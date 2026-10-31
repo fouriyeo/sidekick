@@ -26,7 +26,9 @@ futures-util = "0.3"
 tauri-plugin-store = "2.5.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+arboard = { version = "3", default-features = false }
 axum = { version = "0.8", features = ["ws"] }
+base64 = "0.22"
 local-ip-address = "0.6"
 tokio-util = { version = "0.7", features = ["io"] }
 

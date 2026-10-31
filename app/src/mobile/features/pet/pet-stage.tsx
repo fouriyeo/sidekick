@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { MicButton } from "@/mobile/features/mic/mic-button";
 import { Button } from "@/shared/ui/button";
 import { createGestureRecognizer } from "./gestures";
 import { isNight } from "./mood";
@@ -284,6 +285,8 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       <div aria-live="polite" className="sr-only">
         {pet.name}，{statusText}
       </div>
+
+      <MicButton active={active} posture={pet.settings.posture} />
 
       {saveStatus === "error" && (
         <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 z-30 -translate-x-1/2 text-xs text-pet-muted">

@@ -230,3 +230,10 @@
 - 原因：方向是最稳定、无需权限的姿态信号；真机已验证 `matchMedia`/`screen.orientation` 可用，能减少用户手动切换。
 - 代价：手动选择只在当前方向有效；录音中切换布局仍按 P1 契约处理。
 - 规范：`docs/prd/pet/SPEC.md`、`docs/standards/ux.md`、`app/src/mobile/features/pet/use-orientation.ts`。
+
+## D36 · 麦克风 spike 路径与边界（2026-10-31）
+
+- 决策：spike 用 Tauri WebView `getUserMedia` + `ScriptProcessor`（16kHz/单声道 PCM16）采集，手机 Rust 以 JSON `voice.start` / `voice` / `voice.cancel` + base64 WAV 发送；桌面 Rust 调本机 whisper.cpp（ggml-base）转写，写剪贴板并尝试 Cmd+V；目标应用变化、安全输入或辅助功能未授权时只复制。
+- 原因：WebView 采集在 Realme/WebView 103 已实测可用，whisper.cpp 本机可用，先用最短链路验证采集、转写、输入三个高风险点。
+- 代价/偏离：JSON base64 WAV 不是最终二进制协议；桌面转写用临时 WAV（立即删除），P0 需改内存/whisper-rs；自动粘贴受 macOS 辅助功能权限限制；手机端暂无上滑取消、波形和结果回传，base 模型准确率有限。
+- 规范：`docs/engineering/audio-pipeline.md`、`docs/engineering/protocol-audio.md`、`docs/status.md`。

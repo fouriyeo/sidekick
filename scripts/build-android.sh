@@ -7,5 +7,8 @@ export NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
 export ANDROID_NDK_HOME="$NDK_HOME"
 export PATH="$HOME/.cargo/bin:$ANDROID_HOME/platform-tools:$PATH"
 
-cd "$(dirname "$0")/../app"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+node "$SCRIPT_DIR/patch-android-manifest.mjs"
+
+cd "$SCRIPT_DIR/../app"
 pnpm tauri android build --debug --target aarch64 --apk

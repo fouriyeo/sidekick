@@ -16,6 +16,7 @@
 10. 完成前端 Phase 1：React 双 entry（`main.tsx` + `entries/desktop|mobile`）、`desktop`/`mobile` 连接/聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts`；删除旧 `main.ts`/`styles.css`；桌面浏览器与 Realme 真机双向收发通过（2026-10-31）。
 11. 宠物 P0 代码落地：文档预检（麦克风延后/plugin-store）、Tauri plugin-store 2.5.0、状态机/手势/精力亲密度/确定性存档、静态 SVG 舞台、双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器/无头 Chrome 视觉验证（2026-10-31）。
 12. 宠物姿态改为按屏幕方向自动切换：新增 `useOrientation`（matchMedia + resize/orientationchange），横屏 docked、竖屏 handheld；设置手动覆盖到下次旋转；真机旋转验证通过（2026-10-31）。
+13. 麦克风 spike：WebView `getUserMedia` + PCM16 采集、手机 Rust 走 JSON `voice.*`、桌面 whisper.cpp 本机转写、`arboard` 写剪贴板；真机 5 秒长按和桌面转写已验证，自动粘贴因 macOS 辅助功能未授权降级为复制（2026-10-31）。
 
 ## 已验证（有实际证据）
 
@@ -34,6 +35,7 @@
 - 宠物浏览器验证：首启命名、设置页、手动支架/手持、减少动效、聊天入口/返回正常；无头 Chrome 1280×720 截图确认静态宠物舞台与设置页。
 - Realme（WebView 103）已安装并启动；竖屏宠物舞台、设置页、改名 + 手持后杀进程重启恢复均通过；`sidekick-pet.json` 已写入应用私有目录。
 - 方向自动姿态已在 Realme 上验证：竖屏 handheld、横屏 docked，旋转后 320ms 内切换；设置手动覆盖可用。
+- 麦克风 spike：真机 5 秒长按生成约 143KB WAV，桌面收到并 whisper 转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 正确；自动粘贴因辅助功能权限返回 copied。
 - **未验证**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产未完成；`color-mix` 相关 hover/透明度在 WebView 103 上降级。
 
 ## 已知问题 / 技术债
@@ -51,6 +53,8 @@
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退，建议后续升级 WebView |
+| 麦克风 spike 偏离 | JSON base64 WAV 非最终协议；桌面临时 WAV 违反“音频不落盘”，P0 改内存/whisper-rs；自动粘贴需辅助功能授权 |
+| 麦克风未完成项 | 上滑取消、波形、权限引导、手机结果回传、60 秒上限、密码框/窗口切换验收、模型准确率未完成 |
 | 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
 | gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
@@ -60,7 +64,8 @@
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
 - [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与 Rive 资产待补。
 - [ ] **宠物真机回归（剩余）**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产；竖屏/设置/存档已通过（2026-10-31）。
-- [ ] **外设麦克风 P0**：先按 [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) 做 spike，再按 [prd/mic/INDEX.md](./prd/mic/INDEX.md) 实现；只输入、不发送。
+- [x] **外设麦克风 spike**：WebView 采集、whisper.cpp 本机转写、剪贴板/粘贴降级已跑通；上滑取消/波形/协议化/权限引导仍待做。
+- [ ] **外设麦克风 P0**：按 [prd/mic/INDEX.md](./prd/mic/INDEX.md) 实现；只输入、不发送。
 - [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
@@ -79,3 +84,4 @@
 - [ ] 宠物横屏 16:9/20:9、支架/手持与 3 分钟 60fps（竖屏/设置/存档已通过）
 - [ ] 宠物杀进程重启后名字/设置/存档恢复
 - [ ] 宠物 3 分钟 60fps、无 >50ms 长任务
+- [ ] 麦克风：权限拒绝/辅助功能未开/窗口切换/密码框/上滑取消的降级路径

@@ -10,7 +10,7 @@ owner: qa
 # 外设麦克风 · 验收清单
 
 > 只列可执行用例。产品规则见 [PRD.md](./PRD.md)，体验细节见 [SPEC.md](./SPEC.md)。
-> 设备基线：Realme RMX3370 / Android 13 横屏 + macOS 13.3+；可信局域网。
+> 设备基线：Realme RMX3370 / Android 13（横/竖屏）+ macOS 13.3+；可信局域网。
 
 ## 1. 入口与连接
 

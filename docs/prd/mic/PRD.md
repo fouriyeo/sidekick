@@ -10,7 +10,7 @@ owner: product
 # PRD：随身麦 · 外设麦克风
 
 **版本** v0.1 · **日期** 2026-10-31 · **状态** 草稿（待评审）
-**平台** 手机横屏采集 + 桌面 macOS 转写/输入
+**平台** 手机端（优先横屏、不强制横竖屏）采集 + 桌面 macOS 转写/输入
 **关联** [SPEC](./SPEC.md) · [ACCEPTANCE](./ACCEPTANCE.md) · [音频工程方案](../../engineering/audio-pipeline.md) · [交互规范](../../standards/ux.md)
 
 ## 0. 一页摘要

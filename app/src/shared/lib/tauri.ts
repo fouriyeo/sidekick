@@ -5,11 +5,20 @@ import { type ConnEvent, isConnEvent, type ServerInfo } from "@/protocol/message
 export type AppRole = "desktop" | "mobile";
 export type Unsubscribe = () => void;
 
+export type VoiceInsertResult = {
+  outcome: "inserted" | "copied";
+};
+
 const COMMANDS = {
   appRole: "app_role",
   serverInfo: "server_info",
   connectServer: "connect_server",
   sendChat: "send_chat",
+  captureFrontApp: "capture_front_app",
+  transcribeAndInsert: "transcribe_and_insert",
+  sendVoiceStart: "send_voice_start",
+  sendVoiceCancel: "send_voice_cancel",
+  sendVoice: "send_voice",
 } as const;
 
 const EVENTS = {
@@ -95,6 +104,32 @@ export function connectServer(addr: string): Promise<void> {
 
 export function sendChat(text: string): Promise<void> {
   return invoke<void>(COMMANDS.sendChat, { text });
+}
+
+export function captureFrontApp(): Promise<string | null> {
+  return invoke<string | null>(COMMANDS.captureFrontApp);
+}
+
+export function transcribeAndInsert(
+  audioBase64: string,
+  expectedApp: string | null,
+): Promise<VoiceInsertResult> {
+  return invoke<VoiceInsertResult>(COMMANDS.transcribeAndInsert, {
+    audioBase64,
+    expectedApp,
+  });
+}
+
+export function sendVoiceStart(): Promise<void> {
+  return invoke<void>(COMMANDS.sendVoiceStart);
+}
+
+export function sendVoiceCancel(): Promise<void> {
+  return invoke<void>(COMMANDS.sendVoiceCancel);
+}
+
+export function sendVoice(audio: string, sampleRate: number, durationMs: number): Promise<void> {
+  return invoke<void>(COMMANDS.sendVoice, { audio, sampleRate, durationMs });
 }
 
 export function subscribeChat(handler: (raw: string) => void): Unsubscribe {

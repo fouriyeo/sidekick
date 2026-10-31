@@ -19,8 +19,9 @@
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
-- ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、手动双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
-- ❌ 尚未开始：麦克风实现、Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
+- ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、方向自动双姿态（手动覆盖）、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
+- ✅ **麦克风 spike 已验证**（2026-10-31）：手机 WebView 采集 16k PCM16 → Tauri 发 JSON `voice.*` → 桌面 whisper.cpp 转写 → `arboard` 写剪贴板；自动粘贴因 macOS 辅助功能未授权降级为复制。完整 P0 仍待做。
+- ❌ 尚未开始：麦克风 P0 完整实现、Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
 
 ## 2.5 文档导航（懒加载）
 
@@ -157,6 +158,8 @@ sidekick/
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
 - **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。
 - **方向自动姿态**：`use-orientation.ts` 用 `matchMedia("(orientation: portrait)")` + resize/orientationchange；横屏 docked、竖屏 handheld，设置手动覆盖只持续到下次旋转。
+- **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
+- **麦克风 spike**：whisper-cli 在 `/opt/homebrew/bin/whisper-cli`，模型默认 `~/Library/Application Support/Sidekick/models/ggml-base.bin`；临时 WAV 会立即删除，但 P0 必须改内存/whisper-rs。自动 Cmd+V 需 macOS 辅助功能权限，未授权只复制。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 
 ## 9. 协作约定
@@ -171,11 +174,11 @@ sidekick/
 
 ## 10. 下一步路线（按优先级）
 
-> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；宠物 P0 代码完成（真机/Rive 待补），麦克风 PRD 已就绪、实现未开始。
+> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；宠物 P0 代码完成（真机/Rive 待补），麦克风 spike 完成、P0 未开始。
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
-2. 情绪宠物 P0：代码已完成（静态 SVG 降级、手动双姿态、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
-3. 外设麦克风 P0：先做 spike（Android 采集、本机 ASR、macOS 文本输入），再按 `docs/prd/mic/` 实现；只输入、不发送。
+2. 情绪宠物 P0：代码已完成（静态 SVG 降级、方向自动双姿态（手动覆盖）、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
+3. 外设麦克风 P0：spike 已完成（WebView 采集、whisper、剪贴板/复制降级）；下一步补上滑取消、波形、权限引导、协议化与内存转写；只输入、不发送。
 4. 接入 Claude Code hooks：`notify` / `ask` 事件推手机，手机回答回传并作为 hook 结果（协议扩展 status / ask / notify / input）。
 5. 配对鉴权 + release 签名/桌面打包/开机自启。
 6. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。

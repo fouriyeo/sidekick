@@ -10,7 +10,7 @@ owner: engineering
 # 麦克风音频链路方案
 
 > 目标：手机按住说话 → 局域网 → 桌面本机转写 → 输入到当前应用。
-> 状态：提案，未实现；先做 spike 验证三个高风险点：Android 采集、本机 ASR、macOS 文本输入。
+> 状态：spike 已验证主要路径（2026-10-31）；完整 P0 未实现。先做 spike 验证三个高风险点：Android 采集、本机 ASR、macOS 文本输入。
 
 ## 1. 范围与非目标
 
@@ -241,3 +241,12 @@ owner: engineering
 - 自动粘贴用 CGEvent 还是 AX API？哪些应用不兼容？
 - 桌面浮窗用 Tauri 第二窗口还是系统通知？
 - 局域网加密/配对是否要提前到麦克风 P0？当前建议 P1。
+
+## 15. Spike 结论（2026-10-31）
+
+- WebView `getUserMedia` + `AudioContext(16000)` + `ScriptProcessor(2048)` 在 Realme/WebView 103 可用；需要 Tauri `on_permission_request` 允许 `Microphone`，并在 AndroidManifest 声明 `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS`。
+- whisper.cpp 1.9.5 + `ggml-base`（本机）能转写中英文；base 模型中文/代码术语准确率有限，后续需用测试集选模型。
+- 桌面剪贴板用 `arboard` 写入；自动 Cmd+V 需要 macOS 辅助功能权限，未授权时按设计降级为只复制。
+- Spike 传输暂时用 JSON `voice.start` / `voice` / `voice.cancel` + base64 WAV，不是本文二进制协议；桌面用临时 WAV 调 `whisper-cli`，P0 应改为内存/`whisper-rs`，避免原始音频落盘。
+- 真机验证：5 秒长按生成约 143KB WAV，桌面收到并转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 内容正确。
+- 未覆盖：上滑取消、波形、权限引导、手机结果回传、60 秒上限全链路、密码框/窗口切换完整验收、真实测试集准确率。

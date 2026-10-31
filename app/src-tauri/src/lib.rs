@@ -105,7 +105,11 @@ mod desktop_server {
                 match msg {
                     Message::Text(text) => {
                         let text = text.to_string();
-                        println!("[ws] recv: {text}");
+                        if text.contains("\"type\":\"voice\"") {
+                            println!("[ws] recv: [voice message, {} bytes]", text.len());
+                        } else {
+                            println!("[ws] recv: {text}");
+                        }
                         let _ = tx.send(text);
                     }
                     Message::Close(_) => break,
@@ -175,6 +179,21 @@ mod mobile_client {
     use tokio_tungstenite::tungstenite::Message;
 
     pub struct ClientState(pub Mutex<Option<mpsc::UnboundedSender<String>>>);
+
+    fn now_ms() -> u128 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0)
+    }
+
+    fn send_payload(app: &tauri::AppHandle, payload: serde_json::Value) -> Result<(), String> {
+        let state = app.state::<ClientState>();
+        let guard = state.0.lock().unwrap();
+        let tx = guard.as_ref().ok_or("还没连接电脑")?;
+        tx.send(payload.to_string())
+            .map_err(|_| "连接已断开".to_string())
+    }
 
     fn normalize_addr(addr: &str) -> String {
         let addr = addr.trim().trim_end_matches('/');
@@ -255,6 +274,241 @@ mod mobile_client {
         .to_string();
         tx.send(payload).map_err(|_| "连接已断开".to_string())
     }
+
+    #[tauri::command]
+    pub fn send_voice_start(app: tauri::AppHandle) -> Result<(), String> {
+        send_payload(
+            &app,
+            serde_json::json!({
+                "type": "voice.start",
+                "from": "phone",
+                "ts": now_ms(),
+            }),
+        )
+    }
+
+    #[tauri::command]
+    pub fn send_voice_cancel(app: tauri::AppHandle) -> Result<(), String> {
+        send_payload(
+            &app,
+            serde_json::json!({
+                "type": "voice.cancel",
+                "from": "phone",
+                "ts": now_ms(),
+            }),
+        )
+    }
+
+    #[tauri::command]
+    pub fn send_voice(
+        app: tauri::AppHandle,
+        audio: String,
+        sample_rate: u32,
+        duration_ms: u32,
+    ) -> Result<(), String> {
+        send_payload(
+            &app,
+            serde_json::json!({
+                "type": "voice",
+                "from": "phone",
+                "audio": audio,
+                "sampleRate": sample_rate,
+                "durationMs": duration_ms,
+                "ts": now_ms(),
+            }),
+        )
+    }
+}
+
+#[cfg(desktop)]
+mod desktop_mic {
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use serde::Serialize;
+
+    #[cfg(target_os = "macos")]
+    #[link(name = "Carbon", kind = "framework")]
+    unsafe extern "C" {
+        fn IsSecureEventInputEnabled() -> bool;
+    }
+
+    #[derive(Serialize)]
+    pub struct VoiceResult {
+        pub outcome: &'static str,
+    }
+
+    fn front_app() -> Option<String> {
+        let asn = Command::new("lsappinfo").arg("front").output().ok()?;
+        let asn = String::from_utf8_lossy(&asn.stdout).trim().to_string();
+        if asn.is_empty() {
+            return None;
+        }
+
+        let info = Command::new("lsappinfo")
+            .args(["info", "-only", "name", &asn])
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&info.stdout);
+        let marker = "\"LSDisplayName\"=\"";
+        let start = text.find(marker)? + marker.len();
+        let rest = &text[start..];
+        let end = rest.find('"')?;
+        Some(rest[..end].to_string())
+    }
+
+    fn secure_input_enabled() -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            unsafe { IsSecureEventInputEnabled() }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+
+    fn copy_to_clipboard(text: &str) -> Result<(), String> {
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|error| format!("剪贴板不可用: {error}"))?;
+        clipboard
+            .set_text(text)
+            .map_err(|error| format!("写入剪贴板失败: {error}"))?;
+        Ok(())
+    }
+
+    fn paste_from_clipboard() -> bool {
+        Command::new("osascript")
+            .args([
+                "-e",
+                "tell application \"System Events\" to keystroke \"v\" using command down",
+            ])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    #[tauri::command]
+    pub fn capture_front_app() -> Option<String> {
+        front_app()
+    }
+
+    #[tauri::command]
+    pub async fn transcribe_and_insert(
+        audio_base64: String,
+        expected_app: Option<String>,
+    ) -> Result<VoiceResult, String> {
+        tauri::async_runtime::spawn_blocking(move || {
+            transcribe_and_insert_blocking(audio_base64, expected_app)
+        })
+        .await
+        .map_err(|error| format!("转写任务失败: {error}"))?
+    }
+
+    fn transcribe_and_insert_blocking(
+        audio_base64: String,
+        expected_app: Option<String>,
+    ) -> Result<VoiceResult, String> {
+        let bytes = STANDARD
+            .decode(audio_base64)
+            .map_err(|_| "音频数据无效".to_string())?;
+        eprintln!("[mic] decode {} bytes", bytes.len());
+        if bytes.len() < 44 {
+            return Err("音频太短".to_string());
+        }
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        let base = std::env::temp_dir().join(format!(
+            "sidekick-voice-{}-{stamp}",
+            std::process::id()
+        ));
+        let wav_path = base.with_extension("wav");
+        let txt_path = base.with_extension("txt");
+
+        std::fs::write(&wav_path, &bytes).map_err(|error| format!("临时音频写入失败: {error}"))?;
+
+        let cli = std::env::var("SIDEKICK_WHISPER_CLI")
+            .unwrap_or_else(|_| "/opt/homebrew/bin/whisper-cli".to_string());
+        let home = std::env::var("HOME").unwrap_or_default();
+        let model = std::env::var("SIDEKICK_WHISPER_MODEL").unwrap_or_else(|_| {
+            format!("{home}/Library/Application Support/Sidekick/models/ggml-base.bin")
+        });
+        let lang = std::env::var("SIDEKICK_WHISPER_LANG").unwrap_or_else(|_| "auto".to_string());
+
+        let output = Command::new(&cli)
+            .arg("-m")
+            .arg(&model)
+            .arg("-f")
+            .arg(&wav_path)
+            .arg("-l")
+            .arg(&lang)
+            .arg("-nt")
+            .arg("-otxt")
+            .arg("-of")
+            .arg(&base)
+            .output();
+
+        let text = match output {
+            Ok(result) if result.status.success() => {
+                std::fs::read_to_string(&txt_path).unwrap_or_default()
+            }
+            Ok(result) => {
+                let _ = std::fs::remove_file(&wav_path);
+                let _ = std::fs::remove_file(&txt_path);
+                let detail = String::from_utf8_lossy(&result.stderr)
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                return Err(format!("语音转写失败: {detail}"));
+            }
+            Err(error) => {
+                let _ = std::fs::remove_file(&wav_path);
+                let _ = std::fs::remove_file(&txt_path);
+                return Err(format!("找不到本地语音转写工具: {error}"));
+            }
+        };
+
+        let _ = std::fs::remove_file(&wav_path);
+        let _ = std::fs::remove_file(&txt_path);
+
+        let text = text
+            .trim()
+            .chars()
+            .take(2000)
+            .collect::<String>();
+        eprintln!("[mic] transcript {} chars", text.chars().count());
+        if text.is_empty() {
+            return Err("没听清，再说一次？".to_string());
+        }
+
+        copy_to_clipboard(&text)?;
+
+        let current_app = front_app();
+        let same_app = expected_app.is_some() && current_app.as_deref() == expected_app.as_deref();
+        let can_paste = same_app && !secure_input_enabled();
+        eprintln!(
+            "[mic] paste target {} secure={}",
+            if same_app { "matched" } else { "changed" },
+            secure_input_enabled()
+        );
+
+        if can_paste && paste_from_clipboard() {
+            eprintln!("[mic] outcome inserted");
+            Ok(VoiceResult {
+                outcome: "inserted",
+            })
+        } else {
+            eprintln!("[mic] outcome copied");
+            Ok(VoiceResult {
+                outcome: "copied",
+            })
+        }
+    }
 }
 
 #[tauri::command]
@@ -275,11 +529,22 @@ pub fn run() {
             tauri::async_runtime::spawn(desktop_server::start());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app_role, server_info]);
+        .invoke_handler(tauri::generate_handler![
+            app_role,
+            server_info,
+            desktop_mic::capture_front_app,
+            desktop_mic::transcribe_and_insert
+        ]);
 
     #[cfg(mobile)]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
+        .on_permission_request(|_, kind| match kind {
+            tauri::webview::PermissionKind::Microphone => {
+                tauri::webview::PermissionResponse::Allow
+            }
+            _ => tauri::webview::PermissionResponse::Default,
+        })
         .setup(|app| {
             app.manage(mobile_client::ClientState(std::sync::Mutex::new(None)));
             Ok(())
@@ -287,7 +552,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_role,
             mobile_client::connect_server,
-            mobile_client::send_chat
+            mobile_client::send_chat,
+            mobile_client::send_voice_start,
+            mobile_client::send_voice_cancel,
+            mobile_client::send_voice
         ]);
 
     builder

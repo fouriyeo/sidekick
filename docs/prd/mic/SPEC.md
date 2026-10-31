@@ -10,7 +10,7 @@ owner: design
 # 外设麦克风 · 体验规格
 
 > 本文回答“按钮在哪、状态怎么变、失败看到什么”。产品规则见 [PRD.md](./PRD.md)；技术方案见 [engineering/audio-pipeline.md](../../engineering/audio-pipeline.md)。
-> 手机只做横屏；桌面只做不抢焦点的小浮窗。
+> 手机端优先横屏、不强制横竖屏；桌面只做不抢焦点的小浮窗。
 
 ## 1. 手机布局
 

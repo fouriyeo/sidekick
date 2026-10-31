@@ -214,7 +214,8 @@
 ## 10. Rust / Tauri 依赖
 
 - 同一套原则：必要性、维护、许可证、体积（编译时间/产物体积）、安全、可替换。
-- 基线：`tauri` 2.x、`serde`、`tokio`、`axum`、`tokio-tungstenite`、`tauri-plugin-store` 2.5.0；不重复引入 HTTP/WS 框架。
+- 基线：`tauri` 2.x、`serde`、`tokio`、`axum`、`tokio-tungstenite`、`tauri-plugin-store` 2.5.0、`base64` 0.22、`arboard` 3.7（仅桌面剪贴板，关闭 image feature）；不重复引入 HTTP/WS 框架。
+- 麦克风 spike 的本机转写使用 Homebrew `whisper.cpp`/`whisper-cli` + `ggml-base` 模型（MIT；模型不入库）；正式分发前需单独决定模型分发/下载方案。
 - Tauri 插件只用官方或维护良好的社区插件；capabilities 最小权限。
 - 新增 crate 前跑 `cargo tree -d` 看是否已有重复能力；`cargo deny` 管许可证；`cargo audit` 管漏洞。
 - 协议类型如果引入 `ts-rs` / `tauri-specta`，生成物入库并在 CI 校验一致性。

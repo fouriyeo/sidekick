@@ -11,6 +11,7 @@ owner: engineering
 
 > 现状：协议 v0 只有 `chat` / `system`，文本 JSON，服务端广播。见 [protocol/README.md](../../protocol/README.md)。
 > 本文新增麦克风会话与二进制音频帧；实现前需评审，不与现有消息破坏兼容。
+> 2026-10-31 spike 暂时使用 JSON `voice.start` / `voice` / `voice.cancel` + base64 WAV，未采用本文二进制帧；正式 P0 前必须按本文实现或先修订协议。
 
 ## 1. 目标
 
