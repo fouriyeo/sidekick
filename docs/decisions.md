@@ -63,3 +63,15 @@
 
 - 决策：桌面服务 `/` 落地页提供 `/download/apk` 下载按钮；桌面窗口扫码即可直达。
 - 原因：用户扫码后希望直接下载安装，而不是手动找安装包。
+
+## D12 · 前端包管理器迁移到 pnpm（2026-10-31）
+
+- 决策：前端依赖管理从 npm 切换到 pnpm；`package.json` 锁定 `packageManager: pnpm@11.22`，`pnpm-lock.yaml` 入库，删除 `package-lock.json`；Tauri 的 `beforeDevCommand` / `beforeBuildCommand` 改为 `pnpm dev` / `pnpm build`。
+- 原因：安装更快、磁盘占用更小、依赖隔离更严格，避免多包管理器混用。
+- 影响：文档、脚本、`tauri.conf.json` 中的 npm/npx 命令同步更新。
+
+## D13 · 清理模板残留与未使用依赖（2026-10-31）
+
+- 移除：未引用的模板 SVG（`app/src/assets`）、未使用的 `tauri-plugin-opener`（前后端依赖与 capability）、本地 Python 实验环境 `daemon/`（约 50MB，知识保留在 `docs/ble-notes.md`）。
+- 保留：`app/src-tauri/icons`（打包需要）、`capabilities/default.json`（`core:default`）。
+- 构建产物继续不入库；`gen/` 保持忽略、按需生成。

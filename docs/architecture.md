@@ -63,4 +63,4 @@
 - 无历史持久化；广播会回显自己发送的消息。
 - 端口固定；单机单实例；调试客户端会混入在线人数统计。
 - 仅 debug 构建（debug 签名）；release 签名与正式打包未配置。
-- `app/src-tauri/gen/` 不入库，需 `npm run tauri android init` 重新生成。
+- `app/src-tauri/gen/` 不入库，需 `pnpm tauri android init` 重新生成。

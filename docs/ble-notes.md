@@ -53,4 +53,4 @@ await server.start()
 ## 历史环境备注
 
 - 曾尝试 Homebrew cask 安装 Flutter，因 `storage.googleapis.com` 下载卡住放弃；如回归 Flutter，可改用 `storage.flutter-io.cn` / `pub.flutter-io.cn` 镜像。
-- Python 实验环境曾建在 `daemon/.venv`（已 gitignore，可随时重建：`python3.11 -m venv .venv && pip install bless`）。
+- Python 实验环境原在 `daemon/.venv`，已随清理移除；如需重启蓝牙预研，可重建：`python3.11 -m venv .venv && pip install bless`。

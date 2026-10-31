@@ -8,4 +8,4 @@ export ANDROID_NDK_HOME="$NDK_HOME"
 export PATH="$HOME/.cargo/bin:$ANDROID_HOME/platform-tools:$PATH"
 
 cd "$(dirname "$0")/../app"
-npx tauri android build --debug --target aarch64 --apk
+pnpm tauri android build --debug --target aarch64 --apk

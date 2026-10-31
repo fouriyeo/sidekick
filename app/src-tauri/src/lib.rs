@@ -270,7 +270,6 @@ fn app_role() -> &'static str {
 pub fn run() {
     #[cfg(desktop)]
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
             tauri::async_runtime::spawn(desktop_server::start());
             Ok(())
@@ -279,7 +278,6 @@ pub fn run() {
 
     #[cfg(mobile)]
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             app.manage(mobile_client::ClientState(std::sync::Mutex::new(None)));
             Ok(())

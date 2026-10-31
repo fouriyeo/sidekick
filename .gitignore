@@ -1,6 +1,5 @@
 .DS_Store
 *.log
-daemon/.venv/
 
-# Tauri Android generated project (regenerate: npm run tauri android init)
+# Tauri Android generated project (regenerate: pnpm tauri android init)
 app/src-tauri/gen/

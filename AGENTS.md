@@ -66,12 +66,12 @@ sidekick/
 
 ## 5. 常用命令
 
-前提：`cd sidekick/app && npm install`。
+前提：`cd sidekick/app && pnpm install`。
 
-- 桌面开发：`npm run tauri dev`（窗口出现即服务已启动；日志可见 `[server] listening on http://0.0.0.0:8848`）
-- 生成安卓工程（首次/清理后）：`npm run tauri android init`（需要 `ANDROID_HOME` / `NDK_HOME` / `JAVA_HOME`，见 `docs/setup.md`）
+- 桌面开发：`pnpm tauri dev`（窗口出现即服务已启动；日志可见 `[server] listening on http://0.0.0.0:8848`）
+- 生成安卓工程（首次/清理后）：`pnpm tauri android init`（需要 `ANDROID_HOME` / `NDK_HOME` / `JAVA_HOME`，见 `docs/setup.md`）
 - 构建 debug APK：`scripts/build-android.sh`
-  - 等价于：`npx tauri android build --debug --target aarch64 --apk`
+  - 等价于：`pnpm tauri android build --debug --target aarch64 --apk`
   - 产物：`app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
 - 安装并启动：`scripts/install-android.sh`（`adb install -r` + `am start`）
 - 日志：桌面端看 `tauri dev` 终端；安卓端 `adb logcat`
@@ -79,16 +79,16 @@ sidekick/
 ## 6. 环境（macOS arm64）
 
 - Rust 1.93（brew `rust`，含 rustup；Rust 安卓目标已安装）
-- Node 24 + npm；Tauri CLI 在 `app/` 的 devDependencies
+- Node 24 + pnpm 11（`packageManager` 已锁定 pnpm@11.22）；Tauri CLI 在 `app/` 的 devDependencies
 - JDK 21：`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
 - Android SDK：`~/Library/Android/sdk`（cmdline-tools 由 brew cask 安装）
 - NDK `27.2.12479018`；compileSdk 37（SDK 包名是 `platforms;android-37.0`）
-- 已安装：`rust`、`openjdk@21`、`android-commandlinetools`、`cargo-ndk`、`gh`
+- 已安装：`rust`、`openjdk@21`、`android-commandlinetools`、`cargo-ndk`、`gh`、`pnpm`
 - 详细安装步骤 / 环境变量 / 无线调试流程：`docs/setup.md`
 
 ## 7. 验证「改完没坏」的最短路径
 
-1. 桌面端 `npm run tauri dev`，确认日志出现 `[server] listening`；
+1. 桌面端 `pnpm tauri dev`，确认日志出现 `[server] listening`；
 2. `scripts/build-android.sh && scripts/install-android.sh`，手机上打开 App；
 3. 在 App 输入 `电脑IP:8848` 并连接，状态变「已连接」；
 4. 双向发消息，桌面日志应出现 `[ws] recv: {...}`；
@@ -101,7 +101,7 @@ sidekick/
 - **adb 出现重复设备**：mDNS 与 IP 两条 transport 同时存在会报 `more than one device/emulator`；`adb disconnect <mDNS 服务名>` 只留 IP 连接。
 - **compileSdk 37**：SDK 包名是 `platforms;android-37.0`，不是 `android-37`。
 - **debug APK 很大**（约 120–240MB，含未剥离调试符号），属正常；release 需签名，体积预计 10–20MB。
-- **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore；克隆后必须先 `npm run tauri android init` 再构建。
+- **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore；克隆后必须先 `pnpm tauri android init` 再构建。
 - **macOS 防火墙**：第一次接受局域网连接会弹「允许传入网络连接」，必须允许，否则手机连不上。
 - **手机与电脑需同一局域网**；开发机 IP 会变，App 里填的地址要跟着改。
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。

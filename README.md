@@ -7,8 +7,8 @@
 ## 快速开始
 
 ```bash
-cd app && npm install
-npm run tauri dev          # 桌面端
+cd app && pnpm install
+pnpm tauri dev             # 桌面端
 scripts/build-android.sh   # 构建安卓 debug APK
 scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 ```

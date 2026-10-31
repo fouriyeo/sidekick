@@ -9,7 +9,8 @@
 3. 蓝牙预研：Python `bless` 验证 Mac 可作 BLE 外设（后暂停，主线转局域网）；
 4. 实现桌面端（axum HTTP/WS 服务 + 二维码 UI）与安卓 App（Rust WS 客户端 + 手机 UI）；
 5. 修复首版黑屏（CSS 类名冲突把 `<body>` 隐藏），重新出包并安装；
-6. 真机验证通过：手机 App ↔ 桌面端双向收发消息。
+6. 真机验证通过：手机 App ↔ 桌面端双向收发消息；
+7. 清理模板残留与未使用插件，前端包管理器从 npm 迁移到 pnpm（`pnpm-lock.yaml` 入库）。
 
 ## 已验证（有实际证据）
 
@@ -32,7 +33,7 @@
 | 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
 | 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
-| gen 不入库 | 克隆后需 `npm run tauri android init` |
+| gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
 
 ## 下一步（按优先级）
@@ -46,7 +47,7 @@
 
 ## 验收清单（每次改动的回归测试）
 
-- [ ] `npm run tauri dev` 正常启动，日志有 `[server] listening on http://0.0.0.0:8848`
+- [ ] `pnpm tauri dev` 正常启动，日志有 `[server] listening on http://0.0.0.0:8848`
 - [ ] `scripts/build-android.sh` 成功产出 APK
 - [ ] `scripts/install-android.sh` 安装并启动
 - [ ] 手机连接 `IP:8848` 后状态为「已连接」

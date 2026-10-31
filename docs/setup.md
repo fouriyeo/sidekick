@@ -6,6 +6,7 @@
 | --- | --- |
 | Rust | 1.93.1（brew `rust`，含 rustup） |
 | Node | v24.13.0 |
+| pnpm | 11.22（`app/package.json` 的 `packageManager` 已锁定） |
 | JDK | OpenJDK 21（brew `openjdk@21`） |
 | Android cmdline-tools | brew cask `android-commandlinetools`；`sdkmanager` 已在 PATH |
 | Android SDK | `~/Library/Android/sdk` |
@@ -41,10 +42,10 @@ export PATH="$HOME/.cargo/bin:$ANDROID_HOME/platform-tools:$PATH"
 
 ```sh
 # 桌面端开发（窗口出现即服务已启动）
-cd app && npm install && npm run tauri dev
+cd app && pnpm install && pnpm tauri dev
 
 # 生成安卓工程（克隆后 / gen 被清理后必须先执行）
-npm run tauri android init
+pnpm tauri android init
 
 # 构建 debug APK
 scripts/build-android.sh
@@ -101,8 +102,8 @@ window.__TAURI_INTERNALS__.invoke("send_chat", { text: "hello" })
 `app/src-tauri/gen/` 已被 gitignore（约 600MB 构建产物）。克隆后：
 
 ```sh
-cd app && npm install
-npm run tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
+cd app && pnpm install
+pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 ```
 
 生成的 Gradle 配置使用 `compileSdk = 37`，对应 SDK 包名 `platforms;android-37.0`。
@@ -122,5 +123,5 @@ npm run tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 ## Release（待办）
 
 - 生成 keystore，在 `gen/android` 中配置 `signingConfigs`；
-- `npx tauri android build --apk` 产出正式包；
-- 桌面端 `npm run tauri build` 打包 .app/.dmg。
+- `pnpm tauri android build --apk` 产出正式包；
+- 桌面端 `pnpm tauri build` 打包 .app/.dmg。
