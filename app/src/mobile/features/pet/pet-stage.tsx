@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { MicButton } from "@/mobile/features/mic/mic-button";
+import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { Button } from "@/shared/ui/button";
 import { createGestureRecognizer } from "./gestures";
 import { isNight } from "./mood";
@@ -61,6 +62,10 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const saveStatus = usePetStore((state) => state.saveStatus);
   const setPosture = usePetStore((state) => state.setPosture);
   const connectionStatus = useConnectionStore((state) => state.status);
+  const micBusy = useMicStore(
+    (state) =>
+      state.phase === "arming" || state.phase === "listening" || state.phase === "processing",
+  );
   const orientation = useOrientation();
 
   const systemReduced = useReducedMotion();
@@ -150,6 +155,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (micBusy) return;
     if (dimmedRef.current) {
       markActivity();
       return;
@@ -286,7 +292,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
         {pet.name}，{statusText}
       </div>
 
-      <MicButton active={active} posture={pet.settings.posture} />
+      <MicButton active={active} posture={pet.settings.posture} onOpenConnection={onOpenChat} />
 
       {saveStatus === "error" && (
         <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 z-30 -translate-x-1/2 text-xs text-pet-muted">

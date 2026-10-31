@@ -2,10 +2,11 @@ import { useCallback, useEffect } from "react";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
 import { ChatView } from "@/mobile/features/chat/components/chat-view";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { PetSettings } from "@/mobile/features/pet/pet-settings";
 import { PetStage } from "@/mobile/features/pet/pet-stage";
 import { useUiStore } from "@/mobile/ui-store";
-import { parseMessage } from "@/protocol/messages";
+import { parseMessage, parseMicMessage } from "@/protocol/messages";
 import { subscribeChat, subscribeConn } from "@/shared/lib/tauri";
 
 export function MobileApp() {
@@ -26,6 +27,15 @@ export function MobileApp() {
 
   useEffect(() => {
     const unsubscribeChat = subscribeChat((raw) => {
+      const micMessage = parseMicMessage(raw);
+      if (micMessage) {
+        const store = useMicStore.getState();
+        if (micMessage.type === "mic.result") store.handleResult(micMessage);
+        else if (micMessage.type === "mic.state") store.handleState(micMessage);
+        else if (micMessage.type === "mic.error") store.handleError(micMessage);
+        return;
+      }
+
       const parsed = parseMessage(raw, "phone");
       if (parsed) append(parsed.kind, parsed.text);
     });

@@ -17,7 +17,9 @@
 11. 宠物 P0 代码落地：文档预检（麦克风延后/plugin-store）、Tauri plugin-store 2.5.0、状态机/手势/精力亲密度/确定性存档、静态 SVG 舞台、双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器/无头 Chrome 视觉验证（2026-10-31）。
 12. 宠物姿态改为按屏幕方向自动切换：新增 `useOrientation`（matchMedia + resize/orientationchange），横屏 docked、竖屏 handheld；设置手动覆盖到下次旋转；真机旋转验证通过（2026-10-31）。
 13. 手机自动发现电脑：UDP 广播探测（固定 47820）+ 桌面单播回「主机名 + 真实端口」；服务端口改候选 `47810`–`47814`、`8848` 自动回退；手机启动即自动连接，桌面二维码改为按需展开（2026-10-31）。
-13. 麦克风 spike：WebView `getUserMedia` + PCM16 采集、手机 Rust 走 JSON `voice.*`、桌面 whisper.cpp 本机转写、`arboard` 写剪贴板；真机 5 秒长按和桌面转写已验证，自动粘贴因 macOS 辅助功能未授权降级为复制（2026-10-31）。
+14. 麦克风 spike：WebView `getUserMedia` + PCM16 采集、手机 Rust 走 JSON `voice.*`、桌面 whisper.cpp 本机转写、`arboard` 写剪贴板；真机 5 秒长按和桌面转写已验证（2026-10-31）。
+15. 麦克风 P0：二进制 PCM16 协议（`mic.start/ready/stop/result/state/error` + `SK01` 帧）、服务端单会话缓冲、whisper-rs 内存转写与启动 prewarm、直接 CGEvent 自动粘贴（未授权复制）、手机波形/上滑取消/权限说明/结果卡片（2026-10-31）。
+16. 桌面设置页：语音模型下载/选择/删除/预热、辅助功能授权卡片；应用内语音状态浮层；桌面剪贴板历史（文本、搜索、置顶、隐藏内容过滤、`0600` 持久化）（2026-10-31）。
 
 ## 已验证（有实际证据）
 
@@ -41,7 +43,10 @@
 - **桌面面板已改版验证（2026-10-31）**：真实服务 + 浏览器 `?role=desktop` 通过 CDP 检查，默认无 canvas（无大二维码），地址显示真实端口，展开后出现 160px 二维码。
 - 自动化测试：`pnpm typecheck/lint/test/build` 全绿（103 前端用例）；`cargo test` 10 passed；`check-boundaries`、`check-docs` 通过。
 - 麦克风 spike：真机 5 秒长按生成约 143KB WAV，桌面收到并 whisper 转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 正确；自动粘贴因辅助功能权限返回 copied。
-- **未验证**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产未完成；`color-mix` 相关 hover/透明度在 WebView 103 上降级。
+- 麦克风 P0 后端：Python WS 客户端按正式二进制协议发送 3.9 秒中文，服务端返回 `mic.result(copied, accessibility_off)`；whisper-rs base 在模型预热后延迟约 0.2–0.3s；剪贴板 UTF-8 内容正确。
+- 剪贴板：复制文本后 `~/Library/Application Support/Sidekick/clipboard.json` 在 1 秒内出现，权限 `600`；带 `org.nspasteboard.ConcealedType` 的内容未记录；Sidekick 自身转写未入库。
+- 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test`（128 tests）/ `pnpm build` 通过；`cargo test --lib` 20 tests 通过。
+- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、模型下载真实网络、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产。
 
 ## 已知问题 / 技术债
 
@@ -54,12 +59,13 @@
 | 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
 | withGlobalTauri | `tauri.conf.json` 仍为 `true`；Phase 4 收紧为 `false` 时需回归 IPC/事件/QR |
-| 麦克风未实现 | PRD/SPEC/AC 已就绪；需先 spike（Android 采集、本机 ASR、macOS 输入） |
+| 麦克风 P0 | 已实现；自动粘贴依赖 macOS 辅助功能，需要用户手动勾选一次；开发二进制重编译后可能需重勾选 |
+| 麦克风未完成项 | 真机 60 秒/断连、密码框/窗口切换完整矩阵、辅助功能实测、模型准确率测试集待补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退，建议后续升级 WebView |
-| 麦克风 spike 偏离 | JSON base64 WAV 非最终协议；桌面临时 WAV 违反“音频不落盘”，P0 改内存/whisper-rs；自动粘贴需辅助功能授权 |
-| 麦克风未完成项 | 上滑取消、波形、权限引导、手机结果回传、60 秒上限、密码框/窗口切换验收、模型准确率未完成 |
+| 麦克风 spike 偏离 | 已解决：JSON base64 WAV/临时 WAV 已替换为二进制 PCM16 + whisper-rs 内存转写；自动粘贴改为直接 CGEvent |
+| 剪贴板历史 | 仅在桌面应用运行时记录；无全局快捷键；图片/文件/富文本不支持 |
 | 端口候选回退 | 47810–47814、8848 依次尝试；全部占用时服务启动失败（server_info 报错） |
 | 发现依赖 UDP 广播 | 路由器禁止广播/AP 隔离时发现失败，需手动输入地址或扫码 |
 | 同机多实例 | 只有一个实例能绑 UDP 47820，仅先启动者可被自动发现 |
@@ -72,8 +78,10 @@
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
 - [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与 Rive 资产待补。
 - [ ] **宠物真机回归（剩余）**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产；竖屏/设置/存档已通过（2026-10-31）。
-- [x] **外设麦克风 spike**：WebView 采集、whisper.cpp 本机转写、剪贴板/粘贴降级已跑通；上滑取消/波形/协议化/权限引导仍待做。
-- [ ] **外设麦克风 P0**：按 [prd/mic/INDEX.md](./prd/mic/INDEX.md) 实现；只输入、不发送。
+- [x] **外设麦克风 spike**：WebView 采集、whisper.cpp 本机转写、剪贴板/粘贴降级已跑通。
+- [x] **外设麦克风 P0 代码**：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层；待真机与辅助功能实测。
+- [x] **桌面剪贴板 P1**：文本历史、搜索、置顶、隐私过滤、本地持久化。
+- [ ] **麦克风收尾**：勾选 macOS 辅助功能后验证自动粘贴；真机 60 秒/断连/密码框矩阵；模型准确率测试集。
 - [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。

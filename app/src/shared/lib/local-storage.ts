@@ -1,4 +1,6 @@
 export const SERVER_ADDR_KEY = "sidekick:server";
+export const MIC_PRIMER_KEY = "sidekick:mic-primer";
+export const MIC_PERMISSION_DENIED_KEY = "sidekick:mic-permission-denied";
 
 export function readLocal(key: string): string | null {
   if (typeof window === "undefined") return null;

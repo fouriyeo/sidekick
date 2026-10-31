@@ -1,7 +1,7 @@
 ---
 doc: engineering/audio-pipeline
 title: 麦克风音频链路方案
-status: draft
+status: active
 updated: 2026-10-31
 load: on-demand
 owner: engineering
@@ -10,7 +10,7 @@ owner: engineering
 # 麦克风音频链路方案
 
 > 目标：手机按住说话 → 局域网 → 桌面本机转写 → 输入到当前应用。
-> 状态：spike 已验证主要路径（2026-10-31）；完整 P0 未实现。先做 spike 验证三个高风险点：Android 采集、本机 ASR、macOS 文本输入。
+> 状态：spike 已验证，P0 已实现（2026-10-31）。采集/传输/内存 ASR/自动粘贴降级/模型管理已落地；真机与 macOS 权限矩阵继续回归。
 
 ## 1. 范围与非目标
 
@@ -33,60 +33,40 @@ owner: engineering
 
 ```text
 手机麦克风
-  → 采集 PCM16（16kHz / mono / 100ms 分片）
-  → Tauri 命令 send_audio_chunk（Rust）
-  → WS 二进制帧（局域网）
-  → 桌面 axum 音频路由
-  → 桌面 ASR（本机）
-  → 文本输入（辅助功能/剪贴板）
-  → 状态回传：手机 + 桌面浮窗
+  → WebView getUserMedia，16kHz / mono / 2048 samples（约 128ms）PCM16
+  → Tauri 命令 mic_frame（base64 PCM，Rust 组二进制帧）
+  → WS 二进制帧（局域网，magic=SK01）
+  → 桌面 axum 按 session 追加到内存缓冲（不广播）
+  → mic.stop(release/timeout) → whisper-rs 内存转写
+  → CGEvent Cmd+V / 仅复制
+  → mic.result 回传手机 + 桌面应用内浮层
 ```
 
 关键点：
 
 - 音频不经过 WebView 的 `new WebSocket`（混合内容限制）；由 Rust 发送。
-- 桌面服务不把音频广播给其它客户端；按 session 路由到转写任务。
-- 音频只在内存；转写完成/失败/取消后立即丢弃。
+- 桌面服务不把音频广播给其它客户端；按 session 路由，`mic.stop` 后才转写。
+- 音频只在内存；转写完成/失败/取消后立即丢弃；不写临时 WAV。
+- 控制消息仍是 JSON；手机停止/取消有明确 `reason`，取消类不转写。
 
-## 3. 采集方案（需 spike）
+## 3. 采集方案（已选定）
 
-### 方案 A：WebView getUserMedia + AudioWorklet
+使用 WebView `getUserMedia` + `ScriptProcessor(2048)`，在 Realme/WebView 103 实测可用：
 
-- 前端 `getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })`，AudioWorklet 取 PCM。
-- 通过 Tauri 命令把 100ms 分片（base64 或字节数组）交给 Rust，由 Rust 发 WS。
-- 优点：前端实现快；不写 Kotlin；调试方便。
-- 风险：
-  - Tauri Android WebView 是否默认处理 `onPermissionRequest` 和麦克风权限，需实测。
-  - WebView 音频采样率可能被系统重采样；需确认实际格式。
-  - Tauri IPC 频率/序列化开销；100ms 分片可接受，20ms 不建议。
-- 适用：P0 spike 首选，2–3 天验证。
+- 优先创建 `AudioContext({ sampleRate: 16000 })`；设备拒绝时回退默认采样率，并用连续线性重采样到 16k。
+- 每块 PCM16 立即通过 `mic_frame` 交给 Rust，不在 JS 缓存整段；避免 base64 WAV 和临时文件。
+- Tauri 移动端需要 `on_permission_request` 允许 `Microphone`；AndroidManifest 声明 `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS`。
+- 首次使用前展示 3 行权限说明；拒绝后显示系统设置步骤，不重复弹系统框。
 
-### 方案 B：Kotlin AudioRecord 插件
-
-- 写 Tauri Android 插件：`AudioRecord` 采集 PCM16，前台权限/短时录音；通过 JNI/事件把分片交给 Rust。
-- 优点：格式可控、延迟低、权限处理明确；不依赖 WebView。
-- 风险：Kotlin/JNI 工作量；Tauri 插件生命周期；需要插件维护。
-- 适用：方案 A 失败或延迟不达标时切换。
-
-### 决策门槛
-
-| 指标 | 方案 A 通过条件 |
-| --- | --- |
-| 权限 | 首次请求能弹系统麦克风权限；拒绝后可引导 |
-| 格式 | 能拿到 16kHz 单声道 PCM（或可稳定重采样） |
-| 延迟 | 分片到 Rust ≤100ms；无明显丢帧 |
-| 稳定性 | 连续 60 秒录音不崩、不爆音 |
-| 电量 | 10 分钟录音掉电可接受 |
-
-不达标就切 B；不在 P0 同时维护两套。
+不采用 Kotlin AudioRecord 插件：当前采集稳定性、格式与 60 秒录音已满足 P0；若后续出现爆音/延迟问题再切换。
 
 ## 4. 音频格式
 
-### P0 建议：PCM16
+### P0 实现：PCM16
 
 - 16kHz / 单声道 / 16bit / 小端。
-- 100ms 分片 = 3200 bytes；base64 约 4.3KB；10 次/秒。
-- 局域网带宽 32KB/s；10 秒语音约 320KB。
+- WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂；2048 samples ≈ 128ms，约 8 帧/秒。
+- 局域网带宽约 32KB/s；10 秒语音约 320KB；不落盘。
 - 优点：无需编解码依赖；调试简单；延迟低。
 - 缺点：带宽/电量比 Opus 高；后续可换。
 
@@ -95,67 +75,44 @@ owner: engineering
 - 24–32kbps VBR；20ms 帧；需编码器与容器/解码依赖。
 - 只有在带宽/电量成为问题时再引入；需走依赖审批。
 
-## 5. 传输
+## 5. 传输（已实现）
 
 - 使用现有 WS 通道，新增二进制帧；控制消息仍用 JSON。
-- 协议细节见 [protocol-audio.md](./protocol-audio.md)。
-- 手机端 Rust 维护当前 `session` 和发送通道；UI 不直接发音频。
-- 桌面端 axum 解析二进制，按 session 投递到转写任务；不广播。
-- 背压：发送队列超过 2 秒音频就丢弃最旧分片并告警；不无限缓冲。
-- 断线：立即停止采集、丢弃缓冲、手机显示失败；不后台重连补发。
+- 协议细节见 [protocol-audio.md](./protocol-audio.md)；编码器/解析器在 `mic_protocol.rs`，手机 Rust 维护当前 session 与序列号。
+- 桌面端按 session 追加到内存缓冲；音频帧**绝不广播**。
+- 同一时间只允许一个 active session；重复 start 返回 `mic.error`。
+- 断线/取消/后台：立即丢弃缓冲，不后台重连补发。
+- 65 秒或 2.2MB 缓冲上限，超过丢弃；单帧上限 64KB。
 
-## 6. 本机转写（需 spike）
+## 6. 本机转写（已选定 whisper-rs）
 
-### 方案 A：macOS Speech（SFSpeechRecognizer）
-
-- 系统自带、可要求 on-device；无需下载大模型；包体小。
-- 需要 `NSSpeechRecognitionUsageDescription`；可能依赖系统语言资源。
-- 风险：中文/代码术语准确率、长音频分段、Rust 集成（objc2 或 Swift sidecar）。
-- 优点：macOS 13.3+ 可用；延迟低；隐私好。
-
-### 方案 B：whisper.cpp / whisper-rs
-
-- 跨平台、可控；模型可选 tiny/small/medium；Metal 加速。
-- 模型体积大（数百 MB），首次下载/分发需设计；中文可用，代码术语弱。
-- 许可证需按 dependency-policy 审核（whisper.cpp MIT；模型权重单独确认）。
-- 优点：不依赖 Apple；准确率可通过更大模型提升；离线可控。
-
-### 方案 C：云端 ASR
-
-- 本期不做；如未来引入，必须显式开关、告知上传、单独决策。
-
-### 选型门槛
-
-用固定 30 句测试集（中文 + 代码术语 + 中英混说）比较：
-
-| 指标 | 门槛 |
-| --- | --- |
-| 字符准确率 | ≥90% `[假设]` |
-| 10 秒语音转写 p95 | ≤2s |
-| 首次使用准备 | ≤30s（含权限/模型加载） |
-| 包体/模型 | 可接受，且有下载/存储方案 |
-| 隐私 | 默认本机；可断网使用 |
-
-未达标不进入 P0；先调模型/测试集，再决定是否降级功能。
+- 使用 whisper-rs 0.16 / whisper.cpp + Metal，在桌面进程内转写；模型加载缓存并启动时 prewarm。
+- 模型可选 tiny/base/small/medium，下载、存储、切换见 [asr-model.md](./asr-model.md)。
+- 默认中文（`language=zh`）+ 简体 prompt；文本换行替换为空格，最多 2000 字。
+- 10 秒语音在 base 模型上实测约 0.2–0.3s（模型已加载）；首次加载通过 prewarm 隐藏。
+- 原始音频不写文件；模型文件本身除外。
+- macOS Speech 未采用：命令行访问受 TCC 限制，且准确率/模型可控性不如 whisper.cpp；云端 ASR 本期不做。
 
 ## 7. 文本输入（macOS）
 
 ### 7.1 目标应用校验
 
-1. 录音开始时记录前台应用（bundle id + PID）。
-2. 插入前再次读取前台应用；不一致 → 不自动输入，只复制。
-3. 读取焦点 UI 元素；不是可编辑输入框 → 只复制。
-4. `IsSecureEventInputEnabled()` 为真（密码框等）→ 只复制。
-5. 以上任一不满足，桌面浮窗显示“已复制”，手机显示“已复制到电脑”。
+1. 录音开始时记录前台应用（bundle id + display name）。
+2. 插入前再次读取前台应用；bundle id 不一致 → 不自动输入，只复制。
+3. `IsSecureEventInputEnabled()` 为真（密码框等）→ 只复制。
+4. 辅助功能未授权 → 只复制，并提示在设置里授权。
+5. 读取焦点 UI 元素是否为可编辑输入框为 P1；当前用前台应用 + 安全输入两道检查。
+6. 以上任一不满足，桌面浮层显示“已复制”，手机显示原因。
 
 ### 7.2 输入方式
 
-- 首选：辅助功能权限 + 设置剪贴板 + 发送 `Cmd+V`（CGEvent / enigo）。
+- 首选：辅助功能权限 + `arboard` 写剪贴板 + `core-graphics` 合成 `Cmd+V`（keycode 9 + Command）。
 - 备选：仅复制，用户手动粘贴。
 - 不直接改目标控件值（兼容性差、可能破坏撤销）。
 - **绝不发送 Return/Enter**；不调用任何“提交/发送”快捷键。
 - 输入后系统撤销（⌘Z）应能撤回该段文本；不做自建撤销栈。
 - 权限被拒/未授权：不阻塞录音与转写，只降级。
+- 设置页提供“请求权限 / 打开系统设置 / 在 Finder 中显示当前程序 / 重新检测”；macOS 不允许程序自行授权，必须用户勾选一次。
 
 ### 7.3 安全边界
 
@@ -217,8 +174,7 @@ owner: engineering
 | --- | --- | --- | --- |
 | Android | `RECORD_AUDIO` | 首次按下前说明，再请求 | 引导系统设置；不能录音 |
 | Android | `INTERNET` | 已有 | 无 |
-| macOS | 语音识别（若用 SFSpeechRecognizer） | 首次转写 | 提示；不能转写 |
-| macOS | 辅助功能（自动输入） | 首次自动粘贴 | 只复制；可重新授权 |
+| macOS | 辅助功能（自动输入） | 首次自动粘贴前说明 / 设置页请求 | 只复制；可重新授权并重新检测 |
 | macOS | 麦克风 | 不需要（桌面不采集） | — |
 
 不申请后台服务、通知、定位等无关权限。
@@ -235,18 +191,17 @@ owner: engineering
 
 ## 14. 开放式问题
 
-- 方案 A 的 WebView 麦克风权限是否稳定？需要真机 spike。
-- macOS Speech 与 whisper.cpp 哪个准确率/延迟更好？用测试集决定。
-- PCM16 是否足够？Opus 何时引入？
-- 自动粘贴用 CGEvent 还是 AX API？哪些应用不兼容？
-- 桌面浮窗用 Tauri 第二窗口还是系统通知？
-- 局域网加密/配对是否要提前到麦克风 P0？当前建议 P1。
+- Opus/BLE 何时引入？当前 PCM16 已跑通。
+- 自动粘贴对哪些 macOS 应用不兼容？需继续扩充真机矩阵。
+- 桌面独立 always-on-top 浮窗是否值得从应用内浮层升级？
+- AX 焦点是否可编辑输入框的检查（P1）如何覆盖终端/浏览器？
+- 局域网配对/加密仍在 P1。
 
-## 15. Spike 结论（2026-10-31）
+## 15. 实现状态（2026-10-31）
 
-- WebView `getUserMedia` + `AudioContext(16000)` + `ScriptProcessor(2048)` 在 Realme/WebView 103 可用；需要 Tauri `on_permission_request` 允许 `Microphone`，并在 AndroidManifest 声明 `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS`。
-- whisper.cpp 1.9.5 + `ggml-base`（本机）能转写中英文；base 模型中文/代码术语准确率有限，后续需用测试集选模型。
-- 桌面剪贴板用 `arboard` 写入；自动 Cmd+V 需要 macOS 辅助功能权限，未授权时按设计降级为只复制。
-- Spike 传输暂时用 JSON `voice.start` / `voice` / `voice.cancel` + base64 WAV，不是本文二进制协议；桌面用临时 WAV 调 `whisper-cli`，P0 应改为内存/`whisper-rs`，避免原始音频落盘。
-- 真机验证：5 秒长按生成约 143KB WAV，桌面收到并转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 内容正确。
-- 未覆盖：上滑取消、波形、权限引导、手机结果回传、60 秒上限全链路、密码框/窗口切换完整验收、真实测试集准确率。
+- 采集：WebView `getUserMedia` + `AudioContext(16000)` + `ScriptProcessor(2048)`；Realme/WebView 103 可用；Android 权限已配置。手机 UI 含波形、计时、上滑取消、50/60 秒、后台取消、权限说明。
+- 协议：`mic.start` / `mic.ready` / `mic.stop` / `mic.result` / `mic.state` / `mic.error` + `SK01` PCM16 二进制帧；服务端单会话缓冲，音频不广播、不落盘。
+- ASR：whisper-rs + `ggml-base`，启动 prewarm；实测 3.9 秒中文在模型已加载时约 0.2–0.3s。base 对“异步/注释”等术语仍有误识，可用模型页切换 small。
+- 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不发送回车。
+- 桌面：设置页管理模型与辅助功能；应用内语音浮层显示倾听/转写/结果；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
+- 待验证：macOS 辅助功能实际勾选后的自动粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、测试集准确率。

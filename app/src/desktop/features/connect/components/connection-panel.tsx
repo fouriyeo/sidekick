@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { Settings } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -13,9 +14,16 @@ type ConnectionPanelProps = {
   status: DesktopConnectionStatus;
   error: string | null;
   onRetry: () => void;
+  onOpenSettings: () => void;
 };
 
-export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPanelProps) {
+export function ConnectionPanel({
+  info,
+  status,
+  error,
+  onRetry,
+  onOpenSettings,
+}: ConnectionPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -84,10 +92,22 @@ export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPane
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5">
-      <div className="flex min-w-0 items-baseline gap-2.5">
-        <img src="/logo-icon.svg" alt="" className="size-8 self-center" />
+      <div className="flex min-w-0 items-center gap-2.5">
+        <img src="/logo-icon.svg" alt="" className="size-8" />
         <h1 className="text-[22px] font-bold tracking-[0.3px]">Sidekick</h1>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">电脑端 · 局域网测试</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          电脑端 · 局域网测试
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="打开桌面设置"
+          title="设置"
+          onClick={onOpenSettings}
+        >
+          <Settings className="size-4" />
+        </Button>
       </div>
 
       <div className="flex items-center gap-2 text-[13px] text-muted-foreground">

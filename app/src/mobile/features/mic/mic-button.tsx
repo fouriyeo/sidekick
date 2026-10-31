@@ -1,326 +1,729 @@
 import { cn } from "cn";
-import { Mic } from "lucide-react";
+import { AlertCircle, Check, Copy, Loader2, Mic, ShieldAlert, X } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import { usePetStore } from "@/mobile/features/pet/pet-store";
+import { createHaptics } from "@/mobile/features/pet/haptics";
 import type { Posture } from "@/mobile/features/pet/types";
-import { sendVoice, sendVoiceCancel, sendVoiceStart } from "@/shared/lib/tauri";
-import { startVoiceRecording, type VoiceSession } from "./voice-recorder";
-
-type MicState = "idle" | "arming" | "listening" | "processing" | "error";
+import { useReducedMotion } from "@/mobile/features/pet/use-reduced-motion";
+import type { MicStopReason } from "@/protocol/messages";
+import {
+  MIC_PERMISSION_DENIED_KEY,
+  MIC_PRIMER_KEY,
+  readLocal,
+  writeLocal,
+} from "@/shared/lib/local-storage";
+import { sendMicFrame, sendMicStart, sendMicStop } from "@/shared/lib/tauri";
+import { formatDuration, MIC_COPY, micLocalErrorText } from "./mic-copy";
+import { useMicStore } from "./mic-store";
+import { PermissionPrimer } from "./permission-primer";
+import {
+  createSessionId,
+  primeMicrophone,
+  startVoiceRecording,
+  type VoiceSession,
+} from "./voice-recorder";
+import { VoiceWaveform } from "./voice-waveform";
 
 type MicButtonProps = {
   active: boolean;
   posture: Posture;
+  onOpenConnection?: () => void;
 };
 
 const MIN_RECORDING_MS = 300;
 const MAX_RECORDING_MS = 60_000;
+const WARN_RECORDING_MS = 50_000;
+const CANCEL_ENTER_PX = 48;
+const CANCEL_EXIT_PX = 24;
 
-export function MicButton({ active, posture }: MicButtonProps) {
+export function MicButton({ active, posture, onOpenConnection }: MicButtonProps) {
   const connectionStatus = useConnectionStore((state) => state.status);
-  const dispatch = usePetStore((state) => state.dispatch);
+  const phase = useMicStore((state) => state.phase);
+  const result = useMicStore((state) => state.result);
+  const error = useMicStore((state) => state.error);
 
-  const [state, setState] = useState<MicState>("idle");
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const reducedMotion = useReducedMotion();
+  const haptics = useMemo(() => createHaptics(), []);
+  const [layoutPosture, setLayoutPosture] = useState(posture);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [warning, setWarning] = useState(false);
+  const [cancelZone, setCancelZone] = useState(false);
   const [message, setMessage] = useState("");
+  const [copyDone, setCopyDone] = useState(false);
+  const [primerOpen, setPrimerOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [primerBusy, setPrimerBusy] = useState(false);
+  const [primerDone, setPrimerDone] = useState(() => readLocal(MIC_PRIMER_KEY) === "1");
+  const [permissionDenied, setPermissionDenied] = useState(
+    () => readLocal(MIC_PERMISSION_DENIED_KEY) === "1",
+  );
 
   const sessionRef = useRef<VoiceSession | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const sequenceRef = useRef(0);
+  const pointerIdRef = useRef<number | null>(null);
+  const startYRef = useRef(0);
   const heldRef = useRef(false);
   const startSentRef = useRef(false);
   const startedAtRef = useRef(0);
-  const pointerIdRef = useRef<number | null>(null);
+  const cancelZoneRef = useRef(false);
+  const warnedRef = useRef(false);
   const tickRef = useRef<number | null>(null);
-  const resetRef = useRef<number | null>(null);
-  const busyRef = useRef(false);
+  const hintTimerRef = useRef<number | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const finishingRef = useRef(false);
 
-  const clearTimers = useCallback(() => {
+  const busy = phase === "arming" || phase === "listening" || phase === "processing";
+  const connected = connectionStatus === "connected";
+
+  useEffect(() => {
+    if (!busy) setLayoutPosture(posture);
+  }, [busy, posture]);
+
+  const showHint = useCallback((text: string) => {
+    if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current);
+    setMessage(text);
+    hintTimerRef.current = window.setTimeout(() => {
+      hintTimerRef.current = null;
+      setMessage("");
+    }, 1800);
+  }, []);
+
+  const clearTick = useCallback(() => {
     if (tickRef.current !== null) {
       window.clearInterval(tickRef.current);
       tickRef.current = null;
     }
-    if (resetRef.current !== null) {
-      window.clearTimeout(resetRef.current);
-      resetRef.current = null;
+  }, []);
+
+  const releasePointer = useCallback((event?: ReactPointerEvent<HTMLButtonElement>) => {
+    const pointerId = pointerIdRef.current;
+    pointerIdRef.current = null;
+    if (event && pointerId !== null && event.currentTarget.hasPointerCapture?.(pointerId)) {
+      event.currentTarget.releasePointerCapture(pointerId);
     }
   }, []);
 
-  const resetSoon = useCallback(
-    (nextMessage = "") => {
-      clearTimers();
-      setMessage(nextMessage);
-      resetRef.current = window.setTimeout(() => {
-        setState("idle");
-        setMessage("");
-        resetRef.current = null;
-      }, 1800);
-    },
-    [clearTimers],
-  );
-
   const cancelRecording = useCallback(
-    async (notify: boolean) => {
+    async (reason: MicStopReason, hint = "") => {
       heldRef.current = false;
-      clearTimers();
+      clearTick();
+      releasePointer();
+      setCancelZone(false);
+      cancelZoneRef.current = false;
 
       const session = sessionRef.current;
       sessionRef.current = null;
-      if (session) await session.cancel();
-
-      if (notify && startSentRef.current) {
-        void sendVoiceCancel().catch(() => undefined);
-      }
+      const sessionId = sessionIdRef.current;
+      sessionIdRef.current = null;
+      const shouldNotify = startSentRef.current;
       startSentRef.current = false;
-      dispatch({ type: "MIC_CANCEL", now: Date.now() });
-      setState("idle");
-      setElapsedSeconds(0);
-      setMessage("");
+
+      await session?.cancel();
+      if (shouldNotify && sessionId) {
+        void sendMicStop(sessionId, reason).catch(() => undefined);
+      }
+
+      useMicStore.getState().cancel();
+      setElapsedMs(0);
+      setWarning(false);
+      warnedRef.current = false;
+      if (hint) showHint(hint);
+      if (reason === "cancel") haptics.light();
     },
-    [clearTimers, dispatch],
+    [clearTick, haptics, releasePointer, showHint],
   );
 
-  const finish = useCallback(
-    async (send: boolean) => {
-      if (busyRef.current) return;
-      busyRef.current = true;
+  const abortLocalCapture = useCallback(
+    async (notifyServer: boolean) => {
       heldRef.current = false;
-      clearTimers();
+      clearTick();
+      releasePointer();
+      setCancelZone(false);
+      cancelZoneRef.current = false;
 
       const session = sessionRef.current;
       sessionRef.current = null;
-      if (!session) {
-        busyRef.current = false;
-        setState("idle");
+      const sessionId = sessionIdRef.current;
+      sessionIdRef.current = null;
+      const wasSent = startSentRef.current;
+      startSentRef.current = false;
+
+      if (session) await session.cancel();
+      if (notifyServer && wasSent && sessionId) {
+        void sendMicStop(sessionId, "cancel").catch(() => undefined);
+      }
+    },
+    [clearTick, releasePointer],
+  );
+
+  const finishRecording = useCallback(
+    async (reason: "release" | "timeout") => {
+      if (finishingRef.current) return;
+      finishingRef.current = true;
+      heldRef.current = false;
+      clearTick();
+      releasePointer();
+      setCancelZone(false);
+      cancelZoneRef.current = false;
+
+      const session = sessionRef.current;
+      sessionRef.current = null;
+      const sessionId = sessionIdRef.current;
+      sessionIdRef.current = null;
+
+      if (!session || !sessionId) {
+        useMicStore.getState().reset();
+        setElapsedMs(0);
+        finishingRef.current = false;
         return;
       }
 
       try {
         const recording = await session.stop();
-        const tooShort = !recording || recording.durationMs < MIN_RECORDING_MS;
-
-        if (!send || tooShort) {
+        if (recording.durationMs < MIN_RECORDING_MS) {
           if (startSentRef.current) {
-            void sendVoiceCancel().catch(() => undefined);
+            void sendMicStop(sessionId, "cancel").catch(() => undefined);
           }
           startSentRef.current = false;
-          dispatch({ type: "MIC_CANCEL", now: Date.now() });
-          setState("idle");
-          setElapsedSeconds(0);
-          if (send && tooShort) resetSoon("按住说话。");
+          useMicStore.getState().cancel();
+          setElapsedMs(0);
+          setWarning(false);
+          warnedRef.current = false;
+          showHint(MIC_COPY.tooShort);
+          haptics.light();
           return;
         }
 
-        setState("processing");
-        setMessage("转写中…");
+        useMicStore.getState().markProcessing();
+        const sent = startSentRef.current;
+        startSentRef.current = false;
+        if (!sent) {
+          useMicStore.getState().fail(MIC_COPY.disconnected, "disconnect");
+          return;
+        }
 
         try {
-          await sendVoice(recording.base64, recording.sampleRate, recording.durationMs);
-          dispatch({ type: "MIC_CANCEL", now: Date.now() });
-          resetSoon("已发送");
+          await sendMicStop(sessionId, reason);
         } catch {
-          dispatch({ type: "MIC_ERROR", now: Date.now() });
-          setState("error");
-          setElapsedSeconds(0);
-          resetSoon("发送失败，检查连接。");
-        } finally {
-          startSentRef.current = false;
+          useMicStore.getState().fail(MIC_COPY.disconnected, "disconnect");
         }
+        setElapsedMs(0);
+        setWarning(false);
+        warnedRef.current = false;
       } finally {
-        busyRef.current = false;
+        finishingRef.current = false;
       }
     },
-    [clearTimers, dispatch, resetSoon],
+    [clearTick, haptics, releasePointer, showHint],
   );
 
-  const onPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      if (
-        busyRef.current ||
-        state === "arming" ||
-        state === "listening" ||
-        state === "processing"
-      ) {
+  const startRecording = useCallback(
+    async (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (busy || !active) return;
+      if (!connected) {
+        showHint("先连接电脑，再按住说话。");
+        onOpenConnection?.();
         return;
       }
-
-      if (connectionStatus !== "connected") {
-        setState("error");
-        resetSoon("先连接电脑，再按住说话。");
+      if (!primerDone) {
+        setPrimerOpen(true);
+        return;
+      }
+      if (permissionDenied) {
+        setGuideOpen(true);
         return;
       }
 
       event.currentTarget.setPointerCapture?.(event.pointerId);
       pointerIdRef.current = event.pointerId;
+      startYRef.current = event.clientY;
       heldRef.current = true;
-      setState("arming");
-      setMessage("准备中…");
+      cancelZoneRef.current = false;
+      setCancelZone(false);
+      warnedRef.current = false;
+      setWarning(false);
+      setElapsedMs(0);
+      startedAtRef.current = Date.now();
+      sequenceRef.current = 0;
+      startSentRef.current = false;
 
-      void startVoiceRecording()
-        .then(async (session) => {
-          if (!heldRef.current) {
-            await session.cancel();
-            setState("idle");
-            setMessage("");
-            return;
-          }
+      const sessionId = createSessionId();
+      sessionIdRef.current = sessionId;
+      useMicStore.getState().begin(sessionId);
 
-          sessionRef.current = session;
-          startedAtRef.current = Date.now();
-          startSentRef.current = true;
-          dispatch({ type: "MIC_START", now: Date.now() });
-          setState("listening");
-          setMessage("正在听");
+      try {
+        await sendMicStart(sessionId, 16_000, 128);
+        startSentRef.current = true;
+      } catch {
+        heldRef.current = false;
+        sessionIdRef.current = null;
+        useMicStore.getState().fail(MIC_COPY.disconnected, "disconnect");
+        return;
+      }
 
-          try {
-            await sendVoiceStart();
-          } catch {
-            // The send on release will surface the connection error.
-          }
+      if (!heldRef.current) {
+        void sendMicStop(sessionId, "cancel").catch(() => undefined);
+        startSentRef.current = false;
+        sessionIdRef.current = null;
+        const phase = useMicStore.getState().phase;
+        if (phase === "arming" || phase === "listening") useMicStore.getState().cancel();
+        return;
+      }
 
-          tickRef.current = window.setInterval(() => {
-            const seconds = Math.floor((Date.now() - startedAtRef.current) / 1000);
-            setElapsedSeconds(seconds);
-            if (seconds * 1000 >= MAX_RECORDING_MS) {
-              void finish(true);
+      try {
+        const session = await startVoiceRecording({
+          sessionId,
+          onFrame: (pcm) => {
+            const sequence = sequenceRef.current;
+            sequenceRef.current += 1;
+            void sendMicFrame(sessionId, sequence, pcm).catch(() => {
+              if (heldRef.current) {
+                void cancelRecording("disconnect", MIC_COPY.disconnected);
+              }
+            });
+          },
+          onLost: () => {
+            if (heldRef.current) {
+              void cancelRecording("mic_lost", MIC_COPY.micLost);
             }
-          }, 250);
-        })
-        .catch((error: unknown) => {
-          heldRef.current = false;
-          setState("error");
-          const denied =
-            typeof error === "object" &&
-            error !== null &&
-            "name" in error &&
-            (error as { name?: unknown }).name === "NotAllowedError";
-          resetSoon(
-            denied ? "需要麦克风权限才能说话。去系统设置打开。" : "麦克风启动失败，再试一次。",
-          );
+          },
         });
+
+        if (!heldRef.current) {
+          void sendMicStop(sessionId, "cancel").catch(() => undefined);
+          startSentRef.current = false;
+          await session.cancel();
+          sessionIdRef.current = null;
+          const phase = useMicStore.getState().phase;
+          if (phase === "arming" || phase === "listening") useMicStore.getState().cancel();
+          return;
+        }
+
+        sessionRef.current = session;
+        useMicStore.getState().markListening();
+        tickRef.current = window.setInterval(() => {
+          const elapsed = Date.now() - startedAtRef.current;
+          setElapsedMs(elapsed);
+          if (!warnedRef.current && elapsed >= WARN_RECORDING_MS) {
+            warnedRef.current = true;
+            setWarning(true);
+            haptics.medium();
+          }
+          if (elapsed >= MAX_RECORDING_MS && heldRef.current) {
+            void finishRecording("timeout");
+          }
+        }, 250);
+      } catch (cause) {
+        heldRef.current = false;
+        void sendMicStop(sessionId, "cancel").catch(() => undefined);
+        startSentRef.current = false;
+        sessionIdRef.current = null;
+        sessionRef.current = null;
+        useMicStore.getState().cancel();
+
+        const denied =
+          typeof cause === "object" &&
+          cause !== null &&
+          "name" in cause &&
+          (cause as { name?: unknown }).name === "NotAllowedError";
+        if (denied) {
+          setPrimerDone(true);
+          writeLocal(MIC_PRIMER_KEY, "1");
+          setPermissionDenied(true);
+          writeLocal(MIC_PERMISSION_DENIED_KEY, "1");
+          setGuideOpen(true);
+        } else {
+          useMicStore.getState().fail(micLocalErrorText(cause), "mic_start");
+        }
+      }
     },
-    [connectionStatus, dispatch, finish, resetSoon, state],
+    [
+      active,
+      busy,
+      cancelRecording,
+      connected,
+      finishRecording,
+      haptics,
+      onOpenConnection,
+      permissionDenied,
+      primerDone,
+      showHint,
+    ],
+  );
+
+  const onPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      if (phase === "processing") return;
+      void startRecording(event);
+    },
+    [phase, startRecording],
+  );
+
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (pointerIdRef.current !== event.pointerId || !heldRef.current) return;
+      if (phase !== "listening" && phase !== "arming") return;
+
+      const delta = startYRef.current - event.clientY;
+      if (!cancelZoneRef.current && delta >= CANCEL_ENTER_PX) {
+        cancelZoneRef.current = true;
+        setCancelZone(true);
+        haptics.light();
+      } else if (cancelZoneRef.current && delta < CANCEL_EXIT_PX) {
+        cancelZoneRef.current = false;
+        setCancelZone(false);
+      }
+    },
+    [haptics, phase],
   );
 
   const onPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (pointerIdRef.current !== event.pointerId) return;
-      pointerIdRef.current = null;
+      releasePointer(event);
 
-      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
+      if (cancelZoneRef.current) {
+        void cancelRecording("cancel");
+        return;
       }
 
-      if (state === "listening") {
-        void finish(true);
-      } else if (state === "arming") {
-        heldRef.current = false;
+      if (phase === "listening" || phase === "arming") {
+        void finishRecording("release");
+      } else if (phase === "idle" && !heldRef.current) {
+        setElapsedMs(0);
       }
     },
-    [finish, state],
+    [cancelRecording, finishRecording, phase, releasePointer],
   );
 
   const onPointerCancel = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (pointerIdRef.current !== event.pointerId) return;
-      pointerIdRef.current = null;
-      if (state === "listening" || state === "arming") {
-        void cancelRecording(true);
-      }
+      void cancelRecording("cancel");
     },
-    [cancelRecording, state],
+    [cancelRecording],
   );
 
   useEffect(() => {
+    if (
+      (phase === "idle" || phase === "error") &&
+      (sessionRef.current !== null || heldRef.current)
+    ) {
+      void abortLocalCapture(phase === "error");
+    }
+  }, [abortLocalCapture, phase]);
+
+  useEffect(() => {
     const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && (state === "arming" || state === "listening")) {
-        void cancelRecording(true);
+      if (document.visibilityState === "hidden" && (phase === "arming" || phase === "listening")) {
+        void cancelRecording("background", MIC_COPY.background);
       }
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [cancelRecording, state]);
+  }, [cancelRecording, phase]);
 
   useEffect(() => {
-    if (!active && (state === "arming" || state === "listening")) {
-      void cancelRecording(true);
+    if (connectionStatus !== "connected" && (phase === "arming" || phase === "listening")) {
+      void cancelRecording("disconnect", MIC_COPY.disconnected);
     }
-  }, [active, cancelRecording, state]);
+  }, [cancelRecording, connectionStatus, phase]);
+
+  useEffect(() => {
+    if (!active && (phase === "arming" || phase === "listening")) {
+      void cancelRecording("background", MIC_COPY.background);
+    }
+  }, [active, cancelRecording, phase]);
 
   useEffect(() => {
     return () => {
-      clearTimers();
+      clearTick();
+      if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
       const session = sessionRef.current;
       sessionRef.current = null;
       if (session) void session.cancel();
     };
-  }, [clearTimers]);
+  }, [clearTick]);
 
-  const label =
-    state === "arming"
-      ? "准备中…"
-      : state === "listening"
-        ? "正在听"
-        : state === "processing"
-          ? message || "转写中…"
-          : state === "error"
-            ? message
-            : "";
+  const handlePrimerContinue = useCallback(async () => {
+    setPrimerBusy(true);
+    try {
+      await primeMicrophone();
+      writeLocal(MIC_PRIMER_KEY, "1");
+      writeLocal(MIC_PERMISSION_DENIED_KEY, "0");
+      setPrimerDone(true);
+      setPermissionDenied(false);
+      setPrimerOpen(false);
+      setGuideOpen(false);
+      showHint(MIC_COPY.permissionReady);
+      haptics.light();
+    } catch (cause) {
+      const denied = micLocalErrorText(cause) === MIC_COPY.permissionDenied;
+      if (denied) {
+        writeLocal(MIC_PRIMER_KEY, "1");
+        writeLocal(MIC_PERMISSION_DENIED_KEY, "1");
+        setPrimerDone(true);
+        setPermissionDenied(true);
+      }
+      setPrimerOpen(false);
+      setGuideOpen(true);
+      if (!denied) showHint(micLocalErrorText(cause));
+    } finally {
+      setPrimerBusy(false);
+    }
+  }, [haptics, showHint]);
+
+  const handleGuideContinue = useCallback(() => {
+    setGuideOpen(false);
+    setPermissionDenied(false);
+    writeLocal(MIC_PERMISSION_DENIED_KEY, "0");
+  }, []);
+
+  const handleCopyResult = useCallback(() => {
+    if (!result?.text) return;
+    const clipboard = navigator.clipboard;
+    if (!clipboard) return;
+    void clipboard
+      .writeText(result.text)
+      .then(() => {
+        setCopyDone(true);
+        if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = window.setTimeout(() => {
+          setCopyDone(false);
+          copyTimerRef.current = null;
+        }, 1500);
+      })
+      .catch(() => undefined);
+  }, [result]);
+
+  const getLevel = useCallback(() => sessionRef.current?.getLevel() ?? 0, []);
+  const recording = phase === "arming" || phase === "listening";
+  const listening = phase === "listening";
+  const processing = phase === "processing";
+  const showResult = (phase === "delivered" || phase === "error") && (result || error);
+
+  const timerText = formatDuration(elapsedMs);
+  const statusLabel = processing
+    ? MIC_COPY.processing
+    : phase === "arming"
+      ? MIC_COPY.arming
+      : listening
+        ? cancelZone
+          ? MIC_COPY.releaseToCancel
+          : `${MIC_COPY.listening} · ${timerText}`
+        : "";
+
+  const label = !connected
+    ? MIC_COPY.idleDisconnected
+    : processing
+      ? MIC_COPY.processing
+      : phase === "arming"
+        ? MIC_COPY.arming
+        : MIC_COPY.idle;
 
   return (
-    <div
-      className={cn(
-        "absolute z-30 flex flex-col items-center gap-2",
-        posture === "docked"
-          ? "bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 -translate-x-1/2"
-          : "bottom-[calc(env(safe-area-inset-bottom)+24px)] right-[calc(env(safe-area-inset-right)+24px)]",
-      )}
-    >
-      {label && (
-        <span
-          aria-live="polite"
-          className={cn(
-            "max-w-[70vw] rounded-full border border-pet-border bg-card px-3 py-1.5 text-center text-xs text-pet-text",
-            state === "error" && "border-pet-danger text-pet-danger",
-          )}
-        >
-          {state === "listening" ? `${label} · ${elapsedSeconds}s` : label}
-        </span>
-      )}
-
-      <button
-        type="button"
-        aria-label="按住说话，麦克风"
-        aria-pressed={state === "listening"}
+    <>
+      <div
         className={cn(
-          "touch-none select-none rounded-full border border-pet-border shadow-sm transition-transform active:scale-[0.98]",
-          "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pet-primary/40",
-          posture === "docked"
-            ? "flex h-14 min-w-[220px] items-center justify-center gap-2 px-6 text-sm font-medium"
-            : "flex size-24 flex-col items-center justify-center gap-1 text-xs",
-          state === "listening"
-            ? "bg-pet-coral text-white"
-            : "bg-pet-primary text-pet-primary-foreground disabled:opacity-60",
+          "absolute z-30 flex flex-col items-center gap-2",
+          layoutPosture === "docked"
+            ? "bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 -translate-x-1/2"
+            : "bottom-[calc(env(safe-area-inset-bottom)+24px)] right-[calc(env(safe-area-inset-right)+24px)]",
         )}
-        disabled={state === "processing"}
-        onContextMenu={(event) => event.preventDefault()}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
       >
-        <Mic className={posture === "docked" ? "size-5" : "size-7"} />
-        {posture === "docked" && (
-          <span>{state === "listening" ? `${elapsedSeconds}s` : "按住说话"}</span>
+        {message && (
+          <span
+            role="status"
+            aria-live="polite"
+            className="max-w-[78vw] rounded-full border border-pet-border bg-pet-bg px-3 py-1.5 text-center text-xs text-pet-text shadow-sm"
+          >
+            {message}
+          </span>
         )}
-        {posture === "handheld" && <span>{state === "listening" ? "松手结束" : "按住"}</span>}
-      </button>
-    </div>
+
+        {showResult && (
+          <div
+            className={cn(
+              "w-[min(82vw,420px)] rounded-2xl border bg-pet-bg p-3 text-left shadow-lg",
+              error ? "border-pet-danger" : "border-pet-border",
+            )}
+          >
+            <div className="flex items-start gap-2">
+              <span
+                className={cn(
+                  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
+                  error ? "bg-secondary text-pet-danger" : "bg-secondary text-pet-success",
+                )}
+              >
+                {error ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5" />}
+              </span>
+              <p className="text-xs leading-relaxed text-pet-text">{error ?? result?.message}</p>
+            </div>
+
+            {result?.text && (
+              <div className="mt-2 rounded-xl bg-secondary px-2.5 py-2">
+                <p className="line-clamp-2 text-xs leading-relaxed text-pet-muted">{result.text}</p>
+                <button
+                  type="button"
+                  className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-pet-primary"
+                  onClick={handleCopyResult}
+                >
+                  {copyDone ? <Check className="size-3" /> : <Copy className="size-3" />}
+                  {copyDone ? MIC_COPY.copiedAction : MIC_COPY.copy}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {layoutPosture === "handheld" && recording && (
+          <div
+            className={cn(
+              "w-[min(82vw,360px)] rounded-2xl border px-4 py-3 shadow-lg",
+              cancelZone
+                ? "border-pet-coral bg-pet-coral text-white"
+                : "border-pet-border bg-pet-bg text-pet-text",
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5 text-xs font-medium">
+                <span className="size-1.5 animate-pulse rounded-full bg-current" />
+                {statusLabel}
+              </span>
+              <span className="text-[11px] opacity-80">
+                {cancelZone
+                  ? MIC_COPY.releaseToCancel
+                  : warning
+                    ? MIC_COPY.warning
+                    : MIC_COPY.cancelHint}
+              </span>
+            </div>
+            <VoiceWaveform
+              active={listening}
+              getLevel={getLevel}
+              reducedMotion={reducedMotion}
+              className="mt-2"
+            />
+          </div>
+        )}
+
+        {layoutPosture === "handheld" && listening && (
+          <button
+            type="button"
+            aria-label="取消录音"
+            className="absolute bottom-0 left-[calc(env(safe-area-inset-left)+24px)] flex size-16 items-center justify-center rounded-full border border-pet-border bg-pet-bg text-pet-muted shadow-sm"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              void cancelRecording("cancel");
+            }}
+          >
+            <X className="size-6" />
+          </button>
+        )}
+
+        <button
+          type="button"
+          aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
+          aria-pressed={listening}
+          className={cn(
+            "touch-none select-none rounded-full border shadow-sm transition-transform active:scale-[0.98]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-primary",
+            layoutPosture === "docked"
+              ? recording
+                ? "flex h-16 w-[min(82vw,520px)] items-center justify-center gap-3 px-5 text-sm font-medium"
+                : "flex h-14 min-w-[220px] items-center justify-center gap-2 px-6 text-sm font-medium"
+              : "flex size-24 flex-col items-center justify-center gap-1 text-xs",
+            cancelZone
+              ? "border-pet-coral bg-pet-coral text-white"
+              : recording
+                ? "border-pet-coral bg-pet-coral text-white"
+                : processing
+                  ? "border-pet-border bg-secondary text-pet-muted"
+                  : "border-pet-primary bg-pet-primary text-pet-primary-foreground",
+            !connected && !recording && "border-pet-border bg-secondary text-pet-muted",
+          )}
+          disabled={processing}
+          onContextMenu={(event) => event.preventDefault()}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+        >
+          {processing ? (
+            <Loader2 className="size-5 animate-spin" />
+          ) : recording && layoutPosture === "docked" ? (
+            <>
+              <span className="size-1.5 animate-pulse rounded-full bg-current" />
+              {layoutPosture === "docked" && (
+                <>
+                  <span className="tabular-nums text-xs">{timerText}</span>
+                  <VoiceWaveform
+                    active={listening}
+                    getLevel={getLevel}
+                    reducedMotion={reducedMotion}
+                    bars={18}
+                    className="min-w-0 flex-1"
+                  />
+                  <span className="shrink-0 text-[11px] opacity-90">
+                    {cancelZone
+                      ? MIC_COPY.releaseToCancel
+                      : warning
+                        ? MIC_COPY.warning
+                        : MIC_COPY.cancelHint}
+                  </span>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <Mic className={layoutPosture === "docked" ? "size-5" : "size-7"} />
+              {layoutPosture === "docked" ? (
+                <span>{label}</span>
+              ) : (
+                <span>{recording ? "松手结束" : label}</span>
+              )}
+            </>
+          )}
+        </button>
+      </div>
+
+      <PermissionPrimer
+        open={primerOpen}
+        mode="primer"
+        busy={primerBusy}
+        onOpenChange={setPrimerOpen}
+        onContinue={() => {
+          void handlePrimerContinue();
+        }}
+      />
+      <PermissionPrimer
+        open={guideOpen}
+        mode="guide"
+        onOpenChange={setGuideOpen}
+        onContinue={handleGuideContinue}
+      />
+
+      {phase === "error" && error && /权限/.test(error) && (
+        <button
+          type="button"
+          aria-label="查看麦克风权限设置"
+          className="absolute bottom-[calc(env(safe-area-inset-bottom)+96px)] right-[calc(env(safe-area-inset-right)+24px)] z-30 flex size-11 items-center justify-center rounded-full border border-pet-border bg-pet-bg text-pet-primary"
+          onClick={() => setGuideOpen(true)}
+        >
+          <ShieldAlert className="size-5" />{" "}
+        </button>
+      )}
+    </>
   );
 }

@@ -260,3 +260,39 @@
 - 原因：用户明确「电脑端不用整个大二维码一直在那里」；端到端最短路径应是打开 App 就可用。
 - 代价：手动输入不再是主路径，需要保留兜底入口与排障文案；桌面二维码变为两步操作（展开→扫）。
 - 规范：`app/src/mobile/features/connect/`、`app/src/desktop/features/connect/`、`docs/engineering/lan-discovery.md`。
+
+## D40 · 自动粘贴改为 Sidekick 直接合成 Cmd+V（2026-10-31）
+
+- 背景：spike 用 `osascript -> System Events` 发 Cmd+V，辅助功能授权后仍不可靠，且错误归因在 osascript 而非 Sidekick。
+- 决策：由 Sidekick 进程用 `core-graphics` 合成 keycode 9（V）+ Command 的按下/抬起；插入前用 `AXIsProcessTrusted()` 检查自身授权；未授权/目标应用变化/安全输入只复制。设置页提供请求权限、打开系统设置、Finder 定位与重新检测。
+- 原因：权限归属于 Sidekick 本身，行为可解释；只发 V，不发送 Return/Enter。
+- 代价：macOS 不允许程序自行勾选，用户需手动授权一次；开发二进制重编译后 TCC 可能要求重新授权。
+- 规范：`app/src-tauri/src/desktop_mic.rs`、`docs/engineering/audio-pipeline.md`。
+
+## D41 · ASR 改为 whisper-rs 内存转写 + 本机模型管理（2026-10-31）
+
+- 决策：用 whisper-rs 0.16（Metal）在本机转写，不再调 `whisper-cli`、不写临时 WAV；模型目录 `~/Library/Application Support/Sidekick/models`，桌面设置页负责下载/取消/删除/选择，并复用已有 `ggml-base.bin`；保留 tiny/base/small/medium。
+- 原因：满足“音频不落盘”，避免 Homebrew 运行依赖；启动 prewarm 后实测 3.9 秒中文约 0.2–0.3s。
+- 代价：新增 whisper-rs / reqwest / cmake 构建依赖；模型体积 74MB–1.4GB；base 对代码术语仍有误识，需切 small/medium 或后续测试集优化。
+- 规范：`app/src-tauri/src/asr_models.rs`、`docs/engineering/asr-model.md`。
+
+## D42 · 麦克风正式协议：二进制 PCM16 + 单会话（2026-10-31）
+
+- 决策：`mic.start` / `mic.ready` / `mic.stop` 用 JSON；音频用 `SK01 + session + sequence + PCM16` 二进制帧；桌面单 active session、音频不广播、只在 `mic.stop(release/timeout)` 后转写；取消/后台/断连丢弃。
+- 原因：JSON base64 WAV 膨胀且解析开销大；单会话足以覆盖 P0 单手机，配对/多客户端隔离在 P1。
+- 代价：控制消息仍走广播，同网段调试客户端可见；音频与结果只对单手机场景优化。
+- 规范：`app/src-tauri/src/mic_protocol.rs`、`protocol/README.md`、`docs/engineering/protocol-audio.md`。
+
+## D43 · 桌面设置页 + P0 应用内语音浮层（2026-10-31）
+
+- 决策：模型管理与辅助功能入口放在桌面 App 内「设置」Sheet，不单独做网页；语音状态用右上角应用内浮层，不做独立 always-on-top 窗口。
+- 原因：模型属于电脑本机能力，手机不应下载；应用内浮层避免新窗口焦点/TCC 复杂度，先满足 P0 反馈。
+- 代价：桌面 App 不在前台时看不到浮层；独立小窗与菜单栏入口放 P1。
+- 规范：`app/src/desktop/features/settings/`、`app/src/desktop/features/mic-receiver/`。
+
+## D44 · 桌面剪贴板历史作为 P1 辅助能力（2026-10-31）
+
+- 决策：经用户确认，本轮并行实现文本剪贴板历史（搜索/复制/置顶/删除/清空/暂停），作为 P1 辅助能力，不替代宠物/麦克风 P0；只记录文本，跳过 `org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型，跳过 Sidekick 自身写入；本地 JSON 权限 `0600`，最多 100 条，不联网、不写全文日志。
+- 原因：用户明确提出“顺手做剪贴板管理”；复用桌面常驻进程与设置页，成本低；隐私边界必须先定。
+- 代价：仅在桌面应用运行时记录；无全局快捷键/菜单栏/图片文件；密码管理器以外的敏感文本无法完全识别。
+- 规范：`docs/engineering/clipboard-manager.md`、`app/src-tauri/src/clipboard_manager.rs`、`docs/product/scope.md`。

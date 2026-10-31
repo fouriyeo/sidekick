@@ -14,11 +14,12 @@
 | NDK | `27.2.12479018` |
 | Rust 安卓目标 | `aarch64-linux-android`、`armv7-linux-androideabi`、`i686-linux-android`、`x86_64-linux-android`（`tauri android init` 自动安装） |
 | cargo-ndk | `cargo install cargo-ndk`（安装在 `~/.cargo/bin`） |
+| cmake | brew `cmake`（whisper-rs 构建依赖；libclang 用 Xcode CLT 自带） |
 
 重装参考：
 
 ```sh
-brew install rust openjdk@21
+brew install rust openjdk@21 cmake
 brew install --cask android-commandlinetools
 sdkmanager --sdk_root="$HOME/Library/Android/sdk" \
   "platform-tools" "platforms;android-35" "platforms;android-36" "platforms;android-37.0" \
@@ -122,6 +123,14 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 | Gradle 报缺少 android-37 / build-tools | `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"` |
 | APK 很大 | debug 版正常（含调试符号）；release 需签名，体积预计 10–20MB |
 | 首次构建很慢 | Gradle 首次下载依赖；`~/.gradle` 缓存后会明显加快 |
+
+## 本机语音模型 / 自动粘贴 / 剪贴板
+
+- whisper-rs 构建需要 `cmake`（`brew install cmake`）和 libclang；当前使用 `/Library/Developer/CommandLineTools/usr/lib`。
+- 模型目录：`~/Library/Application Support/Sidekick/models`；已有 `ggml-base.bin` 会被直接识别。桌面「设置 → 语音模型」可下载/切换/删除。
+- 自动粘贴需要在「系统设置 → 隐私与安全性 → 辅助功能」勾选当前 `desktop`（开发）或 `Sidekick.app`（正式）。设置页可请求权限、打开系统设置、在 Finder 中定位、重新检测。重新编译开发二进制后可能需要重新勾选。
+- 剪贴板历史在 `~/Library/Application Support/Sidekick/clipboard.json`，权限 `600`；可在桌面「剪贴板」页暂停/清空。
+- 可用 `SIDEKICK_MODEL_DIR` 指向临时空目录验证“无模型”提示，不改动现有模型。
 
 ## Release（待办）
 

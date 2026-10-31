@@ -163,7 +163,15 @@ node ../scripts/check-docs.mjs
 - Rust：`cargo fmt --check`、`cargo clippy`、`cargo test`、`cargo audit`（引入后）。
 - 真机测试无法完全 CI 化；发版前人工跑清单并记录。
 
-## 13. 缺陷分级
+## 13. 麦克风 / 剪贴板专项
+
+- 麦克风协议：`cargo test --lib`（`mic_protocol` 帧往返/非法帧/session）；前端 `audio-frame.test.ts`、`messages.test.ts`。
+- 录音 UI：真机长按、上滑取消、50/60 秒、后台、断连、权限说明、结果卡片；WebView 103 的 `ScriptProcessor` 必须 2 的幂。
+- 自动粘贴：授权前后各跑一次；目标窗口切换、密码框/安全输入只复制；确认不发送 Return。
+- 模型：已有 base 被识别；tiny 下载/取消/切换/删除；无模型时提示；`models/` 无音频文件。
+- 剪贴板：复制/搜索/回填/置顶/删除/清空/暂停；Concealed 类型不记录；`clipboard.json` 权限 `600`；日志无正文。
+
+## 14. 缺陷分级
 
 | 级别 | 定义 | 处理 |
 | --- | --- | --- |

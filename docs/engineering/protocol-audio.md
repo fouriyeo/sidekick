@@ -1,17 +1,16 @@
 ---
 doc: engineering/protocol-audio
 title: 音频协议提案
-status: draft
+status: active
 updated: 2026-10-31
 load: on-demand
 owner: engineering
 ---
 
-# 音频协议提案（v1，未实现）
+# 音频协议（v1，已实现）
 
-> 现状：协议 v0 只有 `chat` / `system`，文本 JSON，服务端广播。见 [protocol/README.md](../../protocol/README.md)。
-> 本文新增麦克风会话与二进制音频帧；实现前需评审，不与现有消息破坏兼容。
-> 2026-10-31 spike 暂时使用 JSON `voice.start` / `voice` / `voice.cancel` + base64 WAV，未采用本文二进制帧；正式 P0 前必须按本文实现或先修订协议。
+> 现状：协议 v0 的 `chat` / `system` 不变；2026-10-31 已按本文实现麦克风会话与二进制帧。
+> 实现：`app/src-tauri/src/mic_protocol.rs`、`desktop_server.rs`、`mobile_client.rs`；前端类型见 `app/src/protocol/messages.ts` 与 `audio-frame.ts`。
 
 ## 1. 目标
 
@@ -49,7 +48,7 @@ P1 才加 `asr.partial`（流式中间结果）。
   "codec": "pcm16",
   "sampleRate": 16000,
   "channels": 1,
-  "frameMs": 100,
+  "frameMs": 128,
   "maxMs": 60000,
   "ts": 1730000000000
 }
@@ -103,13 +102,18 @@ P1 才加 `asr.partial`（流式中间结果）。
   "session": "...",
   "outcome": "inserted",
   "reason": null,
+  "text": "把这段代码改成异步",
+  "truncated": false,
   "latencyMs": 1820,
   "ts": 1730000000000
 }
 ```
 
 `outcome`：`inserted`（自动输入）、`copied`（仅复制）、`failed`。
-`reason`（failed）：`asr_failed` / `target_mismatch` / `secure_input` / `insert_failed` / `asr_timeout`。
+`reason`：`accessibility_off` / `target_mismatch` / `secure_input` / `paste_failed` / `model_missing` / `empty_transcript` / `asr_failed` / `asr_timeout` / `insert_failed` / `session_busy` / `session_mismatch`。
+
+- `text` 给手机最近一次结果卡片使用；不写日志、不落库。
+- `truncated` 表示原文超过 2000 字，只输入了前 2000 字。
 
 ### 3.5 mic.state（桌面 → 桌面 UI）
 
@@ -147,10 +151,10 @@ offset  size  field
 28      N     payload (PCM16 LE, 16kHz mono)
 ```
 
-- 每帧 100ms = 3200 bytes payload；总帧约 3228 bytes。
+- WebView 103 的 ScriptProcessor 使用 2048 samples；16k 下正好 128ms，设备回退 48k 时重采样后约 683 samples（约 43ms）。`frameMs` 是声明参考值，服务端按实际 payload 累积。
 - `sequence` 从 0 递增；桌面发现丢帧只记录，不请求重传（实时场景重传无意义）。
 - `flags.last` 可选；正常结束以 `mic.stop` 为准，不依赖 last。
-- 单帧 payload 上限 64KB；超过丢弃并告警。
+- 单帧 payload 上限 64KB；PCM16 必须偶数长度；超过/奇数帧丢弃。
 
 ### 4.2 为什么用二进制
 
@@ -158,13 +162,13 @@ offset  size  field
 - 二进制帧在 axum/tokio-tungstenite 都原生支持；调试可用十六进制转储。
 - 控制消息仍用 JSON，保持可读性。
 
-## 5. 路由
+## 5. 路由（实现）
 
-- 桌面服务维护 `sessions: HashMap<Uuid, AudioSession>`。
-- 二进制帧只按 session 投递到转写任务；**不进入现有广播通道**。
-- 文本 `mic.*` 消息可按现有广播给桌面 UI，但手机不应收到其它会话的音频/结果。
-- 未知 session 的二进制帧直接丢弃并计数；不创建新会话。
-- 同一 session 重复 `mic.start`：忽略第二个，回 `mic.error`（`session_busy`）。
+- 桌面服务维护一个 active `ActiveMic { owner, session, pcm, frames, ... }`，见 `desktop_server.rs`。
+- 二进制帧只按 session 追加到该会话缓冲；**不进入广播通道**；未知 session/非 owner 直接丢弃。
+- `mic.start` / `mic.ready` / `mic.stop` / `mic.state` / `mic.result` / `mic.error` 仍走现有文本广播，调试客户端可见；P0 仅单手机，配对/多客户端隔离在 P1。
+- 同一时间只允许一个 active session；重复 `mic.start` 回 `mic.error(session_busy)`。
+- 缓冲上限 65 秒 / 2.2MB；超过丢弃。
 
 ## 6. 会话状态机
 
@@ -181,9 +185,10 @@ idle
 
 超时：
 
-- `arming` 2 秒未 ready → `mic.error`。
-- `listening` 60 秒上限由手机端计时并停；桌面也做 65 秒兜底。
-- `processing` 10 秒未完成 → `mic.error`（`asr_timeout`），丢弃。
+- P0 手机在 `mic.start` 后立即开始发帧，不阻塞等待 `mic.ready`；`ready` 目前用于协议完整性/桌面状态。
+- `listening` 60 秒上限由手机端计时并停；桌面 65 秒兜底丢弃。
+- `processing` 10 秒未完成 → `mic.result(failed, asr_timeout)`；取消标记阻止后续插入。
+- P1 可恢复 `arming 2s` 超时与 `mic.ready` 握手。
 
 ## 7. 向后兼容
 
@@ -200,16 +205,18 @@ idle
 - 不记录音频 payload；日志只记 session 前缀、序列号范围、字节数。
 - P1 加配对/长期密钥/加密后，再考虑跨网络。
 
-## 9. 实现映射
+## 9. 实现映射（当前代码）
 
 | 位置 | 职责 |
 | --- | --- |
-| `app/src-tauri/src/lib.rs` `desktop_server` | 新增 `/ws` 二进制分支、session 路由、audio 缓冲 |
-| 桌面 `desktop/features/mic-receiver` | 浮窗状态、结果提示、设置 |
-| 手机 `mobile/features/mic` | 录音 UI、状态、权限、最近结果 |
-| 手机 Rust `mobile_client` | `mic.start/stop`、音频分片发送、结果事件 |
-| `app/src/protocol/messages.ts` | 消息类型、type guard |
-| `app/src/shared/lib/tauri.ts` | 命令/事件唯一出口 |
+| `app/src-tauri/src/desktop_server.rs` | `/ws`、麦克风会话、二进制帧缓冲、`mic.*` 广播、10s 超时 |
+| `app/src-tauri/src/mic_protocol.rs` | 消息/帧解析、session UUID、`MicStopReason` |
+| `app/src-tauri/src/desktop_mic.rs` | ASR 后插入、CGEvent、目标应用/安全输入检查 |
+| `app/src-tauri/src/asr_models.rs` | 模型、下载、prewarm、内存转写 |
+| `app/src-tauri/src/mobile_client.rs` | `Outbound::Text/Binary`、`mic_start/mic_frame/mic_stop` |
+| 桌面 `desktop/features/mic-receiver` | 应用内语音状态浮层 |
+| 手机 `mobile/features/mic` | 录音、波形、手势、权限、结果卡片 |
+| `app/src/protocol/messages.ts`、`audio-frame.ts` | 前端类型与帧测试工具 |
 
 ## 10. 测试向量
 
@@ -226,7 +233,7 @@ idle
 
 ## 11. 版本与迁移
 
-- P0 上线前：协议评审 + 双端 mock 测试 + 真机端到端。
+- P0 已实现：协议 v1 + whisper-rs + 手机 UI；双端类型/文档/测试向量已同步。
 - P1 扩展：`asr.partial`、`codec: opus`、`lock` 模式；字段可选，不破坏 v1。
 - P2：BLE 传输复用同一消息语义，只换承载层。
 - 每次协议变更同步：`protocol/README.md`、本文、`protocol/messages.ts`、Rust 类型、[decisions.md](../decisions.md)。

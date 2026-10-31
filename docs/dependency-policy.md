@@ -215,7 +215,8 @@
 
 - 同一套原则：必要性、维护、许可证、体积（编译时间/产物体积）、安全、可替换。
 - 基线：`tauri` 2.x、`serde`、`tokio`、`axum`、`tokio-tungstenite`、`tauri-plugin-store` 2.5.0、`base64` 0.22、`arboard` 3.7（仅桌面剪贴板，关闭 image feature）；不重复引入 HTTP/WS 框架。
-- 麦克风 spike 的本机转写使用 Homebrew `whisper.cpp`/`whisper-cli` + `ggml-base` 模型（MIT；模型不入库）；正式分发前需单独决定模型分发/下载方案。
+- 麦克风 P0 新增（桌面）：`whisper-rs` 0.16（MIT/Unlicense，Metal；构建需 cmake + libclang）、`reqwest` 0.13（blocking + rustls，模型下载）、`core-graphics` 0.25（Cmd+V）、`macos-accessibility-client` 0.0.2（辅助功能授权提示）、`objc2-app-kit` / `objc2-foundation` 0.3（NSPasteboard 类型过滤）。均为桌面目标，不进安卓包。
+- 模型权重不入库/不入包；模型由桌面设置页下载到本机，许可与分发见 [asr-model.md](./engineering/asr-model.md)。
 - Tauri 插件只用官方或维护良好的社区插件；capabilities 最小权限。
 - 新增 crate 前跑 `cargo tree -d` 看是否已有重复能力；`cargo deny` 管许可证；`cargo audit` 管漏洞。
 - 协议类型如果引入 `ts-rs` / `tauri-specta`，生成物入库并在 CI 校验一致性。

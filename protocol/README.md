@@ -1,8 +1,8 @@
 # Sidekick 事件协议 v0
 
-当前用于局域网 MVP：WebSocket 文本帧，每条消息是一个 JSON 对象，用 `type` 区分。
+当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
 
-服务端把收到的消息**广播**给所有已连接客户端（桌面 UI、手机 App、调试客户端）。MVP 阶段无鉴权。
+服务端把 `chat` / `system` / `mic.*` 控制消息广播给所有已连接客户端（调试可见）；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
 ## 连接
 
@@ -39,11 +39,55 @@
 }
 ```
 
+## 麦克风消息（v1，已实现）
+
+详细格式/帧布局见 [docs/engineering/protocol-audio.md](../docs/engineering/protocol-audio.md)。
+
+| 方向 | 类型 | 传输 |
+| --- | --- | --- |
+| 手机 → 桌面 | `mic.start` | JSON |
+| 桌面 → 手机 | `mic.ready` | JSON |
+| 手机 → 桌面 | PCM16 分片 | Binary（`SK01`） |
+| 手机 → 桌面 | `mic.stop` | JSON |
+| 桌面 → 手机/UI | `mic.result` / `mic.state` / `mic.error` | JSON |
+
+`mic.start` 示例：
+
+```json
+{
+  "v": 1,
+  "type": "mic.start",
+  "session": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "codec": "pcm16",
+  "sampleRate": 16000,
+  "channels": 1,
+  "frameMs": 128,
+  "maxMs": 60000,
+  "ts": 1730000000000
+}
+```
+
+`mic.stop` 的 `reason`：`release` / `cancel` / `timeout` / `background` / `disconnect` / `mic_lost`；只有 `release` / `timeout` 会转写。
+
+音频帧：
+
+```text
+SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE payload
+```
+
+规则：
+
+- 音频帧绝不广播；服务端按 session 追加到内存缓冲。
+- 单会话；重复 `mic.start` 返回 `mic.error(session_busy)`。
+- `mic.result` 含结果原因和文本；文本只给手机结果卡片，不写日志。
+- 详细字段、超时与测试向量见协议文档。
+
 ## 实现映射（当前代码）
 
-- 桌面服务端：`app/src-tauri/src/lib.rs` 的 `desktop_server` 模块（axum `/ws`）
-- 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）
-- 手机 App：Rust `mobile_client` 模块；前端通过 `connect_server` / `send_chat` 命令发送，通过 `conn` / `chat` 事件接收
+- 桌面服务端：`app/src-tauri/src/desktop_server.rs`（axum `/ws`、动态端口、UDP 发现、麦克风会话）
+- 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）；麦克风状态浮层 `desktop/features/mic-receiver`
+- 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
+- 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）
 
@@ -89,14 +133,14 @@ AI 需要用户决策（权限确认、反问）。
 { "type": "input", "kind": "voice|shortcut|text", "text": "...", "ts": 1730000000000 }
 ```
 
-## 音频通道（提案，未实现）
+## 音频通道（已实现）
 
-麦克风需要低开销的二进制音频帧，且**不能广播**给其它客户端。提案见
-[`docs/engineering/protocol-audio.md`](../docs/engineering/protocol-audio.md)：
+麦克风使用低开销的二进制音频帧，且**不能广播**给其它客户端：
 
-- 控制消息仍用 JSON：`mic.start` / `mic.ready` / `mic.stop` / `mic.result` / `mic.state`；
-- 音频用二进制帧：`magic + version + session UUID + sequence + PCM16`；
-- 桌面按 session 路由到转写任务，不进入现有广播通道；
+- 控制消息：`mic.start` / `mic.ready` / `mic.stop` / `mic.result` / `mic.state` / `mic.error`；
+- 音频帧：`magic + version + session UUID + sequence + PCM16`；
+- 桌面按 session 路由到内存缓冲，不进入现有广播通道；
 - P0 仅可信局域网、无鉴权；配对/加密在 P1。
 
-实现前需评审；现有 `chat` / `system` 行为不变。
+实现前评审已完成；现有 `chat` / `system` 行为不变。详见
+[`docs/engineering/protocol-audio.md`](../docs/engineering/protocol-audio.md)。
