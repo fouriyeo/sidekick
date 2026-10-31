@@ -12,6 +12,7 @@
 6. 真机验证通过：手机 App ↔ 桌面端双向收发消息；
 7. 清理模板残留与未使用插件，前端包管理器从 npm 迁移到 pnpm（`pnpm-lock.yaml` 入库）。
 8. 安装前端重构依赖与脚手架：React 19、Tailwind v4、shadcn/ui（Base UI, base-nova）、Motion、Rive、Zustand；Vite/TS 别名、Biome、Vitest 已配置；旧 UI 尚未迁移。
+9. 落地产品规范与两份 PRD：树形文档（`docs/INDEX.md` + product/standards/prd/engineering）、宠物与麦克风 PRD/SPEC/ACCEPTANCE、项目子智能体与 Skill、`scripts/check-docs.mjs`（2026-10-31）。
 
 ## 已验证（有实际证据）
 
@@ -35,15 +36,18 @@
 | 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
 | 前端未组件化 | 原生 DOM + 手写 CSS；依赖与脚手架已就绪（React/Tailwind/shadcn Base UI/Motion/Rive），旧 UI 未迁移 |
+| 平台未分目录 | 目标 `src/desktop` / `src/mobile` / `src/shared` / `src/protocol` 尚未迁移；当前仍是 `main.ts` 运行时分支 |
+| 宠物/麦克风未实现 | PRD/SPEC/AC 已就绪；麦克风需先 spike（Android 采集、本机 ASR、macOS 输入） |
 | 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
 | gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
 
 ## 下一步（按优先级）
 
-- [ ] **前端重构**：依赖已装；下一步按 `frontend-architecture.md` 迁移入口与连接/聊天，再接宠物。
+- [ ] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
+- [ ] **情绪宠物 P0**：按 [prd/pet/INDEX.md](./prd/pet/INDEX.md) 实现；真机 60fps、零焦虑、横屏双姿态。
+- [ ] **外设麦克风 P0**：先按 [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) 做 spike，再按 [prd/mic/INDEX.md](./prd/mic/INDEX.md) 实现；只输入、不发送。
 - [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
-- [ ] **宠物界面**：状态机（working / idle / waiting）驱动表情与动效，聊天降级为辅助视图。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
 - [ ] **配对与鉴权**：首次扫码配对、长期密钥、信道加密。

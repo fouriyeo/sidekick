@@ -2,7 +2,7 @@
 
 把手机变成电脑的外设与 AI 宠物：电脑把 AI/任务状态推到手机，你在手机上收通知、回答 AI 的提问、发快捷指令、语音输入。
 
-当前进度：**局域网 MVP 已验证** —— Tauri 桌面端（服务端）+ Tauri 安卓 App（客户端）可双向收发消息。
+当前进度：**局域网 MVP 已验证**；前端脚手架、产品规范与两份 PRD 已就绪；宠物与麦克风待实现。
 
 ## 快速开始
 
@@ -25,6 +25,12 @@ scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 ## 文档
 
 - `AGENTS.md` — 给 AI / 新协作者的入口（先读这个）
+- `docs/INDEX.md` — 文档树入口（树形 + 懒加载）
+- `docs/product/` — 产品原则、用户、范围、指标
+- `docs/standards/` — 产品、交互、视觉、工程规范
+- `docs/prd/pet/` — 情绪宠物 PRD / SPEC / ACCEPTANCE
+- `docs/prd/mic/` — 外设麦克风 PRD / SPEC / ACCEPTANCE
+- `docs/engineering/` — 音频链路、协议提案、宠物运行时、测试
 - `docs/architecture.md` — 架构与接口
 - `docs/frontend-architecture.md` — 前端目标架构与规范
 - `docs/status.md` — 进度、已验证内容、已知问题
@@ -37,9 +43,12 @@ scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 ## 路线
 
 - [x] 局域网双向通信（2026-10-31）
-- [ ] 前端重构（React 19 + Tailwind v4 + shadcn/Base UI + Motion + Rive；依赖与脚手架已完成，UI 待迁移）
+- [x] 前端脚手架（React 19 + Tailwind v4 + shadcn/Base UI + Motion + Rive）
+- [x] 产品规范与两份 PRD（2026-10-31）
+- [ ] 前端平台分目录 + 连接/聊天迁移
+- [ ] 情绪宠物（手机横屏、纯陪伴）
+- [ ] 外设麦克风（AI 语音输入）
 - [ ] Claude Code / Qoder hook 接入（通知 + 远程回答）
-- [ ] 宠物界面
 - [ ] release 签名与打包
-- [ ] 蓝牙通道
-- [ ] iOS
+- [ ] 配对与鉴权
+- [ ] 蓝牙通道 / iOS

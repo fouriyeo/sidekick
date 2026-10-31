@@ -1,14 +1,15 @@
 # 前端技术架构
 
 > 状态：已定稿（2026-10-31）；依赖与脚手架已安装，**React UI 尚未迁移**，当前入口仍是原生 DOM + 手写 CSS。
+> 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
 > 依赖准入与许可证细则见 [dependency-policy.md](./dependency-policy.md)。
 
 ## 1. 目标与约束
 
-- 双端共用一套前端；桌面与手机按角色分包，互不加载对方的 UI。
-- 下一步核心是宠物界面：状态机驱动、动效优先，聊天降级为辅助视图。
+- 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
+- 下一步核心是情绪宠物（纯陪伴）；AI 状态映射后续接入，聊天降级为辅助视图。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -42,11 +43,19 @@ app/
 │  ├─ entries/
 │  │  ├─ desktop.tsx          # 桌面壳：窗口布局、侧栏、聊天
 │  │  └─ mobile.tsx           # 手机壳：安全区、底部输入、宠物全屏
-│  ├─ features/
-│  │  ├─ connect/             # 地址输入、二维码、连接状态
-│  │  ├─ chat/                # 消息列表、输入、系统消息
-│  │  ├─ pet/                 # 宠物舞台、Rive 绑定、状态映射
-│  │  └─ settings/            # 设置、配对、关于
+│  ├─ desktop/                # 桌面专属（固定窗口布局）
+│  │  ├─ features/
+│  │  │  ├─ connect/          # 服务地址、二维码、连接状态
+│  │  │  ├─ chat/             # 消息列表、输入、系统消息
+│  │  │  └─ mic-receiver/     # 麦克风状态浮窗、转写结果、输入提示
+│  │  └─ components/
+│  ├─ mobile/                 # 手机专属（只做横屏）
+│  │  ├─ features/
+│  │  │  ├─ connect/          # 地址输入、连接状态
+│  │  │  ├─ pet/              # 宠物舞台、Rive 绑定、状态映射
+│  │  │  ├─ mic/              # 按住说话、波形、权限、结果
+│  │  │  └─ settings/         # 设置、配对、关于
+│  │  └─ components/
 │  ├─ shared/
 │  │  ├─ ui/                  # shadcn 复制组件（button/dialog/sheet/...）
 │  │  ├─ lib/
@@ -65,8 +74,10 @@ app/
 
 **依赖方向（必须遵守）**
 
-- `entries` → `features` → `shared` → `protocol`；`features` 之间不直接互相 import。
-- `shared` 不 import `features`、不 import `entries`。
+- `entries` → 对应平台的 `desktop` / `mobile` features → `shared` → `protocol`；`features` 之间不直接互相 import。
+- `mobile` 不 import `desktop`，`desktop` 不 import `mobile`；`shared` 不 import 任何平台目录。
+- 平台目录各自固定布局，不写跨端响应式断点；共享组件不承担跨平台布局。
+- 平台职责见 [standards/engineering.md](./standards/engineering.md#2-平台职责) 与 [product/scope.md](./product/scope.md#2-平台矩阵)。
 - `features` 不直接 `invoke`/`listen`，统一走 `shared/lib/tauri.ts`。
 - `shared/ui` 只放通用 UI，不放业务逻辑。
 
@@ -115,7 +126,7 @@ void bootstrap();
 规则：
 
 - 不再给 `<body>` 加 `mobile` 类来切换视图；两个 entry 各自挂载，CSS 作用域冲突从结构上消失。
-- `features/pet` 内部用 `lazy(() => import(...))` 加载 Rive 运行时；`.riv` 资源在宠物视图挂载后再加载，不进入首屏 chunk。
+- `mobile/features/pet` 内部用 `lazy(() => import(...))` 加载 Rive 运行时；`.riv` 资源在宠物视图挂载后再加载，不进入首屏 chunk。
 - 开发时开启 `StrictMode`，用来暴露重复订阅/缺失清理；所有 `listen` 必须返回清理函数。
 - 落地页 `app/src-tauri/mobile/index.html` 继续走 Rust `include_str!`，不接 React。
 
@@ -213,7 +224,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 
 - 复制进来的组件归项目所有：可以改样式，但要保持 API 名称与可访问性行为；改动较大时在文件头写一行来源与修改原因。
 - 文件命名统一 kebab-case（如 `chat-bubble.tsx`），组件导出 PascalCase（如 `ChatBubble`），与 shadcn 保持一致。
-- `shared/ui` 只放无业务语义的组件；业务封装放 `features/*/components`。
+- `shared/ui` 只放无业务语义的组件；业务封装放 `desktop|mobile/features/*/components`。
 - 不要给每个 shadcn 组件再包一层；直接用在 feature 里，确有必要再抽。
 - 表单、弹窗、抽屉、Toast 优先用现成组件；聊天气泡、宠物卡片、状态条用 Tailwind 自己写。
 - 可访问性底线：键盘可达、`focus-visible` 可见、图标按钮有标签、消息列表用 `aria-live="polite"`、颜色对比 ≥ 4.5:1。
@@ -227,7 +238,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 | --- | --- | --- | --- |
 | 微动效 | CSS transition/keyframes | hover、press、颜色、透明度、呼吸灯 | ≤ 150–200ms；只动 transform/opacity/color |
 | 界面 | Motion | 进出场、列表增删、布局变化、弹窗/抽屉、手势 | spring 或统一 easing；`AnimatePresence` 管卸载 |
-| 角色 | Rive | 宠物 idle/working/waiting/error、交互反馈 | 状态机输入驱动；懒加载；后台暂停 |
+| 角色 | Rive | 宠物 idle/开心/困倦/倾听/庆祝、交互反馈；AI 状态后续接入 | 状态机输入驱动；懒加载；后台暂停 |
 
 规则：
 
@@ -240,7 +251,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 
 **宠物与 Rive**
 
-- 协议状态 → Rive 输入映射集中在一个 `features/pet/stateMachine.ts`，UI 不直接操作 Rive 内部节点。
+- 情绪状态 → Rive 输入映射集中在 `mobile/features/pet/stateMachine.ts`，UI 不直接操作 Rive 内部节点；协议 status 映射后续接入。
 - Rive 运行时和 `.riv` 只在宠物视图挂载时加载；离开页面销毁实例。
 - 监听 `visibilitychange`，后台暂停 Rive，回前台恢复，省电。
 - 先在 Realme 真机测 60fps，再决定是否需要 WebGL 渲染器；默认 canvas 渲染器。
@@ -317,13 +328,14 @@ adb shell dumpsys package com.android.webview | grep versionName
 | --- | --- | --- |
 | 0. 预检 | 真机 WebView 版本、开分支、记录当前包体/启动时间 | 版本 ≥ 111 或已决定降级方案 |
 | 1. 骨架 | React + Vite + Tailwind + shadcn + Biome；两个 entry；连接 + 聊天 1:1 复刻 | 双端连接/收发与现状一致，Rust 未改 |
-| 2. 宠物 | Rive 舞台、协议 status → 状态机、懒加载、后台暂停 | 真机 60fps，聊天仍可用 |
-| 3. 收尾 | 设置/配对 UI、补齐测试、删除旧 DOM/`styles.css`、包名 `desktop` → `sidekick` | 无旧代码引用，测试通过 |
-| 4. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |
+| 2. 宠物 | Rive 舞台、情绪状态机、懒加载、后台暂停 | 真机 60fps，聊天仍可用 |
+| 3. 麦克风 | 手机采集 + 桌面转写/输入、协议扩展、权限与降级 | 真机按住说话全链路通过 |
+| 4. 收尾 | 设置/配对 UI、补齐测试、删除旧 DOM/`styles.css`、包名 `desktop` → `sidekick` | 无旧代码引用，测试通过 |
+| 5. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |
 
 约束：
 
-- Phase 1 不改 Rust、不改协议；Phase 2 才接 `status`。
+- Phase 1 不改 Rust、不改协议；Phase 2 先做情绪宠物，不接 `status`；Phase 3 才引入音频协议；`status` 映射放 P2（麦克风稳定后）。
 - 不在同一次改动里同时换框架、改协议、加宠物。
 - 每阶段结束更新 `status.md`，重大取舍追加 `decisions.md`。
 
@@ -334,7 +346,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 - [ ] 手机连接 `IP:8848` 状态为「已连接」
 - [ ] 双向聊天与现状一致，气泡方向正确
 - [ ] 构建产物中两个 entry 分 chunk，运行时只加载对应角色的一份
-- [ ] 宠物状态切换（idle/working/waiting/error）与协议一致
+- [ ] 宠物情绪状态切换与 [pet PRD](./prd/pet/PRD.md) 一致；协议 status 接入后另测
 - [ ] Realme 真机动画 60fps，无长期掉帧
 - [ ] `prefers-reduced-motion` 下无强制动画
 - [ ] 首屏 JS/CSS 在预算内
@@ -345,7 +357,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 ## 15. 未决事项
 
 - 真机 WebView 版本（决定 Tailwind v4 是否可直接用）。
-- 宠物美术方向：矢量/骨骼（Rive）还是像素（序列帧）；影响动画方案。
+- 宠物美术方向：已定柔软黏土/手绘矢量，Rive（2026-10-31）；像素/序列帧不采用。
 - 聊天记录是否持久化、存哪里（SQLite/tauri-plugin-store）。
 - 浅色主题是否要做；当前只做暗色。
 - 协议类型是否用 ts-rs 自动生成；等协议字段稳定后再定。

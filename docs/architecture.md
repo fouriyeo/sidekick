@@ -1,5 +1,7 @@
 # 架构
 
+> 组织方式：单仓库、双产物（macOS 桌面 App + 安卓 APK）；前端目标按 `desktop` / `mobile` / `shared` / `protocol` 分目录，桌面与手机各自固定布局，**不做跨端自适应**。规范见 [standards/engineering.md](./standards/engineering.md)。
+
 ## 拓扑
 
 ```

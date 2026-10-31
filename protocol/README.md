@@ -86,3 +86,15 @@ AI 需要用户决策（权限确认、反问）。
 ```json
 { "type": "input", "kind": "voice|shortcut|text", "text": "...", "ts": 1730000000000 }
 ```
+
+## 音频通道（提案，未实现）
+
+麦克风需要低开销的二进制音频帧，且**不能广播**给其它客户端。提案见
+[`docs/engineering/protocol-audio.md`](../docs/engineering/protocol-audio.md)：
+
+- 控制消息仍用 JSON：`mic.start` / `mic.ready` / `mic.stop` / `mic.result` / `mic.state`；
+- 音频用二进制帧：`magic + version + session UUID + sequence + PCM16`；
+- 桌面按 session 路由到转写任务，不进入现有广播通道；
+- P0 仅可信局域网、无鉴权；配对/加密在 P1。
+
+实现前需评审；现有 `chat` / `system` 行为不变。
