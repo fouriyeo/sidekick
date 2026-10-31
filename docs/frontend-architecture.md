@@ -322,7 +322,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 ## 13. 迁移计划
 
-当前进度（2026-10-31）：依赖、Vite/TS 别名、Tailwind、shadcn Base UI（base-nova）、Biome、Vitest 已就绪；Phase 1 的 React entry 与连接/聊天尚未迁移。
+当前进度（2026-10-31）：Phase 1 已完成。React 双 entry、桌面/手机连接与聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；旧 `main.ts` / `styles.css` 已删除，真机双向收发通过。宠物（Phase 2）待实现。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
@@ -330,7 +330,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 | 1. 骨架 | React + Vite + Tailwind + shadcn + Biome；两个 entry；连接 + 聊天 1:1 复刻 | 双端连接/收发与现状一致，Rust 未改 |
 | 2. 宠物 | Rive 舞台、情绪状态机、懒加载、后台暂停 | 真机 60fps，聊天仍可用 |
 | 3. 麦克风 | 手机采集 + 桌面转写/输入、协议扩展、权限与降级 | 真机按住说话全链路通过 |
-| 4. 收尾 | 设置/配对 UI、补齐测试、删除旧 DOM/`styles.css`、包名 `desktop` → `sidekick` | 无旧代码引用，测试通过 |
+| 4. 收尾 | 设置/配对 UI、补齐测试、包名 `desktop` → `sidekick`（旧 DOM/`styles.css` 已随 Phase 1 删除） | 无旧代码引用，测试通过 |
 | 5. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |
 
 约束：

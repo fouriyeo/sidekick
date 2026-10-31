@@ -148,7 +148,7 @@ node scripts/check-boundaries.mjs
 - `protocol/**` 不得 import 应用层（mobile/desktop/shared/entries）；
 - `entries/desktop` 不得 import mobile；`entries/mobile` 不得 import desktop。
 
-平台目录迁移完成前脚本会跳过；迁移后自动生效。在 CI 或提交前运行；违反即失败。边界靠脚本，不靠自觉。
+平台目录已于 2026-10-31 完成迁移，脚本已生效。在 CI 或提交前运行；违反即失败。边界靠脚本，不靠自觉。
 
 ## 11. 文档同步
 

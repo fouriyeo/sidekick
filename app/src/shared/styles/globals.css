@@ -10,7 +10,20 @@
     @apply border-border outline-ring/50;
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground;
+    margin: 0;
+    font-family: -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    overscroll-behavior: none;
   }
 }

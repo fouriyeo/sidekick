@@ -15,7 +15,7 @@
 
 - ✅ **局域网 MVP 已验证**（2026-10-31）：Tauri 桌面端（服务端）+ Tauri 安卓 App（客户端）双向收发消息成功。
 - ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
-- 前端重构脚手架已就绪（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion + Rive；依赖、Vite/TS、Biome、Vitest 已配置，**旧 UI 尚未迁移**；规范见 `docs/frontend-architecture.md`，依赖治理见 `docs/dependency-policy.md`。
+- ✅ **前端 Phase 1 已完成**（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）双 entry；`entries/desktop.tsx` / `entries/mobile.tsx`、`desktop/**`、`mobile/**`、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；连接/聊天 1:1 迁移，旧 `main.ts` / `styles.css` 已删除；桌面浏览器与安卓真机双向收发通过。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
@@ -35,7 +35,7 @@
 - 前端按平台分目录：`src/desktop`、`src/mobile`、`src/shared`、`src/protocol`；桌面与手机各自固定布局，**不做跨端自适应**。详见 `docs/standards/engineering.md`。
 - 桌面端：Tauri（Rust）+ Vite/TypeScript；Rust 里跑 axum HTTP/WebSocket 服务，端口 **8848**。
 - 手机端：Tauri Android App（Rust 核心 + WebView UI）；Rust 侧用 tokio-tungstenite 主动连电脑，前端通过 Tauri 命令/事件与 Rust 通信。
-- 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；前端据此挂载对应 entry（目标：`entries/desktop.tsx` / `entries/mobile.tsx`，当前仍是 `main.ts` 分支）。
+- 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；`src/main.tsx` 据此动态 import 并挂载 `entries/desktop.tsx` / `entries/mobile.tsx`。
 - 协议：WebSocket 文本帧 JSON；服务端把消息广播给所有已连接客户端。定义见 `protocol/README.md`。
 - 数据流：手机 App →(ws)→ 桌面服务 → 广播 → 桌面 UI / 其他客户端。
 - 前端重构目标栈（脚手架已就绪，旧 UI 未迁移）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion + Rive；见 `docs/frontend-architecture.md`。
@@ -69,8 +69,13 @@ sidekick/
 │  └─ skills/           # 项目 Skill（sidekick-docs / sidekick-feature）
 ├─ app/                 # Tauri 项目（桌面 + 安卓共用，构建两个产物）
 │  ├─ index.html
-│  ├─ src/main.ts       # 当前角色分流入口（迁移前）
-│  ├─ src/shared/       # 已就绪的共享组件/样式/工具
+│  ├─ src/main.tsx      # createRoot + app_role 动态 import entry
+│  ├─ src/entries/      # desktop.tsx / mobile.tsx
+│  ├─ src/desktop/      # 桌面平台：features/connect、features/chat
+│  ├─ src/mobile/       # 手机平台：features/connect、features/chat
+│  ├─ src/protocol/     # messages.ts（chat/system/ServerInfo/ConnEvent）
+│  ├─ src/shared/       # ui / lib（tauri.ts）/ styles
+│  ├─ src/dev/          # 仅开发环境 Tauri mock（浏览器验证）
 │  ├─ src-tauri/src/lib.rs        # 桌面 axum 服务 + 手机 WS 客户端（cfg 分流）
 │  ├─ src-tauri/mobile/index.html # 手机浏览器落地页（含下载按钮）
 │  ├─ src-tauri/tauri.conf.json   # 产品名 Sidekick / identifier dev.sidekick.app
@@ -87,7 +92,7 @@ sidekick/
 └─ scripts/             # 安卓构建与安装、文档检查
 ```
 
-目标前端结构：`src/entries` + `src/desktop` + `src/mobile` + `src/shared` + `src/protocol`，禁止跨平台 import；详见 `docs/standards/engineering.md`。迁移完成前当前入口仍是 `src/main.ts`。
+前端结构已落地：`src/entries` + `src/desktop` + `src/mobile` + `src/shared` + `src/protocol`，禁止跨平台 import；详见 `docs/standards/engineering.md`。
 
 ## 5. 常用命令
 
@@ -100,7 +105,7 @@ sidekick/
   - 产物：`app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
 - 安装并启动：`scripts/install-android.sh`（`adb install -r` + `am start`）
 - 日志：桌面端看 `tauri dev` 终端；安卓端 `adb logcat`
-- 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm format`（Biome + Vitest；当前只覆盖新脚手架目录，旧 `src/main.ts` 暂不在 lint 范围）
+- 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm format`（Biome + Vitest；覆盖 entries/desktop/mobile/shared/protocol/test/dev）
 - 重生成全平台图标：`pnpm tauri icon ../brand/logo-appicon.svg`（在 `app/` 内运行；会同步 Android mipmap，`gen/` 清空后需先 `pnpm tauri android init`）
 - 文档检查：`node scripts/check-docs.mjs`（在仓库根目录运行）
 - 平台边界检查：`node scripts/check-boundaries.mjs`（迁移出 `src/mobile` / `src/desktop` 后自动生效）
@@ -137,7 +142,10 @@ sidekick/
 
 ## 8. 已知坑（踩过的都在这）
 
-- **CSS 类名冲突导致黑屏**：`.mobile { display:none }` 会命中 `<body class="mobile">`，整页不可见。手机样式必须限定到 `#mobile-view`（或加前缀），不要用裸 `.mobile` 选择器。
+- **不要给 body 加平台状态类**：桌面/手机是两个独立 entry，各自固定布局；历史上 `.mobile { display:none }` 命中 `<body class="mobile">` 导致整页黑屏，已删除旧 DOM/styles。
+- **StrictMode 订阅**：Tauri `listen` 是异步的；`shared/lib/tauri.ts` 的 `subscribe*` 已处理 pending/cleanup，组件 effect 必须调用返回的同步退订函数，不要每次渲染重新 listen。
+- **广播回显**：桌面/手机发送后都不要本地追加，等服务端广播回显；按 `from` 判断 me/them，避免重复消息。
+- **dev mock**：浏览器验证用 `http://localhost:1420/?role=mobile`；`src/dev/tauri-mock.ts` 只在 `import.meta.env.DEV` 生效，生产构建不包含。
 - **无线调试两个端口不同**：配对弹窗里的是「配对端口」，无线调试主页的是「连接端口」；`adb pair` 用前者、`adb connect` 用后者。配对码离开弹窗即失效。
 - **adb 出现重复设备**：mDNS 与 IP 两条 transport 同时存在会报 `more than one device/emulator`；`adb disconnect <mDNS 服务名>` 只留 IP 连接。
 - **compileSdk 37**：SDK 包名是 `platforms;android-37.0`，不是 `android-37`。
@@ -160,9 +168,9 @@ sidekick/
 
 ## 10. 下一步路线（按优先级）
 
-> 前置：先按 `docs/standards/engineering.md` 完成平台分目录与前端迁移；宠物/麦克风的 PRD 已就绪，但实现未开始。
+> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；宠物/麦克风 PRD 已就绪，宠物 P0 正在实现。
 
-1. 前端平台分目录 + 连接/聊天迁移：`src/entries`、`src/desktop`、`src/mobile`、`src/shared`、`src/protocol`；对应 `docs/frontend-architecture.md` 的 Phase 1。
+1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
 2. 情绪宠物 P0：按 `docs/prd/pet/` 实现；真机 60fps、零焦虑、横屏双姿态。
 3. 外设麦克风 P0：先做 spike（Android 采集、本机 ASR、macOS 文本输入），再按 `docs/prd/mic/` 实现；只输入、不发送。
 4. 接入 Claude Code hooks：`notify` / `ask` 事件推手机，手机回答回传并作为 hook 结果（协议扩展 status / ask / notify / input）。

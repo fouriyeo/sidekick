@@ -5,67 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Sidekick</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <main class="app" id="desktop-view">
-      <section class="panel">
-        <div class="brand">
-          <img class="brand-mark" src="/logo-icon.svg" alt="" />
-          <h1>Sidekick</h1>
-          <span class="tag">电脑端 · 局域网测试</span>
-        </div>
-
-        <div class="status-row">
-          <span id="dot" class="dot"></span>
-          <span id="status-text">连接中…</span>
-        </div>
-
-        <div class="url-row">
-          <code id="server-url">…</code>
-          <button id="copy-btn" type="button">复制</button>
-        </div>
-
-        <canvas id="qr" width="220" height="220"></canvas>
-        <p class="hint">手机扫码打开页面，点“下载 App”安装后，输入上面的地址（同一 Wi-Fi）。</p>
-      </section>
-
-      <section class="panel chat">
-        <ul id="messages"></ul>
-        <form id="send-form">
-          <input id="message-input" placeholder="给手机发条消息…" autocomplete="off" />
-          <button type="submit">发送</button>
-        </form>
-      </section>
-    </main>
-
-    <main class="mobile" id="mobile-view">
-      <header class="mobile-head">
-        <div class="brand">
-          <img class="brand-mark" src="/logo-icon.svg" alt="" />
-          <h1>Sidekick</h1>
-          <span class="tag">手机端</span>
-        </div>
-        <div class="status-row">
-          <span id="m-dot" class="dot"></span>
-          <span id="m-status">未连接</span>
-        </div>
-      </header>
-
-      <form id="connect-form" class="connect-row">
-        <input id="server-addr" placeholder="电脑地址，如 192.168.1.5:8848" autocomplete="off" />
-        <button type="submit">连接</button>
-      </form>
-
-      <ul id="m-messages"></ul>
-      <p class="hint">和电脑连同一个 Wi-Fi，输入电脑端显示的地址。</p>
-
-      <form id="m-send-form" class="send-row">
-        <input id="m-input" placeholder="给电脑发条消息…" autocomplete="off" />
-        <button type="submit">发送</button>
-      </form>
-    </main>
-
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
