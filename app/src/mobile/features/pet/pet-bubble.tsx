@@ -12,7 +12,7 @@ export function PetBubble({ bubble, className }: PetBubbleProps) {
       {bubble && (
         <p
           key={bubble.id}
-          className="line-clamp-2 max-w-full rounded-2xl border border-pet-border bg-card/95 px-4 py-3 text-[15px] leading-relaxed text-pet-text shadow-sm"
+          className="line-clamp-2 max-w-full rounded-2xl border border-pet-border bg-card px-4 py-3 text-[15px] leading-relaxed text-pet-text shadow-sm"
         >
           {bubble.text}
         </p>

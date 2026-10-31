@@ -138,7 +138,7 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
       {settingsError && (
         <p
           role="alert"
-          className="mt-2 shrink-0 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="mt-2 shrink-0 rounded-xl border border-destructive bg-card px-3 py-2 text-sm text-destructive"
         >
           {settingsError}
         </p>

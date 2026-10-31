@@ -216,3 +216,10 @@
 - 原因：用户明确不需要强制方向；横屏仍是设计基准，但不应阻断竖屏使用。此决定替代 D22 中“手机只做横屏”的方向限制。
 - 代价：竖屏需要额外检查安全区、气泡与控件不遮挡；麦克风阶段的竖屏录音策略另行评估。
 - 规范：`docs/standards/ux.md`、`docs/prd/pet/SPEC.md`、`docs/prd/pet/ACCEPTANCE.md`。
+
+## D34 · Android WebView 103 的兼容回退（2026-10-31）
+
+- 决策：宠物 P0 在当前 Realme（Android System WebView 103）上使用 hex/rgb 颜色作为 `oklch` 的回退（`@supports` 内保留 oklch），并用未分层 `100vh` 覆盖 Tailwind 的 `h-dvh`；不降级 Tailwind。
+- 原因：真机 WebView 103 不支持 `oklch`、`dvh` 与 `color-mix`，原实现会出现舞台高度塌缩、按钮/卡片颜色透明。用户要求不强制升级 WebView 也能正常使用。
+- 代价：`color-mix` 的 hover/透明度细节在 103 上弱化；建议后续升级 WebView，或逐步把关键 opacity 写法改成独立颜色令牌。
+- 规范：`app/src/shared/styles/tokens.css`、`app/src/shared/styles/globals.css`、`docs/frontend-architecture.md`。

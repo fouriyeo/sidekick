@@ -298,7 +298,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 
 **浏览器底线**
 
-- Chrome / Android System WebView ≥ 111
+- Chrome / Android System WebView ≥ 111（当前 Realme 为 103；宠物 P0 已加 hex/rgb 颜色与 100vh 回退，`color-mix` 细节降级，见 D34）
 - Safari / macOS WKWebView ≥ 16.4（macOS 13.3+）
 - Firefox ≥ 128（仅桌面调试参考）
 

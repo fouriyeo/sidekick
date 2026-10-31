@@ -27,3 +27,13 @@
     overscroll-behavior: none;
   }
 }
+
+/* Android WebView 103 has no dvh; the unlayered 100vh rule wins over
+   Tailwind's layered h-dvh utility and keeps the full-screen shells alive. */
+.h-dvh {
+  height: 100vh;
+}
+
+.min-h-dvh {
+  min-height: 100vh;
+}

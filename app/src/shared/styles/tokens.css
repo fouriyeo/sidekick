@@ -1,53 +1,105 @@
 :root,
 .dark {
   --radius: 0.75rem;
-
-  --background: oklch(0.18 0.02 260);
-  --foreground: oklch(0.93 0.01 260);
-  --card: oklch(0.21 0.02 260);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.23 0.02 260);
-  --popover-foreground: var(--foreground);
-  --primary: oklch(0.62 0.19 265);
-  --primary-foreground: oklch(0.98 0.01 260);
-  --secondary: oklch(0.26 0.02 260);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(0.24 0.02 260);
-  --muted-foreground: oklch(0.68 0.02 260);
-  --accent: oklch(0.28 0.03 265);
-  --accent-foreground: var(--foreground);
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.98 0.01 25);
-  --border: oklch(0.3 0.02 260);
-  --input: oklch(0.3 0.02 260);
-  --ring: oklch(0.62 0.19 265);
-
-  --success: oklch(0.72 0.16 150);
-  --warning: oklch(0.8 0.14 80);
   --motion-ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --pet-bg: oklch(0.17 0.02 260);
-  --pet-glow: oklch(0.82 0.12 75 / 0.32);
-  --pet-primary: oklch(0.78 0.13 70);
-  --pet-primary-foreground: oklch(0.2 0.03 60);
-  --pet-coral: oklch(0.72 0.14 30);
-  --pet-success: oklch(0.78 0.1 160);
-  --pet-danger: oklch(0.66 0.18 25);
-  --pet-text: oklch(0.94 0.015 80);
-  --pet-muted: oklch(0.72 0.02 80);
-  --pet-border: oklch(0.32 0.02 260);
-  --pet-body: oklch(0.9 0.05 80);
-  --pet-body-shadow: oklch(0.8 0.06 70);
-  --pet-belly: oklch(0.96 0.03 80);
-  --pet-ear: oklch(0.84 0.07 45);
-  --pet-eye: oklch(0.25 0.03 60);
-  --pet-cheek: oklch(0.78 0.12 30 / 0.45);
+  /* WebView <111 fallback: keep the app usable with hex/rgb colors. */
+  --background: #0f1115;
+  --foreground: #e8eaf0;
+  --card: #141821;
+  --card-foreground: var(--foreground);
+  --popover: #171b24;
+  --popover-foreground: var(--foreground);
+  --primary: #2e5bff;
+  --primary-foreground: #fbfcff;
+  --secondary: #1c2029;
+  --secondary-foreground: var(--foreground);
+  --muted: #1b1f27;
+  --muted-foreground: #9aa0b0;
+  --accent: #262c3a;
+  --accent-foreground: var(--foreground);
+  --destructive: #d9534f;
+  --destructive-foreground: #fff5f5;
+  --border: #2b303c;
+  --input: #2b303c;
+  --ring: #2e5bff;
 
-  --chart-1: oklch(0.62 0.19 265);
-  --chart-2: oklch(0.72 0.16 150);
-  --chart-3: oklch(0.8 0.14 80);
-  --chart-4: oklch(0.65 0.2 25);
-  --chart-5: oklch(0.7 0.1 200);
+  --success: #5fd97f;
+  --warning: #f0b45c;
+
+  --pet-bg: #0f1115;
+  --pet-glow: rgba(240, 180, 92, 0.32);
+  --pet-primary: #f0c27a;
+  --pet-primary-foreground: #2a241c;
+  --pet-coral: #e88a6a;
+  --pet-success: #8fd9b6;
+  --pet-danger: #d9534f;
+  --pet-text: #f5efe3;
+  --pet-muted: #b8b0a0;
+  --pet-border: #2b303c;
+  --pet-body: #f4dcc0;
+  --pet-body-shadow: #d9b896;
+  --pet-belly: #fbf0df;
+  --pet-ear: #e8b19a;
+  --pet-eye: #3b2f2a;
+  --pet-cheek: rgba(232, 138, 106, 0.45);
+
+  --chart-1: #2e5bff;
+  --chart-2: #5fd97f;
+  --chart-3: #f0b45c;
+  --chart-4: #d9534f;
+  --chart-5: #7cc4d9;
+}
+
+@supports (color: oklch(0.5 0.1 100)) {
+  :root,
+  .dark {
+    --background: oklch(0.18 0.02 260);
+    --foreground: oklch(0.93 0.01 260);
+    --card: oklch(0.21 0.02 260);
+    --card-foreground: var(--foreground);
+    --popover: oklch(0.23 0.02 260);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(0.62 0.19 265);
+    --primary-foreground: oklch(0.98 0.01 260);
+    --secondary: oklch(0.26 0.02 260);
+    --secondary-foreground: var(--foreground);
+    --muted: oklch(0.24 0.02 260);
+    --muted-foreground: oklch(0.68 0.02 260);
+    --accent: oklch(0.28 0.03 265);
+    --accent-foreground: var(--foreground);
+    --destructive: oklch(0.62 0.22 25);
+    --destructive-foreground: oklch(0.98 0.01 25);
+    --border: oklch(0.3 0.02 260);
+    --input: oklch(0.3 0.02 260);
+    --ring: oklch(0.62 0.19 265);
+
+    --success: oklch(0.72 0.16 150);
+    --warning: oklch(0.8 0.14 80);
+
+    --pet-bg: oklch(0.17 0.02 260);
+    --pet-glow: oklch(0.82 0.12 75 / 0.32);
+    --pet-primary: oklch(0.78 0.13 70);
+    --pet-primary-foreground: oklch(0.2 0.03 60);
+    --pet-coral: oklch(0.72 0.14 30);
+    --pet-success: oklch(0.78 0.1 160);
+    --pet-danger: oklch(0.66 0.18 25);
+    --pet-text: oklch(0.94 0.015 80);
+    --pet-muted: oklch(0.72 0.02 80);
+    --pet-border: oklch(0.32 0.02 260);
+    --pet-body: oklch(0.9 0.05 80);
+    --pet-body-shadow: oklch(0.8 0.06 70);
+    --pet-belly: oklch(0.96 0.03 80);
+    --pet-ear: oklch(0.84 0.07 45);
+    --pet-eye: oklch(0.25 0.03 60);
+    --pet-cheek: oklch(0.78 0.12 30 / 0.45);
+
+    --chart-1: oklch(0.62 0.19 265);
+    --chart-2: oklch(0.72 0.16 150);
+    --chart-3: oklch(0.8 0.14 80);
+    --chart-4: oklch(0.65 0.2 25);
+    --chart-5: oklch(0.7 0.1 200);
+  }
 }
 
 @theme inline {

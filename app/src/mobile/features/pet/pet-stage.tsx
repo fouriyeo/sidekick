@@ -200,7 +200,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           aria-hidden={!controlsVisible || undefined}
           tabIndex={controlsVisible ? 0 : -1}
           className={cn(
-            "size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-white/5 hover:text-pet-text",
+            "size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text",
             !controlsVisible && "pointer-events-none opacity-0",
           )}
           onClick={onOpenSettings}
@@ -214,7 +214,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           aria-hidden="true"
           className={cn(
             "size-2 rounded-full transition-opacity duration-200",
-            connectionStatus === "connected" ? "bg-pet-success" : "bg-pet-muted/60",
+            connectionStatus === "connected" ? "bg-pet-success" : "bg-pet-muted",
             !controlsVisible && "opacity-0",
           )}
         />
@@ -226,7 +226,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           aria-hidden={!controlsVisible || undefined}
           tabIndex={controlsVisible ? 0 : -1}
           className={cn(
-            "size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-white/5 hover:text-pet-text",
+            "size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text",
             !controlsVisible && "pointer-events-none opacity-0",
           )}
           onClick={onOpenChat}
@@ -280,7 +280,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       {dimmed && (
         <div
           role="presentation"
-          className="absolute inset-0 z-40 bg-black/30"
+          className="absolute inset-0 z-40 bg-black opacity-30"
           onPointerDown={(event) => {
             event.preventDefault();
             markActivity();

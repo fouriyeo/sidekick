@@ -38,15 +38,13 @@ export function NamePrompt({ open }: NamePromptProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-6"
-      role="presentation"
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" role="presentation">
+      <div aria-hidden="true" className="absolute inset-0 bg-black opacity-40" />
       <form
         role="dialog"
         aria-modal="true"
         aria-labelledby="pet-name-title"
-        className="w-[min(420px,86vw)] rounded-3xl border border-pet-border bg-card p-6 text-pet-text shadow-xl"
+        className="relative w-[86vw] max-w-[420px] rounded-3xl border border-pet-border bg-card p-6 text-pet-text shadow-xl"
         onSubmit={(event) => {
           event.preventDefault();
           void submit(draft);

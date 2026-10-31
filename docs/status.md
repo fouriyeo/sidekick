@@ -31,7 +31,8 @@
 - 宠物 P0 文档预检：`node scripts/check-docs.mjs` 通过；PRD/SPEC/AC/UX/pet-runtime 已按“手动姿态、快速连戳 P1、麦克风延后、plugin-store”收口。
 - 宠物 P0 代码：`pnpm typecheck` / `pnpm lint` / `pnpm test`（84 tests）/ `pnpm build` 全绿；Android debug APK 构建成功；`check-boundaries` 通过。
 - 宠物浏览器验证：首启命名、设置页、手动支架/手持、减少动效、聊天入口/返回正常；无头 Chrome 1280×720 截图确认静态宠物舞台与设置页。
-- **未验证**：Realme 无线 adb 中途断连，宠物真机横/竖屏、plugin-store 跨重启、60fps/16:9 未完成；Rive 资产未接入，当前为静态 SVG 降级。
+- Realme（WebView 103）已安装并启动；竖屏宠物舞台、设置页、改名 + 手持后杀进程重启恢复均通过；`sidekick-pet.json` 已写入应用私有目录。
+- **未验证**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产未完成；`color-mix` 相关 hover/透明度在 WebView 103 上降级。
 
 ## 已知问题 / 技术债
 
@@ -47,6 +48,7 @@
 | 麦克风未实现 | PRD/SPEC/AC 已就绪；需先 spike（Android 采集、本机 ASR、macOS 输入） |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
+| WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退，建议后续升级 WebView |
 | 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
 | gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
@@ -55,7 +57,7 @@
 
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
 - [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与 Rive 资产待补。
-- [ ] **宠物真机回归**：横/竖屏安全区、支架/手持、杀进程恢复、3 分钟 60fps、16:9。
+- [ ] **宠物真机回归（剩余）**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产；竖屏/设置/存档已通过（2026-10-31）。
 - [ ] **外设麦克风 P0**：先按 [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) 做 spike，再按 [prd/mic/INDEX.md](./prd/mic/INDEX.md) 实现；只输入、不发送。
 - [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
@@ -72,6 +74,6 @@
 - [ ] 手机发消息 → 桌面日志 `[ws] recv`
 - [ ] 桌面发消息 → 手机收到，气泡在左侧
 - [ ] 手机发消息 → 手机气泡在右侧
-- [ ] 宠物首启命名、设置、支架/手持在 Realme 横/竖屏正常
+- [ ] 宠物横屏 16:9/20:9、支架/手持与 3 分钟 60fps（竖屏/设置/存档已通过）
 - [ ] 宠物杀进程重启后名字/设置/存档恢复
 - [ ] 宠物 3 分钟 60fps、无 >50ms 长任务
