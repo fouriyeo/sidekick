@@ -223,3 +223,10 @@
 - 原因：真机 WebView 103 不支持 `oklch`、`dvh` 与 `color-mix`，原实现会出现舞台高度塌缩、按钮/卡片颜色透明。用户要求不强制升级 WebView 也能正常使用。
 - 代价：`color-mix` 的 hover/透明度细节在 103 上弱化；建议后续升级 WebView，或逐步把关键 opacity 写法改成独立颜色令牌。
 - 规范：`app/src/shared/styles/tokens.css`、`app/src/shared/styles/globals.css`、`docs/frontend-architecture.md`。
+
+## D35 · 姿态按屏幕方向自动切换（2026-10-31）
+
+- 决策：`useOrientation` 监听屏幕方向，横屏 → docked、竖屏 → handheld；设置可手动覆盖，下一次方向变化恢复自动。充电/拿起等传感器判定仍归 P1。
+- 原因：方向是最稳定、无需权限的姿态信号；真机已验证 `matchMedia`/`screen.orientation` 可用，能减少用户手动切换。
+- 代价：手动选择只在当前方向有效；录音中切换布局仍按 P1 契约处理。
+- 规范：`docs/prd/pet/SPEC.md`、`docs/standards/ux.md`、`app/src/mobile/features/pet/use-orientation.ts`。

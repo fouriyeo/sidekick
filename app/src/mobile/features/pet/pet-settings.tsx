@@ -194,7 +194,7 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
               ))}
             </div>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              手动切换，默认支架；自动判定后续接入。
+              横屏自动支架、竖屏自动手持；可手动覆盖，下次旋转恢复自动。
             </p>
           </section>
 

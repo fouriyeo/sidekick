@@ -25,7 +25,8 @@ app/src/mobile/features/pet/
 ├─ pet-store.ts           # Zustand store 与副作用
 ├─ gestures.ts            # 摸摸/戳识别与冷却
 ├─ copy.ts                # 文案库（copy_id）
-├─ posture.ts             # docked/handheld 手动切换与持久化
+├─ posture.ts             # 方向→姿态映射与手动覆盖
+├─ use-orientation.ts     # matchMedia 方向检测 + resize 兜底
 ├─ pet-settings.tsx       # 设置页（姿态/震动/减少动效/重置）
 └─ components/
    ├─ pet-fallback.tsx    # 静态图 + CSS 呼吸
@@ -151,6 +152,7 @@ type PetSaveV1 = {
 - 睡眠倒计时只累计前台（宠物页可见且未打开设置/聊天覆盖层）；夜间 5 分钟无互动入睡；触摸唤醒（麦克风唤醒为 P1）。
 - 回来问候：`now - lastSeenAt > 6h`；>3 天用特殊文案；每次前台最多一次；与睡眠冲突时睡眠优先。
 - 后台跨夜离开 ≥5 分钟回前台直接 `sleeping`，不弹问候；覆盖层关闭后恢复计时，不重新问候。
+- 姿态：`use-orientation.ts` 监听 `(orientation: portrait)` 与 resize/orientationchange；横屏 docked、竖屏 handheld；设置手动覆盖，下一次方向变化恢复自动。
 - 精力结算按 `lastEnergyAt` 分段累计（前台 -1/30min、后台 -1/2h、睡眠 +5/h），clamp 0–100；启动补算但不超过阈值。
 - 系统时间回拨/时区变化：只重算时段；不补发问候；精力不补发衰减。
 - 测试用可注入 `now`，不直接读 `Date.now()` 散落各处。

@@ -18,7 +18,9 @@ import { PetBubble } from "./pet-bubble";
 import { PetCanvas } from "./pet-canvas";
 import { PetHearts } from "./pet-hearts";
 import { usePetStore } from "./pet-store";
+import { postureForOrientation } from "./posture";
 import type { GestureEvent, PetState } from "./types";
+import { useOrientation } from "./use-orientation";
 import { useReducedMotion } from "./use-reduced-motion";
 
 type PetStageProps = {
@@ -56,7 +58,9 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const handleGesture = usePetStore((state) => state.handleGesture);
   const flush = usePetStore((state) => state.flush);
   const saveStatus = usePetStore((state) => state.saveStatus);
+  const setPosture = usePetStore((state) => state.setPosture);
   const connectionStatus = useConnectionStore((state) => state.status);
+  const orientation = useOrientation();
 
   const systemReduced = useReducedMotion();
   const reducedMotion =
@@ -90,6 +94,15 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const next = postureForOrientation(orientation);
+    if (usePetStore.getState().pet.settings.posture !== next) {
+      void setPosture(next);
+    }
+  }, [hydrated, orientation, setPosture]);
 
   useEffect(() => {
     if (!active) return;
@@ -180,6 +193,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
         "relative h-dvh w-screen overflow-hidden bg-pet-bg text-pet-text",
         reducedMotion && styles.reduceMotion,
       )}
+      data-orientation={orientation}
       data-posture={pet.settings.posture}
       data-phase={pet.phase}
     >
