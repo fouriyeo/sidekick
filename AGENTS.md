@@ -15,6 +15,7 @@
 
 - ✅ **局域网 MVP 已验证**（2026-10-31）：Tauri 桌面端（服务端）+ Tauri 安卓 App（客户端）双向收发消息成功。
 - ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
+- 前端重构脚手架已就绪（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion + Rive；依赖、Vite/TS、Biome、Vitest 已配置，**旧 UI 尚未迁移**；规范见 `docs/frontend-architecture.md`，依赖治理见 `docs/dependency-policy.md`。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
 - ❌ 尚未开始：Claude Code / Qoder hook 接入、宠物界面、配对鉴权、正式签名包、iOS。
 
@@ -26,6 +27,7 @@
 - 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；前端据此切换界面。
 - 协议：WebSocket 文本帧 JSON；服务端把消息广播给所有已连接客户端。定义见 `protocol/README.md`。
 - 数据流：手机 App →(ws)→ 桌面服务 → 广播 → 桌面 UI / 其他客户端。
+- 前端重构目标栈（脚手架已就绪，旧 UI 未迁移）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion + Rive；见 `docs/frontend-architecture.md`。
 
 ### 桌面端接口
 
@@ -64,6 +66,8 @@ sidekick/
 └─ scripts/             # 安卓构建与安装脚本
 ```
 
+重构脚手架已在 `src/shared` 落地；目标目录见 `docs/frontend-architecture.md`，迁移完成前当前入口仍是 `src/main.ts`。
+
 ## 5. 常用命令
 
 前提：`cd sidekick/app && pnpm install`。
@@ -75,6 +79,7 @@ sidekick/
   - 产物：`app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
 - 安装并启动：`scripts/install-android.sh`（`adb install -r` + `am start`）
 - 日志：桌面端看 `tauri dev` 终端；安卓端 `adb logcat`
+- 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm format`（Biome + Vitest；当前只覆盖新脚手架目录，旧 `src/main.ts` 暂不在 lint 范围）
 
 ## 6. 环境（macOS arm64）
 
@@ -105,15 +110,19 @@ sidekick/
 - **macOS 防火墙**：第一次接受局域网连接会弹「允许传入网络连接」，必须允许，否则手机连不上。
 - **手机与电脑需同一局域网**；开发机 IP 会变，App 里填的地址要跟着改。
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
+- **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 
 ## 9. 协作约定
 
 - 用户是中文母语：沟通用中文、直白、先基础后细节；环境配置由 AI 直接代劳，但破坏性操作（删库、重置、卸载）先问。
 - 改动跨端时同步更新 `protocol/README.md` 与相关 docs；重大决策追加到 `docs/decisions.md`。
+- 前端改动遵循 `docs/frontend-architecture.md`；新增/升级依赖遵循 `docs/dependency-policy.md`，新增运行时依赖追加到 `docs/decisions.md`。
 - 不提交构建产物（`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、`.venv`）。
 - GitHub 推送已配置（gh 登录 fouriyeo，已 `gh auth setup-git`）。共享/不可逆操作（force push、改仓库可见性）先确认。
 
 ## 10. 下一步路线（按优先级）
+
+> 宠物界面前置：前端依赖与脚手架已就绪，下一步按 `docs/frontend-architecture.md` 迁移入口与连接/聊天，再接宠物。
 
 1. 接入 Claude Code hooks：`notify` / `ask` 事件推手机，手机回答回传并作为 hook 结果（协议扩展 status / ask / notify / input）。
 2. 宠物界面：状态机驱动表情/动作，替代当前聊天壳。

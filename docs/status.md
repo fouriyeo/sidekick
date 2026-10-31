@@ -11,6 +11,7 @@
 5. 修复首版黑屏（CSS 类名冲突把 `<body>` 隐藏），重新出包并安装；
 6. 真机验证通过：手机 App ↔ 桌面端双向收发消息；
 7. 清理模板残留与未使用插件，前端包管理器从 npm 迁移到 pnpm（`pnpm-lock.yaml` 入库）。
+8. 安装前端重构依赖与脚手架：React 19、Tailwind v4、shadcn/ui（Base UI, base-nova）、Motion、Rive、Zustand；Vite/TS 别名、Biome、Vitest 已配置；旧 UI 尚未迁移。
 
 ## 已验证（有实际证据）
 
@@ -20,7 +21,8 @@
 - 手机 App 连接桌面：状态变「已连接」；
 - 手机 → 电脑：桌面日志出现 `[ws] recv: {"from":"phone",...}`；
 - 电脑 → 手机：手机界面出现对应消息（气泡方向已按角色修正）；
-- 测试设备：Realme RMX3370（Android 13），无线 adb；桌面 macOS arm64。
+- 测试设备：Realme RMX3370（Android 13），无线 adb；桌面 macOS arm64；
+- 前端脚手架：`pnpm typecheck`、`pnpm lint`、`pnpm test`（2 个冒烟测试）、`pnpm build` 通过；Tailwind v4 + shadcn 主题可编译。
 
 ## 已知问题 / 技术债
 
@@ -32,12 +34,14 @@
 | 消息回显 | 广播会把发送者自己的消息也回传（当前 UI 按 `from` 显示） |
 | 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
+| 前端未组件化 | 原生 DOM + 手写 CSS；依赖与脚手架已就绪（React/Tailwind/shadcn Base UI/Motion/Rive），旧 UI 未迁移 |
 | 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
 | gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
 
 ## 下一步（按优先级）
 
+- [ ] **前端重构**：依赖已装；下一步按 `frontend-architecture.md` 迁移入口与连接/聊天，再接宠物。
 - [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
 - [ ] **宠物界面**：状态机（working / idle / waiting）驱动表情与动效，聊天降级为辅助视图。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。

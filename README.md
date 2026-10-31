@@ -26,15 +26,18 @@ scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 
 - `AGENTS.md` — 给 AI / 新协作者的入口（先读这个）
 - `docs/architecture.md` — 架构与接口
+- `docs/frontend-architecture.md` — 前端目标架构与规范
 - `docs/status.md` — 进度、已验证内容、已知问题
 - `docs/setup.md` — 环境、构建、无线调试、WebView 调试
 - `docs/decisions.md` — 关键选型与取舍记录
+- `docs/dependency-policy.md` — 开源依赖治理
 - `docs/ble-notes.md` — 蓝牙预研笔记
 - `protocol/README.md` — 事件协议 v0
 
 ## 路线
 
 - [x] 局域网双向通信（2026-10-31）
+- [ ] 前端重构（React 19 + Tailwind v4 + shadcn/Base UI + Motion + Rive；依赖与脚手架已完成，UI 待迁移）
 - [ ] Claude Code / Qoder hook 接入（通知 + 远程回答）
 - [ ] 宠物界面
 - [ ] release 签名与打包

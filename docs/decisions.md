@@ -75,3 +75,39 @@
 - 移除：未引用的模板 SVG（`app/src/assets`）、未使用的 `tauri-plugin-opener`（前后端依赖与 capability）、本地 Python 实验环境 `daemon/`（约 50MB，知识保留在 `docs/ble-notes.md`）。
 - 保留：`app/src-tauri/icons`（打包需要）、`capabilities/default.json`（`core:default`）。
 - 构建产物继续不入库；`gen/` 保持忽略、按需生成。
+
+## D14 · 前端框架与样式：React 19 + Tailwind CSS v4（2026-10-31）
+
+- 背景：现有前端为原生 DOM + 手写 CSS；下一步宠物界面是状态驱动 + 高频动画，继续手写会失控。
+- 决策：前端框架采用 React 19（Vite 8 + TypeScript 6）；样式采用 Tailwind CSS v4（CSS-first，`@theme` 令牌）；不引入 SCSS。
+- 放弃：Vue 3.5（可用，但 shadcn/Base UI、Motion、Rive 的 React 资料更多）、Svelte 5（生态小）、继续原生（宠物 UI 维护成本高）。
+- 代价：React 运行时约 60KB gzip；Tailwind v4 要求 Android WebView ≥ 111、macOS WKWebView ≥ Safari 16.4（macOS 13.3+）。
+- 规范：`frontend-architecture.md`。
+
+## D15 · 组件库：shadcn/ui + Base UI（2026-10-31）
+
+- 决策：常规交互组件采用 shadcn/ui，primitive base 选 Base UI（`@base-ui/react`）；组件复制进仓库维护，不混用 Radix 版本。
+- 原因：视觉可完全定制，适合宠物产品；自带无障碍；2026-07 起 shadcn 默认 Base UI。
+- 放弃：daisyUI（偏成品、复杂交互弱）、Ant Design/Mantine（重、后台感）、纯 headless（工作量大）。
+- 规范：`frontend-architecture.md` 第 7 节、`dependency-policy.md`。
+
+## D16 · 动画分层：Motion + Rive（2026-10-31）
+
+- 决策：UI 动效用 Motion；宠物主体用 Rive 状态机；CSS 只做微动效。GSAP/anime.js 暂不引入，Live2D 后置。
+- 原因：一层一个引擎，避免重复能力和包体膨胀；Rive 的状态机最适合 idle/working/waiting。
+- 代价：Rive 需要美术资产与编辑器；运行时和 `.riv` 必须懒加载；CSP 需允许 WASM。
+- 规范：`frontend-architecture.md` 第 8 节。
+
+## D17 · 开源依赖治理：准入清单与预算（2026-10-31）
+
+- 决策：新增 npm/Rust 依赖必须过 6 项准入（必要性、维护、许可证、体积、安全、可替换性）；新增运行时依赖记入本文件。
+- 预算：首屏 JS ≤ 150KB gzip、CSS ≤ 40KB、宠物 chunk ≤ 600KB（JS+WASM）、`.riv` ≤ 2MB。
+- 放弃：为单个函数引整库、CDN 运行时、重复能力的库（SCSS+Tailwind、GSAP+Motion、Redux+Zustand 等）。
+- 规范：`dependency-policy.md`。
+
+## D18 · shadcn Base UI 实施：base-nova + cn（2026-10-31）
+
+- 决策：shadcn 采用 `base-nova` 风格；组件复制进 `src/shared/ui`；类名合并用 `cn` 包（替代 clsx + tailwind-merge）；CSS 引入 `shadcn/tailwind.css` 与 `tw-animate-css`。
+- 原因：这是 shadcn 2026 registry 的默认 Base UI 组合，减少自造适配层；`cn` 零依赖、API 兼容。
+- 代价：`shadcn` 包作为运行时 CSS 依赖存在；`cn` 是较新的包，需按依赖规范跟踪维护状态。
+- 规范：`frontend-architecture.md` 第 7 节、`dependency-policy.md` 第 7/9 节。

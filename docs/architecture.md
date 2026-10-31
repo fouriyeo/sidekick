@@ -41,6 +41,8 @@
 
 ## 前端（`app/src/main.ts`）
 
+> 目标架构已定稿（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI）+ Motion + Rive；**尚未迁移**，本节描述的是当前实现。规范见 `frontend-architecture.md`，依赖治理见 `dependency-policy.md`。
+
 - 启动时 `invoke("app_role")` → 给 `<body>` 加 `mobile` 类并渲染手机视图，或渲染桌面视图。
 - 桌面视图：`server_info` → 显示地址、二维码；本地 `ws://127.0.0.1:8848/ws` 收发。
 - 手机视图：地址输入（localStorage 记忆）→ `connect_server`；监听 `conn` / `chat` 渲染消息；`send_chat` 发送。
@@ -58,6 +60,7 @@
 
 ## 当前限制与技术债
 
+- 前端仍为原生 DOM + 手写 CSS；重构方案已定（React 19 + Tailwind v4 + shadcn/Base UI + Motion + Rive），尚未迁移，见 `frontend-architecture.md`。
 - 无鉴权、无加密，仅限可信局域网。
 - 手机端无自动重连（需手动重新连接）；桌面 UI 有简单重连。
 - 无历史持久化；广播会回显自己发送的消息。
