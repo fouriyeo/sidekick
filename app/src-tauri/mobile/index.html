@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Sidekick</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: -apple-system, "PingFang SC", sans-serif;
+        background: #0f1115;
+        color: #e8eaf0;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #23262f;
+      }
+      h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: 0.3px; }
+      #status {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #3a2a12;
+        color: #f0b45c;
+      }
+      #status.online { background: #12331f; color: #5fd97f; }
+      .download {
+        margin: 14px;
+        padding: 14px;
+        border-radius: 14px;
+        background: #141821;
+        border: 1px solid #23262f;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .download strong { font-size: 15px; }
+      .download p { margin: 5px 0 0; font-size: 12px; color: #8a90a0; line-height: 1.5; }
+      .download code { color: #aab0c0; }
+      .download a {
+        text-decoration: none;
+        background: #2e5bff;
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      #messages {
+        flex: 1;
+        overflow-y: auto;
+        list-style: none;
+        margin: 0;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #messages li {
+        max-width: 82%;
+        padding: 9px 12px;
+        border-radius: 14px;
+        font-size: 15px;
+        line-height: 1.4;
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
+      #messages li.me { align-self: flex-end; background: #2e5bff; color: #fff; border-bottom-right-radius: 4px; }
+      #messages li.them { align-self: flex-start; background: #1c2029; border-bottom-left-radius: 4px; }
+      #messages li.system { align-self: center; background: transparent; color: #8a90a0; font-size: 12px; padding: 2px; }
+      footer {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+        border-top: 1px solid #23262f;
+        background: #12151c;
+      }
+      #input {
+        flex: 1;
+        border: 1px solid #2b303c;
+        background: #0f1115;
+        color: #e8eaf0;
+        border-radius: 10px;
+        padding: 11px 12px;
+        font-size: 15px;
+        outline: none;
+      }
+      #input:focus { border-color: #2e5bff; }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 0 16px;
+        font-size: 15px;
+        background: #2e5bff;
+        color: #fff;
+        font-weight: 500;
+      }
+      #ping {
+        background: #1c2029;
+        color: #aab0c0;
+        font-size: 13px;
+      }
+      .hint { text-align: center; color: #5c6272; font-size: 12px; padding: 0 0 8px; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Sidekick</h1>
+      <span id="status">连接中…</span>
+    </header>
+    <section class="download">
+      <div>
+        <strong>Sidekick 安卓 App</strong>
+        <p>安装后打开，输入 <code id="conn-hint">…</code> 连接电脑</p>
+      </div>
+      <a href="/download/apk">下载 App</a>
+    </section>
+    <ul id="messages"></ul>
+    <p class="hint">手机 ↔ 电脑 · 局域网测试</p>
+    <footer>
+      <input id="input" placeholder="给电脑发条消息…" autocomplete="off" />
+      <button id="ping">Ping</button>
+      <button id="send">发送</button>
+    </footer>
+    <script>
+      const statusEl = document.getElementById("status");
+      const listEl = document.getElementById("messages");
+      const inputEl = document.getElementById("input");
+      const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
+      document.getElementById("conn-hint").textContent = location.host;
+      let ws = null;
+
+      function setStatus(online, text) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("online", online);
+      }
+
+      function append(kind, text) {
+        const li = document.createElement("li");
+        li.className = kind;
+        li.textContent = text;
+        listEl.appendChild(li);
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+
+      function connect() {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => setStatus(true, "已连接");
+        ws.onclose = () => {
+          setStatus(false, "重连中…");
+          setTimeout(connect, 2000);
+        };
+        ws.onerror = () => ws.close();
+        ws.onmessage = (event) => {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            append("system", event.data);
+            return;
+          }
+          if (msg.type === "system") append("system", msg.text);
+          else if (msg.type === "chat") append(msg.from === "phone" ? "me" : "them", msg.text);
+        };
+      }
+
+      function sendText(text) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          append("system", "还没连上电脑");
+          return;
+        }
+        ws.send(JSON.stringify({ type: "chat", from: "phone", text, ts: Date.now() }));
+      }
+
+      document.getElementById("send").onclick = () => {
+        const text = inputEl.value.trim();
+        if (!text) return;
+        sendText(text);
+        inputEl.value = "";
+      };
+      inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") document.getElementById("send").click();
+      });
+      document.getElementById("ping").onclick = () => {
+        sendText("ping " + new Date().toLocaleTimeString());
+      };
+
+      connect();
+    </script>
+  </body>
+</html>

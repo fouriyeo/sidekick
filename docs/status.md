@@ -1,0 +1,55 @@
+# 项目状态
+
+最后更新：2026-10-31
+
+## 时间线（2026-10-31）
+
+1. 命名「小跟班 / Sidekick」，创建私有仓库 `fouriyeo/sidekick`；
+2. 安装 Rust、JDK 21、Android cmdline-tools、SDK/NDK，配置 Tauri 安卓工程；
+3. 蓝牙预研：Python `bless` 验证 Mac 可作 BLE 外设（后暂停，主线转局域网）；
+4. 实现桌面端（axum HTTP/WS 服务 + 二维码 UI）与安卓 App（Rust WS 客户端 + 手机 UI）；
+5. 修复首版黑屏（CSS 类名冲突把 `<body>` 隐藏），重新出包并安装；
+6. 真机验证通过：手机 App ↔ 桌面端双向收发消息。
+
+## 已验证（有实际证据）
+
+- 手机浏览器扫码可打开电脑 `http://<IP>:8848/`（局域网 HTTP 通）；
+- 桌面窗口显示地址/二维码；`/download/apk` 返回 APK（content-type、文件名正确）；
+- 安卓 App 安装启动显示手机界面（「Sidekick 手机端」、地址输入、发送框）；
+- 手机 App 连接桌面：状态变「已连接」；
+- 手机 → 电脑：桌面日志出现 `[ws] recv: {"from":"phone",...}`；
+- 电脑 → 手机：手机界面出现对应消息（气泡方向已按角色修正）；
+- 测试设备：Realme RMX3370（Android 13），无线 adb；桌面 macOS arm64。
+
+## 已知问题 / 技术债
+
+| 项 | 说明 |
+| --- | --- |
+| 无鉴权/加密 | 同网段任何人可连 WS；仅限可信网络 |
+| 无自动重连 | 手机断线后需重新点连接（桌面 UI 有简单重连） |
+| 无持久化 | 消息不落库，重启即清空 |
+| 消息回显 | 广播会把发送者自己的消息也回传（当前 UI 按 `from` 显示） |
+| 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
+| 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
+| 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
+| gen 不入库 | 克隆后需 `npm run tauri android init` |
+| 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
+
+## 下一步（按优先级）
+
+- [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
+- [ ] **宠物界面**：状态机（working / idle / waiting）驱动表情与动效，聊天降级为辅助视图。
+- [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
+- [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
+- [ ] **配对与鉴权**：首次扫码配对、长期密钥、信道加密。
+- [ ] **iOS**：Tauri mobile 初始化，评估后台限制。
+
+## 验收清单（每次改动的回归测试）
+
+- [ ] `npm run tauri dev` 正常启动，日志有 `[server] listening on http://0.0.0.0:8848`
+- [ ] `scripts/build-android.sh` 成功产出 APK
+- [ ] `scripts/install-android.sh` 安装并启动
+- [ ] 手机连接 `IP:8848` 后状态为「已连接」
+- [ ] 手机发消息 → 桌面日志 `[ws] recv`
+- [ ] 桌面发消息 → 手机收到，气泡在左侧
+- [ ] 手机发消息 → 手机气泡在右侧
