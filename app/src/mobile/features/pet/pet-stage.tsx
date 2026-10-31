@@ -239,8 +239,8 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
         className={cn(
           "absolute z-20",
           pet.settings.posture === "docked"
-            ? "top-[8%] left-[calc(env(safe-area-inset-left)+8%)] w-[48%] landscape:top-[16%] landscape:w-[36%]"
-            : "top-[6%] left-[calc(env(safe-area-inset-left)+8%)] w-[42%] landscape:top-[9%] landscape:w-[32%]",
+            ? "top-[16%] left-[calc(env(safe-area-inset-left)+8%)] w-[48%] landscape:w-[36%]"
+            : "top-[16%] left-[calc(env(safe-area-inset-left)+8%)] w-[42%] landscape:top-[12%] landscape:w-[32%]",
         )}
       >
         <PetBubble bubble={bubble} />
