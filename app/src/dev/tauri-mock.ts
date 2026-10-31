@@ -16,7 +16,9 @@ export function installTauriMock(): void {
   const role: MockRole = params.get("role") === "mobile" ? "mobile" : "desktop";
   const callbacks = new Map<number, (payload: unknown) => void>();
   const eventHandlers = new Map<MockEvent, number>();
+  const stores = new Map<number, Map<string, unknown>>();
   let nextId = 1;
+  let nextStoreId = 1000;
 
   function emit(event: MockEvent, payload: unknown) {
     const handlerId = eventHandlers.get(event);
@@ -53,6 +55,32 @@ export function installTauriMock(): void {
       if (command === "plugin:event|unlisten") {
         const event = args?.event;
         if (event === "chat" || event === "conn") eventHandlers.delete(event);
+        return null;
+      }
+      if (command === "plugin:store|load") {
+        const rid = nextStoreId++;
+        stores.set(rid, new Map());
+        return rid;
+      }
+      if (command === "plugin:store|get") {
+        const store = stores.get(Number(args?.rid));
+        const key = String(args?.key ?? "");
+        return [store?.get(key), store?.has(key) ?? false];
+      }
+      if (command === "plugin:store|set") {
+        stores.get(Number(args?.rid))?.set(String(args?.key ?? ""), args?.value);
+        return null;
+      }
+      if (command === "plugin:store|delete") {
+        const store = stores.get(Number(args?.rid));
+        const deleted = store?.delete(String(args?.key ?? "")) ?? false;
+        return deleted;
+      }
+      if (command === "plugin:store|clear") {
+        stores.get(Number(args?.rid))?.clear();
+        return null;
+      }
+      if (command === "plugin:store|save" || command === "plugin:resources|close") {
         return null;
       }
       return null;

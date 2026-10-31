@@ -1,8 +1,10 @@
 import { useCallback, useEffect } from "react";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
-import { ChatPanel } from "@/mobile/features/chat/components/chat-panel";
-import { ConnectionBar } from "@/mobile/features/connect/components/connection-bar";
+import { ChatView } from "@/mobile/features/chat/components/chat-view";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { PetSettings } from "@/mobile/features/pet/pet-settings";
+import { PetStage } from "@/mobile/features/pet/pet-stage";
+import { useUiStore } from "@/mobile/ui-store";
 import { parseMessage } from "@/protocol/messages";
 import { subscribeChat, subscribeConn } from "@/shared/lib/tauri";
 
@@ -10,6 +12,10 @@ export function MobileApp() {
   const append = useChatStore((state) => state.append);
   const hydrateAddr = useConnectionStore((state) => state.hydrateAddr);
   const setOnline = useConnectionStore((state) => state.setOnline);
+  const view = useUiStore((state) => state.view);
+  const settingsOpen = useUiStore((state) => state.settingsOpen);
+  const setView = useUiStore((state) => state.setView);
+  const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
 
   useEffect(() => {
     hydrateAddr();
@@ -38,9 +44,14 @@ export function MobileApp() {
   );
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-background px-4 pt-[calc(env(safe-area-inset-top)+16px)] pb-[calc(env(safe-area-inset-bottom)+16px)] text-foreground">
-      <ConnectionBar onError={appendSystem} />
-      <ChatPanel />
-    </main>
+    <>
+      <PetStage
+        active={view === "pet" && !settingsOpen}
+        onOpenChat={() => setView("chat")}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      {view === "chat" && <ChatView onBack={() => setView("pet")} onError={appendSystem} />}
+      <PetSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </>
   );
 }

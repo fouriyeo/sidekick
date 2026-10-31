@@ -14,6 +14,7 @@
 8. 安装前端重构依赖与脚手架：React 19、Tailwind v4、shadcn/ui（Base UI, base-nova）、Motion、Rive、Zustand；Vite/TS 别名、Biome、Vitest 已配置；旧 UI 尚未迁移。
 9. 落地产品规范与两份 PRD：树形文档（`docs/INDEX.md` + product/standards/prd/engineering）、宠物与麦克风 PRD/SPEC/ACCEPTANCE、项目子智能体与 Skill、`scripts/check-docs.mjs`（2026-10-31）。
 10. 完成前端 Phase 1：React 双 entry（`main.tsx` + `entries/desktop|mobile`）、`desktop`/`mobile` 连接/聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts`；删除旧 `main.ts`/`styles.css`；桌面浏览器与 Realme 真机双向收发通过（2026-10-31）。
+11. 宠物 P0 代码落地：文档预检（手动姿态/麦克风延后/plugin-store）、Tauri plugin-store 2.5.0、状态机/手势/精力亲密度/确定性存档、静态 SVG 舞台、手动双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器/无头 Chrome 视觉验证（2026-10-31）。
 
 ## 已验证（有实际证据）
 
@@ -27,6 +28,10 @@
 - 前端脚手架：`pnpm typecheck`、`pnpm lint`、`pnpm test`（2 个冒烟测试）、`pnpm build` 通过；Tailwind v4 + shadcn 主题可编译。
 - 前端 Phase 1：`pnpm typecheck` / `pnpm lint` / `pnpm test`（40 tests）/ `pnpm build` 全绿；安卓 debug APK 构建成功；`node scripts/check-boundaries.mjs` 通过。
 - 桌面 UI（浏览器复用 Vite + 真实 8848 服务）连接/收发、手机 UI（浏览器 mock）连接/收发、Realme 真机 App ↔ 桌面双向消息与气泡方向通过；手机端只加载 mobile chunk，`qrcode` 只在 desktop chunk。
+- 宠物 P0 文档预检：`node scripts/check-docs.mjs` 通过；PRD/SPEC/AC/UX/pet-runtime 已按“手动姿态、快速连戳 P1、麦克风延后、plugin-store”收口。
+- 宠物 P0 代码：`pnpm typecheck` / `pnpm lint` / `pnpm test`（84 tests）/ `pnpm build` 全绿；Android debug APK 构建成功；`check-boundaries` 通过。
+- 宠物浏览器验证：首启命名、设置页、手动支架/手持、减少动效、聊天入口/返回正常；无头 Chrome 1280×720 截图确认静态宠物舞台与设置页。
+- **未验证**：Realme 无线 adb 中途断连，宠物真机横/竖屏、plugin-store 跨重启、60fps/16:9 未完成；Rive 资产未接入，当前为静态 SVG 降级。
 
 ## 已知问题 / 技术债
 
@@ -39,7 +44,9 @@
 | 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
 | withGlobalTauri | `tauri.conf.json` 仍为 `true`；Phase 4 收紧为 `false` 时需回归 IPC/事件/QR |
-| 宠物/麦克风未实现 | PRD/SPEC/AC 已就绪；麦克风需先 spike（Android 采集、本机 ASR、macOS 输入） |
+| 麦克风未实现 | PRD/SPEC/AC 已就绪；需先 spike（Android 采集、本机 ASR、macOS 输入） |
+| 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
+| Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
 | 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
 | gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
@@ -47,7 +54,8 @@
 ## 下一步（按优先级）
 
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
-- [ ] **情绪宠物 P0**：按 [prd/pet/INDEX.md](./prd/pet/INDEX.md) 实现；真机 60fps、零焦虑、横屏双姿态。
+- [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与 Rive 资产待补。
+- [ ] **宠物真机回归**：横/竖屏安全区、支架/手持、杀进程恢复、3 分钟 60fps、16:9。
 - [ ] **外设麦克风 P0**：先按 [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) 做 spike，再按 [prd/mic/INDEX.md](./prd/mic/INDEX.md) 实现；只输入、不发送。
 - [ ] **Claude Code / Qoder hook 接入**：桌面侧监听 `notify` / `ask` 事件 → 推手机；手机回复经 `answer` 回传，桌面作为 hook 结果/输入注入。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
@@ -64,3 +72,6 @@
 - [ ] 手机发消息 → 桌面日志 `[ws] recv`
 - [ ] 桌面发消息 → 手机收到，气泡在左侧
 - [ ] 手机发消息 → 手机气泡在右侧
+- [ ] 宠物首启命名、设置、支架/手持在 Realme 横/竖屏正常
+- [ ] 宠物杀进程重启后名字/设置/存档恢复
+- [ ] 宠物 3 分钟 60fps、无 >50ms 长任务

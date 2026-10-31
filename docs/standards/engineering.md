@@ -93,7 +93,8 @@ app/src/
 
 - Zustand 按平台/功能拆 store；不引第二套状态库。
 - 连接状态唯一事实源；宠物/麦克风只读它，不各自维护 `online`。
-- 宠物持久化只存名字、心情、精力、亲密度、lastSeen、设置；不存聊天/音频/转写。
+- 宠物存档走 plugin-store adapter（`sidekick-pet.json`）；只存名字、基线心情、精力、亲密度、`onboarded`、时间戳、设置；不存聊天/音频/转写。
+- localStorage 只存服务器地址等轻量设置，不存宠物数据。
 - 麦克风不持久化音频/转写；最近一次转写只在内存，重启清空。
 - 本地存储必须带版本号；升级时做迁移，损坏时回退默认并提示。
 
@@ -119,8 +120,8 @@ app/src/
 
 **测试层级**
 
-- 单元：状态机、协议解析、纯函数、持久化迁移。
-- 组件：麦克风按钮状态、宠物降级、错误提示。
+- 单元：宠物状态机/手势、plugin-store 迁移与损坏、协议解析、纯函数。
+- 组件：麦克风按钮状态、宠物降级与减少动效、错误提示。
 - 集成：WS 音频流（mock STT）、文本输入（mock 辅助功能）。
 - 真机：权限、后台、来电、断网、长按 60 秒、掉电。
 
@@ -148,7 +149,7 @@ node scripts/check-boundaries.mjs
 - `protocol/**` 不得 import 应用层（mobile/desktop/shared/entries）；
 - `entries/desktop` 不得 import mobile；`entries/mobile` 不得 import desktop。
 
-平台目录已于 2026-10-31 完成迁移，脚本已生效。在 CI 或提交前运行；违反即失败。边界靠脚本，不靠自觉。
+平台目录已于 2026-10-31 完成迁移，脚本已生效；宠物 P0 已按 `mobile/features/pet` 落地。在 CI 或提交前运行；违反即失败。边界靠脚本，不靠自觉。
 
 ## 11. 文档同步
 

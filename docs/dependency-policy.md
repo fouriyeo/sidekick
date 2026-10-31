@@ -130,6 +130,7 @@
 | --- | --- | --- | --- | --- |
 | `react` / `react-dom` | UI 运行时 | 首屏 | MIT | 19.3.x |
 | `@tauri-apps/api` | invoke / listen | 首屏 | MIT/Apache-2.0 | 2.x |
+| `@tauri-apps/plugin-store` | 宠物存档（plugin-store） | 手机宠物按需 | MIT/Apache-2.0 | 2.5.0；对应 Rust `tauri-plugin-store` 2.5.0 |
 | `tailwindcss` / `@tailwindcss/vite` | 样式 | 构建期 | MIT | 4.3.x |
 | `@base-ui/react` | 无样式 primitive | 首屏（按组件） | MIT | shadcn 的 base |
 | `motion` | UI 动画 | 首屏（按需） | MIT | 14.8.x |
@@ -213,7 +214,7 @@
 ## 10. Rust / Tauri 依赖
 
 - 同一套原则：必要性、维护、许可证、体积（编译时间/产物体积）、安全、可替换。
-- 基线：`tauri` 2.x、`serde`、`tokio`、`axum`、`tokio-tungstenite`；不重复引入 HTTP/WS 框架。
+- 基线：`tauri` 2.x、`serde`、`tokio`、`axum`、`tokio-tungstenite`、`tauri-plugin-store` 2.5.0；不重复引入 HTTP/WS 框架。
 - Tauri 插件只用官方或维护良好的社区插件；capabilities 最小权限。
 - 新增 crate 前跑 `cargo tree -d` 看是否已有重复能力；`cargo deny` 管许可证；`cargo audit` 管漏洞。
 - 协议类型如果引入 `ts-rs` / `tauri-specta`，生成物入库并在 CI 校验一致性。

@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { useUiStore } from "@/mobile/ui-store";
 import type { ConnEvent } from "@/protocol/messages";
 import { SERVER_ADDR_KEY } from "@/shared/lib/local-storage";
 
@@ -14,6 +15,29 @@ const tauri = vi.hoisted(() => ({
   subscribeConn: vi.fn(),
   unsubscribeChat: vi.fn(),
   unsubscribeConn: vi.fn(),
+}));
+
+vi.mock("@/mobile/features/pet/pet-stage", () => ({
+  PetStage: ({
+    onOpenChat,
+    onOpenSettings,
+  }: {
+    onOpenChat: () => void;
+    onOpenSettings: () => void;
+  }) => (
+    <div>
+      <button type="button" onClick={onOpenChat}>
+        打开聊天
+      </button>
+      <button type="button" onClick={onOpenSettings}>
+        打开设置
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("@/mobile/features/pet/pet-settings", () => ({
+  PetSettings: () => null,
 }));
 
 vi.mock("@/shared/lib/tauri", () => ({
@@ -43,6 +67,7 @@ beforeEach(() => {
     error: null,
     hydrated: false,
   });
+  useUiStore.setState({ view: "pet", settingsOpen: false });
   tauri.chatHandler = null;
   tauri.connHandler = null;
   tauri.subscribeChat.mockClear();
@@ -57,6 +82,10 @@ afterEach(() => {
   cleanup();
 });
 
+function openChat() {
+  fireEvent.click(screen.getByRole("button", { name: "打开聊天" }));
+}
+
 describe("MobileApp", () => {
   it("subscribes once and appends parsed chat messages", () => {
     render(<MobileApp />);
@@ -68,6 +97,7 @@ describe("MobileApp", () => {
       tauri.chatHandler?.('{"type":"chat","from":"desktop","text":"你好","ts":1}');
       tauri.chatHandler?.('{"type":"chat","from":"phone","text":"回声","ts":2}');
     });
+    openChat();
 
     expect(screen.getByText("你好")).toBeInTheDocument();
     expect(screen.getByText("回声")).toBeInTheDocument();
@@ -76,6 +106,7 @@ describe("MobileApp", () => {
 
   it("updates the connection store from conn events", () => {
     render(<MobileApp />);
+    openChat();
 
     act(() => tauri.connHandler?.({ online: true }));
     expect(screen.getByText("已连接")).toBeInTheDocument();
@@ -98,6 +129,7 @@ describe("MobileApp", () => {
   it("sends trimmed text and clears the draft without a local echo", async () => {
     tauri.sendChat.mockResolvedValue(undefined);
     render(<MobileApp />);
+    openChat();
 
     fireEvent.change(screen.getByLabelText("消息内容"), { target: { value: "  你好  " } });
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
@@ -110,6 +142,7 @@ describe("MobileApp", () => {
   it("keeps the draft and appends a readable system message when sending fails", async () => {
     tauri.sendChat.mockRejectedValue(new Error("还没连接电脑"));
     render(<MobileApp />);
+    openChat();
 
     fireEvent.change(screen.getByLabelText("消息内容"), { target: { value: "在吗" } });
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
@@ -121,6 +154,7 @@ describe("MobileApp", () => {
   it("appends connection errors as system messages and saves the address", async () => {
     tauri.connectServer.mockRejectedValue(new Error("连接失败: refused"));
     render(<MobileApp />);
+    openChat();
 
     fireEvent.change(screen.getByLabelText("电脑地址"), { target: { value: "10.0.0.2:8848" } });
     fireEvent.click(screen.getByRole("button", { name: "连接" }));

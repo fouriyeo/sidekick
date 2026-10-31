@@ -22,9 +22,9 @@ load: on-demand
 
 ## 2. 色彩
 
-基础层沿用现有 shadcn 暗色令牌（[tokens.css](../../app/src/shared/styles/tokens.css)）；宠物舞台新增暖色作用域令牌，落地时写入 `tokens.css`，不要在组件里写死颜色。
+基础层沿用现有 shadcn 暗色令牌（[tokens.css](../../app/src/shared/styles/tokens.css)）；宠物舞台暖色作用域令牌已于 2026-10-31 写入 `tokens.css`，组件只引用语义令牌。
 
-| 令牌（建议） | 值 | 用途 |
+| 令牌（已落地） | 值 | 用途 |
 | --- | --- | --- |
 | `--pet-bg` | `oklch(0.17 0.02 260)` | 宠物舞台背景，比全局背景略深 |
 | `--pet-glow` | `oklch(0.82 0.12 75 / 0.32)` | 宠物背后的暖光晕 |
@@ -91,9 +91,9 @@ load: on-demand
 
 - 分层：身体、头、耳朵、眼睛、眉毛、嘴、尾巴、光晕分开；便于状态机组合。
 - 网格/骨骼数量控制在中端安卓可 60fps 的范围内；避免大面积网格变形。
-- 状态机输入命名稳定：`mood`、`energy`、`trigger_pet`、`trigger_poke`、`trigger_listen`、`trigger_success`、`trigger_cancel`、`trigger_error`、`is_night`。
+- 状态机输入命名稳定：`mood`、`energy`、`trigger_pet`、`trigger_poke`、`trigger_listen`、`trigger_success`、`trigger_cancel`、`trigger_error`、`trigger_wake`、`is_night`。
 - 单个 `.riv` ≤2MB；纹理图集 ≤2048；不把音频塞进 `.riv`。
-- 提供静态 PNG/WebP 降级图；Rive 加载失败时使用。
+- 提供静态 SVG/PNG/WebP 降级图；Rive 加载失败时使用（当前实现为内联 SVG + CSS 呼吸）。
 - 动画命名和状态映射写入 [engineering/pet-runtime.md](../engineering/pet-runtime.md)。
 
 ## 7. 动效
@@ -108,12 +108,12 @@ load: on-demand
 - 宠物 idle：呼吸 3–5 秒循环；眨眼 2–6 秒随机；张望/伸懒腰 4–12 秒随机。
 - 触摸反馈 ≤100ms；开心/庆祝 ≤2 秒；失败关心 ≤1.5 秒。
 - 不做持续全屏粒子；爱心粒子最多 6 个，1 秒内消失。
-- `prefers-reduced-motion: reduce`：去掉随机 idle、弹跳、粒子；保留状态切换的即时变化。
+- `prefers-reduced-motion: reduce`：去掉随机 idle、弹跳、爱心粒子、闪光；保留状态切换的即时表情（交叉淡入 120ms）与按钮反馈；睡觉/醒来越过动画，直接用静态姿势。
 - 后台/息屏暂停 Rive；回前台恢复并先眨眼一次，避免“突然复活”。
 
 ## 8. 声音
 
-- 默认关闭；设置里可开。
+- 默认关闭；设置里可开（本轮未接入，设置项 disabled；P1 接入）。
 - 声音只做点缀：轻“咪”、呼噜、完成提示；不循环、不尖锐。
 - 不绕过系统静音；不在录音时播放声音，避免回声。
 - 所有声音信息必须有视觉替代。
@@ -124,7 +124,7 @@ load: on-demand
 - 不打包中文字体；如需品牌字体，必须子集化并走依赖审批。
 - 宠物舞台 `devicePixelRatio` 上限 2；安卓避免大面积 blur/shadow 动画。
 - 真机 60fps 是硬指标；掉帧就减粒子/网格，不降整体帧率目标。
-- 暗色 OLED 防烧屏：支架模式 2 分钟无操作自动暗到 70%，触摸恢复；宠物仍有轻微呼吸，不长期静止。
+- 暗色 OLED 防烧屏：屏幕常亮（P1，本轮未接入）落地后，支架模式 2 分钟无操作自动暗到 70%，触摸恢复；宠物仍有轻微呼吸，不长期静止。
 
 ## 10. 交接
 

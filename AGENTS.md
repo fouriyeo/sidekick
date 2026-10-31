@@ -19,7 +19,8 @@
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
-- ❌ 尚未开始：宠物与麦克风实现、Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
+- ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、手动双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
+- ❌ 尚未开始：麦克风实现、Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
 
 ## 2.5 文档导航（懒加载）
 
@@ -116,7 +117,7 @@ sidekick/
 | --- | --- |
 | `sidekick-docs-router` | 查规范/PRD/方案，按树懒加载，不批量读 |
 | `sidekick-prd-reviewer` | 写完/改完 PRD，按 10 项质量门评审 |
-| `sidekick-pet-designer` | 宠物体验/视觉/动效/横屏评审 |
+| `sidekick-pet-designer` | 宠物体验/视觉/动效评审 |
 | `sidekick-audio-engineer` | 麦克风采集/传输/转写/输入方案与排障 |
 | `sidekick-protocol-guardian` | 改协议/消息类型后检查文档与实现一致 |
 
@@ -168,10 +169,10 @@ sidekick/
 
 ## 10. 下一步路线（按优先级）
 
-> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；宠物/麦克风 PRD 已就绪，宠物 P0 正在实现。
+> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；宠物 P0 代码完成（真机/Rive 待补），麦克风 PRD 已就绪、实现未开始。
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
-2. 情绪宠物 P0：按 `docs/prd/pet/` 实现；真机 60fps、零焦虑、横屏双姿态。
+2. 情绪宠物 P0：代码已完成（静态 SVG 降级、手动双姿态、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
 3. 外设麦克风 P0：先做 spike（Android 采集、本机 ASR、macOS 文本输入），再按 `docs/prd/mic/` 实现；只输入、不发送。
 4. 接入 Claude Code hooks：`notify` / `ask` 事件推手机，手机回答回传并作为 hook 结果（协议扩展 status / ask / notify / input）。
 5. 配对鉴权 + release 签名/桌面打包/开机自启。

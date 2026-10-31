@@ -1,0 +1,228 @@
+.petSlot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: 64%;
+  max-width: 88vw;
+  max-height: 760px;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) translate3d(var(--pet-x, 0%), var(--pet-y, 0%), 0)
+    scale(var(--pet-scale, 1));
+  transition: transform 320ms var(--ease-out-soft);
+  will-change: transform;
+}
+
+.motionLayer {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 70%;
+}
+
+.petArt {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 70%;
+  animation: pet-breathe 4s ease-in-out infinite;
+}
+
+.shadow {
+  fill: var(--pet-body-shadow);
+  opacity: 0.28;
+}
+
+.head {
+  transform-origin: 160px 190px;
+  transition: transform 120ms var(--ease-out-soft);
+}
+
+.earLeft,
+.earRight {
+  transform-origin: 160px 150px;
+  transition: transform 120ms var(--ease-out-soft);
+}
+
+.earLeft {
+  transform: rotate(-8deg);
+}
+
+.earRight {
+  transform: rotate(8deg);
+}
+
+.tail {
+  transform-origin: 212px 236px;
+  animation: pet-tail 3.4s ease-in-out infinite;
+}
+
+.eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pet-blink 6s ease-in-out infinite;
+}
+
+.eyebrow {
+  stroke: var(--pet-eye);
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+.mouth {
+  stroke: var(--pet-eye);
+  stroke-width: 4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.cheek {
+  fill: var(--pet-cheek);
+}
+
+.motionLayer[data-mood="curious"] .head {
+  transform: rotate(4deg);
+}
+
+.motionLayer[data-mood="concerned"] .head {
+  transform: rotate(-4deg);
+}
+
+.motionLayer[data-mood="listening"] .earLeft {
+  transform: rotate(-18deg) translateY(-4px);
+}
+
+.motionLayer[data-mood="listening"] .earRight {
+  transform: rotate(18deg) translateY(-4px);
+}
+
+.motionLayer[data-mood="happy"] .tail,
+.motionLayer[data-mood="proud"] .tail {
+  animation-duration: 1.2s;
+}
+
+.motionLayer[data-phase="sleeping"] .head {
+  transform: translateY(6px) rotate(-2deg);
+}
+
+.motionLayer[data-phase="sleeping"] .petArt {
+  animation-duration: 6s;
+}
+
+.motionLayer[data-energy="low"] .tail {
+  animation-duration: 5s;
+}
+
+.look .head {
+  animation: pet-look 1.2s ease-in-out;
+}
+
+.stretch .petArt {
+  animation: pet-stretch 1.2s ease-in-out;
+}
+
+.heart {
+  position: absolute;
+  bottom: 38%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  color: var(--pet-coral);
+  animation: pet-heart 1s ease-out forwards;
+  pointer-events: none;
+}
+
+.reduceMotion .petArt,
+.reduceMotion .tail,
+.reduceMotion .eyes,
+.reduceMotion .heart,
+.reduceMotion .head,
+.reduceMotion .earLeft,
+.reduceMotion .earRight {
+  animation: none !important;
+  transition-duration: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petArt,
+  .tail,
+  .eyes,
+  .heart,
+  .head,
+  .earLeft,
+  .earRight {
+    animation: none !important;
+  }
+}
+
+@keyframes pet-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+}
+
+@keyframes pet-blink {
+  0%,
+  43%,
+  47%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes pet-tail {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes pet-look {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  35% {
+    transform: rotate(5deg);
+  }
+  70% {
+    transform: rotate(-3deg);
+  }
+}
+
+@keyframes pet-stretch {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.04, 0.97);
+  }
+  70% {
+    transform: scale(0.99, 1.02);
+  }
+}
+
+@keyframes pet-heart {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -54px) scale(1);
+  }
+}

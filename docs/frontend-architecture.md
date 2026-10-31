@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，**React UI 尚未迁移**，当前入口仍是原生 DOM + 手写 CSS。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现静态 SVG 降级，Rive 资产待补。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -49,7 +49,7 @@ app/
 │  │  │  ├─ chat/             # 消息列表、输入、系统消息
 │  │  │  └─ mic-receiver/     # 麦克风状态浮窗、转写结果、输入提示
 │  │  └─ components/
-│  ├─ mobile/                 # 手机专属（只做横屏）
+│  ├─ mobile/                 # 手机专属（不强制横竖屏）
 │  │  ├─ features/
 │  │  │  ├─ connect/          # 地址输入、连接状态
 │  │  │  ├─ pet/              # 宠物舞台、Rive 绑定、状态映射
@@ -262,7 +262,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - Zustand 5；按 feature 拆 store：`useConnectionStore`、`useChatStore`、`usePetStore`、`useSettingsStore`、`useUiStore`。
 - store 只存“真状态”，派生值用 selector 计算；不存重复数据。
 - 连接状态是唯一事实源；聊天/宠物界面只读它，不各自维护 `online`。
-- 本地持久化只存设置（服务器地址、偏好）；聊天记录暂不落盘，等存储方案确定。
+- 本地持久化：服务器地址用 localStorage；宠物存档用 plugin-store（adapter 隔离）；聊天记录暂不落盘。
 - 不引全局事件总线；Tauri 事件在 `shared/lib/tauri.ts` 里转成 store action。
 - 组件局部 UI 状态（展开/收起、输入草稿）留在组件内，不进全局 store。
 - 视图切换用 `useUiStore` 的 `view` 字段（`chat | pet | settings`），不进 URL、不引路由。
@@ -322,13 +322,13 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 ## 13. 迁移计划
 
-当前进度（2026-10-31）：Phase 1 已完成。React 双 entry、桌面/手机连接与聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；旧 `main.ts` / `styles.css` 已删除，真机双向收发通过。宠物（Phase 2）待实现。
+当前进度（2026-10-31）：Phase 1 已完成。React 双 entry、桌面/手机连接与聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；旧 `main.ts` / `styles.css` 已删除，真机双向收发通过。宠物 P0 已实现（静态 SVG 降级，Rive 待资产；真机部分未验证）。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
 | 0. 预检 | 真机 WebView 版本、开分支、记录当前包体/启动时间 | 版本 ≥ 111 或已决定降级方案 |
 | 1. 骨架 | React + Vite + Tailwind + shadcn + Biome；两个 entry；连接 + 聊天 1:1 复刻 | 双端连接/收发与现状一致，Rust 未改 |
-| 2. 宠物 | Rive 舞台、情绪状态机、懒加载、后台暂停 | 真机 60fps，聊天仍可用 |
+| 2. 宠物 | 舞台、情绪状态机、plugin-store 存档、手动双姿态（当前静态 SVG，Rive 待资产） | 真机 60fps，聊天仍可用 |
 | 3. 麦克风 | 手机采集 + 桌面转写/输入、协议扩展、权限与降级 | 真机按住说话全链路通过 |
 | 4. 收尾 | 设置/配对 UI、补齐测试、包名 `desktop` → `sidekick`（旧 DOM/`styles.css` 已随 Phase 1 删除） | 无旧代码引用，测试通过 |
 | 5. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |

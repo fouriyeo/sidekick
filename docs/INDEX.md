@@ -98,9 +98,9 @@ docs/
 ## 4. 当前阶段（2026-10-31）
 
 - 已完成：局域网双向通信 MVP、安卓真机验证、前端 Phase 1（React 双 entry + 连接/聊天迁移）、产品规范与两份 PRD。
-- 进行中：情绪宠物 P0。
+- 已完成代码：情绪宠物 P0（静态 SVG 降级；真机/Rive 待补）。
 - 未开始：麦克风实现、Claude Code / Qoder hook、release 打包、配对鉴权、iOS。
-- 本期只做两件事：**情绪宠物（手机横屏）** + **外设麦克风（AI 语音输入）**。
+- 本期只做两件事：**情绪宠物（手机端，不强制横竖屏）** + **外设麦克风（AI 语音输入）**。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 
 ## 5. 事实的唯一归属
@@ -117,6 +117,7 @@ docs/
 | 现有协议 | [../protocol/README.md](../protocol/README.md) |
 | 音频协议提案 | [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
 | 重大决策 | [decisions.md](./decisions.md) |
+| 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
 | 当前进度 | [status.md](./status.md) |
 
 同一条规则只写一处，其它地方用链接；不要复制。
