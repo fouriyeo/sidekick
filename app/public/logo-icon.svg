@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="logo-title logo-desc">
+  <title id="logo-title">小跟班 Sidekick</title>
+  <desc id="logo-desc">A friendly cat peeking over a laptop, with a coral heart and mint accents.</desc>
+  <defs>
+    <mask id="base-notch" maskUnits="userSpaceOnUse" x="82" y="418" width="348" height="44">
+      <rect x="82" y="424" width="348" height="38" rx="19" fill="#fff"/>
+      <rect x="232" y="420" width="48" height="14" rx="7" fill="#000"/>
+    </mask>
+  </defs>
+
+  <path d="M 196 166 L 184 92 L 250 132 Z" fill="#5B5BD6" stroke="#5B5BD6" stroke-width="30" stroke-linejoin="round"/>
+  <path d="M 316 166 L 328 92 L 262 132 Z" fill="#5B5BD6" stroke="#5B5BD6" stroke-width="30" stroke-linejoin="round"/>
+  <path d="M 202 152 L 194 107 L 234 131 Z" fill="#34D399" stroke="#34D399" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M 310 152 L 318 107 L 278 131 Z" fill="#34D399" stroke="#34D399" stroke-width="10" stroke-linejoin="round"/>
+
+  <path d="M 136 222 C 136 164 176 128 256 128 C 336 128 376 164 376 222 C 376 280 330 314 256 314 C 182 314 136 280 136 222 Z" fill="#5B5BD6"/>
+
+  <circle cx="206" cy="218" r="21" fill="#1E1B4B"/>
+  <circle cx="306" cy="218" r="21" fill="#1E1B4B"/>
+  <circle cx="213" cy="210" r="7" fill="#FFFFFF"/>
+  <circle cx="313" cy="210" r="7" fill="#FFFFFF"/>
+
+  <path d="M 236 242 C 242 254 250 254 256 244 C 262 254 270 254 276 242" fill="none" stroke="#1E1B4B" stroke-width="8" stroke-linecap="round"/>
+
+  <path d="M 256 302 C 242 293 234 287 234 277 C 234 269 240 263 248 263 C 252 263 255 265 256 268 C 257 265 260 263 264 263 C 272 263 278 269 278 277 C 278 287 270 293 256 302 Z" fill="#FF7A59"/>
+
+  <rect x="100" y="310" width="312" height="116" rx="22" fill="#EFEFF6" stroke="#DEDEEB" stroke-width="2"/>
+  <circle cx="256" cy="368" r="30" fill="#34D399"/>
+
+  <rect x="82" y="424" width="348" height="38" rx="19" fill="#5B5BD6" mask="url(#base-notch)"/>
+
+  <rect x="326" y="284" width="52" height="42" rx="20" fill="#5B5BD6"/>
+  <circle cx="338" cy="320" r="9" fill="#5B5BD6"/>
+  <circle cx="352" cy="325" r="9" fill="#5B5BD6"/>
+  <circle cx="366" cy="320" r="9" fill="#5B5BD6"/>
+</svg>

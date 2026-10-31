@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 44 312 312" width="312" height="312" role="img" aria-labelledby="logo-title logo-desc">
+  <title id="logo-title">小跟班 Sidekick</title>
+  <desc id="logo-desc">Favicon: the Sidekick cat head on a light rounded square.</desc>
+
+  <rect x="100" y="44" width="312" height="312" rx="72" fill="#F1F1FA"/>
+  <rect x="106" y="50" width="300" height="300" rx="66" fill="none" stroke="#E1E1EE" stroke-width="4"/>
+
+  <path d="M 196 166 L 184 92 L 250 132 Z" fill="#5B5BD6" stroke="#5B5BD6" stroke-width="30" stroke-linejoin="round"/>
+  <path d="M 316 166 L 328 92 L 262 132 Z" fill="#5B5BD6" stroke="#5B5BD6" stroke-width="30" stroke-linejoin="round"/>
+  <path d="M 202 152 L 194 107 L 234 131 Z" fill="#34D399" stroke="#34D399" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M 310 152 L 318 107 L 278 131 Z" fill="#34D399" stroke="#34D399" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M 136 222 C 136 164 176 128 256 128 C 336 128 376 164 376 222 C 376 280 330 314 256 314 C 182 314 136 280 136 222 Z" fill="#5B5BD6"/>
+  <circle cx="206" cy="218" r="21" fill="#1E1B4B"/>
+  <circle cx="306" cy="218" r="21" fill="#1E1B4B"/>
+  <circle cx="213" cy="210" r="7" fill="#FFFFFF"/>
+  <circle cx="313" cy="210" r="7" fill="#FFFFFF"/>
+  <path d="M 236 242 C 242 254 250 254 256 244 C 262 254 270 254 276 242" fill="none" stroke="#1E1B4B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M 256 302 C 242 293 234 287 234 277 C 234 269 240 263 248 263 C 252 263 255 265 256 268 C 257 265 260 263 264 263 C 272 263 278 269 278 277 C 278 287 270 293 256 302 Z" fill="#FF7A59"/>
+</svg>

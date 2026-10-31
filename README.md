@@ -1,5 +1,9 @@
 # 小跟班 · Sidekick
 
+<p align="center">
+  <img src="brand/logo-horizontal.svg" width="420" alt="小跟班 · Sidekick" />
+</p>
+
 把手机变成电脑的外设与 AI 宠物：电脑把 AI/任务状态推到手机，你在手机上收通知、回答 AI 的提问、发快捷指令、语音输入。
 
 当前进度：**局域网 MVP 已验证**；前端脚手架、产品规范与两份 PRD 已就绪；宠物与麦克风待实现。
@@ -18,9 +22,16 @@ scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 ## 目录
 
 - `app/` — Tauri 项目（桌面端 + 安卓端同一代码库）
+- `brand/` — logo 源文件（SVG 图标、横版组合、App 图标、favicon）
 - `protocol/` — 手机与电脑之间的事件协议
 - `docs/` — 架构、决策、环境、状态、蓝牙预研
 - `scripts/` — 构建/安装脚本
+
+## 品牌资源
+
+- `brand/` — logo 源文件：`logo-icon.svg`、`logo-horizontal.svg`、`logo-horizontal-dark.svg`、`logo-appicon.svg`、`logo-favicon.svg`
+- 修改后重新生成全平台图标：`cd app && pnpm tauri icon ../brand/logo-appicon.svg`
+- Web favicon：`app/public/favicon.svg`（来自 `brand/logo-favicon.svg`）
 
 ## 文档
 

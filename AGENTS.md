@@ -17,6 +17,7 @@
 - ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
 - 前端重构脚手架已就绪（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion + Rive；依赖、Vite/TS、Biome、Vitest 已配置，**旧 UI 尚未迁移**；规范见 `docs/frontend-architecture.md`，依赖治理见 `docs/dependency-policy.md`。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
+- ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
 - ❌ 尚未开始：宠物与麦克风实现、Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
 
@@ -74,6 +75,7 @@ sidekick/
 │  ├─ src-tauri/mobile/index.html # 手机浏览器落地页（含下载按钮）
 │  ├─ src-tauri/tauri.conf.json   # 产品名 Sidekick / identifier dev.sidekick.app
 │  └─ src-tauri/gen/    # tauri android init 生成（已 gitignore，需重新生成）
+├─ brand/               # logo 源文件（SVG 图标 / 横版 / App 图标 / favicon）
 ├─ protocol/README.md   # 事件协议 v0
 ├─ docs/
 │  ├─ INDEX.md          # 文档树入口（懒加载）
@@ -99,6 +101,7 @@ sidekick/
 - 安装并启动：`scripts/install-android.sh`（`adb install -r` + `am start`）
 - 日志：桌面端看 `tauri dev` 终端；安卓端 `adb logcat`
 - 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm format`（Biome + Vitest；当前只覆盖新脚手架目录，旧 `src/main.ts` 暂不在 lint 范围）
+- 重生成全平台图标：`pnpm tauri icon ../brand/logo-appicon.svg`（在 `app/` 内运行；会同步 Android mipmap，`gen/` 清空后需先 `pnpm tauri android init`）
 - 文档检查：`node scripts/check-docs.mjs`（在仓库根目录运行）
 - 平台边界检查：`node scripts/check-boundaries.mjs`（迁移出 `src/mobile` / `src/desktop` 后自动生效）
 
