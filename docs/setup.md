@@ -90,7 +90,8 @@ curl -s http://127.0.0.1:9222/json   # 查看 WebView 当前 URL / 标题
 - 可直接执行：
 
 ```js
-window.__TAURI_INTERNALS__.invoke("connect_server", { addr: "<电脑IP>:8848" })
+window.__TAURI_INTERNALS__.invoke("connect_server", { addr: "<电脑IP>:<真实端口>" })
+window.__TAURI_INTERNALS__.invoke("discover_servers")  // 无参，返回发现的电脑列表
 window.__TAURI_INTERNALS__.invoke("send_chat", { text: "hello" })
 ```
 
@@ -113,7 +114,9 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 | 现象 | 可能原因 / 处理 |
 | --- | --- |
 | App 打开全黑 | 常见是 CSS 把 `body` 设成 `display:none`（见 AGENTS.md 第 8 节）；用 CDP 检查 `getComputedStyle(document.body).display` 与元素尺寸 |
-| 手机连不上电脑 | 是否同一 Wi-Fi；macOS 防火墙是否允许传入；8848 是否监听；电脑 IP 是否变化 |
+| 手机连不上电脑 | 是否同一 Wi-Fi；macOS 防火墙是否允许传入（TCP 服务端口 + UDP 47820）；服务端口是否监听；电脑 IP 是否变化 |
+| 手机找不到电脑（自动发现失败） | 路由器是否禁止广播/开启 AP 隔离；macOS 是否允许 Sidekick 传入连接；`pnpm tauri dev` 日志是否有 `[discovery]`；可改用「手动输入地址」并填桌面窗口显示的地址 |
+| 服务端口被占用 | 日志会显示候选端口依次失败、最终监听的真实端口；桌面窗口显示的地址即为真实端口，无需手改 |
 | `adb pair` 报 `protocol fault` | 配对端口/码已失效；重开配对弹窗，用弹窗里的端口与最新码 |
 | `more than one device/emulator` | 断开 mDNS transport：`adb disconnect <服务名>` |
 | Gradle 报缺少 android-37 / build-tools | `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"` |

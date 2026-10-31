@@ -14,6 +14,7 @@
 ## 2. 当前状态（务必先看）
 
 - ✅ **局域网 MVP 已验证**（2026-10-31）：Tauri 桌面端（服务端）+ Tauri 安卓 App（客户端）双向收发消息成功。
+- ✅ **手机自动发现电脑已落地**（2026-10-31）：UDP 广播探测（固定 47820）+ 桌面单播回主机名/真实端口；服务端口候选 `47810`–`47814`、`8848` 自动回退；手机启动即自动连接，桌面大二维码改为按需展开；真机（Realme）端到端与端口回退已验。
 - ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
 - ✅ **前端 Phase 1 已完成**（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）双 entry；`entries/desktop.tsx` / `entries/mobile.tsx`、`desktop/**`、`mobile/**`、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；连接/聊天 1:1 迁移，旧 `main.ts` / `styles.css` 已删除；桌面浏览器与安卓真机双向收发通过。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
@@ -35,7 +36,7 @@
 
 - 单仓库、双产物：Tauri 2 桌面端 + 安卓端共用 `app/`，但构建出两个独立软件；Rust 用 `cfg(desktop/mobile)` 隔离，桌面服务代码不进手机包。
 - 前端按平台分目录：`src/desktop`、`src/mobile`、`src/shared`、`src/protocol`；桌面与手机各自固定布局，**不做跨端自适应**。详见 `docs/standards/engineering.md`。
-- 桌面端：Tauri（Rust）+ Vite/TypeScript；Rust 里跑 axum HTTP/WebSocket 服务，端口 **8848**。
+- 桌面端：Tauri（Rust）+ Vite/TypeScript；Rust 里跑 axum HTTP/WebSocket 服务，端口候选 **47810**–`47814`、`8848`（默认 47810，被占用自动顺延，真实端口由 `server_info` 与发现回包告知）；UDP 发现端口固定 **47820**。
 - 手机端：Tauri Android App（Rust 核心 + WebView UI）；Rust 侧用 tokio-tungstenite 主动连电脑，前端通过 Tauri 命令/事件与 Rust 通信。
 - 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；`src/main.tsx` 据此动态 import 并挂载 `entries/desktop.tsx` / `entries/mobile.tsx`。
 - 协议：WebSocket 文本帧 JSON；服务端把消息广播给所有已连接客户端。定义见 `protocol/README.md`。
@@ -49,14 +50,16 @@
 | HTTP GET | `/` | 手机落地页（含「下载 App」按钮 + 网页聊天预览） |
 | HTTP GET | `/download/apk` | 直接下载 debug APK（读取 `gen/android/.../app-universal-debug.apk`，未构建时返回 404） |
 | WS | `/ws` | 消息通道 |
-| Tauri 命令 | `server_info` | 返回 `{ip, port, url}`，前端用于展示地址与二维码 |
+| UDP | `47820` | 发现响应器：收 `sidekick.discover` 探测，单播回主机名 + 真实端口 |
+| Tauri 命令 | `server_info` | 等就绪后返回 `{ip, port, url, discoveryPort}`，前端展示地址/发现状态/二维码 |
 
 ### 手机端接口
 
 | 方式 | 名称 | 说明 |
 | --- | --- | --- |
 | Tauri 命令 | `app_role` | 返回 `mobile` |
-| Tauri 命令 | `connect_server({addr})` | 连接 `ws://<addr>/ws`；`addr` 可只写 `IP:端口`（缺省 8848） |
+| Tauri 命令 | `discover_servers` | 无参；UDP 广播发现同网段电脑，返回 `{name, ip, port, addr}[]`（异常返回空数组） |
+| Tauri 命令 | `connect_server({addr})` | 连接 `ws://<addr>/ws`；`addr` 可只写 `IP:端口`（缺省 47810）；重复调用先断开旧连接，4s 超时 |
 | Tauri 命令 | `send_chat({text})` | 发送 `{"type":"chat","from":"phone",...}` |
 | Tauri 事件 | `conn` / `chat` | `conn: {online, url}`；`chat: <JSON 字符串>` |
 
@@ -75,10 +78,11 @@ sidekick/
 │  ├─ src/entries/      # desktop.tsx / mobile.tsx
 │  ├─ src/desktop/      # 桌面平台：features/connect、features/chat
 │  ├─ src/mobile/       # 手机平台：features/connect、features/chat
-│  ├─ src/protocol/     # messages.ts（chat/system/ServerInfo/ConnEvent）
+│  ├─ src/protocol/     # messages.ts（chat/system/ServerInfo/ConnEvent）+ discovery.ts（发现结果）
 │  ├─ src/shared/       # ui / lib（tauri.ts）/ styles
 │  ├─ src/dev/          # 仅开发环境 Tauri mock（浏览器验证）
-│  ├─ src-tauri/src/lib.rs        # 桌面 axum 服务 + 手机 WS 客户端（cfg 分流）
+│  ├─ src-tauri/src/lib.rs        # 桌面 axum 服务 + 手机 WS 客户端（cfg 分流；动态端口/连接串行化）
+│  ├─ src-tauri/src/discovery.rs  # UDP 局域网发现（探测/回包/响应器/扫描）
 │  ├─ src-tauri/mobile/index.html # 手机浏览器落地页（含下载按钮）
 │  ├─ src-tauri/tauri.conf.json   # 产品名 Sidekick / identifier dev.sidekick.app
 │  └─ src-tauri/gen/    # tauri android init 生成（已 gitignore，需重新生成）
@@ -100,7 +104,7 @@ sidekick/
 
 前提：`cd sidekick/app && pnpm install`。
 
-- 桌面开发：`pnpm tauri dev`（窗口出现即服务已启动；日志可见 `[server] listening on http://0.0.0.0:8848`）
+- 桌面开发：`pnpm tauri dev`（窗口出现即服务已启动；日志可见 `[server] listening on http://0.0.0.0:47810` 与 `[discovery] UDP 响应器已启动`）
 - 生成安卓工程（首次/清理后）：`pnpm tauri android init`（需要 `ANDROID_HOME` / `NDK_HOME` / `JAVA_HOME`，见 `docs/setup.md`）
 - 构建 debug APK：`scripts/build-android.sh`
   - 等价于：`pnpm tauri android build --debug --target aarch64 --apk`
@@ -136,9 +140,9 @@ sidekick/
 
 ## 7. 验证「改完没坏」的最短路径
 
-1. 桌面端 `pnpm tauri dev`，确认日志出现 `[server] listening`；
+1. 桌面端 `pnpm tauri dev`，确认日志出现 `[server] listening on http://0.0.0.0:47810` 与 `[discovery] UDP 响应器已启动`；
 2. `scripts/build-android.sh && scripts/install-android.sh`，手机上打开 App；
-3. 在 App 输入 `电脑IP:8848` 并连接，状态变「已连接」；
+3. App 启动后自动发现并连接（logcat 见 `[discovery] 扫描结束，发现 N 台电脑` → `[mobile] connected to ws://…`），状态变「已连接」；发现失败再展开「手动输入地址」兜底；
 4. 双向发消息，桌面日志应出现 `[ws] recv: {...}`；
 5. 无头验证（推荐 AI 用）：见 `docs/setup.md`「WebView 远程调试」，用 CDP 调 Tauri 命令并用 `adb exec-out screencap -p` 截图确认。
 
@@ -154,7 +158,11 @@ sidekick/
 - **debug APK 很大**（约 120–240MB，含未剥离调试符号），属正常；release 需签名，体积预计 10–20MB。
 - **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore；克隆后必须先 `pnpm tauri android init` 再构建。
 - **macOS 防火墙**：第一次接受局域网连接会弹「允许传入网络连接」，必须允许，否则手机连不上。
-- **手机与电脑需同一局域网**；开发机 IP 会变，App 里填的地址要跟着改。
+- **手机与电脑需同一局域网**；开发机 IP 会变，一般不用手填（自动发现），发现失败时再手动输入桌面窗口显示的地址。
+- **自动发现的三个前提**：同一网段、路由器不拦广播/无 AP 隔离、macOS 防火墙允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。
+- **端口被占用是正常的**：`47810` 被占会自动顺延到 `47811`…，桌面日志与窗口地址显示真实端口；手机发现回包也带真实端口。
+- **同机多实例**：只有一个实例能绑 UDP 47820，只有先启动的实例会被自动发现。
+- **重复连接**：手机端 `connect_server` 已串行化（先 abort 旧连接 + generation 守卫），自动连接与手动点击并发不会互相覆盖状态。
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
 - **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。
 - **方向自动姿态**：`use-orientation.ts` 用 `matchMedia("(orientation: portrait)")` + resize/orientationchange；横屏 docked、竖屏 handheld，设置手动覆盖只持续到下次旋转。
@@ -174,7 +182,7 @@ sidekick/
 
 ## 10. 下一步路线（按优先级）
 
-> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；宠物 P0 代码完成（真机/Rive 待补），麦克风 spike 完成、P0 未开始。
+> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；手机自动发现电脑已落地；宠物 P0 代码完成（真机/Rive 待补），麦克风 spike 完成、P0 未开始。
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
 2. 情绪宠物 P0：代码已完成（静态 SVG 降级、方向自动双姿态（手动覆盖）、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。

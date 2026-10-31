@@ -58,7 +58,7 @@ export function ChatPanel() {
       </ul>
 
       <p className="shrink-0 py-2 text-center text-xs leading-relaxed text-muted-foreground">
-        和电脑连同一个 Wi-Fi，输入电脑端显示的地址。
+        电脑连上后，在这里发消息；同一 Wi-Fi 下手机打开 App 会自动发现电脑。
       </p>
 
       <form

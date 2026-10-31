@@ -30,7 +30,31 @@ export function installTauriMock(): void {
     async invoke(command, args) {
       if (command === "app_role") return role;
       if (command === "server_info") {
-        return { ip: "127.0.0.1", port: 8848, url: "http://127.0.0.1:8848" };
+        return {
+          ip: "127.0.0.1",
+          port: 47810,
+          url: "http://127.0.0.1:47810",
+          discoveryPort: 47820,
+        };
+      }
+      if (command === "discover_servers") {
+        // ?discover=none 模拟找不到电脑，?discover=two 模拟局域网里有两台。
+        const mode = params.get("discover");
+        if (mode === "none") return [];
+        // 模拟 UDP 广播等待，方便在浏览器里看到「正在找电脑…」。
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        const devices = [
+          { name: "Mock 电脑", ip: "127.0.0.1", port: 47810, addr: "127.0.0.1:47810" },
+        ];
+        if (mode === "two") {
+          devices.push({
+            name: "客厅 MacBook",
+            ip: "192.168.1.8",
+            port: 47810,
+            addr: "192.168.1.8:47810",
+          });
+        }
+        return devices;
       }
       if (command === "connect_server") {
         const addr = typeof args?.addr === "string" ? args.addr : "";

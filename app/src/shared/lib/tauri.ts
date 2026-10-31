@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { type DiscoveredServer, isDiscoveredServer } from "@/protocol/discovery";
 import { type ConnEvent, isConnEvent, type ServerInfo } from "@/protocol/messages";
 
 export type AppRole = "desktop" | "mobile";
@@ -12,6 +13,7 @@ export type VoiceInsertResult = {
 const COMMANDS = {
   appRole: "app_role",
   serverInfo: "server_info",
+  discoverServers: "discover_servers",
   connectServer: "connect_server",
   sendChat: "send_chat",
   captureFrontApp: "capture_front_app",
@@ -96,6 +98,15 @@ export async function getAppRole(): Promise<AppRole> {
 
 export function getServerInfo(): Promise<ServerInfo> {
   return invoke<ServerInfo>(COMMANDS.serverInfo);
+}
+
+/** 搜索同一局域网内正在广播的电脑；非法条目直接丢弃。 */
+export async function discoverServers(): Promise<DiscoveredServer[]> {
+  const result = await invoke<unknown>(COMMANDS.discoverServers);
+  if (!Array.isArray(result)) {
+    throw new Error("搜索电脑失败：返回结果格式不正确");
+  }
+  return result.filter(isDiscoveredServer);
 }
 
 export function connectServer(addr: string): Promise<void> {

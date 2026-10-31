@@ -6,9 +6,10 @@
 
 ```
 手机 App（Tauri Android，WS 客户端）
-      │  ws://<电脑IP>:8848/ws（局域网）
+      ├─ ① UDP 广播探测 → 桌面发现响应器（固定 47820）
+      └─ ② ws://<电脑IP>:<真实端口>/ws（局域网）
       ▼
-桌面 App（Tauri，HTTP/WS 服务端，0.0.0.0:8848）
+桌面 App（Tauri，HTTP/WS 服务端，0.0.0.0:47810 起，被占用自动顺延）
       ├─ 桌面 UI（同一 WS 客户端，本机回环）
       ├─ HTTP /              手机落地页（下载 App + 网页聊天预览）
       └─ HTTP /download/apk  直接下发 debug APK
@@ -19,12 +20,13 @@
 ## 桌面端（`app/src-tauri/src/lib.rs` · `desktop_server` 模块）
 
 - Tauri 启动时在 `setup` 中用 `tauri::async_runtime::spawn` 启动 axum 服务。
-- 端口固定 **8848**，绑定 `0.0.0.0`。
+- 端口按候选 `47810`–`47814`、`8848` 依次 bind，第一个成功者生效（默认 `47810`，不常用且避开临时端口段），绑定 `0.0.0.0`；真实端口写入 `BOUND_PORT`，`server_info` 等就绪（≤3s）后返回。
+- 服务起来后启动 UDP 发现响应器（固定 `47820`）：收到局域网 probe 即单播回「主机名 + 真实端口」，算法与报文见 [engineering/lan-discovery.md](./engineering/lan-discovery.md)。
 - 状态：`broadcast::Sender<String>` + 在线计数。
 - 路由：`/`、`/ws`、`/download/apk`。
 - 收到任意文本帧 → 打印 `[ws] recv:` → 原样广播。
 - 连接 / 断开 → 广播 `system` 消息（含当前连接数，瞬时值）。
-- `server_info` 命令返回局域网 IP / 端口 / URL，前端用于展示与二维码。
+- `server_info` 命令返回局域网 IP / 真实端口 / URL / `discoveryPort`；前端用于展示地址、自动发现状态与按需展开的二维码。
 - `/download/apk` 从 `gen/android/.../app-universal-debug.apk` 流式读取 APK；文件不存在返回 404 提示。
 
 ## 手机端（`app/src-tauri/src/lib.rs` · `mobile_client` 模块）
@@ -37,6 +39,8 @@
   - 读循环把文本帧 `emit("chat", text)`；写循环从 channel 取消息发送；
   - 连接/断开 `emit("conn", {online})`。
 - `send_chat(text)`：取出保存的发送端，构造 `{"type":"chat","from":"phone","text","ts"}`。
+- `discover_servers()`：`spawn_blocking` 里做一次 UDP 广播探测（1500ms 窗口），返回 `{name, ip, port, addr}[]`；网络异常只记日志、返回空数组。
+- 重复 `connect_server` 会先取消旧连接（任务 abort + generation 守卫），避免旧连接退出时清空新连接状态；连接超时 4s。
 - 为什么在 Rust 侧建连而不是 WebView 里 `new WebSocket`：
   - 规避 Android WebView 对混合内容（https 页面里连 ws://）的限制；
   - 将来换 BLE 传输时只改 Rust 传输层，前端命令/事件不变。
@@ -62,10 +66,11 @@
 
 ## 当前限制与技术债
 
-- 前端仍为原生 DOM + 手写 CSS；重构方案已定（React 19 + Tailwind v4 + shadcn/Base UI + Motion + Rive），尚未迁移，见 `frontend-architecture.md`。
-- 无鉴权、无加密，仅限可信局域网。
+- 无鉴权、无加密，仅限可信局域网；发现只暴露「有人在跑 Sidekick + 主机名 + 端口」。
 - 手机端无自动重连（需手动重新连接）；桌面 UI 有简单重连。
 - 无历史持久化；广播会回显自己发送的消息。
-- 端口固定；单机单实例；调试客户端会混入在线人数统计。
+- 端口自动回退，但同机多实例时只有一个实例能绑定发现端口（47820），即「先启动者可被发现」。
+- 广播可能被路由器/AP 隔离拦截；此时降级为手动地址。
+- 调试客户端会混入在线人数统计。
 - 仅 debug 构建（debug 签名）；release 签名与正式打包未配置。
 - `app/src-tauri/gen/` 不入库，需 `pnpm tauri android init` 重新生成。

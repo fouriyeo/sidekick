@@ -237,3 +237,26 @@
 - 原因：WebView 采集在 Realme/WebView 103 已实测可用，whisper.cpp 本机可用，先用最短链路验证采集、转写、输入三个高风险点。
 - 代价/偏离：JSON base64 WAV 不是最终二进制协议；桌面转写用临时 WAV（立即删除），P0 需改内存/whisper-rs；自动粘贴受 macOS 辅助功能权限限制；手机端暂无上滑取消、波形和结果回传，base 模型准确率有限。
 - 规范：`docs/engineering/audio-pipeline.md`、`docs/engineering/protocol-audio.md`、`docs/status.md`。
+
+## D37 · 局域网自动发现用 UDP 广播，不用 mDNS（2026-10-31）
+
+- 背景：手机每次都要扫码或手填 `IP:端口`，IP/端口会变；桌面大二维码长期占位。
+- 决策：手机 App 向 `255.255.255.255:47820` 广播一次轻量 probe（1500ms 窗口、3 次），桌面 UDP 响应器单播回「主机名 + 真实端口」；手机用 UDP 源 IP 组装连接地址，自动/点选后走原有 WS 通道。
+- 放弃：mDNS/Bonjour（需新 crate，Android 还要 MulticastLock，收益不匹配）、桌面周期广播（无必要，手机按需探测更省电）。
+- 代价：路由器禁止广播或 AP 隔离时发现失败，降级为手动地址；发现报文无鉴权，仅暴露「同网段有人在跑 Sidekick」。
+- 规范：`docs/engineering/lan-discovery.md`、`app/src-tauri/src/discovery.rs`。
+
+## D38 · 服务端口改为不常用端口 + 候选回退（2026-10-31）
+
+- 背景：8848 被占用时服务直接启动失败，且端口固定让「自动发现」没有意义。
+- 决策：候选端口 `47810`–`47814`、`8848` 依次 bind，第一个成功者生效；真实端口通过发现回复与 `server_info` 告知两端；手机 `connect_server` 缺省端口改 47810，显式端口仍兼容。
+- 原因：47810 不常用且低于临时端口段（49152–65535），冲突概率低；回退让端口占用不再等于服务不可用。
+- 代价：旧版 APK 默认连 8848，升级桌面端后需同步出新 APK（文档已注明）；同机多实例时只有一个实例可被发现。
+- 规范：`app/src-tauri/src/lib.rs`、`docs/engineering/lan-discovery.md`。
+
+## D39 · 发现优先、地址兜底；桌面二维码降级为按需展开（2026-10-31）
+
+- 决策：手机 App 启动即自动发现，恰好 1 台电脑时自动连接，多台列点选，0 台给提示并保留「手动输入地址」与上次地址；桌面面板不再常驻大二维码，改为「地址 + 复制 + 自动发现状态」，二维码移入「用手机浏览器打开 / 安装 App」按需展开（仍保留下载入口）。
+- 原因：用户明确「电脑端不用整个大二维码一直在那里」；端到端最短路径应是打开 App 就可用。
+- 代价：手动输入不再是主路径，需要保留兜底入口与排障文案；桌面二维码变为两步操作（展开→扫）。
+- 规范：`app/src/mobile/features/connect/`、`app/src/desktop/features/connect/`、`docs/engineering/lan-discovery.md`。

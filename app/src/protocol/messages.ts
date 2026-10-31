@@ -18,6 +18,8 @@ export type ServerInfo = {
   ip: string;
   port: number;
   url: string;
+  /** UDP 自动发现端口；null 表示桌面端未开启自动发现。 */
+  discoveryPort: number | null;
 };
 
 export type ConnEvent = {

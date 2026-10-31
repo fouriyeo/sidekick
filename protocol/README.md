@@ -6,7 +6,8 @@
 
 ## 连接
 
-- 地址：`ws://<电脑IP>:8848/ws`
+- 地址：`ws://<电脑IP>:<端口>/ws`；端口由桌面端在候选端口（默认 `47810`）中取第一个可用的
+- 手机一般不用手填：App 启动后通过局域网 UDP 发现自动拿到电脑地址与真实端口，详见 [docs/engineering/lan-discovery.md](../docs/engineering/lan-discovery.md)
 - 编码：UTF-8 JSON 文本帧，一条消息一帧
 
 ## 消息类型
@@ -41,8 +42,9 @@
 ## 实现映射（当前代码）
 
 - 桌面服务端：`app/src-tauri/src/lib.rs` 的 `desktop_server` 模块（axum `/ws`）
-- 桌面 UI：`app/src/main.ts` 中直接 `new WebSocket(...)`
+- 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）
 - 手机 App：Rust `mobile_client` 模块；前端通过 `connect_server` / `send_chat` 命令发送，通过 `conn` / `chat` 事件接收
+- 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）
 
 ## 规划中的事件（AI 接入阶段）

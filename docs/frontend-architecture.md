@@ -149,7 +149,7 @@ UI 事件
 - 所有命令名、事件名、参数类型集中在 `shared/lib/tauri.ts`；feature 里不出现裸字符串 `invoke("...")`。
 - 协议类型集中在 `protocol/messages.ts`，用 `type` 字段做 discriminated union。
 - 边界校验：来自 WebSocket/Rust 的 payload 先校验再进 store；协议简单时用手写 type guard，复杂后引 zod/valibot（只在这一个边界用）。
-- 桌面 UI 目前直接连 `ws://127.0.0.1:8848/ws`；手机走 Rust 传输。这个差异保留，未来换 BLE 只改 Rust/`tauri.ts`，UI 不变。
+- 桌面 UI 直接连本机 `ws://127.0.0.1:<server_info.port>/ws`（端口由服务端动态分配）；手机走 Rust 传输，并先用 `discover_servers` 发现电脑。这个差异保留，未来换 BLE 只改 Rust/`tauri.ts`，UI 不变。
 - 连接状态收敛为一个状态机：`disconnected → connecting → connected → error`；所有界面读同一个 store，不各自维护 `online` 布尔值。
 - 事件订阅在 entry 挂载时注册一次，卸载时取消；不要在每次渲染里 `listen`。
 
@@ -343,7 +343,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 - [ ] 桌面 `pnpm tauri dev` 正常启动，`[server] listening` 出现
 - [ ] 安卓 `scripts/build-android.sh && scripts/install-android.sh` 成功
-- [ ] 手机连接 `IP:8848` 状态为「已连接」
+- [ ] 手机打开 App 自动发现并连接电脑，状态为「已连接」；无发现时可手动输入地址兜底
 - [ ] 双向聊天与现状一致，气泡方向正确
 - [ ] 构建产物中两个 entry 分 chunk，运行时只加载对应角色的一份
 - [ ] 宠物情绪状态切换与 [pet PRD](./prd/pet/PRD.md) 一致；协议 status 接入后另测

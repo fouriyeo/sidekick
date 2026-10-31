@@ -18,22 +18,25 @@ type ConnectionPanelProps = {
 export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [qrErrorUrl, setQrErrorUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
 
   const url = info?.url ?? null;
+  const discoveryPort = info?.discoveryPort ?? null;
   const qrFailed = url !== null && qrErrorUrl === url;
   const connected = status === "connected";
 
+  // 二维码只在展开后懒生成，面板默认不再常驻大二维码。
   useEffect(() => {
-    if (!url) return;
+    if (!detailsOpen || !url) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     let cancelled = false;
-    QRCode.toCanvas(canvas, url, { width: 220, margin: 1 })
+    QRCode.toCanvas(canvas, url, { width: 160, margin: 1 })
       .then(() => {
         if (!cancelled) setQrErrorUrl(null);
       })
@@ -44,7 +47,7 @@ export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPane
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [detailsOpen, url]);
 
   useEffect(() => {
     return () => {
@@ -72,6 +75,11 @@ export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPane
       setCopied(false);
       setCopyFailed(true);
     }
+  }
+
+  function toggleDetails() {
+    setQrErrorUrl(null);
+    setDetailsOpen((open) => !open);
   }
 
   return (
@@ -117,7 +125,7 @@ export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPane
       )}
 
       {status === "error" ? (
-        <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-center">
           <p className="text-sm text-destructive">获取连接信息失败</p>
           <p className="max-w-full break-all text-xs text-muted-foreground">{error}</p>
           <Button type="button" variant="outline" size="sm" onClick={onRetry}>
@@ -126,38 +134,70 @@ export function ConnectionPanel({ info, status, error, onRetry }: ConnectionPane
         </div>
       ) : (
         <>
-          <div
-            className={cn("mx-auto rounded-lg bg-white p-2.5", !url || qrFailed ? "hidden" : "")}
-          >
-            <canvas
-              ref={canvasRef}
-              width={220}
-              height={220}
-              role="img"
-              aria-label="手机连接二维码"
-              className="block"
-            />
+          <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              手机打开 Sidekick 会自动找到这台电脑
+            </p>
+            {info && (
+              <p
+                className={cn(
+                  "text-xs",
+                  discoveryPort !== null ? "text-success" : "text-muted-foreground",
+                )}
+              >
+                {discoveryPort !== null
+                  ? `自动发现已开启（UDP ${discoveryPort}）`
+                  : "自动发现未开启，请用二维码/手动地址"}
+              </p>
+            )}
           </div>
 
-          {qrFailed && url && (
-            <div className="mx-auto flex min-h-[220px] w-full max-w-[220px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border p-4 text-center">
-              <p className="text-xs text-muted-foreground">二维码生成失败，请手动输入地址：</p>
-              <p className="break-all font-mono text-xs text-foreground">{url}</p>
-            </div>
-          )}
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              aria-expanded={detailsOpen}
+              onClick={toggleDetails}
+            >
+              {detailsOpen ? "收起二维码" : "用手机浏览器打开 / 安装 App"}
+            </Button>
 
-          {!url && (
-            <div
-              aria-hidden="true"
-              className="mx-auto size-[220px] rounded-lg border border-dashed border-border bg-muted/30 motion-safe:animate-pulse"
-            />
-          )}
+            {detailsOpen && (
+              <div className="flex flex-col items-center gap-2">
+                {url && !qrFailed && (
+                  <div className="rounded-lg bg-white p-2">
+                    <canvas
+                      ref={canvasRef}
+                      width={160}
+                      height={160}
+                      role="img"
+                      aria-label="手机连接二维码"
+                      className="block"
+                    />
+                  </div>
+                )}
+
+                {qrFailed && url && (
+                  <div className="w-full max-w-[240px] rounded-lg border border-dashed border-border p-3 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      二维码生成失败，请手动输入地址：
+                    </p>
+                    <p className="mt-1 break-all font-mono text-xs text-foreground">{url}</p>
+                  </div>
+                )}
+
+                {!url && <p className="text-xs text-muted-foreground">正在获取连接信息…</p>}
+
+                <p className="text-center text-xs leading-relaxed text-muted-foreground">
+                  手机扫码打开页面，点“下载 App”安装后，同一 Wi-Fi 下打开 App 会自动发现这台电脑。
+                </p>
+              </div>
+            )}
+          </div>
         </>
       )}
-
-      <p className="text-center text-xs leading-relaxed text-muted-foreground">
-        手机扫码打开页面，点“下载 App”安装后，输入上面的地址（同一 Wi-Fi）。
-      </p>
     </section>
   );
 }

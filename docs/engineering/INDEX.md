@@ -9,6 +9,7 @@ children:
   - protocol-audio.md
   - pet-runtime.md
   - quality.md
+  - lan-discovery.md
 ---
 
 # 工程方案分支
@@ -21,12 +22,14 @@ children:
 | --- | --- | --- |
 | 做麦克风：采集、传输、转写、输入 | [audio-pipeline.md](./audio-pipeline.md) | L |
 | 改协议/加音频消息 | [protocol-audio.md](./protocol-audio.md) | L |
+| 做自动发现、端口冲突、桌面二维码 | [lan-discovery.md](./lan-discovery.md) | M |
 | 做宠物：Rive、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
 | 写测试、真机验收、发版 | [quality.md](./quality.md) | M |
 
 ## 当前状态
 
-- 音频 / 宠物方案均为**提案**，尚未实现；代码前先做 spike。
+- 音频完整 P0 未实现（spike 已通过）；宠物 P0 代码已完成；局域网自动发现（本页新方案）已实现。
+- 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
 - 现有架构事实：[architecture.md](../architecture.md)、[frontend-architecture.md](../frontend-architecture.md)。
 - 现有协议事实：[protocol/README.md](../../protocol/README.md)。
 - 新增依赖必须过 [dependency-policy.md](../dependency-policy.md) 六问，并记录 [decisions.md](../decisions.md)。

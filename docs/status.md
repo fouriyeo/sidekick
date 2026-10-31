@@ -16,11 +16,12 @@
 10. 完成前端 Phase 1：React 双 entry（`main.tsx` + `entries/desktop|mobile`）、`desktop`/`mobile` 连接/聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts`；删除旧 `main.ts`/`styles.css`；桌面浏览器与 Realme 真机双向收发通过（2026-10-31）。
 11. 宠物 P0 代码落地：文档预检（麦克风延后/plugin-store）、Tauri plugin-store 2.5.0、状态机/手势/精力亲密度/确定性存档、静态 SVG 舞台、双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器/无头 Chrome 视觉验证（2026-10-31）。
 12. 宠物姿态改为按屏幕方向自动切换：新增 `useOrientation`（matchMedia + resize/orientationchange），横屏 docked、竖屏 handheld；设置手动覆盖到下次旋转；真机旋转验证通过（2026-10-31）。
+13. 手机自动发现电脑：UDP 广播探测（固定 47820）+ 桌面单播回「主机名 + 真实端口」；服务端口改候选 `47810`–`47814`、`8848` 自动回退；手机启动即自动连接，桌面二维码改为按需展开（2026-10-31）。
 13. 麦克风 spike：WebView `getUserMedia` + PCM16 采集、手机 Rust 走 JSON `voice.*`、桌面 whisper.cpp 本机转写、`arboard` 写剪贴板；真机 5 秒长按和桌面转写已验证，自动粘贴因 macOS 辅助功能未授权降级为复制（2026-10-31）。
 
 ## 已验证（有实际证据）
 
-- 手机浏览器扫码可打开电脑 `http://<IP>:8848/`（局域网 HTTP 通）；
+- 手机浏览器扫码可打开电脑 `http://<电脑IP>:<端口>/`（局域网 HTTP 通；当时固定 8848，现已改为 `47810` 起候选回退）；
 - 桌面窗口显示地址/二维码；`/download/apk` 返回 APK（content-type、文件名正确）；
 - 安卓 App 安装启动显示手机界面（「Sidekick 手机端」、地址输入、发送框）；
 - 手机 App 连接桌面：状态变「已连接」；
@@ -29,12 +30,16 @@
 - 测试设备：Realme RMX3370（Android 13），无线 adb；桌面 macOS arm64；
 - 前端脚手架：`pnpm typecheck`、`pnpm lint`、`pnpm test`（2 个冒烟测试）、`pnpm build` 通过；Tailwind v4 + shadcn 主题可编译。
 - 前端 Phase 1：`pnpm typecheck` / `pnpm lint` / `pnpm test`（40 tests）/ `pnpm build` 全绿；安卓 debug APK 构建成功；`node scripts/check-boundaries.mjs` 通过。
-- 桌面 UI（浏览器复用 Vite + 真实 8848 服务）连接/收发、手机 UI（浏览器 mock）连接/收发、Realme 真机 App ↔ 桌面双向消息与气泡方向通过；手机端只加载 mobile chunk，`qrcode` 只在 desktop chunk。
+- 桌面 UI（浏览器复用 Vite + 真实服务，当时 8848）连接/收发、手机 UI（浏览器 mock）连接/收发、Realme 真机 App ↔ 桌面双向消息与气泡方向通过；手机端只加载 mobile chunk，`qrcode` 只在 desktop chunk。
 - 宠物 P0 文档预检：`node scripts/check-docs.mjs` 通过；PRD/SPEC/AC/UX/pet-runtime 已按“手动姿态、快速连戳 P1、麦克风延后、plugin-store”收口。
 - 宠物 P0 代码：`pnpm typecheck` / `pnpm lint` / `pnpm test`（84 tests）/ `pnpm build` 全绿；Android debug APK 构建成功；`check-boundaries` 通过。
 - 宠物浏览器验证：首启命名、设置页、手动支架/手持、减少动效、聊天入口/返回正常；无头 Chrome 1280×720 截图确认静态宠物舞台与设置页。
 - Realme（WebView 103）已安装并启动；竖屏宠物舞台、设置页、改名 + 手持后杀进程重启恢复均通过；`sidekick-pet.json` 已写入应用私有目录。
 - 方向自动姿态已在 Realme 上验证：竖屏 handheld、横屏 docked，旋转后 320ms 内切换；设置手动覆盖可用。
+- **自动发现端到端已验证（2026-10-31）**：Realme 打开 App 后 logcat 出现 `[discovery] 扫描结束，发现 1 台电脑` → `[mobile] connecting to ws://<电脑IP>:47810/ws` → 已连接；聊天页显示「设备名 + 地址 + 已连接」，发消息桌面日志出现 `[ws] recv` 且手机收到回显。
+- **端口回退已验证（2026-10-31）**：先占用 47810，桌面日志显示 `端口 47810 绑定失败…尝试下一个候选端口` 后监听 47811；手机发现回包携带 `port=47811` 并自动连上。
+- **桌面面板已改版验证（2026-10-31）**：真实服务 + 浏览器 `?role=desktop` 通过 CDP 检查，默认无 canvas（无大二维码），地址显示真实端口，展开后出现 160px 二维码。
+- 自动化测试：`pnpm typecheck/lint/test/build` 全绿（103 前端用例）；`cargo test` 10 passed；`check-boundaries`、`check-docs` 通过。
 - 麦克风 spike：真机 5 秒长按生成约 143KB WAV，桌面收到并 whisper 转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 正确；自动粘贴因辅助功能权限返回 copied。
 - **未验证**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产未完成；`color-mix` 相关 hover/透明度在 WebView 103 上降级。
 
@@ -55,7 +60,10 @@
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退，建议后续升级 WebView |
 | 麦克风 spike 偏离 | JSON base64 WAV 非最终协议；桌面临时 WAV 违反“音频不落盘”，P0 改内存/whisper-rs；自动粘贴需辅助功能授权 |
 | 麦克风未完成项 | 上滑取消、波形、权限引导、手机结果回传、60 秒上限、密码框/窗口切换验收、模型准确率未完成 |
-| 端口固定 | 8848 被占用时服务启动失败（仅打印错误） |
+| 端口候选回退 | 47810–47814、8848 依次尝试；全部占用时服务启动失败（server_info 报错） |
+| 发现依赖 UDP 广播 | 路由器禁止广播/AP 隔离时发现失败，需手动输入地址或扫码 |
+| 同机多实例 | 只有一个实例能绑 UDP 47820，仅先启动者可被自动发现 |
+| 无自动重连 | 桌面重启后手机需在聊天页点设备卡「连接」或重新搜索 |
 | gen 不入库 | 克隆后需 `pnpm tauri android init` |
 | 桌面端为开发模式 | 目前用 `tauri dev` 运行，未打包/未做开机自启 |
 
@@ -74,10 +82,12 @@
 
 ## 验收清单（每次改动的回归测试）
 
-- [ ] `pnpm tauri dev` 正常启动，日志有 `[server] listening on http://0.0.0.0:8848`
+- [ ] `pnpm tauri dev` 正常启动，日志有 `[server] listening on http://0.0.0.0:47810` 与 `[discovery] UDP 响应器已启动`
 - [ ] `scripts/build-android.sh` 成功产出 APK
 - [ ] `scripts/install-android.sh` 安装并启动
-- [ ] 手机连接 `IP:8848` 后状态为「已连接」
+- [ ] 手机打开 App 自动发现电脑并连接（无需输入地址/扫码）
+- [ ] 占用 47810 后桌面服务回退到 47811，手机仍能自动发现并连接
+- [ ] 桌面面板默认无大二维码，展开「用手机浏览器打开 / 安装 App」后出现二维码
 - [ ] 手机发消息 → 桌面日志 `[ws] recv`
 - [ ] 桌面发消息 → 手机收到，气泡在左侧
 - [ ] 手机发消息 → 手机气泡在右侧

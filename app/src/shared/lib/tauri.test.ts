@@ -51,6 +51,29 @@ describe("tauri command wrappers", () => {
     await sendChat("你好");
     expect(tauri.invoke).toHaveBeenCalledWith("send_chat", { text: "你好" });
   });
+
+  it("discovers servers without arguments and drops invalid entries", async () => {
+    const { discoverServers } = await loadTauri();
+    tauri.invoke.mockResolvedValue([
+      { name: "MacBook", ip: "192.168.1.5", port: 47810, addr: "192.168.1.5:47810" },
+      { name: "坏数据", ip: "192.168.1.6", port: "47810", addr: "192.168.1.6:47810" },
+      null,
+      { name: "另一台", ip: "192.168.1.7", port: 47810, addr: "192.168.1.7:47810" },
+    ]);
+
+    await expect(discoverServers()).resolves.toEqual([
+      { name: "MacBook", ip: "192.168.1.5", port: 47810, addr: "192.168.1.5:47810" },
+      { name: "另一台", ip: "192.168.1.7", port: 47810, addr: "192.168.1.7:47810" },
+    ]);
+    expect(tauri.invoke).toHaveBeenCalledWith("discover_servers");
+  });
+
+  it("rejects a non-array discovery result with a Chinese message", async () => {
+    const { discoverServers } = await loadTauri();
+    tauri.invoke.mockResolvedValue({ devices: [] });
+
+    await expect(discoverServers()).rejects.toThrow("搜索电脑失败");
+  });
 });
 
 describe("event subscription bridge", () => {

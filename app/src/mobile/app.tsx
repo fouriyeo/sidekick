@@ -11,15 +11,18 @@ import { subscribeChat, subscribeConn } from "@/shared/lib/tauri";
 export function MobileApp() {
   const append = useChatStore((state) => state.append);
   const hydrateAddr = useConnectionStore((state) => state.hydrateAddr);
+  const discover = useConnectionStore((state) => state.discover);
   const setOnline = useConnectionStore((state) => state.setOnline);
   const view = useUiStore((state) => state.view);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
   const setView = useUiStore((state) => state.setView);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
 
+  // 启动即自动搜索电脑：不需要用户输入 IP 或扫码。
   useEffect(() => {
     hydrateAddr();
-  }, [hydrateAddr]);
+    void discover();
+  }, [hydrateAddr, discover]);
 
   useEffect(() => {
     const unsubscribeChat = subscribeChat((raw) => {

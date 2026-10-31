@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DiscoveredServer } from "@/protocol/discovery";
 import { SERVER_ADDR_KEY } from "@/shared/lib/local-storage";
 
 const tauri = vi.hoisted(() => ({
   connectServer: vi.fn(),
+  discoverServers: vi.fn(),
 }));
 
 vi.mock("@/shared/lib/tauri", () => ({
   connectServer: tauri.connectServer,
+  discoverServers: tauri.discoverServers,
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
@@ -17,11 +20,30 @@ const initialState = {
   status: "disconnected" as const,
   error: null,
   hydrated: false,
+  devices: [],
+  discovering: false,
+  hasDiscovered: false,
+  discoverError: null,
+};
+
+const MACBOOK: DiscoveredServer = {
+  name: "开发者的 MacBook",
+  ip: "192.168.1.5",
+  port: 47810,
+  addr: "192.168.1.5:47810",
+};
+
+const STUDIO: DiscoveredServer = {
+  name: "书房台式机",
+  ip: "192.168.1.8",
+  port: 47810,
+  addr: "192.168.1.8:47810",
 };
 
 beforeEach(() => {
   localStorage.clear();
   tauri.connectServer.mockReset();
+  tauri.discoverServers.mockReset();
   useConnectionStore.setState(initialState);
 });
 
@@ -100,6 +122,122 @@ describe("connect", () => {
 
     expect(tauri.connectServer).toHaveBeenCalledWith("192.168.1.5:8848");
     expect(useConnectionStore.getState().status).toBe("connecting");
+  });
+});
+
+describe("discover", () => {
+  it("auto-connects when exactly one computer is found", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK]);
+    tauri.connectServer.mockResolvedValue(undefined);
+
+    await expect(useConnectionStore.getState().discover()).resolves.toBeNull();
+
+    expect(useConnectionStore.getState()).toMatchObject({
+      devices: [MACBOOK],
+      discovering: false,
+      hasDiscovered: true,
+      discoverError: null,
+      status: "connecting",
+      addr: "192.168.1.5:47810",
+    });
+    expect(tauri.connectServer).toHaveBeenCalledWith("192.168.1.5:47810");
+    expect(localStorage.getItem(SERVER_ADDR_KEY)).toBe("192.168.1.5:47810");
+  });
+
+  it("does not auto-connect when several computers are found", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK, STUDIO]);
+
+    await useConnectionStore.getState().discover();
+
+    expect(tauri.connectServer).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState()).toMatchObject({
+      devices: [MACBOOK, STUDIO],
+      discovering: false,
+      hasDiscovered: true,
+      status: "disconnected",
+    });
+  });
+
+  it("does not auto-connect when autoConnect is disabled", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK]);
+
+    await useConnectionStore.getState().discover({ autoConnect: false });
+
+    expect(tauri.connectServer).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState().devices).toEqual([MACBOOK]);
+  });
+
+  it("does not auto-connect when already connected", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK]);
+    useConnectionStore.setState({ status: "connected" });
+
+    await useConnectionStore.getState().discover();
+
+    expect(tauri.connectServer).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState().devices).toEqual([MACBOOK]);
+  });
+
+  it("keeps the manual path open when nothing is found", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+
+    await expect(useConnectionStore.getState().discover()).resolves.toBeNull();
+
+    expect(tauri.connectServer).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState()).toMatchObject({
+      devices: [],
+      discovering: false,
+      hasDiscovered: true,
+      discoverError: null,
+    });
+  });
+
+  it("turns failures into a Chinese message and can be retried", async () => {
+    tauri.discoverServers.mockRejectedValueOnce(new Error("没有局域网权限"));
+
+    await expect(useConnectionStore.getState().discover()).resolves.toBe(
+      "搜索电脑失败：没有局域网权限",
+    );
+    expect(useConnectionStore.getState()).toMatchObject({
+      discovering: false,
+      hasDiscovered: true,
+      discoverError: "搜索电脑失败：没有局域网权限",
+      devices: [],
+    });
+
+    tauri.discoverServers.mockResolvedValueOnce([MACBOOK]);
+    tauri.connectServer.mockResolvedValue(undefined);
+    await useConnectionStore.getState().discover();
+
+    expect(useConnectionStore.getState()).toMatchObject({
+      devices: [MACBOOK],
+      discoverError: null,
+      hasDiscovered: true,
+    });
+    expect(tauri.connectServer).toHaveBeenCalledWith("192.168.1.5:47810");
+  });
+
+  it("does not fire duplicate requests while a search is running", async () => {
+    let resolveDiscover: ((devices: DiscoveredServer[]) => void) | undefined;
+    tauri.discoverServers.mockReturnValue(
+      new Promise<DiscoveredServer[]>((resolve) => {
+        resolveDiscover = resolve;
+      }),
+    );
+
+    const first = useConnectionStore.getState().discover();
+    const second = useConnectionStore.getState().discover();
+
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+    expect(useConnectionStore.getState().discovering).toBe(true);
+
+    resolveDiscover?.([]);
+    await expect(Promise.all([first, second])).resolves.toEqual([null, null]);
+
+    expect(useConnectionStore.getState()).toMatchObject({
+      discovering: false,
+      hasDiscovered: true,
+      devices: [],
+    });
   });
 });
 
