@@ -13,7 +13,7 @@ vi.mock("@/shared/lib/tauri", () => ({
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
-import { useConnectionStore } from "./connection-store";
+import { RETRY_DELAYS_MS, useConnectionStore } from "./connection-store";
 
 const initialState = {
   addr: "",
@@ -24,6 +24,11 @@ const initialState = {
   discovering: false,
   hasDiscovered: false,
   discoverError: null,
+  retryAttempt: 0,
+  retryAt: null,
+  retrying: false,
+  // 默认暂停自动重连，避免旧用例被真实定时器干扰；自动重连用例里再显式打开。
+  retryPaused: true,
 };
 
 const MACBOOK: DiscoveredServer = {
@@ -45,9 +50,11 @@ beforeEach(() => {
   tauri.connectServer.mockReset();
   tauri.discoverServers.mockReset();
   useConnectionStore.setState(initialState);
+  useConnectionStore.getState().pauseRetry();
 });
 
 afterEach(() => {
+  useConnectionStore.getState().pauseRetry();
   vi.restoreAllMocks();
 });
 
@@ -256,5 +263,194 @@ describe("setOnline", () => {
     useConnectionStore.getState().setOnline(false);
 
     expect(useConnectionStore.getState()).toMatchObject({ status: "disconnected", error: null });
+  });
+});
+
+describe("自动重连", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useConnectionStore.setState({ retryPaused: false });
+  });
+
+  afterEach(() => {
+    useConnectionStore.getState().pauseRetry();
+    vi.useRealTimers();
+  });
+
+  it("断连后 1 秒重新发现并自动连上", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK]);
+    tauri.connectServer.mockResolvedValue(undefined);
+    useConnectionStore.setState({ status: "connected", addr: MACBOOK.addr });
+
+    useConnectionStore.getState().setOnline(false);
+
+    expect(useConnectionStore.getState()).toMatchObject({
+      status: "disconnected",
+      retryAttempt: 1,
+    });
+    expect(useConnectionStore.getState().retryAt).not.toBeNull();
+    expect(tauri.discoverServers).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+    expect(tauri.connectServer).toHaveBeenCalledWith(MACBOOK.addr);
+    expect(useConnectionStore.getState()).toMatchObject({
+      status: "connecting",
+      retryAttempt: 0,
+      retryAt: null,
+      retrying: false,
+    });
+  });
+
+  it("找不到电脑时按 1s → 2s → 4s 退避", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+
+    useConnectionStore.getState().setOnline(false);
+
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+    expect(useConnectionStore.getState().retryAttempt).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[1] - 1);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(2);
+    expect(useConnectionStore.getState().retryAttempt).toBe(3);
+
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[2]);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(3);
+  });
+
+  it("退避上限固定为 30 秒", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+
+    useConnectionStore.getState().setOnline(false);
+
+    // 依次走完 1s / 2s / 4s / 8s / 16s，之后固定 30s。
+    for (const delay of RETRY_DELAYS_MS.slice(0, 5)) {
+      await vi.advanceTimersByTimeAsync(delay);
+    }
+    expect(useConnectionStore.getState().retryAttempt).toBe(6);
+
+    const maxDelay = RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+    await vi.advanceTimersByTimeAsync(maxDelay);
+    expect(useConnectionStore.getState().retryAttempt).toBe(7);
+    const calls = tauri.discoverServers.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(tauri.discoverServers.mock.calls.length).toBe(calls + 1);
+  });
+
+  it("发现不到电脑时退回上次地址", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+    tauri.connectServer.mockResolvedValue(undefined);
+    useConnectionStore.setState({ addr: "10.0.0.9:47810" });
+
+    useConnectionStore.getState().setOnline(false);
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+
+    expect(tauri.connectServer).toHaveBeenCalledWith("10.0.0.9:47810");
+  });
+
+  it("多台电脑时回到上次连过的那台", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK, STUDIO]);
+    tauri.connectServer.mockResolvedValue(undefined);
+    useConnectionStore.setState({ addr: STUDIO.addr });
+
+    useConnectionStore.getState().setOnline(false);
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+
+    expect(tauri.connectServer).toHaveBeenCalledWith(STUDIO.addr);
+  });
+
+  it("多台电脑且没有上次地址时不替用户选，停止自动重连", async () => {
+    tauri.discoverServers.mockResolvedValue([MACBOOK, STUDIO]);
+
+    useConnectionStore.getState().setOnline(false);
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+
+    expect(tauri.connectServer).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState()).toMatchObject({
+      retryAttempt: 0,
+      retryAt: null,
+      retrying: false,
+    });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+  });
+
+  it("连上后清空倒计时并停止重试", async () => {
+    useConnectionStore.getState().setOnline(false);
+    expect(useConnectionStore.getState().retryAttempt).toBe(1);
+
+    useConnectionStore.getState().setOnline(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(tauri.discoverServers).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState()).toMatchObject({
+      retryAttempt: 0,
+      retryAt: null,
+    });
+  });
+
+  it("立即重连会取消剩余等待并立刻尝试", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+
+    useConnectionStore.getState().setOnline(false);
+    await vi.advanceTimersByTimeAsync(300);
+
+    useConnectionStore.getState().retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+
+    // 旧的 1s 定时器已被取消，不会在 700ms 后再补一次。
+    await vi.advanceTimersByTimeAsync(699);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+  });
+
+  it("切后台暂停排期，回前台立即重试", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+
+    useConnectionStore.getState().setOnline(false);
+    useConnectionStore.getState().pauseRetry();
+
+    expect(useConnectionStore.getState()).toMatchObject({
+      retryPaused: true,
+      retryAttempt: 0,
+      retryAt: null,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(tauri.discoverServers).not.toHaveBeenCalled();
+
+    useConnectionStore.getState().resumeRetry();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(useConnectionStore.getState().retryPaused).toBe(false);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+  });
+
+  it("手动连接会取消已排队的自动重连", async () => {
+    tauri.connectServer.mockResolvedValue(undefined);
+
+    useConnectionStore.getState().setOnline(false);
+    await useConnectionStore.getState().connect("10.0.0.9:47810");
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(tauri.discoverServers).not.toHaveBeenCalled();
+  });
+
+  it("启动时找不到电脑会自动继续重试", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+
+    await useConnectionStore.getState().bootstrap();
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(1);
+    expect(useConnectionStore.getState().retryAttempt).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+    expect(tauri.discoverServers).toHaveBeenCalledTimes(2);
   });
 });

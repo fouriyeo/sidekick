@@ -12,6 +12,21 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
   error: "未连接",
 };
 
+/** 每 500ms 刷新一次，用于「N 秒后自动重连」倒计时；没有排期时不开计时器。 */
+function useRetryCountdown(retryAt: number | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (retryAt === null) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(timer);
+  }, [retryAt]);
+
+  if (retryAt === null) return null;
+  return Math.max(0, Math.ceil((retryAt - now) / 1000));
+}
+
 type ConnectionBarProps = {
   onError?: (message: string) => void;
 };
@@ -61,9 +76,16 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
   const hasDiscovered = useConnectionStore((state) => state.hasDiscovered);
   const discoverError = useConnectionStore((state) => state.discoverError);
   const discover = useConnectionStore((state) => state.discover);
+  const retryAttempt = useConnectionStore((state) => state.retryAttempt);
+  const retryAt = useConnectionStore((state) => state.retryAt);
+  const retrying = useConnectionStore((state) => state.retrying);
+  const retryNow = useConnectionStore((state) => state.retryNow);
+  const retrySeconds = useRetryCountdown(retryAt);
   const [manualOpen, setManualOpen] = useState(false);
   const connected = status === "connected";
-  const connectingAddr = status === "connecting" ? addr : null;
+  const connecting = status === "connecting";
+  const connectingAddr = connecting ? addr : null;
+  const showRetryRow = !connected && !connecting && !discovering;
 
   // 打开聊天页时如果启动阶段还没搜过（或启动搜索尚未开始），补搜一次。
   useEffect(() => {
@@ -155,15 +177,6 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               <li>电脑端 Sidekick 已打开</li>
               <li>允许防火墙接收 Sidekick 的连接</li>
             </ul>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => void discover()}
-            >
-              重新搜索
-            </Button>
           </div>
         ) : null}
 
@@ -173,18 +186,44 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
             className="mt-2 rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-3"
           >
             <p className="text-sm break-words text-destructive">{discoverError}</p>
+          </div>
+        )}
+      </section>
+
+      {showRetryRow && (
+        <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span role="status" aria-live="polite" className="min-w-0 truncate">
+            {retrying
+              ? `正在自动重连（第 ${retryAttempt} 次）…`
+              : retrySeconds !== null
+                ? `${retrySeconds} 秒后自动重连（第 ${retryAttempt} 次）`
+                : "未连接"}
+          </span>
+          <span className="flex shrink-0 items-center gap-1">
+            {!retrying && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs"
+                onClick={retryNow}
+              >
+                立即重连
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="mt-2"
+              className="h-8 px-2.5 text-xs"
+              disabled={discovering || retrying}
               onClick={() => void discover()}
             >
               重新搜索
             </Button>
-          </div>
-        )}
-      </section>
+          </span>
+        </div>
+      )}
 
       <div className="mt-2 flex shrink-0 flex-col">
         <button

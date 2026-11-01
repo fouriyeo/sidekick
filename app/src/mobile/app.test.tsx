@@ -86,7 +86,13 @@ beforeEach(() => {
     discovering: false,
     hasDiscovered: false,
     discoverError: null,
+    retryAttempt: 0,
+    retryAt: null,
+    retrying: false,
+    retryPaused: true,
   });
+  // 测试里默认暂停自动重连，避免真实定时器干扰；自动重连 UI 用例再单独打开。
+  useConnectionStore.getState().pauseRetry();
   useUiStore.setState({ view: "pet", settingsOpen: false });
   tauri.chatHandler = null;
   tauri.connHandler = null;
@@ -101,6 +107,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  useConnectionStore.getState().pauseRetry();
   cleanup();
 });
 
@@ -144,7 +151,8 @@ describe("MobileApp", () => {
     expect(useConnectionStore.getState().status).toBe("connected");
 
     act(() => tauri.connHandler?.({ online: false }));
-    expect(screen.getByText("未连接")).toBeInTheDocument();
+    // 顶栏状态与重连行都会显示「未连接」。
+    expect(screen.getAllByText("未连接").length).toBeGreaterThan(0);
     expect(useConnectionStore.getState().status).toBe("disconnected");
   });
 
@@ -260,5 +268,61 @@ describe("MobileApp", () => {
     openChat();
 
     await waitFor(() => expect(tauri.discoverServers.mock.calls.length).toBe(callsBefore + 1));
+  });
+
+  it("断连后仍显示上次的电脑和重新搜索入口", async () => {
+    await renderApp();
+    act(() => {
+      useConnectionStore.setState({
+        status: "disconnected",
+        devices: [MACBOOK],
+        hasDiscovered: true,
+        addr: MACBOOK.addr,
+        retryAttempt: 0,
+        retryAt: null,
+      });
+    });
+    openChat();
+
+    expect(await screen.findByText("开发者的 MacBook")).toBeInTheDocument();
+    expect(screen.getAllByText("未连接").length).toBeGreaterThan(0);
+
+    const callsBefore = tauri.discoverServers.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "重新搜索" }));
+    await waitFor(() => expect(tauri.discoverServers.mock.calls.length).toBe(callsBefore + 1));
+  });
+
+  it("显示自动重连倒计时，点立即重连会立刻重试", async () => {
+    await renderApp();
+    openChat();
+    act(() => {
+      useConnectionStore.setState({
+        status: "disconnected",
+        retryPaused: true,
+        retryAttempt: 2,
+        retryAt: Date.now() + 5_000,
+      });
+    });
+
+    expect(await screen.findByText(/秒后自动重连（第 2 次）/)).toBeInTheDocument();
+
+    const callsBefore = tauri.discoverServers.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "立即重连" }));
+    await waitFor(() => expect(tauri.discoverServers.mock.calls.length).toBe(callsBefore + 1));
+  });
+
+  it("自动重连进行中显示状态", async () => {
+    await renderApp();
+    openChat();
+    act(() => {
+      useConnectionStore.setState({
+        status: "disconnected",
+        retrying: true,
+        retryAttempt: 3,
+        retryAt: null,
+      });
+    });
+
+    expect(screen.getByText(/正在自动重连（第 3 次）/)).toBeInTheDocument();
   });
 });

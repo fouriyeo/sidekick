@@ -11,19 +11,29 @@ import { subscribeChat, subscribeConn } from "@/shared/lib/tauri";
 
 export function MobileApp() {
   const append = useChatStore((state) => state.append);
-  const hydrateAddr = useConnectionStore((state) => state.hydrateAddr);
-  const discover = useConnectionStore((state) => state.discover);
+  const bootstrap = useConnectionStore((state) => state.bootstrap);
   const setOnline = useConnectionStore((state) => state.setOnline);
   const view = useUiStore((state) => state.view);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
   const setView = useUiStore((state) => state.setView);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
 
-  // 启动即自动搜索电脑：不需要用户输入 IP 或扫码。
+  // 启动即自动搜索电脑：不需要用户输入 IP 或扫码；搜索不到就进入自动重连。
   useEffect(() => {
-    hydrateAddr();
-    void discover();
-  }, [hydrateAddr, discover]);
+    void bootstrap();
+  }, [bootstrap]);
+
+  // App 切后台时暂停自动重连排期，回前台立即重试一次（熄屏期间计时器会被系统冻结）。
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      const connection = useConnectionStore.getState();
+      if (document.hidden) connection.pauseRetry();
+      else connection.resumeRetry();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
 
   useEffect(() => {
     const unsubscribeChat = subscribeChat((raw) => {
