@@ -15,6 +15,7 @@ const tauri = vi.hoisted(() => ({
   discoverServers: vi.fn(),
   exitApp: vi.fn(),
   sendChat: vi.fn(),
+  setKeepScreenOn: vi.fn(),
   subscribeBackButton: vi.fn(),
   subscribeChat: vi.fn(),
   subscribeConn: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock("@/shared/lib/tauri", () => ({
   discoverServers: tauri.discoverServers,
   exitApp: tauri.exitApp,
   sendChat: tauri.sendChat,
+  setKeepScreenOn: tauri.setKeepScreenOn,
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
   subscribeBackButton: (handler: () => void) => {
     tauri.backHandler = handler;
@@ -83,6 +85,7 @@ vi.mock("@/shared/lib/tauri", () => ({
   },
 }));
 
+import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { MobileApp } from "./app";
 
 beforeEach(() => {
@@ -105,6 +108,9 @@ beforeEach(() => {
   // 测试里默认暂停自动重连，避免真实定时器干扰；自动重连 UI 用例再单独打开。
   useConnectionStore.getState().pauseRetry();
   useUiStore.setState({ view: "pet", settingsOpen: false });
+  usePetStore.setState((state) => ({
+    pet: { ...state.pet, settings: { ...state.pet.settings, keepAwake: true } },
+  }));
   tauri.chatHandler = null;
   tauri.connHandler = null;
   tauri.backHandler = null;
@@ -120,6 +126,8 @@ beforeEach(() => {
   tauri.discoverServers.mockResolvedValue([]);
   tauri.exitApp.mockReset();
   tauri.exitApp.mockResolvedValue(undefined);
+  tauri.setKeepScreenOn.mockReset();
+  tauri.setKeepScreenOn.mockResolvedValue(undefined);
   clearBackHandlers();
 });
 
@@ -394,5 +402,29 @@ describe("MobileApp", () => {
     });
 
     expect(screen.getByText(/正在自动重连（第 3 次）/)).toBeInTheDocument();
+  });
+
+  it("宠物页请求屏幕常亮，切到聊天页释放，返回后恢复", async () => {
+    await renderApp();
+
+    expect(tauri.setKeepScreenOn).toHaveBeenCalledWith(true);
+
+    openChat();
+    expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(false);
+
+    act(() => tauri.backHandler?.());
+    expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(true);
+  });
+
+  it("关闭屏幕常亮设置后不再请求常亮", async () => {
+    act(() => {
+      usePetStore.setState((state) => ({
+        pet: { ...state.pet, settings: { ...state.pet.settings, keepAwake: false } },
+      }));
+    });
+
+    await renderApp();
+
+    expect(tauri.setKeepScreenOn).not.toHaveBeenCalledWith(true);
   });
 });

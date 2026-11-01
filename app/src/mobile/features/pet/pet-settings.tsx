@@ -265,9 +265,16 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
                 </Button>
               ))}
             </div>
-            <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-              <span>屏幕常亮</span>
-              <span className="text-xs">暂未接入</span>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="pet-keep-awake">屏幕常亮</Label>
+                <p className="mt-1 text-xs text-muted-foreground">放在桌边时不自动熄屏，会更耗电</p>
+              </div>
+              <Switch
+                id="pet-keep-awake"
+                checked={pet.settings.keepAwake}
+                onCheckedChange={(checked) => void update({ keepAwake: checked })}
+              />
             </div>
           </section>
 

@@ -5,6 +5,8 @@ import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { PetSettings } from "@/mobile/features/pet/pet-settings";
 import { PetStage } from "@/mobile/features/pet/pet-stage";
+import { usePetStore } from "@/mobile/features/pet/pet-store";
+import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import { parseMessage, parseMicMessage } from "@/protocol/messages";
@@ -21,6 +23,10 @@ export function MobileApp() {
   const settingsOpen = useUiStore((state) => state.settingsOpen);
   const setView = useUiStore((state) => state.setView);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
+  const keepAwake = usePetStore((state) => state.pet.settings.keepAwake);
+
+  // 宠物页在前台（含设置弹层）时屏幕常亮；聊天页与后台交给系统默认熄屏。
+  useKeepAwake(keepAwake && view === "pet");
 
   // 根页面返回键：第一次提示「再按一次退出」，2 秒内第二次才真正退出。
   const [exitHintVisible, setExitHintVisible] = useState(false);

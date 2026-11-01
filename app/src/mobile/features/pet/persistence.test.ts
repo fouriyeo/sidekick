@@ -86,7 +86,18 @@ describe("pet persistence", () => {
     expect(parsed.save?.affinityGainedToday).toBe(5);
     expect(parsed.save?.settings.posture).toBe("docked");
     expect(parsed.save?.settings.haptics).toBe(false);
-    expect(parsed.save?.settings.keepAwake).toBe("never");
+    expect(parsed.save?.settings.keepAwake).toBe(true);
+  });
+
+  it("normalizes keepAwake: legacy 未接入 值落到默认开，显式关闭保留", () => {
+    const legacy = parsePetSave(
+      { version: 1, name: "小满", settings: { keepAwake: "never" } },
+      NOW,
+    );
+    expect(legacy.save?.settings.keepAwake).toBe(true);
+
+    const off = parsePetSave({ version: 1, name: "小满", settings: { keepAwake: false } }, NOW);
+    expect(off.save?.settings.keepAwake).toBe(false);
   });
 
   it("validates names", () => {

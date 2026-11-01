@@ -20,7 +20,8 @@ export type PetSettings = {
   sound: boolean;
   reduceMotion: ReduceMotionSetting;
   posture: Posture;
-  keepAwake: "never";
+  /** 宠物页面前台时是否阻止系统熄屏；旧存档里的 "never" 归一化为 true。 */
+  keepAwake: boolean;
 };
 
 export type PetState = {

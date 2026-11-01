@@ -828,6 +828,7 @@ dependencies = [
  "base64 0.22.1",
  "core-graphics",
  "futures-util",
+ "jni 0.21.1",
  "local-ip-address",
  "macos-accessibility-client",
  "objc2-app-kit",

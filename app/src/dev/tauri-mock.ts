@@ -169,6 +169,8 @@ export function installTauriMock(): void {
   const internals: MockInternals = {
     async invoke(command, args) {
       if (command === "app_role") return role;
+      // 浏览器没有窗口常亮能力：静默成功，方便验证宠物页逻辑。
+      if (command === "set_keep_screen_on") return null;
       if (command === "server_info") {
         return {
           ip: "127.0.0.1",

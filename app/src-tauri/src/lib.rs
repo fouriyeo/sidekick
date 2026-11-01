@@ -14,6 +14,8 @@ mod desktop_mic;
 mod desktop_server;
 mod mic_protocol;
 #[cfg(mobile)]
+mod keep_awake;
+#[cfg(mobile)]
 mod mobile_client;
 
 #[cfg(desktop)]
@@ -87,6 +89,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_role,
             discovery::discover_servers,
+            keep_awake::set_keep_screen_on,
             mobile_client::connect_server,
             mobile_client::send_chat,
             mobile_client::mic_start,

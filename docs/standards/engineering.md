@@ -58,6 +58,7 @@ app/src/
 | --- | --- | --- |
 | 宠物渲染 | ✅ `mobile/features/pet` | ❌ |
 | 麦克风采集 | ✅ `mobile/features/mic` | ❌ |
+| 屏幕常亮 | ✅ Rust `keep_awake`（Android JNI 窗口标志） | ❌ |
 | WS 客户端 | ✅ Rust `mobile_client` | ✅ 桌面 UI 本地回环 |
 | WS 服务端 | ❌ | ✅ Rust `desktop_server` |
 | 转写 | ❌ | ✅ `desktop/features/mic-receiver` + Rust |

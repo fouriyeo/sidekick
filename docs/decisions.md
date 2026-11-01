@@ -305,3 +305,12 @@
 - 放弃：手机 Rust 侧原生重连（可跨 WebView 后台冻结，但要重做发现与 UI 状态协调，留待心跳方案一起评估）；WS 心跳本轮不做（半开连接仍可能延迟发现）。
 - 代价：电脑恢复后最多等待一个退避周期（≤30s）才连上；无心跳，半开连接检测仍依赖 TCP。
 - 规范：`docs/engineering/lan-discovery.md` 第 6 节、`app/src/mobile/features/connect/connection-store.ts`。
+
+## D46 · 宠物页面屏幕常亮走 Android 窗口标志（2026-11-01）
+
+- 背景：宠物 P0 的「屏幕常亮」设置项标注「暂未接入」；支架模式放在桌边时会被系统锁屏打断，PET-AC-39 记为 P1 未覆盖。
+- 决策：新增手机端 Tauri 命令 `set_keep_screen_on({enabled})`，Rust 用 `WebviewWindow::with_webview` + `PlatformWebview::jni_handle()` 直接调 Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；前端 `useKeepAwake` 只在「宠物舞台前台可见（含设置弹层）」时开启，聊天页与后台释放；设置页「显示 → 屏幕常亮」变成真开关，默认开、可关闭，旧存档里的 `"never"` 归一化为开。
+- 原因：WebView 的 Screen Wake Lock 在 Android System WebView 上可用性/权限前提不确定（Chromium 文档说明 contextless wake lock 需要宿主持有 `WAKE_LOCK`），而窗口标志不依赖 WebView 版本、不需要任何权限，且只在窗口对用户可见时生效，天然满足「宠物页可见才常亮」。不引第三方插件（`tauri-plugin-keep-awake` 等），`jni` 只加在 Android 目标并锁 0.21（与 `tauri-runtime-wry` 一致，不新增 crate 版本）。
+- 放弃：`navigator.wakeLock`（真机 WebView 103 风险）；`WAKE_LOCK` 权限 + PowerManager（权限过重）；Kotlin 插件方法（`gen/` 不入库，Raw JNI 代码更少）。
+- 代价：iOS 暂为空实现（后续用 `isIdleTimerDisabled` 补同一命令接口）；常亮明显增加耗电，靠设置开关与现有「2 分钟无操作暗到 70%」缓解；JNI 失败只记日志，用户侧静默降级为系统默认熄屏。
+- 规范：`app/src-tauri/src/keep_awake.rs`、`app/src/mobile/features/pet/use-keep-awake.ts`、`docs/prd/pet/SPEC.md` §7、`docs/standards/ux.md` §3。

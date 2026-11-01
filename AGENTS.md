@@ -16,6 +16,7 @@
 - ✅ **局域网 MVP 已验证**（2026-10-31）：Tauri 桌面端（服务端）+ Tauri 安卓 App（客户端）双向收发消息成功。
 - ✅ **手机自动发现电脑已落地**（2026-10-31）：UDP 广播探测（固定 47820）+ 桌面单播回主机名/真实端口；服务端口候选 `47810`–`47814`、`8848` 自动回退；手机启动即自动连接，桌面大二维码改为按需展开；真机（Realme）端到端与端口回退已验。
 - ✅ **断连自动重连**（2026-11-01）：断连/启动未连上/手动连接失败后按 1s→30s 退避重试，每次先静默重新发现再连；切后台暂停、回前台立即重试；聊天页常显重连状态与「立即重连 / 重新搜索」。真机验证：杀桌面后自动重试，桌面恢复/端口回退到 47811 都能自动连上。
+- ✅ **宠物页屏幕常亮**（2026-11-01）：设置页「显示 → 屏幕常亮」真开关（默认开）；手机 Rust `set_keep_screen_on` 用 JNI 调 Android `FLAG_KEEP_SCREEN_ON`，只在宠物页前台（含设置弹层）生效，聊天/后台释放；旧存档 `"never"` 归一化为开。iOS 暂为空实现。
 - ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
 - ✅ **前端 Phase 1 已完成**（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）双 entry；`entries/desktop.tsx` / `entries/mobile.tsx`、`desktop/**`、`mobile/**`、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；连接/聊天 1:1 迁移，旧 `main.ts` / `styles.css` 已删除；桌面浏览器与安卓真机双向收发通过。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
@@ -63,6 +64,7 @@
 | Tauri 命令 | `discover_servers` | 无参；UDP 广播发现同网段电脑，返回 `{name, ip, port, addr}[]`（异常返回空数组） |
 | Tauri 命令 | `connect_server({addr})` | 连接 `ws://<addr>/ws`；`addr` 可只写 `IP:端口`（缺省 47810）；重复调用先断开旧连接，4s 超时 |
 | Tauri 命令 | `send_chat({text})` | 发送 `{"type":"chat","from":"phone",...}` |
+| Tauri 命令 | `set_keep_screen_on({enabled})` | 宠物页前台屏幕常亮：Android JNI 加/清 `FLAG_KEEP_SCREEN_ON`；iOS 暂为空实现 |
 | Tauri 事件 | `conn` / `chat` | `conn: {online, url}`；`chat: <JSON 字符串>` |
 
 ## 4. 目录结构
@@ -170,6 +172,7 @@ sidekick/
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
 - **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。
 - **Android 返回键**：不注册 `back-button` 监听时系统默认直接 finish（退出 App）。现在 App 启动即注册一次 `subscribeBackButton`（`shared/lib/tauri.ts`）；设置页/聊天页通过 `mobile/system-back.ts` 返回栈消费，根页面走「再按一次退出」（第一次提示、2 秒内第二次调 `exitApp()`，需要 `core:app:allow-exit` 权限，已在 `capabilities/default.json`）。**新增全屏页面时记得 `pushBackHandler`，否则该页按返回会被根页面当成退出确认**。浏览器 `?role=mobile` 用 Esc 模拟返回键（dev mock）。
+- **屏幕常亮**：走 Android 原生窗口标志（`app/src-tauri/src/keep_awake.rs`，`WebviewWindow::with_webview` + `jni_handle().exec`），不用 `navigator.wakeLock`（WebView 上可用性/权限前提不确定）；`jni` 只加在 Android 目标并**锁 0.21**（必须与 `tauri-runtime-wry` 一致，否则 `JniHandle::exec` 闭包类型不匹配）。窗口标志只在窗口可见时生效，所以聊天页/后台由 JS 显式释放；无需 `WAKE_LOCK` 权限。JNI 失败只打 `[keep-awake]` 日志，静默降级为系统默认熄屏。
 - **方向自动姿态**：`use-orientation.ts` 用 `matchMedia("(orientation: portrait)")` + resize/orientationchange；横屏 docked、竖屏 handheld，设置手动覆盖只持续到下次旋转。
 - **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
 - **麦克风 P0**：`whisper-rs` 构建需 cmake + libclang（`LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib`）；模型目录 `~/Library/Application Support/Sidekick/models`，启动会 prewarm，首次手动加载可能 5–6 秒；音频只在内存，不再有临时 WAV。

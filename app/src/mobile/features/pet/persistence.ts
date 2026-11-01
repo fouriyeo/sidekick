@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS: PetSettings = {
   sound: false,
   reduceMotion: "system",
   posture: "docked",
-  keepAwake: "never",
+  keepAwake: true,
 };
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -154,7 +154,8 @@ function normalizeSettings(raw: unknown): PetSettings {
     sound: typeof value.sound === "boolean" ? value.sound : DEFAULT_SETTINGS.sound,
     reduceMotion: normalizeReduceMotion(value.reduceMotion),
     posture: normalizePosture(value.posture),
-    keepAwake: "never",
+    // 旧存档写的是 "never"（当时未接入），统一落到新默认 true：宠物页面默认常亮。
+    keepAwake: typeof value.keepAwake === "boolean" ? value.keepAwake : DEFAULT_SETTINGS.keepAwake,
   };
 }
 

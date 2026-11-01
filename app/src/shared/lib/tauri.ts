@@ -73,6 +73,7 @@ export type ClipboardSnapshot = {
 
 const COMMANDS = {
   appRole: "app_role",
+  setKeepScreenOn: "set_keep_screen_on",
   serverInfo: "server_info",
   discoverServers: "discover_servers",
   connectServer: "connect_server",
@@ -178,6 +179,15 @@ export async function getAppRole(): Promise<AppRole> {
 
 export function getServerInfo(): Promise<ServerInfo> {
   return invoke<ServerInfo>(COMMANDS.serverInfo);
+}
+
+/**
+ * 手机端屏幕常亮：宠物页面在前台时阻止系统自动熄屏。
+ *
+ * 桌面端不注册该命令、iOS 暂为空实现；失败时调用方应静默降级为系统默认熄屏策略。
+ */
+export function setKeepScreenOn(enabled: boolean): Promise<void> {
+  return invoke<void>(COMMANDS.setKeepScreenOn, { enabled });
 }
 
 /** 搜索同一局域网内正在广播的电脑；非法条目直接丢弃。 */

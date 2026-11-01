@@ -173,6 +173,7 @@ Pointer 事件
 - 录音中 `dispatch` 忽略宠物互动（P1 契约）；麦克风状态优先。
 - 震动/声音通过 adapter；测试时 mock；声音本轮未接。
 - 气泡受频率限制，`copy_id` + 触发原因，方便统计关闭率。
+- 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；聊天页/后台/卸载时释放。原生不支持或 JNI 失败时静默降级，不做用户可见报错。
 
 ## 8. 性能
 
@@ -199,7 +200,7 @@ Pointer 事件
 | 中端安卓掉帧 | 限制网格/粒子；真机门禁；降级静态 |
 | 存档格式变更 | 版本号 + 迁移测试；损坏回退 |
 | plugin-store Android 兼容未验证 | Android 编译已通过；真机读写/杀进程恢复待回归，失败则回到 PetStorage adapter 的另一实现 |
-| 无屏幕常亮 | 设置项标注未接入；P1 补常亮，验收不承诺防锁屏 |
+| 屏幕常亮耗电 | 设置可关；仅宠物页前台生效（聊天/后台释放）；2 分钟无操作自动变暗；JNI 失败静默降级为系统默认熄屏 |
 | 时间/时区边界 | 可注入时钟；只做衰减/恢复 |
 | 宠物与麦克风抢事件 | 状态优先级；录音中禁用宠物互动 |
 | 卸载丢宠物 | 关于页说明；P1 备份/导出 |
