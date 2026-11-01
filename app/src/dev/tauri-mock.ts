@@ -23,7 +23,7 @@ type MockModel = {
 type MockClipboardItem = {
   id: string;
   text: string;
-  kind: "text" | "url";
+  kind: "text" | "url" | "voice";
   createdAt: number;
   lastUsedAt: number;
   pinned: boolean;
@@ -108,6 +108,14 @@ export function installTauriMock(): void {
         kind: "url",
         createdAt: Date.now() - 180_000,
         lastUsedAt: Date.now() - 180_000,
+        pinned: false,
+      },
+      {
+        id: "3",
+        text: "帮我总结一下今天会议的结论，然后列三条待办。",
+        kind: "voice",
+        createdAt: Date.now() - 240_000,
+        lastUsedAt: Date.now() - 240_000,
         pinned: false,
       },
     ] as MockClipboardItem[],

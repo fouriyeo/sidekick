@@ -4,6 +4,7 @@ import {
   Clipboard,
   Copy,
   Link2,
+  Mic,
   Pause,
   Pin,
   Play,
@@ -24,7 +25,12 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
-import { filterClipboardItems, useClipboardStore } from "../clipboard-store";
+import {
+  DEFAULT_CLIPBOARD_MAX_ITEMS,
+  filterClipboardItems,
+  formatClipboardCount,
+  useClipboardStore,
+} from "../clipboard-store";
 
 export function ClipboardPanel() {
   const snapshot = useClipboardStore((state) => state.snapshot);
@@ -57,6 +63,7 @@ export function ClipboardPanel() {
   const items = snapshot?.items ?? [];
   const filtered = filterClipboardItems(items, query);
   const enabled = snapshot?.enabled ?? true;
+  const maxItems = snapshot?.maxItems ?? DEFAULT_CLIPBOARD_MAX_ITEMS;
 
   async function handleCopy(id: string) {
     await copy(id);
@@ -76,7 +83,9 @@ export function ClipboardPanel() {
             <Clipboard className="size-4 text-muted-foreground" />
             剪贴板
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">{items.length} 条 · 仅保存在这台电脑</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatClipboardCount(items.length, maxItems)}
+          </p>
         </div>
         <div className="flex items-center gap-1.5">
           <Button
@@ -154,7 +163,9 @@ export function ClipboardPanel() {
                 )}
               >
                 <span className="mt-0.5 text-muted-foreground">
-                  {item.kind === "url" ? (
+                  {item.kind === "voice" ? (
+                    <Mic className="size-3.5" />
+                  ) : item.kind === "url" ? (
                     <Link2 className="size-3.5" />
                   ) : (
                     <Type className="size-3.5" />
@@ -170,9 +181,14 @@ export function ClipboardPanel() {
                   <p className="line-clamp-2 text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
                     {item.text}
                   </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
                     {formatRelativeTime(item.lastUsedAt)}
                     {item.pinned ? " · 已置顶" : ""}
+                    {item.kind === "voice" && (
+                      <span className="rounded bg-muted px-1 py-px text-[10px] leading-relaxed text-muted-foreground">
+                        语音
+                      </span>
+                    )}
                   </p>
                 </button>
 
@@ -217,7 +233,8 @@ export function ClipboardPanel() {
       </div>
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        只记录文本；密码管理器标记为隐藏的内容不会记录。数据仅保存在本机，不联网、不写日志。
+        最多保留最近 {maxItems}{" "}
+        条；新内容淘汰最旧的未置顶项。只记录文本；密码管理器标记为隐藏的内容不会记录。数据仅保存在本机，不联网、不写日志。
       </p>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>

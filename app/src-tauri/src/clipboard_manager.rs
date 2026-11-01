@@ -134,6 +134,17 @@ impl ClipboardManager {
         Ok(())
     }
 
+    /// 写入系统剪贴板（供自动粘贴），同时把这条文本按 `kind` 记入历史。
+    ///
+    /// `write_text` 会设置 `skip_next`，剪贴板 watcher 看到同一段文本会跳过，
+    /// 所以这里显式入库：语音转写（`kind = "voice"`）也能在历史里回看/复用。
+    /// 尊重「暂停记录」：`enabled = false` 时仍然写系统剪贴板，但不入历史。
+    pub fn write_text_and_record(&self, text: &str, kind: &str) -> Result<(), String> {
+        self.write_text(text)?;
+        self.record_text(text.to_string(), kind);
+        Ok(())
+    }
+
     pub fn copy_item(&self, id: &str) -> Result<ClipboardSnapshot, String> {
         let text = {
             let inner = self.inner.lock().unwrap();
@@ -197,37 +208,22 @@ impl ClipboardManager {
     }
 
     fn add_text(&self, text: String) {
-        let trimmed = text.trim();
-        if trimmed.is_empty() || trimmed.chars().count() > MAX_TEXT_CHARS {
-            return;
-        }
+        let kind = item_kind(text.trim()).to_string();
+        self.record_text(text, &kind);
+    }
 
+    /// 入库 + 持久化 + 广播。`enabled = false`（暂停记录）时直接跳过。
+    fn record_text(&self, text: String, kind: &str) {
         let mut inner = self.inner.lock().unwrap();
         if !inner.enabled {
             return;
         }
 
         let now = now_ms();
-        let existing_pinned = inner
-            .items
-            .iter()
-            .find(|item| item.text == text)
-            .map(|item| item.pinned)
-            .unwrap_or(false);
-        inner.items.retain(|item| item.text != text);
-
-        let kind = item_kind(trimmed).to_string();
         let id = format!("{now}-{}", self.counter.fetch_add(1, Ordering::Relaxed));
-        inner.items.push(ClipboardItem {
-            id,
-            text,
-            kind,
-            created_at: now,
-            last_used_at: now,
-            pinned: existing_pinned,
-        });
-        sort_items(&mut inner.items);
-        trim_items(&mut inner.items);
+        if !record_item(&mut inner.items, &text, kind, &id, now) {
+            return;
+        }
         let snapshot = self.persist_and_snapshot(&mut inner);
         let _ = self.app.emit(EVENT_CHANGED, snapshot);
     }
@@ -248,6 +244,39 @@ fn item_kind(text: &str) -> &'static str {
     } else {
         "text"
     }
+}
+
+/// 把一条文本按指定 `kind` 入库，返回是否真的写入。
+///
+/// 纯函数（不碰文件 / 剪贴板 / 事件），便于单测。语义：
+/// - 空白或超长文本不入库；
+/// - 与已有记录文本相同时先移除旧记录，并保留旧记录的 `pinned`；
+/// - 新记录的 `last_used_at` 刷新为 `now`；
+/// - 重新排序（置顶优先 → `last_used_at` 倒序）后裁剪到 [`MAX_ITEMS`]。
+fn record_item(items: &mut Vec<ClipboardItem>, text: &str, kind: &str, id: &str, now: u64) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > MAX_TEXT_CHARS {
+        return false;
+    }
+
+    let existing_pinned = items
+        .iter()
+        .find(|item| item.text == text)
+        .map(|item| item.pinned)
+        .unwrap_or(false);
+    items.retain(|item| item.text != text);
+
+    items.push(ClipboardItem {
+        id: id.to_string(),
+        text: text.to_string(),
+        kind: kind.to_string(),
+        created_at: now,
+        last_used_at: now,
+        pinned: existing_pinned,
+    });
+    sort_items(items);
+    trim_items(items);
+    true
 }
 
 fn sort_items(items: &mut [ClipboardItem]) {
@@ -449,5 +478,74 @@ mod tests {
     fn detects_urls() {
         assert_eq!(item_kind("https://example.com"), "url");
         assert_eq!(item_kind("hello"), "text");
+    }
+
+    #[test]
+    fn record_item_keeps_voice_kind() {
+        let mut items = Vec::new();
+        assert!(record_item(
+            &mut items,
+            "帮我总结一下会议要点",
+            "voice",
+            "v1",
+            100
+        ));
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].kind, "voice");
+        assert_eq!(items[0].last_used_at, 100);
+    }
+
+    #[test]
+    fn record_item_dedupes_and_preserves_pin() {
+        // 同文本再次出现：旧记录被替换，但置顶状态保留，last_used_at 刷新。
+        let mut items = vec![item("old", "hello", true, 10)];
+        assert!(record_item(&mut items, "hello", "text", "new", 50));
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "new");
+        assert_eq!(items[0].text, "hello");
+        assert_eq!(items[0].last_used_at, 50);
+        assert!(items[0].pinned);
+    }
+
+    #[test]
+    fn record_item_trims_to_max_items_keeping_pinned() {
+        let mut items: Vec<ClipboardItem> = (0..MAX_ITEMS)
+            .map(|index| {
+                item(
+                    &format!("old-{index}"),
+                    &format!("text-{index}"),
+                    false,
+                    index as u64,
+                )
+            })
+            .collect();
+        // 最旧的未置顶项本该被淘汰；把它置顶后必须留下。
+        items[0].pinned = true;
+        items[0].last_used_at = 0;
+        sort_items(&mut items);
+
+        assert!(record_item(&mut items, "最新一条", "voice", "newest", 999));
+
+        assert_eq!(items.len(), MAX_ITEMS);
+        assert!(items.iter().any(|item| item.id == "old-0" && item.pinned));
+        assert!(
+            items
+                .iter()
+                .any(|item| item.id == "newest" && item.kind == "voice")
+        );
+        // 被淘汰的是最旧的未置顶项。
+        assert!(!items.iter().any(|item| item.id == "old-1"));
+    }
+
+    #[test]
+    fn record_item_rejects_blank_and_oversized_text() {
+        let mut items = Vec::new();
+        assert!(!record_item(&mut items, "   ", "voice", "blank", 1));
+        assert!(items.is_empty());
+
+        let oversized = "x".repeat(MAX_TEXT_CHARS + 1);
+        assert!(!record_item(&mut items, &oversized, "text", "big", 2));
+        assert!(items.is_empty());
     }
 }

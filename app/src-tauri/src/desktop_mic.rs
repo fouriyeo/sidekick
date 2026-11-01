@@ -154,7 +154,7 @@ pub fn transcribe_and_insert(
     }
 
     clipboard
-        .write_text(&transcript.text)
+        .write_text_and_record(&transcript.text, "voice")
         .map_err(|error| MicFailure {
             code: "insert_failed",
             message: error,

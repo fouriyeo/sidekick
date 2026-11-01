@@ -58,7 +58,7 @@ export type AccessibilityInfo = {
 export type ClipboardItem = {
   id: string;
   text: string;
-  kind: "text" | "url";
+  kind: "text" | "url" | "voice";
   createdAt: number;
   lastUsedAt: number;
   pinned: boolean;

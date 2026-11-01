@@ -30,6 +30,14 @@ export function filterClipboardItems(items: ClipboardItem[], query: string): Cli
   return items.filter((item) => item.text.toLowerCase().includes(needle));
 }
 
+/** 与 Rust 侧 MAX_ITEMS 对齐；snapshot 还没加载时用于展示上限。 */
+export const DEFAULT_CLIPBOARD_MAX_ITEMS = 100;
+
+export function formatClipboardCount(count: number, maxItems?: number): string {
+  const limit = maxItems && maxItems > 0 ? maxItems : DEFAULT_CLIPBOARD_MAX_ITEMS;
+  return `${count} / ${limit} 条 · 仅保存在这台电脑`;
+}
+
 export const useClipboardStore = create<ClipboardState>((set) => ({
   snapshot: null,
   loading: false,

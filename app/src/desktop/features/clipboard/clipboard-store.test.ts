@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ClipboardItem } from "@/shared/lib/tauri";
-import { filterClipboardItems } from "./clipboard-store";
+import {
+  DEFAULT_CLIPBOARD_MAX_ITEMS,
+  filterClipboardItems,
+  formatClipboardCount,
+} from "./clipboard-store";
 
 const items: ClipboardItem[] = [
   {
@@ -34,5 +38,18 @@ describe("filterClipboardItems", () => {
 
   it("returns an empty list when nothing matches", () => {
     expect(filterClipboardItems(items, "不存在")).toEqual([]);
+  });
+});
+
+describe("formatClipboardCount", () => {
+  it("shows current count and the snapshot max items limit", () => {
+    expect(formatClipboardCount(3, 100)).toBe("3 / 100 条 · 仅保存在这台电脑");
+  });
+
+  it("falls back to the default limit before the snapshot loads", () => {
+    const fallback = `0 / ${DEFAULT_CLIPBOARD_MAX_ITEMS} 条 · 仅保存在这台电脑`;
+    expect(DEFAULT_CLIPBOARD_MAX_ITEMS).toBe(100);
+    expect(formatClipboardCount(0)).toBe(fallback);
+    expect(formatClipboardCount(0, 0)).toBe(fallback);
   });
 });

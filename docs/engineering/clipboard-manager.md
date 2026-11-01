@@ -2,7 +2,7 @@
 doc: engineering/clipboard-manager
 title: 桌面剪贴板管理
 status: active
-updated: 2026-10-31
+updated: 2026-11-01
 load: on-demand
 owner: engineering
 ---
@@ -17,9 +17,10 @@ owner: engineering
 **做（P1）**
 
 - 监听 macOS 剪贴板文本变化，保存最近 100 条；
+- 语音转写成功后以 `kind = "voice"` 记入历史，和普通文本一样可搜索、复制回填、置顶；
 - 搜索、复制回填、置顶、删除、清空、暂停记录；
 - 本地 JSON 持久化，文件权限 `0600`；
-- 过滤密码管理器标记为隐藏的内容与 Sidekick 自身写入。
+- 过滤密码管理器标记为隐藏的内容；Sidekick 自身写入用一次性 `skip_next` 防重复入库。
 
 **不做**
 
@@ -37,7 +38,10 @@ owner: engineering
   - 密码管理器前缀：1Password / Bitwarden / LastPass / AgileBits。
 - 只读 `public.utf8-plain-text`；没有纯文本内容（例如纯图片/文件）则不记录。
 - 空文本、超过 50,000 字符的文本跳过。
-- 自身写入（语音转写、剪贴板回填）由 `ClipboardWriter` 设置一次性 `skip_next`，watcher 看到同一文本时跳过，避免把转写再次入库。
+- 自身写入统一先设置一次性 `skip_next`，watcher 看到同一文本时跳过，避免把同一条再记一遍：
+  - 语音转写：`WriteTextAndRecord` 先写系统剪贴板（用于自动粘贴/降级复制），再显式以 `kind = "voice"` 入库一次；
+  - 剪贴板回填（`clipboard_copy`）：只刷新 `lastUsedAt`，不新增记录。
+- 暂停记录（`enabled = false`）时语音转写仍会写系统剪贴板，但不进入历史。
 
 ## 3. 数据与保留
 
@@ -61,9 +65,10 @@ owner: engineering
 - 路径：`~/Library/Application Support/Sidekick/clipboard.json`。
 - 写入：`.tmp` + rename 原子替换；Unix 权限 `0600`。
 - 最大 100 条；新内容淘汰最旧的未置顶项；全部置顶时淘汰最旧置顶项。
+- UI 头部显示 `当前条数 / 100 条`，底部说明淘汰规则，让「只保留最近 100 条」可见。
 - 相同文本去重：保留置顶状态，刷新时间并移到最新。
 - 暂停记录期间仍推进 `changeCount`，不补录暂停期间的复制。
-- `kind`：`http(s)://` / `mailto:` 为 `url`，其余为 `text`。
+- `kind`：`http(s)://` / `mailto:` 为 `url`，语音转写为 `voice`，其余为 `text`。
 
 ## 4. 命令与 UI
 
