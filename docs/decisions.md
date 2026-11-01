@@ -347,3 +347,20 @@
 - 原因：真机是交付目标；WebView 版本锁定在 103（系统组件），只能改写法而不是加 polyfill/升级 WebView。
 - 代价：移动端居中写法与桌面不一致（桌面可用 translate）；dialog/sheet/tooltip 仍有真机居中风险，已记入 `docs/status.md` 已知问题。
 - 规范：`app/src/mobile/features/mic/mic-button.tsx`、`app/src/mobile/app.tsx`、`app/src/mobile/features/pet/pet-stage.tsx`、`AGENTS.md` 第 8 节。
+
+## D51 · 触感接管：关闭 WebView 默认长按震动 + App 原生 haptic（2026-11-02）
+
+- 背景：真机宠物页屏幕变暗/长按按钮时会「震一下」但并不触发点击；排查确认震动来自 WebView 默认长按（Android `View.performLongClick` → `performHapticFeedback(LONG_PRESS)`），而 App 的 JS `navigator.vibrate` 因 APK 未声明 `VIBRATE` 权限被 Chromium 忽略——设置里的「震动」实际是空开关。
+- 决策：新增两个手机端 Tauri 命令：`disable_webview_haptics` 在 App 启动时对 WebView 调 `View.setHapticFeedbackEnabled(false)`（只关 WebView 这个 View）；`haptic({style})` 用 `decorView.performHapticFeedback` 触发 `light/medium/success/error`（`performHapticFeedback` 不需要 VIBRATE 权限，跟随系统「触摸振动」开关；API<30 时 CONFIRM/REJECT 降级为 CONTEXT_CLICK/LONG_PRESS）。前端 `haptics.ts` 收敛为唯一入口（原生命令为主、浏览器回退 `navigator.vibrate`），麦克风按下立即中震，取消/成功/失败沿用现有 effect，并受「震动」开关控制。宠物页禁用长按选中/复制（`user-select:none` + `-webkit-touch-callout` + `contextmenu` 阻止），聊天文本/输入框保留系统选择能力。
+- 原因：Android 官方文档明确 `View.performHapticFeedback` + `HapticFeedbackConstants` 不需要 VIBRATE 权限，与系统触感设置一致；比新增 VIBRATE（应用信息显示「控制振动」）更贴合项目一贯的「不新增权限」取向（D46）。
+- 放弃：加 VIBRATE + `Vibrator`（能保证震，但多一个权限且不跟随系统触感强度）；继续用 `navigator.vibrate`（WebView 上依赖权限、只有毫秒模式，无系统质感）。
+- 代价：系统触感关闭时 App 静默不震（尊重用户设置）；`setHapticFeedbackEnabled(false)` 同时关掉文本选择手柄等 WebView 系统触感（可接受）；iOS 暂无实现，后续用 `UIImpactFeedbackGenerator` 接同一命令。
+- 规范：`app/src-tauri/src/haptics.rs`、`app/src/mobile/features/pet/haptics.ts`、`app/src/mobile/features/mic/mic-button.tsx`、`docs/standards/ux.md` §7、`docs/prd/pet/SPEC.md` §7。
+
+## D52 · 自动变暗与最长常亮可配置（2026-11-02）
+
+- 背景：宠物页 2 分钟无操作自动变暗偏短；屏幕常亮没有上限，放桌边可能整夜常亮耗电。
+- 决策：`PetSettings` 新增 `dimMinutes`（默认 5，范围 1–60；设置页 1/2/5/10/15/30 分钟）与 `keepAwakeHours`（默认 2，0 = 不限；设置页 1/2/4/8/不限）；`PetStage` 用 `dimMinutes` 驱动变暗遮罩；`useKeepAwake(active, maxDurationMs)` 到点释放 `FLAG_KEEP_SCREEN_ON`，用户点亮屏幕回到前台后重新计时；旧存档缺字段走默认（5 分钟 / 2 小时），越界值夹紧。
+- 原因：用户反馈「2 分钟太短」，且常亮是明确耗电项，需要用户可控上限。
+- 代价：设置页多两组选项；常亮到点后交给系统按默认策略熄屏（不是 App 主动锁屏），重新计时从回前台开始。
+- 规范：`app/src/mobile/features/pet/pet-settings.tsx`、`app/src/mobile/features/pet/use-keep-awake.ts`、`app/src/mobile/features/pet/persistence.ts`、`app/src/mobile/features/pet/pet-stage.tsx`、`docs/prd/pet/SPEC.md` §7。

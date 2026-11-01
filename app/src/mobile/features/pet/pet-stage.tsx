@@ -74,6 +74,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
 
   const [controlsVisible, setControlsVisible] = useState(true);
   const [dimmed, setDimmed] = useState(false);
+  const dimMs = Math.max(1, pet.settings.dimMinutes) * 60_000;
   const dimmedRef = useRef(false);
   const controlTimer = useRef<number | null>(null);
   const dimTimer = useRef<number | null>(null);
@@ -88,14 +89,14 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
     dimTimer.current = window.setTimeout(() => {
       dimmedRef.current = true;
       setDimmed(true);
-    }, 120_000);
+    }, dimMs);
 
     setControlsVisible(true);
     if (controlTimer.current !== null) window.clearTimeout(controlTimer.current);
     if (pet.settings.posture === "docked" && active) {
       controlTimer.current = window.setTimeout(() => setControlsVisible(false), 5000);
     }
-  }, [active, pet.settings.posture]);
+  }, [active, dimMs, pet.settings.posture]);
 
   useEffect(() => {
     void hydrate();
@@ -197,9 +198,11 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       aria-hidden={!active || undefined}
       aria-label={`${pet.name}，正在陪伴`}
       className={cn(
-        "relative h-dvh w-screen overflow-hidden bg-pet-bg text-pet-text",
+        "relative h-dvh w-screen overflow-hidden bg-pet-bg text-pet-text select-none",
+        styles.stage,
         reducedMotion && styles.reduceMotion,
       )}
+      onContextMenu={(event) => event.preventDefault()}
       data-orientation={orientation}
       data-posture={pet.settings.posture}
       data-phase={pet.phase}

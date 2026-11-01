@@ -13,8 +13,13 @@ beforeAll(() => {
   });
 });
 
+const tauri = vi.hoisted(() => ({
+  haptic: vi.fn(),
+}));
+
 vi.mock("@/shared/lib/tauri", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/lib/tauri")>()),
+  haptic: tauri.haptic,
   sendMicStart: vi.fn(async () => null),
   sendMicStop: vi.fn(async () => null),
   sendMicFrame: vi.fn(async () => null),
@@ -40,7 +45,11 @@ function resetStores() {
   useMicStore.setState({ phase: "listening", session: "session-1", result: null, error: null });
 }
 
-beforeEach(resetStores);
+beforeEach(() => {
+  resetStores();
+  tauri.haptic.mockReset();
+  tauri.haptic.mockResolvedValue(undefined);
+});
 
 afterEach(() => {
   cleanup();
@@ -140,6 +149,16 @@ describe("MicButton 手持模式：底部居中按钮 + 上方居中覆盖层", 
     expect(overlay.className).toContain("w-[min(82vw,360px)]");
     expect((card as HTMLElement).className).toContain("w-[min(82vw,360px)]");
     expect((card as HTMLElement).className).toContain("pointer-events-auto");
+  });
+
+  it("按下开始录音时中震一下，给「现在在录」的即时反馈", async () => {
+    useMicStore.setState({ phase: "idle", session: null, result: null, error: null });
+    render(<MicButton active posture="handheld" />);
+    const mic = screen.getByRole("button", { name: /按住说话/ });
+
+    fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+
+    expect(tauri.haptic).toHaveBeenCalledWith("medium");
   });
 
   it("按住上滑 60px 进入「松手取消」珊瑚态，松手回到 idle", async () => {

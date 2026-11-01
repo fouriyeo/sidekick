@@ -12,6 +12,7 @@ const tauri = vi.hoisted(() => ({
   connHandler: null as ((event: { online: boolean }) => void) | null,
   backHandler: null as (() => void) | null,
   connectServer: vi.fn(),
+  disableWebviewHaptics: vi.fn(),
   discoverServers: vi.fn(),
   exitApp: vi.fn(),
   sendChat: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock("@/mobile/features/pet/pet-settings", () => ({
 
 vi.mock("@/shared/lib/tauri", () => ({
   connectServer: tauri.connectServer,
+  disableWebviewHaptics: tauri.disableWebviewHaptics,
   discoverServers: tauri.discoverServers,
   exitApp: tauri.exitApp,
   sendChat: tauri.sendChat,
@@ -121,6 +123,8 @@ beforeEach(() => {
   tauri.unsubscribeChat.mockClear();
   tauri.unsubscribeConn.mockClear();
   tauri.sendChat.mockReset();
+  tauri.disableWebviewHaptics.mockReset();
+  tauri.disableWebviewHaptics.mockResolvedValue(undefined);
   tauri.connectServer.mockReset();
   tauri.discoverServers.mockReset();
   tauri.discoverServers.mockResolvedValue([]);
@@ -402,6 +406,12 @@ describe("MobileApp", () => {
     });
 
     expect(screen.getByText(/正在自动重连（第 3 次）/)).toBeInTheDocument();
+  });
+
+  it("启动时关闭 WebView 自带的长按触感，震动改由 App 控制", async () => {
+    await renderApp();
+
+    expect(tauri.disableWebviewHaptics).toHaveBeenCalledTimes(1);
   });
 
   it("宠物页请求屏幕常亮，切到聊天页释放，返回后恢复", async () => {

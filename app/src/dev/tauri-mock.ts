@@ -179,6 +179,9 @@ export function installTauriMock(): void {
       if (command === "app_role") return role;
       // 浏览器没有窗口常亮能力：静默成功，方便验证宠物页逻辑。
       if (command === "set_keep_screen_on") return null;
+      // 浏览器没有原生触感：静默成功（真机由 Android performHapticFeedback 执行）。
+      if (command === "haptic") return null;
+      if (command === "disable_webview_haptics") return null;
       if (command === "server_info") {
         return {
           ip: "127.0.0.1",

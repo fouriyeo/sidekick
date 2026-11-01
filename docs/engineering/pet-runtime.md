@@ -27,7 +27,9 @@ app/src/mobile/features/pet/
 ├─ copy.ts                # 文案库（copy_id）
 ├─ posture.ts             # 方向→姿态映射与手动覆盖
 ├─ use-orientation.ts     # matchMedia 方向检测 + resize 兜底
-├─ pet-settings.tsx       # 设置页（姿态/震动/减少动效/重置）
+├─ pet-settings.tsx       # 设置页（姿态/震动/减少动效/常亮/变暗/重置）
+├─ haptics.ts             # 触感语义 → 原生 haptic 命令（浏览器回退 navigator.vibrate）
+├─ use-keep-awake.ts      # 宠物页常亮（含最长时长与到点释放）
 └─ components/
    ├─ pet-fallback.tsx    # 静态图 + CSS 呼吸
    ├─ pet-bubble.tsx
@@ -36,6 +38,7 @@ app/src/mobile/features/pet/
 
 - 只允许 `mobile/entries` 引用；桌面不 import。
 - 业务状态用纯函数 + Zustand；Rive 节点名不外泄。
+- 触感统一走 `haptics.ts` → 原生 `haptic` 命令（`performHapticFeedback`，无 VIBRATE 权限）；WebView 默认长按触感在 App 启动时关闭。
 - 文件命名 kebab-case，组件导出 PascalCase（与 [frontend-architecture](../frontend-architecture.md) 第 7 节一致）。
 - 文案用 `copy_id`，不在组件里散落字符串。
 
@@ -200,7 +203,7 @@ Pointer 事件
 | 中端安卓掉帧 | 限制网格/粒子；真机门禁；降级静态 |
 | 存档格式变更 | 版本号 + 迁移测试；损坏回退 |
 | plugin-store Android 兼容未验证 | Android 编译已通过；真机读写/杀进程恢复待回归，失败则回到 PetStorage adapter 的另一实现 |
-| 屏幕常亮耗电 | 设置可关；仅宠物页前台生效（聊天/后台释放）；2 分钟无操作自动变暗；JNI 失败静默降级为系统默认熄屏 |
+| 屏幕常亮耗电 | 设置可关；仅宠物页前台生效（聊天/后台释放）；最长常亮默认 2 小时（可调，0 = 不限）；无操作默认 5 分钟自动变暗（可调）；JNI 失败静默降级为系统默认熄屏 |
 | 时间/时区边界 | 可注入时钟；只做衰减/恢复 |
 | 宠物与麦克风抢事件 | 状态优先级；录音中禁用宠物互动 |
 | 卸载丢宠物 | 关于页说明；P1 备份/导出 |

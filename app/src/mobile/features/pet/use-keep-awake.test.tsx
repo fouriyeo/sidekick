@@ -1,4 +1,4 @@
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const tauri = vi.hoisted(() => ({
@@ -12,12 +12,14 @@ vi.mock("@/shared/lib/tauri", () => ({
 import { useKeepAwake } from "./use-keep-awake";
 
 beforeEach(() => {
+  vi.useFakeTimers();
   tauri.setKeepScreenOn.mockReset();
   tauri.setKeepScreenOn.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe("useKeepAwake", () => {
@@ -48,6 +50,29 @@ describe("useKeepAwake", () => {
     rerender({ active: true });
 
     expect(tauri.setKeepScreenOn).toHaveBeenCalledTimes(1);
+  });
+
+  it("超过最长常亮时长后释放，让系统按默认策略熄屏", () => {
+    renderHook(() => useKeepAwake(true, 2_000));
+
+    expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(true);
+
+    act(() => {
+      vi.advanceTimersByTime(2_000);
+    });
+
+    expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(false);
+  });
+
+  it("常亮时长设为 null 时不自动释放", () => {
+    renderHook(() => useKeepAwake(true, null));
+
+    act(() => {
+      vi.advanceTimersByTime(6 * 60 * 60 * 1000);
+    });
+
+    expect(tauri.setKeepScreenOn).toHaveBeenCalledTimes(1);
+    expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(true);
   });
 
   it("原生命令失败时静默降级，不抛出", async () => {

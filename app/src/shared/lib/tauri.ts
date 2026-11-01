@@ -12,6 +12,9 @@ import {
 export type AppRole = "desktop" | "mobile";
 export type Unsubscribe = () => void;
 
+/** App 主动触感的语义；具体映射到哪个 Android HapticFeedbackConstants 由原生层决定。 */
+export type HapticStyle = "light" | "medium" | "success" | "error";
+
 export type AsrModelId = "tiny" | "base" | "small" | "medium";
 
 export type AsrModelInfo = {
@@ -74,6 +77,8 @@ export type ClipboardSnapshot = {
 const COMMANDS = {
   appRole: "app_role",
   setKeepScreenOn: "set_keep_screen_on",
+  haptic: "haptic",
+  disableWebviewHaptics: "disable_webview_haptics",
   serverInfo: "server_info",
   discoverServers: "discover_servers",
   connectServer: "connect_server",
@@ -188,6 +193,25 @@ export function getServerInfo(): Promise<ServerInfo> {
  */
 export function setKeepScreenOn(enabled: boolean): Promise<void> {
   return invoke<void>(COMMANDS.setKeepScreenOn, { enabled });
+}
+
+/**
+ * App 主动触感（手机端）。
+ *
+ * 原生层用 `View.performHapticFeedback`，不申请 `VIBRATE` 权限，并跟随系统
+ * 「触摸振动」开关；桌面/iOS 暂为空实现，失败时调用方静默忽略。
+ */
+export function haptic(style: HapticStyle): Promise<void> {
+  return invoke<void>(COMMANDS.haptic, { style });
+}
+
+/**
+ * 关闭 WebView 自带的系统触感（长按文本选择 / 上下文菜单的默认震动）。
+ *
+ * 触感改由 `haptic()` 统一控制；只影响 WebView 这个 View，不影响 App 主动触感。
+ */
+export function disableWebviewHaptics(): Promise<void> {
+  return invoke<void>(COMMANDS.disableWebviewHaptics);
 }
 
 /** 搜索同一局域网内正在广播的电脑；非法条目直接丢弃。 */

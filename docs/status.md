@@ -26,6 +26,7 @@
 20. 语音转写结果入库：桌面 `write_text_and_record` 在写系统剪贴板（自动粘贴/降级复制）后，以 `kind = "voice"` 记入剪贴板历史；暂停记录时仍写系统剪贴板但不入历史。剪贴板 UI 显示「N / 100 条」并说明 100 条淘汰规则，语音条目带「语音」标签（2026-11-01）。
 21. 按用户真机反馈调整手持语音交互：去掉矛盾的左下 X 取消按钮（按住说话时点它必须先松手，而松手就已经结束），取消只保留上滑；语音按钮由右下改为底部居中，录音条/结果卡片/提示在按钮上方居中；上滑取消后提示「已取消，没有发送。」（2026-11-01）。
 22. 修复真机 WebView 103 居中偏移：Tailwind v4 的 `translate` 工具类输出 CSS `translate` 属性，WebView 103 不支持，导致底部居中按钮整体偏右 48px；把麦克风按钮/覆盖层、再按一次退出提示、宠物保存失败提示改为 `inset-x-0 + flex` 或 `left-0 right-0 mx-auto`。真机 CDP 复验按钮中心偏差 0px（2026-11-01）。
+23. 触感接管 + 可配时长：关闭 WebView 默认长按震动（`setHapticFeedbackEnabled(false)`），App 用原生 `performHapticFeedback` 发轻/中/成功/失败触感（不申请 VIBRATE）；麦克风按下即中震；宠物页禁长按选中/复制；自动变暗默认 5 分钟、屏幕常亮最长默认 2 小时，均可在设置页调整（2026-11-02）。
 
 ## 已验证（有实际证据）
 
@@ -57,6 +58,8 @@
 - **重连 UI 已验证（2026-11-01）**：断连瞬间聊天页显示「未连接 / 正在自动重连（第 1 次）…」+「重新搜索」，连上后恢复正常；前端 147 个用例（含 fake timers 的退避/暂停/立即重连/多台不自动选）全绿。
 - **宠物页屏幕常亮已验证（2026-11-01，Realme 真机 / Android 13）**：安装后打开 App 停在宠物页，`adb shell dumpsys window windows` 的窗口 `fl=` 含 `KEEP_SCREEN_ON`（默认开；设备上旧存档的 `"never"` 已迁移为 `true`）；点「打开聊天」后标志消失、返回宠物恢复；打开设置页时保持常亮；设置里关掉「屏幕常亮」标志消失、重开恢复；`sidekick-pet.json` 持久化为 `keepAwake: true`，logcat 无 `[keep-awake]` 错误。前端 159 用例全绿（含 `use-keep-awake` 3 例）。
 - **手持模式录音 UI 已验证（2026-11-01，无头 Chrome CDP + Realme 真机 / WebView 103）**：393×852 无头 Chrome：空闲按钮 96×96、中心 x=196.5=视口中心、距底 24，录音条中心 196.5、宽 322.3、按钮上方 8px，上滑 60px 进入「松手取消」珊瑚态，松手回 idle 并提示「已取消，没有发送。」。Realme 真机（360×800，CDP `Input.dispatchTouchEvent`）：按钮 rect left 132/right 228（中心 180=视口中心，偏差 0px）、96×96、距底 24px，DOM 无「取消录音」按钮；按住后中心不变、录音条中心 180、与按钮 gap 8px；上滑 60px 按钮文案「松手取消」+ `bg-pet-coral`；松手回 idle 并出现「已取消，没有发送。」。852×393 docked：空闲胶囊中心 426、底边距 16，按住后容器 520 仍居中、录音条在胶囊内。
+- **触感/变暗/常亮真机已验证（2026-11-02，Realme RMX3370 / Android 13）**：装上 debug APK 后 `dumpsys window` 宠物页含 `KEEP_SCREEN_ON`、切聊天页消失、返回恢复；长按聊天文本仍选中（`getSelection` 有 Range）但 logcat **无** `VibratorManagerService` 震动（证明 WebView 默认长按触感已关闭）；长按宠物页图标/空白无震动、无选中（`user-select:none`）；点宠物触发 App 触感（logcat waveform 45ms）。把存档 `dimMinutes` 改成 1 后重启，约 60s 出现 30% 黑色遮罩（`getComputedStyle(opacity)=0.3`），点一下恢复；旧存档自动补上 `dimMinutes: 5`、`keepAwakeHours: 2`；logcat 无 `[haptics]`/`[keep-awake]` 报错。
+- **触感/时长可配已通过质量门（2026-11-02）**：`haptic` / `disable_webview_haptics`（`app/src-tauri/src/haptics.rs`，decorView `performHapticFeedback` + WebView `setHapticFeedbackEnabled(false)`）通过 `cargo check --target aarch64-linux-android`；前端 `haptics.ts` 收敛为唯一入口、麦克风按下中震、宠物页禁用长按选中；`dimMinutes`（默认 5）与 `keepAwakeHours`（默认 2，0 = 不限）落地并含旧存档迁移；`useKeepAwake(active, maxDurationMs)` 到点释放。`pnpm typecheck / lint / test（174 tests / 28 files）` 全绿；真机触感/变暗/常亮到点待验收。
 - **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
 - **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、模型下载真实网络、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产。
 
@@ -77,6 +80,8 @@
 | 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
+| 触感依赖系统设置 | App 主动触感走 `performHapticFeedback`，系统「触摸振动」关闭时不震（尊重用户设置，非 bug）；`navigator.vibrate` 因 APK 未声明 `VIBRATE` 被 WebView 忽略，只作浏览器兜底；iOS 暂无触感 |
+| WebView 默认长按触感 | 已在启动时用 `setHapticFeedbackEnabled(false)` 关闭；若未来需要「长按复制消息」，只恢复功能、不要恢复系统触感 |
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退。也不支持 CSS `translate` 属性（Tailwind v4 的 translate 工具类）：麦克风居中、退出提示、宠物保存提示已改用 `inset-x-0`/`mx-auto`；dialog/sheet/tooltip 仍有 translate 类，真机居中待修 |
 | 麦克风 spike 偏离 | 已解决：JSON base64 WAV/临时 WAV 已替换为二进制 PCM16 + whisper-rs 内存转写；自动粘贴改为直接 CGEvent |
 | 剪贴板历史 | 仅在桌面应用运行时记录；无全局快捷键；图片/文件/富文本不支持 |

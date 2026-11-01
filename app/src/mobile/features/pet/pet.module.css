@@ -1,3 +1,10 @@
+/* 宠物页保持纯净：长按不选中文字、不弹上下文菜单/复制（震动已由原生层接管）。 */
+.stage {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .petSlot {
   position: absolute;
   top: 50%;

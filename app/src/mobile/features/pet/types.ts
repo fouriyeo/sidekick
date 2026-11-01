@@ -22,6 +22,10 @@ export type PetSettings = {
   posture: Posture;
   /** 宠物页面前台时是否阻止系统熄屏；旧存档里的 "never" 归一化为 true。 */
   keepAwake: boolean;
+  /** 宠物页无操作多少分钟后自动变暗（防 OLED 烧屏）；默认 5 分钟。 */
+  dimMinutes: number;
+  /** 屏幕常亮最多保持多少小时，到点释放让系统熄屏；0 表示不限；默认 2 小时。 */
+  keepAwakeHours: number;
 };
 
 export type PetState = {

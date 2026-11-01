@@ -10,7 +10,13 @@ import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import { parseMessage, parseMicMessage } from "@/protocol/messages";
-import { exitApp, subscribeBackButton, subscribeChat, subscribeConn } from "@/shared/lib/tauri";
+import {
+  disableWebviewHaptics,
+  exitApp,
+  subscribeBackButton,
+  subscribeChat,
+  subscribeConn,
+} from "@/shared/lib/tauri";
 
 /** 根页面「再按一次退出」的确认窗口。 */
 const EXIT_HINT_MS = 2000;
@@ -24,9 +30,18 @@ export function MobileApp() {
   const setView = useUiStore((state) => state.setView);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const keepAwake = usePetStore((state) => state.pet.settings.keepAwake);
+  const keepAwakeHours = usePetStore((state) => state.pet.settings.keepAwakeHours);
+  const keepAwakeMs = keepAwakeHours > 0 ? keepAwakeHours * 60 * 60 * 1000 : null;
 
   // 宠物页在前台（含设置弹层）时屏幕常亮；聊天页与后台交给系统默认熄屏。
-  useKeepAwake(keepAwake && view === "pet");
+  // 常亮默认最多 2 小时，到点释放，避免放桌边整夜耗电（设置页可调，0 = 不限）。
+  useKeepAwake(keepAwake && view === "pet", keepAwakeMs);
+
+  // 触感统一由 App 管：先关掉 WebView 自带的长按震动（文本选择/上下文菜单），
+  // 再按需用原生 `haptic` 命令触发；失败静默降级，不影响界面。
+  useEffect(() => {
+    void disableWebviewHaptics().catch(() => undefined);
+  }, []);
 
   // 根页面返回键：第一次提示「再按一次退出」，2 秒内第二次才真正退出。
   const [exitHintVisible, setExitHintVisible] = useState(false);

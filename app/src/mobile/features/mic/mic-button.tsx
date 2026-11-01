@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { createHaptics } from "@/mobile/features/pet/haptics";
+import { usePetStore } from "@/mobile/features/pet/pet-store";
 import type { Posture } from "@/mobile/features/pet/types";
 import { useReducedMotion } from "@/mobile/features/pet/use-reduced-motion";
 import type { MicStopReason } from "@/protocol/messages";
@@ -50,7 +51,10 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
   const error = useMicStore((state) => state.error);
 
   const reducedMotion = useReducedMotion();
-  const haptics = useMemo(() => createHaptics(), []);
+  const hapticsEnabled = usePetStore((state) => state.pet.settings.haptics);
+  const hapticsEnabledRef = useRef(hapticsEnabled);
+  hapticsEnabledRef.current = hapticsEnabled;
+  const haptics = useMemo(() => createHaptics({ enabled: () => hapticsEnabledRef.current }), []);
   const [layoutPosture, setLayoutPosture] = useState(posture);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [warning, setWarning] = useState(false);
@@ -241,6 +245,9 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
         setGuideOpen(true);
         return;
       }
+
+      // 按下即开始录音：中震一下，给「现在在录」的即时确认（UX 规范 §7）。
+      haptics.medium();
 
       event.currentTarget.setPointerCapture?.(event.pointerId);
       pointerIdRef.current = event.pointerId;

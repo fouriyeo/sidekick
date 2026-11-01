@@ -15,7 +15,14 @@ export const DEFAULT_SETTINGS: PetSettings = {
   reduceMotion: "system",
   posture: "docked",
   keepAwake: true,
+  dimMinutes: 5,
+  keepAwakeHours: 2,
 };
+
+/** 自动变暗分钟数的合法范围（1 分钟起，最多 1 小时）。 */
+export const DIM_MINUTES_RANGE = { min: 1, max: 60 } as const;
+/** 屏幕常亮最长小时数的合法范围（0 = 不限，最多 24 小时）。 */
+export const KEEP_AWAKE_HOURS_RANGE = { min: 0, max: 24 } as const;
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -137,6 +144,16 @@ function normalizeReduceMotion(value: unknown): ReduceMotionSetting {
   return value === "on" || value === "off" || value === "system" ? value : "system";
 }
 
+function normalizeDimMinutes(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_SETTINGS.dimMinutes;
+  return Math.round(clampNumber(value, DIM_MINUTES_RANGE.min, DIM_MINUTES_RANGE.max));
+}
+
+function normalizeKeepAwakeHours(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_SETTINGS.keepAwakeHours;
+  return Math.round(clampNumber(value, KEEP_AWAKE_HOURS_RANGE.min, KEEP_AWAKE_HOURS_RANGE.max));
+}
+
 function normalizePosture(value: unknown): Posture {
   return value === "handheld" || value === "auto"
     ? value === "auto"
@@ -156,6 +173,8 @@ function normalizeSettings(raw: unknown): PetSettings {
     posture: normalizePosture(value.posture),
     // 旧存档写的是 "never"（当时未接入），统一落到新默认 true：宠物页面默认常亮。
     keepAwake: typeof value.keepAwake === "boolean" ? value.keepAwake : DEFAULT_SETTINGS.keepAwake,
+    dimMinutes: normalizeDimMinutes(value.dimMinutes),
+    keepAwakeHours: normalizeKeepAwakeHours(value.keepAwakeHours),
   };
 }
 

@@ -25,6 +25,8 @@ describe("pet persistence", () => {
     });
     expect(state.onboarded).toBe(false);
     expect(state.settings.posture).toBe("docked");
+    expect(state.settings.dimMinutes).toBe(5);
+    expect(state.settings.keepAwakeHours).toBe(2);
   });
 
   it("round-trips a save without transient state", () => {
@@ -87,6 +89,29 @@ describe("pet persistence", () => {
     expect(parsed.save?.settings.posture).toBe("docked");
     expect(parsed.save?.settings.haptics).toBe(false);
     expect(parsed.save?.settings.keepAwake).toBe(true);
+    expect(parsed.save?.settings.dimMinutes).toBe(5);
+    expect(parsed.save?.settings.keepAwakeHours).toBe(2);
+  });
+
+  it("normalizes 变暗分钟数与常亮小时数，越界夹紧", () => {
+    const parsed = parsePetSave(
+      {
+        version: 1,
+        name: "小满",
+        settings: { dimMinutes: 99, keepAwakeHours: -3 },
+      },
+      NOW,
+    );
+
+    expect(parsed.save?.settings.dimMinutes).toBe(60);
+    expect(parsed.save?.settings.keepAwakeHours).toBe(0);
+
+    const fallback = parsePetSave(
+      { version: 1, name: "小满", settings: { dimMinutes: "soon", keepAwakeHours: null } },
+      NOW,
+    );
+    expect(fallback.save?.settings.dimMinutes).toBe(5);
+    expect(fallback.save?.settings.keepAwakeHours).toBe(2);
   });
 
   it("normalizes keepAwake: legacy 未接入 值落到默认开，显式关闭保留", () => {

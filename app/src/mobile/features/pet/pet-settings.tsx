@@ -22,6 +22,12 @@ const REDUCE_OPTIONS: Array<{ value: ReduceMotionSetting; label: string }> = [
 
 const POSTURES: Posture[] = ["docked", "handheld"];
 
+/** 宠物页无操作后自动变暗的分钟数选项。 */
+const DIM_OPTIONS = [1, 2, 5, 10, 15, 30] as const;
+
+/** 屏幕常亮最长小时数选项；0 表示不限。 */
+const KEEP_AWAKE_HOUR_OPTIONS = [1, 2, 4, 8, 0] as const;
+
 function validateName(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return "叫小跟班也可以。";
@@ -275,6 +281,46 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
                 checked={pet.settings.keepAwake}
                 onCheckedChange={(checked) => void update({ keepAwake: checked })}
               />
+            </div>
+            {pet.settings.keepAwake && (
+              <div className="mt-4">
+                <p className="text-xs text-muted-foreground">最长常亮</p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {KEEP_AWAKE_HOUR_OPTIONS.map((hours) => (
+                    <Button
+                      key={hours}
+                      type="button"
+                      variant={pet.settings.keepAwakeHours === hours ? "default" : "outline"}
+                      className="h-9 text-xs"
+                      onClick={() => void update({ keepAwakeHours: hours })}
+                    >
+                      {hours === 0 ? "不限" : `${hours} 小时`}
+                    </Button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  到点交给系统自动熄屏；点亮屏幕回到宠物页后重新计时。
+                </p>
+              </div>
+            )}
+            <div className="mt-4">
+              <p className="text-xs text-muted-foreground">无操作自动变暗</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {DIM_OPTIONS.map((minutes) => (
+                  <Button
+                    key={minutes}
+                    type="button"
+                    variant={pet.settings.dimMinutes === minutes ? "default" : "outline"}
+                    className="h-9 text-xs"
+                    onClick={() => void update({ dimMinutes: minutes })}
+                  >
+                    {minutes} 分钟
+                  </Button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                宠物页无操作后自动变暗，触摸即恢复，防止屏幕长时间静止。
+              </p>
             </div>
           </section>
 
