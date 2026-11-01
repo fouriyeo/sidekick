@@ -22,6 +22,10 @@
 16. 桌面设置页：语音模型下载/选择/删除/预热、辅助功能授权卡片；应用内语音状态浮层；桌面剪贴板历史（文本、搜索、置顶、隐藏内容过滤、`0600` 持久化）（2026-10-31）。
 17. 手机断连自动重连：退避 1s→2s→4s→8s→16s→30s，每次重试先静默 UDP 重新发现（覆盖 IP/端口变化），再连唯一电脑/退回上次地址；多台电脑回上次那台、无地址时停止；切后台暂停、回前台立即重试；聊天页常显「N 秒后自动重连」+「立即重连」+「重新搜索」（2026-11-01）。
 18. 宠物页屏幕常亮：设置页「显示 → 屏幕常亮」变成真开关（默认开）；手机 Rust 新增 `set_keep_screen_on` 命令，用 JNI 调 Android `FLAG_KEEP_SCREEN_ON`，只在宠物页前台（含设置弹层）生效，聊天/后台释放；旧存档 `"never"` 归一化为开（2026-11-01）。
+19. 手持模式录音 UI 第一轮修复：把录音条/结果卡片/临时提示移入独立绝对定位覆盖层，右下 96dp 麦克风按钮按住后不再被撑宽居中（2026-11-01）。
+20. 语音转写结果入库：桌面 `write_text_and_record` 在写系统剪贴板（自动粘贴/降级复制）后，以 `kind = "voice"` 记入剪贴板历史；暂停记录时仍写系统剪贴板但不入历史。剪贴板 UI 显示「N / 100 条」并说明 100 条淘汰规则，语音条目带「语音」标签（2026-11-01）。
+21. 按用户真机反馈调整手持语音交互：去掉矛盾的左下 X 取消按钮（按住说话时点它必须先松手，而松手就已经结束），取消只保留上滑；语音按钮由右下改为底部居中，录音条/结果卡片/提示在按钮上方居中；上滑取消后提示「已取消，没有发送。」（2026-11-01）。
+22. 修复真机 WebView 103 居中偏移：Tailwind v4 的 `translate` 工具类输出 CSS `translate` 属性，WebView 103 不支持，导致底部居中按钮整体偏右 48px；把麦克风按钮/覆盖层、再按一次退出提示、宠物保存失败提示改为 `inset-x-0 + flex` 或 `left-0 right-0 mx-auto`。真机 CDP 复验按钮中心偏差 0px（2026-11-01）。
 
 ## 已验证（有实际证据）
 
@@ -46,13 +50,15 @@
 - 自动化测试：`pnpm typecheck/lint/test/build` 全绿（103 前端用例）；`cargo test` 10 passed；`check-boundaries`、`check-docs` 通过。
 - 麦克风 spike：真机 5 秒长按生成约 143KB WAV，桌面收到并 whisper 转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 正确；自动粘贴因辅助功能权限返回 copied。
 - 麦克风 P0 后端：Python WS 客户端按正式二进制协议发送 3.9 秒中文，服务端返回 `mic.result(copied, accessibility_off)`；whisper-rs base 在模型预热后延迟约 0.2–0.3s；剪贴板 UTF-8 内容正确。
-- 剪贴板：复制文本后 `~/Library/Application Support/Sidekick/clipboard.json` 在 1 秒内出现，权限 `600`；带 `org.nspasteboard.ConcealedType` 的内容未记录；Sidekick 自身转写未入库。
+- 剪贴板：复制文本后 `~/Library/Application Support/Sidekick/clipboard.json` 在 1 秒内出现，权限 `600`；带 `org.nspasteboard.ConcealedType` 的内容未记录；语音转写从 2026-11-01 起经 `write_text_and_record` 以 `kind=voice` 入库（此前版本不入库）。
 - 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test`（128 tests）/ `pnpm build` 通过；`cargo test --lib` 20 tests 通过。
 - **断连自动重连已验证（2026-11-01，Realme 真机）**：22:47:54 杀掉桌面进程，手机 22:47:54.504 检测到 `[mobile] 连接已断开`；随后按退避自动重试（发现 0 台 → 退回上次地址 → 连接被拒），重试时间点 22:47:57 / 22:48:00.6 / 22:48:06.3 / 22:48:15.9 / 22:48:33.5（每次 = 退避 + 1.5s 扫描窗口）；桌面 22:49:05 恢复后下一轮自动发现 1 台并 `[mobile] connected`，无需任何手动操作。
 - **端口变化自动重连已验证（2026-11-01，Realme 真机）**：占住 47810 后桌面回退到 47811，手机断连自动重试时发现回包 `port=47811` 并 `[mobile] connected to ws://…:47811/ws`；聊天页显示「已连接」与新端口。
 - **重连 UI 已验证（2026-11-01）**：断连瞬间聊天页显示「未连接 / 正在自动重连（第 1 次）…」+「重新搜索」，连上后恢复正常；前端 147 个用例（含 fake timers 的退避/暂停/立即重连/多台不自动选）全绿。
 - **宠物页屏幕常亮已验证（2026-11-01，Realme 真机 / Android 13）**：安装后打开 App 停在宠物页，`adb shell dumpsys window windows` 的窗口 `fl=` 含 `KEEP_SCREEN_ON`（默认开；设备上旧存档的 `"never"` 已迁移为 `true`）；点「打开聊天」后标志消失、返回宠物恢复；打开设置页时保持常亮；设置里关掉「屏幕常亮」标志消失、重开恢复；`sidekick-pet.json` 持久化为 `keepAwake: true`，logcat 无 `[keep-awake]` 错误。前端 159 用例全绿（含 `use-keep-awake` 3 例）。
-- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、模型下载真实网络、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产。
+- **手持模式录音 UI 已验证（2026-11-01，无头 Chrome CDP + Realme 真机 / WebView 103）**：393×852 无头 Chrome：空闲按钮 96×96、中心 x=196.5=视口中心、距底 24，录音条中心 196.5、宽 322.3、按钮上方 8px，上滑 60px 进入「松手取消」珊瑚态，松手回 idle 并提示「已取消，没有发送。」。Realme 真机（360×800，CDP `Input.dispatchTouchEvent`）：按钮 rect left 132/right 228（中心 180=视口中心，偏差 0px）、96×96、距底 24px，DOM 无「取消录音」按钮；按住后中心不变、录音条中心 180、与按钮 gap 8px；上滑 60px 按钮文案「松手取消」+ `bg-pet-coral`；松手回 idle 并出现「已取消，没有发送。」。852×393 docked：空闲胶囊中心 426、底边距 16，按住后容器 520 仍居中、录音条在胶囊内。
+- **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
+- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、模型下载真实网络、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产。
 
 ## 已知问题 / 技术债
 
@@ -68,9 +74,10 @@
 | withGlobalTauri | `tauri.conf.json` 仍为 `true`；Phase 4 收紧为 `false` 时需回归 IPC/事件/QR |
 | 麦克风 P0 | 已实现；自动粘贴依赖 macOS 辅助功能，需要用户手动勾选一次；开发二进制重编译后可能需重勾选 |
 | 麦克风未完成项 | 真机 60 秒/断连、密码框/窗口切换完整矩阵、辅助功能实测、模型准确率测试集待补 |
+| 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
-| WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退，建议后续升级 WebView |
+| WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退。也不支持 CSS `translate` 属性（Tailwind v4 的 translate 工具类）：麦克风居中、退出提示、宠物保存提示已改用 `inset-x-0`/`mx-auto`；dialog/sheet/tooltip 仍有 translate 类，真机居中待修 |
 | 麦克风 spike 偏离 | 已解决：JSON base64 WAV/临时 WAV 已替换为二进制 PCM16 + whisper-rs 内存转写；自动粘贴改为直接 CGEvent |
 | 剪贴板历史 | 仅在桌面应用运行时记录；无全局快捷键；图片/文件/富文本不支持 |
 | 端口候选回退 | 47810–47814、8848 依次尝试；全部占用时服务启动失败（server_info 报错） |

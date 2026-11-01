@@ -314,3 +314,36 @@
 - 放弃：`navigator.wakeLock`（真机 WebView 103 风险）；`WAKE_LOCK` 权限 + PowerManager（权限过重）；Kotlin 插件方法（`gen/` 不入库，Raw JNI 代码更少）。
 - 代价：iOS 暂为空实现（后续用 `isIdleTimerDisabled` 补同一命令接口）；常亮明显增加耗电，靠设置开关与现有「2 分钟无操作暗到 70%」缓解；JNI 失败只记日志，用户侧静默降级为系统默认熄屏。
 - 规范：`app/src-tauri/src/keep_awake.rs`、`app/src/mobile/features/pet/use-keep-awake.ts`、`docs/prd/pet/SPEC.md` §7、`docs/standards/ux.md` §3。
+
+## D47 · 语音转写写入剪贴板历史 + 100 条上限可见（2026-11-01）
+
+- 背景：用户反馈手机语音识别完成后，电脑端系统剪贴板已有文本，但 Sidekick 剪贴板历史找不到（watcher 用一次性 `skip_next` 跳过自身写入）；同时用户希望明确「只保留最近 100 条」。
+- 决策：新增 `ClipboardManager::write_text_and_record(text, kind)`：先写系统剪贴板（保留自动粘贴/降级复制），再以 `kind = "voice"` 记入历史一次；`skip_next` 只用于防止 watcher 把同一条文本再记一遍。暂停记录（`enabled = false`）时仍写系统剪贴板、但不入历史。100 条上限沿用 `MAX_ITEMS = 100`（置顶优先、同文本去重、通知/快照结构不变），剪贴板 UI 头部显示 `N / 100 条`、底部说明淘汰规则，`voice` 条目加 Mic 图标与「语音」标签。
+- 原因：语音输入与普通复制都是用户想复用的文本，历史缺失会让「语音录入 → 回看/重贴」断链；上限本来已实现但不可见，容易被误解为无限增长/没有隐私边界。
+- 代价：历史里会保存语音转写全文（仅本机、`0600`、可暂停/清空）；语音与普通文本共用 100 条配额。
+- 规范：`app/src-tauri/src/clipboard_manager.rs`、`app/src-tauri/src/desktop_mic.rs`、`docs/engineering/clipboard-manager.md`、`app/src/desktop/features/clipboard/`。
+
+## D48 · 手持模式录音 UI：按钮锚点与覆盖层分离（2026-11-01）
+
+- 背景：竖屏手持模式按住说话后，录音条/结果卡片把右下按钮容器撑宽，96dp 按钮被 `items-center` 居中，看起来「按住后跳到屏幕中间」；用户反馈这样展示很奇怪。
+- 决策：手持模式右下容器只保留按钮本身；录音条/结果卡片/临时提示放独立绝对定位层（按钮上方 8px、右对齐、`pointer-events-none`，结果卡片单独 `pointer-events-auto`）；取消按钮与权限入口固定左下安全区 +24dp。docked（横屏）保持底部居中胶囊，录音条仍在胶囊内部。
+- 原因：按钮位置是肌肉记忆锚点，任何状态都不应移动；把覆盖层从布局流里拿出来是最小改动，且不影响 docked 与手势逻辑。
+- 代价：覆盖层宽度受 `min(82vw,360px)` 限制；窄屏上卡片与左下取消按钮需在纵向错开（卡片在按钮上方，不与取消按钮重叠）。
+- 规范：`app/src/mobile/features/mic/mic-button.tsx`、`docs/prd/mic/SPEC.md` §1.2、`docs/standards/ux.md` §3。
+
+## D49 · 手持语音按钮改底部居中、取消只保留上滑（2026-11-01）
+
+- 背景：用户真机反馈两点：① 按住说话时左下角还有 X 取消按钮，但要去点它必须先松开麦克风按钮，而松手就已经结束录音，这个按钮自相矛盾、实际不可用；② 语音按钮在右下角，用户认为底部居中更合适（与支架模式的居中胶囊一致）。
+- 决策：手持模式麦克风改为底部居中 96dp（`left-1/2 -translate-x-1/2`、底部安全区 +24dp）；录音条/结果卡片/临时提示覆盖层放在按钮上方居中；删除左下取消按钮，取消只保留上滑 ≥48dp、滑回 <24dp 继续、松手取消，取消区按钮与录音条变珊瑚色并显示「松手取消」。D48 的「按钮锚点不随覆盖层变化」仍有效，只是锚点从右下改为底部居中；docked 横屏保持胶囊居中。
+- 原因：按住说话是单指连续手势，抬手后出现的第二个取消按钮在按住过程中不可达；上滑取消是微信等语音输入的既有心智，代码里本来就有取消区逻辑。底部居中与支架模式位置一致，减少两套位置记忆。
+- 放弃：保留左下取消按钮（矛盾）；把取消按钮放到按钮上方（仍需按住时点击，不可行）。
+- 代价：取消只依赖手势，缺少「点击取消」的无障碍替代（P1 用 TalkBack/VoiceOver 自定义动作或系统返回键补）；覆盖层居中后，窄屏上结果卡片与权限快捷入口需要错开。
+- 规范：`app/src/mobile/features/mic/mic-button.tsx`、`docs/prd/mic/SPEC.md` §1.2、`docs/standards/ux.md` §3。
+
+## D50 · WebView 103 不支持 CSS translate：移动端居中改 flex/mx-auto（2026-11-01）
+
+- 背景：手持语音按钮改底部居中后，无头 Chrome（新版 Chromium）验证通过，但 Realme 真机（Android System WebView 103）上按钮整体偏右 48px（半个按钮宽），覆盖层同样偏右。排查发现 Tailwind v4 的 `-translate-x-1/2` 编译为 CSS `translate: var(--tw-translate-x) var(--tw-translate-y)`，而 CSS `translate` 属性 Chrome 104+ 才支持，WebView 103 直接忽略该声明；无头 Chrome 版本新，掩盖了问题。
+- 决策：移动端居中/位移不再用 translate 工具类：需要全宽定位层的用 `inset-x-0` + flex `items-center`；绝对定位的固定宽度子元素用 `left-0 right-0 mx-auto w-[…]`。本次修正麦克风按钮/录音条/结果卡片覆盖层、「再按一次退出」提示、宠物保存失败提示；docked 胶囊也改同一套（原先同样依赖 translate，真机会偏）。dialog/sheet/tooltip 里的 translate 类本轮未动（桌面正常，真机偏移待单独修）。
+- 原因：真机是交付目标；WebView 版本锁定在 103（系统组件），只能改写法而不是加 polyfill/升级 WebView。
+- 代价：移动端居中写法与桌面不一致（桌面可用 translate）；dialog/sheet/tooltip 仍有真机居中风险，已记入 `docs/status.md` 已知问题。
+- 规范：`app/src/mobile/features/mic/mic-button.tsx`、`app/src/mobile/app.tsx`、`app/src/mobile/features/pet/pet-stage.tsx`、`AGENTS.md` 第 8 节。

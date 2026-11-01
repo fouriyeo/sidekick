@@ -24,7 +24,7 @@
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
 - ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、方向自动双姿态（手动覆盖）、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
 - ✅ **麦克风 P0 已实现**（2026-10-31）：手机 WebView 流式 PCM16 → 正式二进制协议（`mic.*` + `SK01`）→ 桌面按会话内存缓冲 → whisper-rs 内存转写（启动 prewarm）→ `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制；手机含上滑取消、波形、计时、权限说明、结果卡片；桌面设置页管理模型与自动输入权限。真机/辅助功能实测待补。
-- ✅ **桌面剪贴板 P1**（2026-10-31）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型与自身写入过滤；本地 `0600` JSON。
+- ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多 100 条；本地 `0600` JSON。
 - ❌ 尚未开始：Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
 
 ## 2.5 文档导航（懒加载）
@@ -170,14 +170,15 @@ sidekick/
 - **自动重连**：`connection-store` 用模块级单一定时器，退避 1s→2s→4s→8s→16s→30s（上限 30s），每次重试先静默 UDP 重新发现（覆盖端口回退/IP 变化），发现 0 台退回上次地址，多台回上次那台、无地址则停止；手动连接/重新搜索会取消排期并清零退避；`document.hidden` 暂停、回前台立即重试。电脑恢复最晚一个退避周期（≤30s）连上。
 - **无心跳**：协议没有 ping/pong；进程退出/网络断开靠 FIN/RST 立刻发现（实测约 0.5s），电脑睡眠/路由器静默丢包可能长时间仍显示「已连接」，需心跳方案补齐。
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
-- **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。
+- **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。**也不支持 CSS `translate` 属性**：Tailwind v4 的 `translate-x/y-*` 工具类编译成 `translate: var(--tw-translate-x) …`，在真机上会被忽略（元素整体偏半个自身宽度）。居中/位移不要用 `left-1/2 -translate-x-1/2`，改用 `inset-x-0` + flex `items-center`，或 `left-0 right-0 mx-auto`；dialog/sheet/tooltip 里仍有 translate 类，属已知待修项。
 - **Android 返回键**：不注册 `back-button` 监听时系统默认直接 finish（退出 App）。现在 App 启动即注册一次 `subscribeBackButton`（`shared/lib/tauri.ts`）；设置页/聊天页通过 `mobile/system-back.ts` 返回栈消费，根页面走「再按一次退出」（第一次提示、2 秒内第二次调 `exitApp()`，需要 `core:app:allow-exit` 权限，已在 `capabilities/default.json`）。**新增全屏页面时记得 `pushBackHandler`，否则该页按返回会被根页面当成退出确认**。浏览器 `?role=mobile` 用 Esc 模拟返回键（dev mock）。
 - **屏幕常亮**：走 Android 原生窗口标志（`app/src-tauri/src/keep_awake.rs`，`WebviewWindow::with_webview` + `jni_handle().exec`），不用 `navigator.wakeLock`（WebView 上可用性/权限前提不确定）；`jni` 只加在 Android 目标并**锁 0.21**（必须与 `tauri-runtime-wry` 一致，否则 `JniHandle::exec` 闭包类型不匹配）。窗口标志只在窗口可见时生效，所以聊天页/后台由 JS 显式释放；无需 `WAKE_LOCK` 权限。JNI 失败只打 `[keep-awake]` 日志，静默降级为系统默认熄屏。
 - **方向自动姿态**：`use-orientation.ts` 用 `matchMedia("(orientation: portrait)")` + resize/orientationchange；横屏 docked、竖屏 handheld，设置手动覆盖只持续到下次旋转。
 - **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
 - **麦克风 P0**：`whisper-rs` 构建需 cmake + libclang（`LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib`）；模型目录 `~/Library/Application Support/Sidekick/models`，启动会 prewarm，首次手动加载可能 5–6 秒；音频只在内存，不再有临时 WAV。
 - **自动粘贴 TCC**：`core-graphics` 合成 Cmd+V 需要 macOS 辅助功能勾选当前程序；开发二进制每次重编译可能被当成新程序，需要重新勾选（设置页有请求权限/重新检测）。不勾选只复制。
-- **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 跳过；文件 `~/Library/Application Support/Sidekick/clipboard.json` 权限 600。
+- **麦克风录音 UI 锚点**：手持模式底部居中的 96dp 按钮容器只能包含按钮本身；录音条/结果卡片/临时提示必须放在独立绝对定位层（`left-0 right-0 mx-auto w-[min(82vw,360px)] bottom-[104px]`、`pointer-events-none`），否则会把 flex 容器撑宽、按钮被挤偏，看起来「按住后跳走」。居中要用 `inset-x-0` + flex `items-center` / `left-0 right-0 mx-auto`，**不要用 `left-1/2 -translate-x-1/2`**（WebView 103 不支持 CSS translate，会偏右半宽）。取消只保留上滑手势（≥48dp，滑回 <24dp 继续），**不要再加左下取消按钮**：按住说话时去点它必须先松手，而松手就已经结束录音，按钮自相矛盾。
+- **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind = "voice"` 入库（暂停记录时仍写系统剪贴板、但不入历史）；最多 100 条（置顶优先淘汰）；文件 `~/Library/Application Support/Sidekick/clipboard.json` 权限 600。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 
 ## 9. 协作约定
@@ -197,7 +198,7 @@ sidekick/
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
 2. 情绪宠物 P0：代码已完成（静态 SVG 降级、方向自动双姿态（手动覆盖）、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
 3. ✅ 外设麦克风 P0：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层已完成；下一步勾选 macOS 辅助功能验证自动粘贴，并补真机 60 秒/断连/密码框矩阵。
-4. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成。
+4. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
 5. 接入 Claude Code hooks：`notify` / `ask` 事件推手机，手机回答回传并作为 hook 结果（协议扩展 status / ask / notify / input）。
 6. 配对鉴权 + release 签名/桌面打包/开机自启。
 7. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
