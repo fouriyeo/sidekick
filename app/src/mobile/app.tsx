@@ -155,7 +155,7 @@ export function MobileApp() {
         <div
           role="status"
           aria-live="polite"
-          className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+112px)] left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg"
+          className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+112px)] left-0 right-0 z-50 mx-auto w-fit rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg"
         >
           再按一次退出
         </div>

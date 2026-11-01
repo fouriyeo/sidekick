@@ -12,6 +12,7 @@ export const MIC_COPY = {
   processing: "转写中…",
   cancelHint: "上滑取消",
   releaseToCancel: "松手取消",
+  cancelled: "已取消，没有发送。",
   tooShort: "按住说话。",
   disconnected: "连接断了，这段没有发送。",
   background: "已取消（App 进入后台）。",

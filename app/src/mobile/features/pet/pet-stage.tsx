@@ -295,7 +295,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       <MicButton active={active} posture={pet.settings.posture} onOpenConnection={onOpenChat} />
 
       {saveStatus === "error" && (
-        <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 z-30 -translate-x-1/2 text-xs text-pet-muted">
+        <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+16px)] left-0 right-0 z-30 mx-auto w-fit text-xs text-pet-muted">
           这次记不住，下次再试。
         </p>
       )}

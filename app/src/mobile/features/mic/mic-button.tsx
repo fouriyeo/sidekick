@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { AlertCircle, Check, Copy, Loader2, Mic, ShieldAlert, X } from "lucide-react";
+import { AlertCircle, Check, Copy, Loader2, Mic, ShieldAlert } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -392,7 +392,7 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
       releasePointer(event);
 
       if (cancelZoneRef.current) {
-        void cancelRecording("cancel");
+        void cancelRecording("cancel", MIC_COPY.cancelled);
         return;
       }
 
@@ -536,108 +536,113 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
     <>
       <div
         className={cn(
-          "absolute z-30 flex flex-col items-center gap-2",
+          // 居中不用 left-1/2 + -translate-x-1/2：Tailwind v4 的 translate 工具类是
+          // CSS `translate` 属性，真机 WebView 103 不支持，按钮会整体偏右半个宽度。
+          "pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center gap-2",
           layoutPosture === "docked"
-            ? "bottom-[calc(env(safe-area-inset-bottom)+16px)] left-1/2 -translate-x-1/2"
-            : "bottom-[calc(env(safe-area-inset-bottom)+24px)] right-[calc(env(safe-area-inset-right)+24px)]",
+            ? "bottom-[calc(env(safe-area-inset-bottom)+16px)]"
+            : "bottom-[calc(env(safe-area-inset-bottom)+24px)]",
         )}
       >
-        {message && (
-          <span
-            role="status"
-            aria-live="polite"
-            className="max-w-[78vw] rounded-full border border-pet-border bg-pet-bg px-3 py-1.5 text-center text-xs text-pet-text shadow-sm"
-          >
-            {message}
-          </span>
-        )}
+        {/*
+          覆盖层（临时提示 / 结果卡片 / 录音条）与按钮分层：
+          手持模式把这一层设为绝对定位、固定宽度并在按钮上方居中；
+          它不参与外层 flex 宽度计算，所以出现/消失都不会撑宽容器、不会推动按钮。
+        */}
+        <div
+          className={cn(
+            "flex flex-col items-center gap-2",
+            layoutPosture === "docked"
+              ? undefined
+              : "pointer-events-none absolute right-0 bottom-[104px] left-0 mx-auto w-[min(82vw,360px)]",
+          )}
+        >
+          {message && (
+            <span
+              role="status"
+              aria-live="polite"
+              className="max-w-[78vw] rounded-full border border-pet-border bg-pet-bg px-3 py-1.5 text-center text-xs text-pet-text shadow-sm"
+            >
+              {message}
+            </span>
+          )}
 
-        {showResult && (
-          <div
-            className={cn(
-              "w-[min(82vw,420px)] rounded-2xl border bg-pet-bg p-3 text-left shadow-lg",
-              error ? "border-pet-danger" : "border-pet-border",
-            )}
-          >
-            <div className="flex items-start gap-2">
-              <span
-                className={cn(
-                  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
-                  error ? "bg-secondary text-pet-danger" : "bg-secondary text-pet-success",
-                )}
-              >
-                {error ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5" />}
-              </span>
-              <p className="text-xs leading-relaxed text-pet-text">{error ?? result?.message}</p>
-            </div>
-
-            {result?.text && (
-              <div className="mt-2 rounded-xl bg-secondary px-2.5 py-2">
-                <p className="line-clamp-2 text-xs leading-relaxed text-pet-muted">{result.text}</p>
-                <button
-                  type="button"
-                  className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-pet-primary"
-                  onClick={handleCopyResult}
+          {showResult && (
+            <div
+              className={cn(
+                "pointer-events-auto rounded-2xl border bg-pet-bg p-3 text-left shadow-lg",
+                layoutPosture === "docked" ? "w-[min(82vw,420px)]" : "w-[min(82vw,360px)]",
+                error ? "border-pet-danger" : "border-pet-border",
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <span
+                  className={cn(
+                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
+                    error ? "bg-secondary text-pet-danger" : "bg-secondary text-pet-success",
+                  )}
                 >
-                  {copyDone ? <Check className="size-3" /> : <Copy className="size-3" />}
-                  {copyDone ? MIC_COPY.copiedAction : MIC_COPY.copy}
-                </button>
+                  {error ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5" />}
+                </span>
+                <p className="text-xs leading-relaxed text-pet-text">{error ?? result?.message}</p>
               </div>
-            )}
-          </div>
-        )}
 
-        {layoutPosture === "handheld" && recording && (
-          <div
-            className={cn(
-              "w-[min(82vw,360px)] rounded-2xl border px-4 py-3 shadow-lg",
-              cancelZone
-                ? "border-pet-coral bg-pet-coral text-white"
-                : "border-pet-border bg-pet-bg text-pet-text",
-            )}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-xs font-medium">
-                <span className="size-1.5 animate-pulse rounded-full bg-current" />
-                {statusLabel}
-              </span>
-              <span className="text-[11px] opacity-80">
-                {cancelZone
-                  ? MIC_COPY.releaseToCancel
-                  : warning
-                    ? MIC_COPY.warning
-                    : MIC_COPY.cancelHint}
-              </span>
+              {result?.text && (
+                <div className="mt-2 rounded-xl bg-secondary px-2.5 py-2">
+                  <p className="line-clamp-2 text-xs leading-relaxed text-pet-muted">
+                    {result.text}
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-pet-primary"
+                    onClick={handleCopyResult}
+                  >
+                    {copyDone ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    {copyDone ? MIC_COPY.copiedAction : MIC_COPY.copy}
+                  </button>
+                </div>
+              )}
             </div>
-            <VoiceWaveform
-              active={listening}
-              getLevel={getLevel}
-              reducedMotion={reducedMotion}
-              className="mt-2"
-            />
-          </div>
-        )}
+          )}
 
-        {layoutPosture === "handheld" && listening && (
-          <button
-            type="button"
-            aria-label="取消录音"
-            className="absolute bottom-0 left-[calc(env(safe-area-inset-left)+24px)] flex size-16 items-center justify-center rounded-full border border-pet-border bg-pet-bg text-pet-muted shadow-sm"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              void cancelRecording("cancel");
-            }}
-          >
-            <X className="size-6" />
-          </button>
-        )}
+          {layoutPosture === "handheld" && recording && (
+            <div
+              className={cn(
+                "w-[min(82vw,360px)] rounded-2xl border px-4 py-3 shadow-lg",
+                cancelZone
+                  ? "border-pet-coral bg-pet-coral text-white"
+                  : "border-pet-border bg-pet-bg text-pet-text",
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-medium">
+                  <span className="size-1.5 animate-pulse rounded-full bg-current" />
+                  {statusLabel}
+                </span>
+                <span className="text-[11px] opacity-80">
+                  {cancelZone
+                    ? MIC_COPY.releaseToCancel
+                    : warning
+                      ? MIC_COPY.warning
+                      : MIC_COPY.cancelHint}
+                </span>
+              </div>
+              <VoiceWaveform
+                active={listening}
+                getLevel={getLevel}
+                reducedMotion={reducedMotion}
+                className="mt-2"
+              />
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
           aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
           aria-pressed={listening}
           className={cn(
-            "touch-none select-none rounded-full border shadow-sm transition-transform active:scale-[0.98]",
+            "pointer-events-auto touch-none select-none rounded-full border shadow-sm transition-transform active:scale-[0.98]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-primary",
             layoutPosture === "docked"
               ? recording
@@ -691,7 +696,9 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
               {layoutPosture === "docked" ? (
                 <span>{label}</span>
               ) : (
-                <span>{recording ? "松手结束" : label}</span>
+                <span>
+                  {recording ? (cancelZone ? MIC_COPY.releaseToCancel : "松手结束") : label}
+                </span>
               )}
             </>
           )}
@@ -714,11 +721,12 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
         onContinue={handleGuideContinue}
       />
 
+      {/* 权限快捷入口：固定在左下安全区，避开底部居中的麦克风按钮与上方覆盖层 */}
       {phase === "error" && error && /权限/.test(error) && (
         <button
           type="button"
           aria-label="查看麦克风权限设置"
-          className="absolute bottom-[calc(env(safe-area-inset-bottom)+96px)] right-[calc(env(safe-area-inset-right)+24px)] z-30 flex size-11 items-center justify-center rounded-full border border-pet-border bg-pet-bg text-pet-primary"
+          className="absolute bottom-[calc(env(safe-area-inset-bottom)+24px)] left-[calc(env(safe-area-inset-left)+24px)] z-30 flex size-11 items-center justify-center rounded-full border border-pet-border bg-pet-bg text-pet-primary"
           onClick={() => setGuideOpen(true)}
         >
           <ShieldAlert className="size-5" />{" "}
