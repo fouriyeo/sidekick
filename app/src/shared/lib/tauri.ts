@@ -1,3 +1,4 @@
+import { exit, onBackButtonPress } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { type DiscoveredServer, isDiscoveredServer } from "@/protocol/discovery";
@@ -317,6 +318,49 @@ export function subscribeClipboardChanged(
   return clipboardChannel((payload) => {
     if (isClipboardSnapshot(payload)) handler(payload);
   });
+}
+
+export type BackButtonPayload = { canGoBack: boolean };
+
+/**
+ * 接管 Android 系统返回键。
+ *
+ * 一旦注册，Tauri 不再自动退出/回退，全部交给 handler 决定；所以整个 App 只在启动时
+ * 注册一次（根页面兜底「再按一次退出」），设置页/聊天页的返回语义由
+ * `mobile/system-back.ts` 的返回栈决定。非 Android 环境（桌面 / iOS / 浏览器）
+ * 注册失败时静默降级，返回键行为不变。
+ */
+export function subscribeBackButton(handler: (payload: BackButtonPayload) => void): Unsubscribe {
+  let unregister: Unsubscribe | null = null;
+  let disposed = false;
+
+  void onBackButtonPress((payload) => {
+    if (!disposed) handler(payload);
+  })
+    .then((listener) => {
+      if (disposed) {
+        void listener.unregister().catch(() => undefined);
+        return;
+      }
+      unregister = () => {
+        void listener.unregister().catch(() => undefined);
+      };
+    })
+    .catch((error: unknown) => {
+      console.warn("[back-button] 接管返回键失败，保持系统默认行为：", normalizeError(error));
+    });
+
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    unregister?.();
+    unregister = null;
+  };
+}
+
+/** 退出 App（Android 走 AppPlugin.exit → finishAffinity）；需要 `core:app:allow-exit` 权限。 */
+export function exitApp(code = 0): Promise<void> {
+  return exit(code);
 }
 
 export function normalizeError(error: unknown): string {

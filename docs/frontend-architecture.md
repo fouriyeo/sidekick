@@ -268,7 +268,8 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - 本地持久化：服务器地址用 localStorage；宠物存档用 plugin-store（adapter 隔离）；聊天记录暂不落盘。
 - 不引全局事件总线；Tauri 事件在 `shared/lib/tauri.ts` 里转成 store action。
 - 组件局部 UI 状态（展开/收起、输入草稿）留在组件内，不进全局 store。
-- 视图切换用 `useUiStore` 的 `view` 字段（`chat | pet | settings`），不进 URL、不引路由。
+- 视图切换用 `useUiStore` 的 `view`（`chat | pet`）与 `settingsOpen`，不进 URL、不引路由。
+- Android 返回键统一从 `shared/lib/tauri.ts` 的 `subscribeBackButton` 进入（App 启动注册一次）；设置页、聊天页往 `mobile/system-back.ts` 的返回栈压处理函数，根页面兜底「再按一次退出」（2 秒窗口，之后调 `exitApp`）。规则见 [standards/ux.md](./standards/ux.md) §4.1。
 
 ## 10. 质量与测试
 

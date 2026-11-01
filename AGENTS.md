@@ -1,7 +1,7 @@
 # AGENTS.md — Sidekick 项目上下文
 
 > 面向 AI 编码代理：读完这一份就能接手。细节在 `docs/`，协议在 `protocol/`。
-> 最后更新：2026-10-31
+> 最后更新：2026-11-01
 
 ## 1. 项目是什么
 
@@ -169,6 +169,7 @@ sidekick/
 - **无心跳**：协议没有 ping/pong；进程退出/网络断开靠 FIN/RST 立刻发现（实测约 0.5s），电脑睡眠/路由器静默丢包可能长时间仍显示「已连接」，需心跳方案补齐。
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
 - **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。
+- **Android 返回键**：不注册 `back-button` 监听时系统默认直接 finish（退出 App）。现在 App 启动即注册一次 `subscribeBackButton`（`shared/lib/tauri.ts`）；设置页/聊天页通过 `mobile/system-back.ts` 返回栈消费，根页面走「再按一次退出」（第一次提示、2 秒内第二次调 `exitApp()`，需要 `core:app:allow-exit` 权限，已在 `capabilities/default.json`）。**新增全屏页面时记得 `pushBackHandler`，否则该页按返回会被根页面当成退出确认**。浏览器 `?role=mobile` 用 Esc 模拟返回键（dev mock）。
 - **方向自动姿态**：`use-orientation.ts` 用 `matchMedia("(orientation: portrait)")` + resize/orientationchange；横屏 docked、竖屏 handheld，设置手动覆盖只持续到下次旋转。
 - **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
 - **麦克风 P0**：`whisper-rs` 构建需 cmake + libclang（`LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib`）；模型目录 `~/Library/Application Support/Sidekick/models`，启动会 prewarm，首次手动加载可能 5–6 秒；音频只在内存，不再有临时 WAV。

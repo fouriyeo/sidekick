@@ -1,5 +1,6 @@
 import { ArrowLeft, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { pushBackHandler } from "@/mobile/system-back";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -56,14 +57,21 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
     setResetConfirm(false);
   }, [open, pet.name]);
 
+  // Android 返回键与页内「返回宠物」同一条路径；重置确认先收起，再退出设置。
+  const handleBack = useCallback(() => {
+    if (resetConfirm) setResetConfirm(false);
+    else onClose();
+    return true;
+  }, [onClose, resetConfirm]);
+
+  // 用 ref 持有最新处理函数，避免重置确认状态变化时反复压栈/出栈。
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
+
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+    return pushBackHandler(() => handleBackRef.current());
+  }, [open]);
 
   if (!open) return null;
 

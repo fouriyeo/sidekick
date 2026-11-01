@@ -40,6 +40,8 @@ export function installTauriMock(): void {
   const role: MockRole = params.get("role") === "mobile" ? "mobile" : "desktop";
   const callbacks = new Map<number, (payload: unknown) => void>();
   const eventHandlers = new Map<MockEvent, number>();
+  // Android 返回键监听：key 是 Channel id，value 是下一条通道消息的序号。
+  const backListeners = new Map<number, number>();
   const stores = new Map<number, Map<string, unknown>>();
   let nextId = 1;
   let nextStoreId = 1000;
@@ -115,6 +117,16 @@ export function installTauriMock(): void {
     const handlerId = eventHandlers.get(event);
     if (handlerId === undefined) return;
     callbacks.get(handlerId)?.({ event, id: handlerId, payload });
+  }
+
+  // 模拟 AppPlugin.trigger("back-button")：按通道消息格式回填 payload。
+  function emitBackButton() {
+    for (const [channelId, nextIndex] of backListeners) {
+      const callback = callbacks.get(channelId);
+      if (!callback) continue;
+      callback({ index: nextIndex, message: { canGoBack: false } });
+      backListeners.set(channelId, nextIndex + 1);
+    }
   }
 
   function modelSnapshot() {
@@ -329,6 +341,22 @@ export function installTauriMock(): void {
         return clipboardSnapshot();
       }
 
+      if (command === "plugin:app|register_listener") {
+        const handler = args?.handler as { id?: unknown } | undefined;
+        if (args?.event === "back-button" && typeof handler?.id === "number") {
+          backListeners.set(handler.id, 0);
+        }
+        return null;
+      }
+      if (command === "plugin:app|remove_listener") {
+        backListeners.delete(Number(args?.channelId));
+        return null;
+      }
+      if (command === "plugin:app|exit") {
+        // 浏览器里没法真的退出：打一条日志，方便确认「再按一次」链路走到了退出。
+        console.info("[tauri-mock] exit", args?.code ?? 0);
+        return null;
+      }
       if (command === "plugin:event|listen") {
         const event = args?.event;
         const handler = args?.handler;
@@ -386,5 +414,11 @@ export function installTauriMock(): void {
   Object.defineProperty(window, "__TAURI_INTERNALS__", {
     configurable: true,
     value: internals,
+  });
+
+  // 浏览器里没有硬件返回键：开发时按 Esc 模拟 Android 返回键。
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    emitBackButton();
   });
 }

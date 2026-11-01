@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { clearBackHandlers } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import type { ConnEvent } from "@/protocol/messages";
 import { SERVER_ADDR_KEY } from "@/shared/lib/local-storage";
@@ -9,11 +10,15 @@ import { SERVER_ADDR_KEY } from "@/shared/lib/local-storage";
 const tauri = vi.hoisted(() => ({
   chatHandler: null as ((raw: string) => void) | null,
   connHandler: null as ((event: { online: boolean }) => void) | null,
+  backHandler: null as (() => void) | null,
   connectServer: vi.fn(),
   discoverServers: vi.fn(),
+  exitApp: vi.fn(),
   sendChat: vi.fn(),
+  subscribeBackButton: vi.fn(),
   subscribeChat: vi.fn(),
   subscribeConn: vi.fn(),
+  unsubscribeBack: vi.fn(),
   unsubscribeChat: vi.fn(),
   unsubscribeConn: vi.fn(),
 }));
@@ -58,8 +63,14 @@ vi.mock("@/mobile/features/pet/pet-settings", () => ({
 vi.mock("@/shared/lib/tauri", () => ({
   connectServer: tauri.connectServer,
   discoverServers: tauri.discoverServers,
+  exitApp: tauri.exitApp,
   sendChat: tauri.sendChat,
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  subscribeBackButton: (handler: () => void) => {
+    tauri.backHandler = handler;
+    tauri.subscribeBackButton(handler);
+    return tauri.unsubscribeBack;
+  },
   subscribeChat: (handler: (raw: string) => void) => {
     tauri.chatHandler = handler;
     tauri.subscribeChat(handler);
@@ -96,18 +107,25 @@ beforeEach(() => {
   useUiStore.setState({ view: "pet", settingsOpen: false });
   tauri.chatHandler = null;
   tauri.connHandler = null;
+  tauri.backHandler = null;
+  tauri.subscribeBackButton.mockClear();
   tauri.subscribeChat.mockClear();
   tauri.subscribeConn.mockClear();
+  tauri.unsubscribeBack.mockClear();
   tauri.unsubscribeChat.mockClear();
   tauri.unsubscribeConn.mockClear();
   tauri.sendChat.mockReset();
   tauri.connectServer.mockReset();
   tauri.discoverServers.mockReset();
   tauri.discoverServers.mockResolvedValue([]);
+  tauri.exitApp.mockReset();
+  tauri.exitApp.mockResolvedValue(undefined);
+  clearBackHandlers();
 });
 
 afterEach(() => {
   useConnectionStore.getState().pauseRetry();
+  clearBackHandlers();
   cleanup();
 });
 
@@ -163,6 +181,58 @@ describe("MobileApp", () => {
 
     expect(tauri.unsubscribeChat).toHaveBeenCalledTimes(1);
     expect(tauri.unsubscribeConn).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns from chat to the pet stage on the Android back button", async () => {
+    await renderApp();
+
+    expect(tauri.subscribeBackButton).toHaveBeenCalledTimes(1);
+
+    openChat();
+    act(() => tauri.backHandler?.());
+
+    expect(useUiStore.getState().view).toBe("pet");
+    expect(tauri.exitApp).not.toHaveBeenCalled();
+  });
+
+  it("asks for a second back press on the pet stage before exiting", async () => {
+    await renderApp();
+
+    act(() => tauri.backHandler?.());
+    expect(screen.getByText("再按一次退出")).toBeInTheDocument();
+    expect(tauri.exitApp).not.toHaveBeenCalled();
+
+    act(() => tauri.backHandler?.());
+    expect(tauri.exitApp).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets the first back press after 2 seconds", async () => {
+    await renderApp();
+    vi.useFakeTimers();
+    try {
+      act(() => tauri.backHandler?.());
+      expect(screen.getByText("再按一次退出")).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(2100));
+      expect(screen.queryByText("再按一次退出")).not.toBeInTheDocument();
+
+      act(() => tauri.backHandler?.());
+      expect(screen.getByText("再按一次退出")).toBeInTheDocument();
+      expect(tauri.exitApp).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hides the exit hint once the user opens chat", async () => {
+    await renderApp();
+
+    act(() => tauri.backHandler?.());
+    expect(screen.getByText("再按一次退出")).toBeInTheDocument();
+
+    openChat();
+
+    expect(screen.queryByText("再按一次退出")).not.toBeInTheDocument();
   });
 
   it("sends trimmed text and clears the draft without a local echo", async () => {
