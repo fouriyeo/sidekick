@@ -14,7 +14,7 @@
       ├─ HTTP /              手机落地页（下载 App + 网页聊天预览）
       └─ HTTP /download/apk  直接下发 debug APK
 
-未来：Claude Code hooks → 桌面服务事件源；BLE 作为另一种传输。
+AI 状态：DeepSeek Harness（DSH）→ 本地脚本 → Sidekick 回环桥 → WS `status` → 手机宠物；Claude Code hooks 与 BLE 作为后续事件源/传输。详见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
 ```
 
 ## 桌面端（`app/src-tauri/src/lib.rs` · `desktop_server` 模块）
@@ -61,8 +61,8 @@
 
 ## 协议
 
-- 传输：WebSocket 文本帧 JSON；当前消息类型 `chat` / `system`，广播语义。
-- 详细定义与未来事件（status / ask / answer / notify / input）见 `protocol/README.md`。
+- 传输：WebSocket 文本帧 JSON；当前消息类型 `chat` / `system` / `status` / `status.request`，广播语义（status.request 只回请求方）。
+- 详细定义与未来事件（ask / answer / notify / input）见 `protocol/README.md`；DSH 联动见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
 
 ## 当前限制与技术债
 

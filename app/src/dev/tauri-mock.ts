@@ -1,7 +1,22 @@
 type MockRole = "desktop" | "mobile";
 
-const MOCK_EVENTS = ["chat", "conn", "model-progress", "clipboard-changed"] as const;
+const MOCK_EVENTS = [
+  "chat",
+  "conn",
+  "model-progress",
+  "clipboard-changed",
+  "dsh-hook-status",
+] as const;
 type MockEvent = (typeof MOCK_EVENTS)[number];
+
+type MockHookState = "idle" | "working" | "asking" | "completed";
+
+type MockHookEvent = {
+  at: number;
+  state: MockHookState;
+  sessions: number;
+  source: string;
+};
 
 type MockInternals = {
   invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -174,6 +189,144 @@ export function installTauriMock(): void {
     downloadCancelled = false;
   }
 
+  // ── AI 联动 mock：浏览器里模拟 DSH 安装/连接/状态推送 ────────────────
+  const hookParam = params.get("hook") ?? "none";
+  const aiParam = params.get("ai") ?? "idle";
+  const mockStateParam = params.get("state");
+  const initialHookState: MockHookState =
+    mockStateParam === "working" || mockStateParam === "asking" || mockStateParam === "completed"
+      ? mockStateParam
+      : "working";
+
+  let hookInstalled = hookParam === "installed" || hookParam === "connected";
+  let hookEnabled = hookInstalled && hookParam !== "disabled";
+  let hookConnected = hookParam === "connected";
+  let hookProfile = "desktop";
+  let hookState: MockHookState = hookConnected ? initialHookState : "idle";
+  let hookSessions = hookConnected ? 1 : 0;
+  let hookLastEventAt: number | null = hookConnected ? Date.now() : null;
+  let hookLastHeartbeatAt: number | null = hookConnected ? Date.now() : null;
+  let hookRecent: MockHookEvent[] = hookConnected
+    ? [{ at: Date.now() - 12_000, state: "asking", sessions: 1, source: "dsh" }]
+    : [];
+  let hookTimer: number | null = null;
+  let mockAiTimer: number | null = null;
+  const mockAiResume: MockHookState = "idle";
+
+  const mockHookProfiles = [
+    { name: "desktop", label: "桌面端", active: true, installed: hookInstalled },
+    { name: "web", label: "网页端", active: false, installed: false },
+  ];
+
+  function dshHookSnapshot() {
+    return {
+      installed: hookInstalled,
+      enabled: hookEnabled,
+      connected: hookConnected,
+      profile: hookInstalled ? hookProfile : null,
+      currentState: hookState,
+      sessions: hookSessions,
+      lastEventAt: hookLastEventAt,
+      lastHeartbeatAt: hookLastHeartbeatAt,
+      pluginVersion: hookInstalled ? 1 : null,
+      endpoint: hookInstalled ? "http://127.0.0.1:47815/hook/dsh" : null,
+      configPath: "/Mock/.dsh/sidekick/config.json",
+      pluginPath: hookInstalled
+        ? `/Mock/.dsh/profiles/${hookProfile}/plugins/sidekick-hook.mjs`
+        : null,
+      patchPath: hookInstalled ? `/Mock/.dsh/profiles/${hookProfile}/cordis.patch.yml` : null,
+      error: null,
+      recentEvents: hookRecent,
+      profiles: mockHookProfiles.map((profile) => ({
+        ...profile,
+        active: profile.name === hookProfile,
+        installed: profile.name === hookProfile ? hookInstalled : profile.installed,
+      })),
+    };
+  }
+
+  function emitDshHookStatus() {
+    emit("dsh-hook-status", dshHookSnapshot());
+  }
+
+  function clearHookTimer() {
+    if (hookTimer !== null) {
+      window.clearTimeout(hookTimer);
+      hookTimer = null;
+    }
+  }
+
+  function recordHookState(state: MockHookState, sessions = 1, source = "test") {
+    clearHookTimer();
+    hookState = state;
+    hookSessions = state === "idle" ? 0 : Math.max(1, sessions);
+    hookLastEventAt = Date.now();
+    hookConnected = true;
+    hookLastHeartbeatAt = Date.now();
+    hookRecent = [
+      { at: hookLastEventAt, state, sessions: hookSessions, source },
+      ...hookRecent,
+    ].slice(0, 20);
+    emitDshHookStatus();
+    if (state === "completed") {
+      hookTimer = window.setTimeout(() => {
+        hookTimer = null;
+        hookState = "idle";
+        hookSessions = 0;
+        hookLastEventAt = Date.now();
+        emitDshHookStatus();
+      }, 3000);
+    }
+  }
+
+  function emitMockAiStatus() {
+    if (mockAiTimer !== null) {
+      window.clearTimeout(mockAiTimer);
+      mockAiTimer = null;
+    }
+    const requested: MockHookState =
+      aiParam === "working" || aiParam === "asking" || aiParam === "completed" ? aiParam : "idle";
+    const completed = requested === "completed";
+    const message = {
+      type: "status",
+      v: 1,
+      source: "test",
+      state: requested,
+      sessions: requested === "idle" ? 0 : 1,
+      resume: completed ? mockAiResume : null,
+      remainingMs: completed ? 3000 : null,
+      ts: Date.now(),
+    };
+    emit("chat", JSON.stringify(message));
+    if (completed) {
+      mockAiTimer = window.setTimeout(() => {
+        mockAiTimer = null;
+        emit(
+          "chat",
+          JSON.stringify({
+            type: "status",
+            v: 1,
+            source: "test",
+            state: mockAiResume,
+            sessions: 0,
+            resume: null,
+            remainingMs: null,
+            ts: Date.now(),
+          }),
+        );
+      }, 3000);
+    }
+  }
+
+  function applyTestHookState(state: MockHookState) {
+    hookInstalled = true;
+    hookEnabled = true;
+    hookConnected = true;
+    hookProfile = hookProfile || "desktop";
+    recordHookState(state);
+    return dshHookSnapshot();
+  }
+
   const internals: MockInternals = {
     async invoke(command, args) {
       if (command === "app_role") return role;
@@ -209,7 +362,11 @@ export function installTauriMock(): void {
       }
       if (command === "connect_server") {
         const addr = typeof args?.addr === "string" ? args.addr : "";
-        window.setTimeout(() => emit("conn", { online: true, url: addr }), 100);
+        window.setTimeout(() => {
+          emit("conn", { online: true, url: addr });
+          // 手机 mock：连上后补一条 AI 状态，方便浏览器直接看四态（?ai=working|asking|completed）。
+          window.setTimeout(emitMockAiStatus, 200);
+        }, 100);
         return null;
       }
       if (command === "send_chat") {
@@ -221,6 +378,10 @@ export function installTauriMock(): void {
       }
       if (command === "mic_start" || command === "mic_stop") return null;
       if (command === "mic_frame") return null;
+      if (command === "send_status_request") {
+        window.setTimeout(emitMockAiStatus, 50);
+        return null;
+      }
 
       if (command === "accessibility_info") {
         return {
@@ -352,6 +513,54 @@ export function installTauriMock(): void {
         clipboard.enabled = Boolean(args?.enabled);
         emitClipboard();
         return clipboardSnapshot();
+      }
+
+      if (command === "dsh_hook_status") return dshHookSnapshot();
+      if (command === "dsh_hook_install") {
+        hookProfile = typeof args?.profile === "string" && args.profile ? args.profile : "desktop";
+        hookInstalled = true;
+        hookEnabled = true;
+        hookConnected = true;
+        hookState = "idle";
+        hookSessions = 0;
+        hookLastEventAt = Date.now();
+        hookLastHeartbeatAt = Date.now();
+        emitDshHookStatus();
+        return dshHookSnapshot();
+      }
+      if (command === "dsh_hook_set_enabled") {
+        hookEnabled = Boolean(args?.enabled);
+        hookConnected = hookInstalled && hookEnabled;
+        hookState = "idle";
+        hookSessions = 0;
+        hookLastEventAt = hookConnected ? Date.now() : null;
+        hookLastHeartbeatAt = hookConnected ? Date.now() : null;
+        emitDshHookStatus();
+        return dshHookSnapshot();
+      }
+      if (command === "dsh_hook_remove") {
+        hookInstalled = false;
+        hookEnabled = false;
+        hookConnected = false;
+        hookState = "idle";
+        hookSessions = 0;
+        hookLastEventAt = null;
+        hookLastHeartbeatAt = null;
+        hookRecent = [];
+        emitDshHookStatus();
+        return dshHookSnapshot();
+      }
+      if (command === "dsh_hook_test") {
+        const state = args?.state;
+        if (
+          state === "working" ||
+          state === "asking" ||
+          state === "completed" ||
+          state === "idle"
+        ) {
+          return applyTestHookState(state);
+        }
+        return dshHookSnapshot();
       }
 
       if (command === "plugin:app|register_listener") {

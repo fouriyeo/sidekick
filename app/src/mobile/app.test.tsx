@@ -15,7 +15,9 @@ const tauri = vi.hoisted(() => ({
   disableWebviewHaptics: vi.fn(),
   discoverServers: vi.fn(),
   exitApp: vi.fn(),
+  haptic: vi.fn(),
   sendChat: vi.fn(),
+  sendStatusRequest: vi.fn(),
   setKeepScreenOn: vi.fn(),
   subscribeBackButton: vi.fn(),
   subscribeChat: vi.fn(),
@@ -67,7 +69,9 @@ vi.mock("@/shared/lib/tauri", () => ({
   disableWebviewHaptics: tauri.disableWebviewHaptics,
   discoverServers: tauri.discoverServers,
   exitApp: tauri.exitApp,
+  haptic: tauri.haptic,
   sendChat: tauri.sendChat,
+  sendStatusRequest: tauri.sendStatusRequest,
   setKeepScreenOn: tauri.setKeepScreenOn,
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
   subscribeBackButton: (handler: () => void) => {
@@ -87,6 +91,8 @@ vi.mock("@/shared/lib/tauri", () => ({
   },
 }));
 
+import { useMicStore } from "@/mobile/features/mic/mic-store";
+import { createIdleAiStatus } from "@/mobile/features/pet/ai-status";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { MobileApp } from "./app";
 
@@ -132,6 +138,16 @@ beforeEach(() => {
   tauri.exitApp.mockResolvedValue(undefined);
   tauri.setKeepScreenOn.mockReset();
   tauri.setKeepScreenOn.mockResolvedValue(undefined);
+  tauri.haptic.mockReset();
+  tauri.haptic.mockResolvedValue(undefined);
+  tauri.sendStatusRequest.mockReset();
+  tauri.sendStatusRequest.mockResolvedValue(undefined);
+  usePetStore.setState({
+    ai: createIdleAiStatus(),
+    aiCaption: null,
+    micListening: false,
+  });
+  useMicStore.setState({ phase: "idle", session: null, result: null, error: null });
   clearBackHandlers();
 });
 
@@ -436,5 +452,82 @@ describe("MobileApp", () => {
     await renderApp();
 
     expect(tauri.setKeepScreenOn).not.toHaveBeenCalledWith(true);
+  });
+
+  it("status 消息先于聊天解析：驱动 AI 状态但不进聊天记录", async () => {
+    await renderApp();
+
+    act(() => {
+      tauri.chatHandler?.(
+        '{"type":"status","v":1,"source":"dsh","state":"working","sessions":2,"ts":1730000000000}',
+      );
+    });
+
+    expect(usePetStore.getState().ai.state).toBe("working");
+    expect(usePetStore.getState().ai.sessions).toBe(2);
+    expect(usePetStore.getState().aiCaption?.copyId).toBe("ai_working");
+    expect(useChatStore.getState().messages).toHaveLength(0);
+
+    act(() => {
+      tauri.chatHandler?.(
+        '{"type":"status","v":1,"source":"dsh","state":"asking","sessions":2,"ts":1730000000500}',
+      );
+    });
+
+    expect(usePetStore.getState().ai.state).toBe("asking");
+    expect(useChatStore.getState().messages).toHaveLength(0);
+  });
+
+  it("过期的 completed 快照被忽略，不重播庆祝", async () => {
+    await renderApp();
+
+    act(() => {
+      tauri.chatHandler?.(
+        '{"type":"status","v":1,"source":"dsh","state":"asking","sessions":1,"ts":1730000000000}',
+      );
+    });
+
+    const staleTs = Date.now() - 10_000;
+    act(() => {
+      tauri.chatHandler?.(
+        `{"type":"status","v":1,"source":"dsh","state":"completed","sessions":1,"resume":"idle","remainingMs":3000,"ts":${staleTs}}`,
+      );
+    });
+
+    expect(usePetStore.getState().ai.state).toBe("asking");
+    expect(usePetStore.getState().aiCaption?.copyId).toBe("ai_asking");
+  });
+
+  it("录音中不触发 AI 触感", async () => {
+    await renderApp();
+    act(() => {
+      useMicStore.setState({ phase: "listening" });
+    });
+
+    act(() => {
+      tauri.chatHandler?.(
+        `{"type":"status","v":1,"source":"dsh","state":"asking","sessions":1,"ts":${Date.now()}}`,
+      );
+    });
+
+    expect(usePetStore.getState().ai.state).toBe("asking");
+    expect(tauri.haptic).not.toHaveBeenCalled();
+  });
+
+  it("连接成功和回到前台时请求 AI 状态快照", async () => {
+    await renderApp();
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(tauri.sendStatusRequest).not.toHaveBeenCalled();
+
+    act(() => tauri.connHandler?.({ online: true }));
+    expect(tauri.sendStatusRequest).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(tauri.sendStatusRequest).toHaveBeenCalledTimes(2);
   });
 });

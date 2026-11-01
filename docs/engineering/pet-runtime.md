@@ -80,6 +80,7 @@ function reducePet(state: PetState, event: PetEvent): { state: PetState; effects
 
 - 副作用（Rive trigger/震动/气泡/存档）由 `effects` 描述，执行层统一处理。
 - MIC_* 本轮无生产事件源，仅单测注入；状态与 Rive trigger 为 P1 契约保留。
+- **AI 联动四态不新增 `PetPhase`**：静态=idle，工作中/等你决定/完成由 `mobile/features/pet/ai-status.ts` 的独立内存 store 驱动；`displayStateOf` 只决定最终展示姿态，AI 状态不落盘。优先级与动作见 [hook SPEC](../prd/hook/SPEC.md) §2。
 
 ### 3.2 Rive 输入（命名稳定）
 
@@ -88,6 +89,7 @@ function reducePet(state: PetState, event: PetEvent): { state: PetState; effects
 | `mood` | number | 当前心情枚举 | content/happy/curious/sleepy/listening/proud/concerned |
 | `energy` | number | 0–100 | 影响哈欠/动作幅度 |
 | `is_night` | boolean | 本地时段 | 夜间表情 |
+| `ai_state` | number | AI 联动四态（P1 接 Rive） | idle/working/asking/completed；当前静态 SVG 用 `data-ai-state` 实现 |
 | `trigger_pet` | trigger | 摸摸 | 一次性 |
 | `trigger_poke` | trigger | 戳一戳 | 一次性 |
 | `trigger_listen` | trigger | 麦克风开始（P1） | 一次性 |

@@ -2,7 +2,7 @@
 
 当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
 
-服务端把 `chat` / `system` / `mic.*` 控制消息广播给所有已连接客户端（调试可见）；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
+服务端把 `chat` / `system` / `status` / `mic.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
 ## 连接
 
@@ -37,6 +37,40 @@
   "type": "system",
   "text": "客户端已连接，当前 2 个"
 }
+```
+
+### status
+
+AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给所有已连接客户端；手机只负责表现，不展示任务内容。
+
+```json
+{
+  "type": "status",
+  "v": 1,
+  "source": "dsh",
+  "state": "working",
+  "sessions": 1,
+  "resume": null,
+  "remainingMs": null,
+  "ts": 1730000000000
+}
+```
+
+- `state`：`idle` / `working` / `asking` / `completed`（产品里的静态 / 工作中 / 等你决定 / 完成）
+- `source`：`dsh`（P0）；后续 `claude-code` / `qoder`
+- `sessions`：进行中的顶层会话数；只用于桌面调试，手机不展示数字
+- `resume`：仅 `completed` 有值；桌面 3 秒后补发该状态
+- `remainingMs`：仅 `completed` 有值；手机本地兜底倒计时
+- 桌面在收到 completed 后 3 秒主动广播 resume 状态；手机也可用 `remainingMs` 本地回退
+- 新客户端连接、手机发 `status.request` 时，桌面立即回当前快照
+- 旧版手机按未知类型忽略，不影响聊天/麦克风
+
+### status.request
+
+手机 → 桌面，请求一次当前状态快照；桌面收到后回一条 `status`。
+
+```json
+{ "type": "status.request" }
 ```
 
 ## 麦克风消息（v1，已实现）
@@ -89,17 +123,14 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 - 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
 - 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
+- AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`（DSH 本地脚本）、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
 - 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）
 
 ## 规划中的事件（AI 接入阶段）
 
-### status
+### status（已实现）
 
-```json
-{ "type": "status", "state": "working|idle|waiting", "detail": "...", "ts": 1730000000000 }
-```
-
-驱动宠物表情与状态展示。
+已在上文「消息类型 → status」落地；桌面 DSH 联动与手机四态已使用。
 
 ### ask
 

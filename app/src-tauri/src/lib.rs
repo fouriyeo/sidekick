@@ -1,7 +1,5 @@
 use tauri::Manager;
 
-mod discovery;
-
 #[cfg(desktop)]
 mod app_paths;
 #[cfg(desktop)]
@@ -12,11 +10,16 @@ mod clipboard_manager;
 mod desktop_mic;
 #[cfg(desktop)]
 mod desktop_server;
-mod mic_protocol;
+mod discovery;
+#[cfg(desktop)]
+mod dsh_hook;
+#[cfg(desktop)]
+mod dsh_hook_install;
 #[cfg(mobile)]
 mod haptics;
 #[cfg(mobile)]
 mod keep_awake;
+mod mic_protocol;
 #[cfg(mobile)]
 mod mobile_client;
 
@@ -52,7 +55,12 @@ pub fn run() {
             app.manage(clipboard.clone());
             clipboard.start();
 
-            tauri::async_runtime::spawn(desktop_server::start(models, clipboard));
+            // DSH AI 联动：回环监听 + 状态广播桥，WS 与设置页共用。
+            let hook = dsh_hook::HookBridge::new(handle.clone());
+            app.manage(hook.clone());
+            hook.start();
+
+            tauri::async_runtime::spawn(desktop_server::start(models, clipboard, hook));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -74,7 +82,12 @@ pub fn run() {
             clipboard_manager::clipboard_toggle_pin,
             clipboard_manager::clipboard_delete,
             clipboard_manager::clipboard_clear,
-            clipboard_manager::clipboard_set_enabled
+            clipboard_manager::clipboard_set_enabled,
+            dsh_hook::dsh_hook_status,
+            dsh_hook::dsh_hook_install,
+            dsh_hook::dsh_hook_set_enabled,
+            dsh_hook::dsh_hook_remove,
+            dsh_hook::dsh_hook_test
         ]);
 
     #[cfg(mobile)]
@@ -98,7 +111,8 @@ pub fn run() {
             mobile_client::send_chat,
             mobile_client::mic_start,
             mobile_client::mic_frame,
-            mobile_client::mic_stop
+            mobile_client::mic_stop,
+            mobile_client::send_status_request
         ]);
 
     builder

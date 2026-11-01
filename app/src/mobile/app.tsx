@@ -9,10 +9,11 @@ import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
-import { parseMessage, parseMicMessage } from "@/protocol/messages";
+import { parseMessage, parseMicMessage, parseStatusMessage } from "@/protocol/messages";
 import {
   disableWebviewHaptics,
   exitApp,
+  sendStatusRequest,
   subscribeBackButton,
   subscribeChat,
   subscribeConn,
@@ -20,6 +21,19 @@ import {
 
 /** 根页面「再按一次退出」的确认窗口。 */
 const EXIT_HINT_MS = 2000;
+
+/** 录音链路是否占用麦克风（录音中 AI 提示音/触感静音）。 */
+function micListeningNow(): boolean {
+  const phase = useMicStore.getState().phase;
+  return phase === "arming" || phase === "listening" || phase === "processing";
+}
+
+/** 连接中/重连成功、回前台时向电脑要一次当前 AI 状态快照。 */
+function requestStatusIfConnected(): void {
+  if (useConnectionStore.getState().status === "connected") {
+    void sendStatusRequest().catch(() => undefined);
+  }
+}
 
 export function MobileApp() {
   const append = useChatStore((state) => state.append);
@@ -113,8 +127,14 @@ export function MobileApp() {
   useEffect(() => {
     const onVisibilityChange = () => {
       const connection = useConnectionStore.getState();
-      if (document.hidden) connection.pauseRetry();
-      else connection.resumeRetry();
+      if (document.hidden) {
+        connection.pauseRetry();
+        return;
+      }
+
+      connection.resumeRetry();
+      // 回前台补一次状态快照；过期的 completed 会被 ai-status 的时钟检查忽略。
+      requestStatusIfConnected();
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -123,6 +143,16 @@ export function MobileApp() {
 
   useEffect(() => {
     const unsubscribeChat = subscribeChat((raw) => {
+      // AI 状态要先于聊天解析：它不进入聊天记录，只驱动宠物四态。
+      const status = parseStatusMessage(raw);
+      if (status) {
+        usePetStore.getState().applyAiStatus(status, {
+          now: Date.now(),
+          micListening: micListeningNow(),
+        });
+        return;
+      }
+
       const micMessage = parseMicMessage(raw);
       if (micMessage) {
         const store = useMicStore.getState();
@@ -137,6 +167,7 @@ export function MobileApp() {
     });
     const unsubscribeConn = subscribeConn((event) => {
       setOnline(event.online);
+      if (event.online) requestStatusIfConnected();
     });
 
     return () => {

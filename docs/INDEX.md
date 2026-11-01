@@ -37,6 +37,7 @@ children:
 | 实现麦克风 | [prd/mic/INDEX.md](./prd/mic/INDEX.md) | PRD / SPEC + [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) + [engineering/protocol-audio.md](./engineering/protocol-audio.md) + [engineering/asr-model.md](./engineering/asr-model.md) |
 | 做桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) | 该篇 |
 | 做自动发现 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) | 该篇 |
+| 做 AI 联动 / DSH hook / 宠物四态 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
 | 查进度、环境、构建 | 直接读 | [status.md](./status.md) / [setup.md](./setup.md) |
 | 记录重大决策 | 直接读 | [decisions.md](./decisions.md) |
@@ -67,17 +68,23 @@ docs/
 │  │  ├─ PRD.md                 # 产品级：做什么、规则、优先级
 │  │  ├─ SPEC.md                # 体验级：布局、状态机、文案
 │  │  └─ ACCEPTANCE.md          # 测试级：Given-When-Then
-│  └─ mic/
+│  ├─ mic/
 │     ├─ INDEX.md
 │     ├─ PRD.md
 │     ├─ SPEC.md
 │     └─ ACCEPTANCE.md
+│  └─ hook/
+│     ├─ INDEX.md               # AI 联动（DSH）一页摘要
+│     ├─ PRD.md                 # 产品规则、范围、隐私
+│     ├─ SPEC.md                # 桌面页、四态动作、声音
+│     └─ ACCEPTANCE.md          # 安装/状态/声音/隐私验收
 ├─ engineering/                 # 技术方案
 │  ├─ INDEX.md
 │  ├─ audio-pipeline.md         # 采集 → 传输 → 转写 → 输入
 │  ├─ protocol-audio.md         # 麦克风音频协议（已实现）
 │  ├─ asr-model.md              # whisper-rs 模型下载/存储/转写
 │  ├─ clipboard-manager.md      # 桌面剪贴板历史与隐私过滤
+│  ├─ dsh-hook.md               # DSH 本地脚本注入、Rust 桥、四态协议
 │  ├─ lan-discovery.md          # UDP 发现与动态端口
 │  ├─ pet-runtime.md            # Rive、状态机、持久化、性能
 │  └─ quality.md                # 测试矩阵、真机验收、发布门
@@ -90,22 +97,14 @@ docs/
 └─ ble-notes.md                 # 现有：蓝牙预研（非主线）
 ```
 
-## 3. 文档体量与读法
+> 文档体量、读法与叶子行数上限见 [standards/documentation.md](./standards/documentation.md)。
 
-| 体量 | 行数 | 读法 |
-| --- | --- | --- |
-| S | < 80 | 可整篇读 |
-| M | 80–200 | 先读标题和表格，只读命中章节 |
-| L | > 200 | 按索引里的“读哪节”提示，禁止整篇灌入上下文 |
+## 4. 当前阶段（2026-11-02）
 
-叶子文档原则上不超过 300 行；超了就拆。索引页不超过 120 行。
-
-## 4. 当前阶段（2026-10-31）
-
-- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风 P0 代码（协议/内存 ASR/模型管理/手机 UI/桌面设置）、桌面剪贴板 P1。
+- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风 P0 代码（协议/内存 ASR/模型管理/手机 UI/桌面设置）、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感。
+- 进行中：**AI 联动（DSH hook）**——桌面 AI 联动页、本地脚本注入、手机四态动作/声音；产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
 - 麦克风：自动粘贴依赖 macOS 辅助功能，需用户手动勾选一次；真机/密码框矩阵继续回归。
-- 未开始：Claude Code / Qoder hook、release 打包、配对鉴权、iOS、Rive 资产。
-- 本期两个主功能：**情绪宠物（手机端，不强制横竖屏）** + **外设麦克风（AI 语音输入）**；剪贴板为经确认的 P1 辅助能力。
+- 未开始：手机回答 AI 提问、Claude Code / Qoder hook、release 打包、配对鉴权、iOS、Rive 资产。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 
 ## 5. 事实的唯一归属
@@ -125,6 +124,9 @@ docs/
 | 桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) |
 | 重大决策 | [decisions.md](./decisions.md) |
 | 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
+| AI 联动（DSH）产品规则 | [prd/hook/PRD.md](./prd/hook/PRD.md) |
+| AI 四态动作/声音/桌面页 | [prd/hook/SPEC.md](./prd/hook/SPEC.md) |
+| DSH 脚本/桥/安装/协议 | [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
 | 当前进度 | [status.md](./status.md) |
 
 同一条规则只写一处，其它地方用链接；不要复制。

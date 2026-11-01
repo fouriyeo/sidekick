@@ -9,7 +9,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 下一步核心是情绪宠物（纯陪伴）；AI 状态映射后续接入，聊天降级为辅助视图。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)。
+- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示，聊天降级为辅助视图。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -254,7 +254,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 
 **宠物与 Rive**
 
-- 情绪状态 → Rive 输入映射集中在 `mobile/features/pet/stateMachine.ts`，UI 不直接操作 Rive 内部节点；协议 status 映射后续接入。
+- 情绪状态 → Rive 输入映射集中在 `mobile/features/pet/stateMachine.ts`，UI 不直接操作 Rive 内部节点；AI 四态由 `mobile/features/pet/ai-status.ts` 独立驱动，`status` 协议已接入，Rive `ai_state` 待资产。
 - Rive 运行时和 `.riv` 只在宠物视图挂载时加载；离开页面销毁实例。
 - 监听 `visibilitychange`，后台暂停 Rive，回前台恢复，省电。
 - 先在 Realme 真机测 60fps，再决定是否需要 WebGL 渲染器；默认 canvas 渲染器。
@@ -339,7 +339,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 约束：
 
-- Phase 1 不改 Rust、不改协议；Phase 2 先做情绪宠物，不接 `status`；Phase 3 才引入音频协议；`status` 映射放 P2（麦克风稳定后）。
+- Phase 1 不改 Rust、不改协议；Phase 2 先做情绪宠物；Phase 3 引入音频协议；`status` 映射在 AI 联动 P1 落地（DSH hook）。
 - 不在同一次改动里同时换框架、改协议、加宠物。
 - 每阶段结束更新 `status.md`，重大取舍追加 `decisions.md`。
 

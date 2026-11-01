@@ -12,6 +12,7 @@ import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { MicButton } from "@/mobile/features/mic/mic-button";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { Button } from "@/shared/ui/button";
+import { type AiState, displayStateOf } from "./ai-status";
 import { createGestureRecognizer } from "./gestures";
 import { isNight } from "./mood";
 import { NamePrompt } from "./name-prompt";
@@ -41,6 +42,12 @@ const STATUS_TEXT: Record<PetState["phase"], string> = {
   away: "在休息",
 };
 
+const AI_STATUS_TEXT: Record<Exclude<AiState, "idle">, string> = {
+  working: "正在陪你工作",
+  asking: "等你决定",
+  completed: "完成了一件事",
+};
+
 function sampleFromPointer(event: ReactPointerEvent<HTMLDivElement>) {
   return {
     pointerId: event.pointerId,
@@ -60,7 +67,11 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const handleGesture = usePetStore((state) => state.handleGesture);
   const flush = usePetStore((state) => state.flush);
   const saveStatus = usePetStore((state) => state.saveStatus);
+  const ai = usePetStore((state) => state.ai);
+  const aiCaption = usePetStore((state) => state.aiCaption);
   const setPosture = usePetStore((state) => state.setPosture);
+  const setMicListening = usePetStore((state) => state.setMicListening);
+  const unlockSound = usePetStore((state) => state.unlockSound);
   const connectionStatus = useConnectionStore((state) => state.status);
   const micBusy = useMicStore(
     (state) =>
@@ -151,6 +162,23 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
     return () => document.removeEventListener("visibilitychange", onChange);
   }, [dispatch, flush]);
 
+  // 录音中静音 AI 触感/音效；结束后恢复。
+  useEffect(() => {
+    setMicListening(micBusy);
+  }, [micBusy, setMicListening]);
+
+  // 首次用户手势解锁 Web Audio（浏览器/WebView 的自动播放策略）。
+  useEffect(() => {
+    const unlock = () => unlockSound();
+    document.addEventListener("pointerdown", unlock, { once: true, capture: true });
+    return () => document.removeEventListener("pointerdown", unlock, { capture: true });
+  }, [unlockSound]);
+
+  // 等你决定时叫醒自动变暗/控制栏，保证一眼看到；working/completed 不打断夜间状态。
+  useEffect(() => {
+    if (active && ai.state === "asking") markActivity();
+  }, [active, ai.state, markActivity]);
+
   function emit(events: GestureEvent[]) {
     for (const event of events) handleGesture(event);
   }
@@ -191,7 +219,13 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   ) as CSSProperties;
 
   const night = isNight(Date.now());
-  const statusText = STATUS_TEXT[pet.phase];
+  const displayAi = displayStateOf(pet.phase, ai.state);
+  // AI 状态文案优先占用气泡槽位；触摸/录音/即时心情反馈时暂时让位给闲聊气泡。
+  const caption = displayAi === "idle" ? null : aiCaption;
+  const liveText =
+    displayAi === "idle"
+      ? `${pet.name}，${STATUS_TEXT[pet.phase]}`
+      : `${pet.name}，${AI_STATUS_TEXT[displayAi]}`;
 
   return (
     <section
@@ -206,6 +240,8 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       data-orientation={orientation}
       data-posture={pet.settings.posture}
       data-phase={pet.phase}
+      data-ai-state={displayAi}
+      data-reduced-motion={reducedMotion ? "true" : "false"}
     >
       <div
         aria-hidden="true"
@@ -267,7 +303,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
             : "top-[16%] left-[calc(env(safe-area-inset-left)+8%)] w-[42%] landscape:top-[12%] landscape:w-[32%]",
         )}
       >
-        <PetBubble bubble={bubble} />
+        <PetBubble bubble={bubble} caption={caption} />
       </div>
 
       <div className={styles.petSlot} style={poseStyle}>
@@ -284,6 +320,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
             energy={pet.energy}
             isNight={night}
             phase={pet.phase}
+            aiState={displayAi}
             active={active}
             reducedMotion={reducedMotion}
           />
@@ -292,7 +329,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       </div>
 
       <div aria-live="polite" className="sr-only">
-        {pet.name}，{statusText}
+        {liveText}
       </div>
 
       <MicButton active={active} posture={pet.settings.posture} onOpenConnection={onOpenChat} />

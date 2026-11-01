@@ -91,7 +91,7 @@ load: on-demand
 
 - 分层：身体、头、耳朵、眼睛、眉毛、嘴、尾巴、光晕分开；便于状态机组合。
 - 网格/骨骼数量控制在中端安卓可 60fps 的范围内；避免大面积网格变形。
-- 状态机输入命名稳定：`mood`、`energy`、`trigger_pet`、`trigger_poke`、`trigger_listen`、`trigger_success`、`trigger_cancel`、`trigger_error`、`trigger_wake`、`is_night`。
+- 状态机输入命名稳定：`mood`、`energy`、`trigger_pet`、`trigger_poke`、`trigger_listen`、`trigger_success`、`trigger_cancel`、`trigger_error`、`trigger_wake`、`is_night`；AI 联动接 Rive 时新增 `ai_state`（idle/working/asking/completed）。
 - 单个 `.riv` ≤2MB；纹理图集 ≤2048；不把音频塞进 `.riv`。
 - 提供静态 SVG/PNG/WebP 降级图；Rive 加载失败时使用（当前实现为内联 SVG + CSS 呼吸）。
 - 动画命名和状态映射写入 [engineering/pet-runtime.md](../engineering/pet-runtime.md)。
@@ -110,13 +110,17 @@ load: on-demand
 - 不做持续全屏粒子；爱心粒子最多 6 个，1 秒内消失。
 - `prefers-reduced-motion: reduce`：去掉随机 idle、弹跳、爱心粒子、闪光；保留状态切换的即时表情（交叉淡入 120ms）与按钮反馈；睡觉/醒来越过动画，直接用静态姿势。
 - 后台/息屏暂停 Rive；回前台恢复并先眨眼一次，避免“突然复活”。
+- **AI 四态动作**：静态（慢呼吸/眨眼/偶尔伸懒腰）、工作中（前倾敲键盘+汗滴/速度线/飞纸）、等你决定（站高+举爪+感叹号+左右找人）、完成（双臂上举+跳+彩纸，3 秒）。四态在轮廓、速度、道具、主色上必须明显不同；减少动效也要保留四套不同静态轮廓。详见 [hook SPEC](../prd/hook/SPEC.md) §2。
+- AI 四态只动 transform/opacity；不新增贴图/emoji；道具用内联 SVG；真机 60fps 与 3 米识别是硬指标。
 
 ## 8. 声音
 
-- 默认关闭；设置里可开（本轮未接入，设置项 disabled；P1 接入）。
-- 声音只做点缀：轻“咪”、呼噜、完成提示；不循环、不尖锐。
-- 不绕过系统静音；不在录音时播放声音，避免回声。
-- 所有声音信息必须有视觉替代。
+- 默认关闭；设置里可开（AI 联动三音效：开工/提问/完成，P0 已接入；三个试听按钮）。
+- 声音只做点缀：轻“叮”、短上扬、完成琶音；不循环、不尖锐、≤420ms。
+- 只在宠物页前台、麦克风未录音时播放；录音/后台静音；提问音最多 2 次。
+- P0 用 Web Audio 合成音，不新增音频文件；P1 可换专门设计的小宠物叫声资产。
+- 不绕过系统静音；系统静音/勿扰/音乐焦点可能无法完全遵守，文档与设置页说明，P1 接原生提示音。
+- 所有声音信息必须有视觉替代（动作 + 文案 + aria-live）。
 
 ## 9. 资源与性能
 

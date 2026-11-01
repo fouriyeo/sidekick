@@ -364,3 +364,20 @@
 - 原因：用户反馈「2 分钟太短」，且常亮是明确耗电项，需要用户可控上限。
 - 代价：设置页多两组选项；常亮到点后交给系统按默认策略熄屏（不是 App 主动锁屏），重新计时从回前台开始。
 - 规范：`app/src/mobile/features/pet/pet-settings.tsx`、`app/src/mobile/features/pet/use-keep-awake.ts`、`app/src/mobile/features/pet/persistence.ts`、`app/src/mobile/features/pet/pet-stage.tsx`、`docs/prd/pet/SPEC.md` §7。
+
+## D53 · AI 联动：本地脚本注入 DSH，不装第三方 hook 插件（2026-11-02）
+
+- 背景：AI 状态联动原本放在宠物 PRD 的 P2；现在作为独立 P1 功能先做 DSH 最小闭环。用户明确问「不能自己写个脚本配置进去吗」，不希望依赖第三方 hook 插件。
+- 决策：Sidekick 写一个本地 `sidekick-hook.mjs` 到 `~/.dsh/profiles/<profile>/plugins/`，并在该 profile 的 `cordis.patch.yml` 追加一个带标记的 `insert` 行；不安装 npm 包、不改 DSH 源码。脚本只订阅 DSH `session/event` / `session/disposed`，把顶层会话聚合为 `idle/working/asking/completed`，POST 到 Sidekick 回环端口；首次需要重启 DSH 一次，之后开关只改配置文件热生效。
+- 原因：DSH patch 支持本地文件路径插件（官方文档确认），单文件即可注入；避免第三方插件的安装、版本和维护风险；状态聚合和事件命名由项目自己控制。回环 + token + 只发状态，满足隐私边界。
+- 放弃：`dsh-hooks` / `dsh-hooks-plugin` / 官方 Claude Code hook 桥（需装包、事件不完全匹配、用户明确倾向自写脚本）；DSH 源码改动（不可维护）。
+- 代价：需要维护本地 DSH 事件适配（DSH 升级可能变）；首次必须重启 DSH；P0 只聚合顶层会话，子代理可能提前完成。
+- 规范：`docs/engineering/dsh-hook.md`、`app/src/dsh-hook/sidekick-hook.mjs`、`app/src-tauri/src/dsh_hook*.rs`、`docs/prd/hook/PRD.md`。
+
+## D54 · AI 四态与三音效：动作优先、声音默认关（2026-11-02）
+
+- 背景：用户要求四态动作更夸张、远看能区分；并补充开始/提问/完成事件是否需要声音。
+- 决策：四态为静态（悠闲但活着）、工作中（手忙脚乱）、等你决定（着急左右找人）、完成（爆发庆祝 3 秒）；四态在轮廓、速度、道具、主色上明显不同；静态也要有慢动作。声音做三个短音效（开工/提问/完成），默认关闭，可在宠物设置开启和试听；P0 用 Web Audio 合成音，不新增音频文件；提问音最多 2 次，录音/后台静音；完成态固定 3 秒。
+- 原因：手机在支架上远看，单靠眼睛/嘴角不够；道具和速度比细微表情更可识别。声音是辅助，办公室/夜间默认不该打扰；合成音零资源/零版权，先验证触发时机，P1 再换专门设计的小宠物叫声。
+- 代价：新增 SVG 短爪/道具层和一套 CSS 动画，需要真机 60fps/识别测试；P0 声音可能受系统静音/音乐焦点影响，P1 接原生提示音/音频焦点。
+- 规范：`docs/prd/hook/SPEC.md`、`app/src/mobile/features/pet/sound.ts`、`pet-fallback.tsx`、`pet.module.css`。

@@ -21,6 +21,7 @@ use crate::asr_models::ModelManager;
 use crate::clipboard_manager::ClipboardManager;
 use crate::desktop_mic::{self, FrontApp};
 use crate::discovery;
+use crate::dsh_hook::HookBridge;
 use crate::mic_protocol::{self, MicStartMessage, MicStopReason};
 
 static MOBILE_PAGE: &str = include_str!("../mobile/index.html");
@@ -43,6 +44,7 @@ struct AppState {
     mic: Arc<Mutex<Option<ActiveMic>>>,
     models: Arc<ModelManager>,
     clipboard: Arc<ClipboardManager>,
+    hook: Arc<HookBridge>,
 }
 
 struct ActiveMic {
@@ -150,10 +152,19 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
 async fn handle_socket(socket: WebSocket, state: AppState) {
     let client_id = state.next_client.fetch_add(1, Ordering::Relaxed);
     let (mut sender, mut receiver) = socket.split();
+    // 先订阅广播，再直发当前 AI 状态快照：新连接（手机/网页）立刻拿到四态，
+    // 不会因为快照和广播的先后顺序丢状态。
     let mut rx = state.tx.subscribe();
 
     let count = state.clients.fetch_add(1, Ordering::SeqCst) + 1;
     println!("[ws] client connected ({count} online)");
+    if sender
+        .send(Message::Text(state.hook.snapshot_json().into()))
+        .await
+        .is_err()
+    {
+        println!("[ws] 发送 AI 状态快照失败，连接即将关闭");
+    }
     let _ = state
         .tx
         .send(system_message(format!("客户端已连接，当前 {count} 个")));
@@ -175,6 +186,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     if let Some(kind) = message_type(&text) {
                         if kind.starts_with("mic.") {
                             handle_mic_text(&recv_state, client_id, &text);
+                            continue;
+                        }
+                        if kind == "status.request" {
+                            // 手机要一次当前 AI 状态快照；广播给所有客户端即可。
+                            let _ = recv_state.tx.send(recv_state.hook.snapshot_json());
                             continue;
                         }
                     }
@@ -484,15 +500,19 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-pub async fn start(models: Arc<ModelManager>, clipboard: Arc<ClipboardManager>) {
-    let (tx, _rx) = broadcast::channel::<String>(64);
+pub async fn start(
+    models: Arc<ModelManager>,
+    clipboard: Arc<ClipboardManager>,
+    hook: Arc<HookBridge>,
+) {
     let state = AppState {
-        tx,
+        tx: hook.sender(),
         clients: Arc::new(AtomicUsize::new(0)),
         next_client: Arc::new(AtomicU64::new(1)),
         mic: Arc::new(Mutex::new(None)),
         models,
         clipboard,
+        hook,
     };
     let app = Router::new()
         .route("/", get(mobile_page))

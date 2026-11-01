@@ -7,6 +7,7 @@ import { Label } from "@/shared/ui/label";
 import { Switch } from "@/shared/ui/switch";
 import { usePetStore } from "./pet-store";
 import { POSTURE_LABEL } from "./posture";
+import { PET_SOUND_LABEL, type PetSoundKind, previewPetSound } from "./sound";
 import type { Posture, ReduceMotionSetting } from "./types";
 
 type PetSettingsProps = {
@@ -27,6 +28,8 @@ const DIM_OPTIONS = [1, 2, 5, 10, 15, 30] as const;
 
 /** 屏幕常亮最长小时数选项；0 表示不限。 */
 const KEEP_AWAKE_HOUR_OPTIONS = [1, 2, 4, 8, 0] as const;
+
+const SOUND_PREVIEWS: PetSoundKind[] = ["work-start", "ask", "complete"];
 
 function validateName(raw: string): string | null {
   const trimmed = raw.trim();
@@ -249,10 +252,36 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
                 onCheckedChange={(checked) => void update({ haptics: checked })}
               />
             </div>
-            <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-              <span>声音</span>
-              <span className="text-xs">暂未接入</span>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="pet-sound">声音</Label>
+                <p className="mt-1 text-xs text-muted-foreground">开工/提问/完成时的短提示音</p>
+              </div>
+              <Switch
+                id="pet-sound"
+                checked={pet.settings.sound}
+                onCheckedChange={(checked) => void update({ sound: checked })}
+              />
             </div>
+            <div className="mt-3">
+              <p className="text-xs text-muted-foreground">试听</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {SOUND_PREVIEWS.map((kind) => (
+                  <Button
+                    key={kind}
+                    type="button"
+                    variant="outline"
+                    className="h-9 text-xs"
+                    onClick={() => previewPetSound(kind)}
+                  >
+                    {PET_SOUND_LABEL[kind]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              只在宠物页前台播放；录音时不响；系统静音/勿扰可能无法完全遵守。
+            </p>
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-4">

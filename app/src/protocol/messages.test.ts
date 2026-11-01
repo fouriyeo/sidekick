@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isConnEvent, parseMessage, parseMicMessage } from "./messages";
+import {
+  isConnEvent,
+  isStatusMessage,
+  parseMessage,
+  parseMicMessage,
+  parseStatusMessage,
+} from "./messages";
 
 describe("parseMessage", () => {
   it("maps chat messages from self to me", () => {
@@ -54,6 +60,54 @@ describe("isConnEvent", () => {
     expect(isConnEvent(null)).toBe(false);
     expect(isConnEvent({ online: "yes" })).toBe(false);
     expect(isConnEvent({ online: true, url: 1 })).toBe(false);
+  });
+});
+
+describe("status messages", () => {
+  const base = {
+    type: "status",
+    v: 1,
+    source: "dsh",
+    state: "working",
+    sessions: 1,
+    ts: 1730000000000,
+  };
+
+  it("accepts working, asking, idle and completed statuses", () => {
+    expect(isStatusMessage(base)).toBe(true);
+    expect(isStatusMessage({ ...base, state: "asking", sessions: 2 })).toBe(true);
+    expect(isStatusMessage({ ...base, state: "idle", sessions: 0 })).toBe(true);
+    expect(
+      isStatusMessage({
+        ...base,
+        state: "completed",
+        resume: "idle",
+        remainingMs: 2100,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects invalid statuses", () => {
+    expect(isStatusMessage({ ...base, v: 2 })).toBe(false);
+    expect(isStatusMessage({ ...base, state: "busy" })).toBe(false);
+    expect(isStatusMessage({ ...base, sessions: -1 })).toBe(false);
+    expect(isStatusMessage({ ...base, sessions: 1.5 })).toBe(false);
+    expect(isStatusMessage({ ...base, ts: "now" })).toBe(false);
+    expect(isStatusMessage({ ...base, resume: "busy" })).toBe(false);
+    expect(isStatusMessage({ ...base, remainingMs: -1 })).toBe(false);
+  });
+
+  it("parses a valid status and ignores invalid/malformed payloads", () => {
+    expect(parseStatusMessage(JSON.stringify(base))).toMatchObject({
+      state: "working",
+      sessions: 1,
+    });
+    expect(parseStatusMessage(JSON.stringify({ ...base, state: "busy" }))).toBeNull();
+    expect(parseStatusMessage("not-json")).toBeNull();
+  });
+
+  it("keeps status out of the chat/system parsing path", () => {
+    expect(parseMessage(JSON.stringify(base), "phone")).toBeNull();
   });
 });
 

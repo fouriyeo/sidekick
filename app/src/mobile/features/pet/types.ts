@@ -1,3 +1,6 @@
+import type { StatusMessage } from "@/protocol/messages";
+import type { AiApplyOptions, AiStatus } from "./ai-status";
+
 export type Mood = "content" | "happy" | "curious" | "sleepy" | "listening" | "proud" | "concerned";
 
 export type BaselineMood = "content" | "sleepy";
@@ -85,7 +88,10 @@ export type CopyId =
   | "night"
   | "mic_success"
   | "mic_error"
-  | "corrupted";
+  | "corrupted"
+  | "ai_working"
+  | "ai_asking"
+  | "ai_completed";
 
 export type PetEvent =
   | { type: "BOOT"; now: number; save: PetSaveV1 | null; corrupted?: boolean }
@@ -150,9 +156,19 @@ export type PetStoreState = {
   bubble: Bubble | null;
   heartBurst: HeartBurst | null;
   riveSignal: RiveSignal | null;
+  /** AI 联动四态；不落盘，App 重启后从 idle/静态重新开始。 */
+  ai: AiStatus;
+  /** 状态气泡（asking 常驻 / working 5 秒 / completed 3 秒），与闲聊气泡共享槽位。 */
+  aiCaption: Bubble | null;
+  /** 录音中：AI 触感/音效静音（由 PetStage/MobileApp 同步）。 */
+  micListening: boolean;
   hydrate: () => Promise<void>;
   dispatch: (event: PetEvent) => void;
   handleGesture: (event: GestureEvent) => void;
+  applyAiStatus: (message: StatusMessage, options?: AiApplyOptions) => void;
+  setMicListening: (listening: boolean) => void;
+  /** 首次用户手势时解锁 Web Audio（自动播放策略）。 */
+  unlockSound: () => void;
   setName: (name: string) => Promise<boolean>;
   setPosture: (posture: Posture) => Promise<boolean>;
   updateSettings: (patch: Partial<PetSettings>) => Promise<boolean>;

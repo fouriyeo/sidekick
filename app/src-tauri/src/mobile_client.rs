@@ -202,6 +202,19 @@ pub fn send_chat(app: tauri::AppHandle, text: String) -> Result<(), String> {
     )
 }
 
+/// 手机端请求一次当前 AI 状态快照；桌面端收到后广播一条 status。
+#[tauri::command]
+pub fn send_status_request(app: tauri::AppHandle) -> Result<(), String> {
+    send_payload(
+        &app,
+        serde_json::json!({
+            "v": 1,
+            "type": "status.request",
+            "ts": now_ms(),
+        }),
+    )
+}
+
 #[tauri::command]
 pub fn mic_start(
     app: tauri::AppHandle,

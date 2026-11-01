@@ -26,7 +26,8 @@
 - ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、方向自动双姿态（手动覆盖）、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
 - ✅ **麦克风 P0 已实现**（2026-10-31）：手机 WebView 流式 PCM16 → 正式二进制协议（`mic.*` + `SK01`）→ 桌面按会话内存缓冲 → whisper-rs 内存转写（启动 prewarm）→ `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制；手机含上滑取消、波形、计时、权限说明、结果卡片；桌面设置页管理模型与自动输入权限。真机/辅助功能实测待补。
 - ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多 100 条；本地 `0600` JSON。
-- ❌ 尚未开始：Claude Code / Qoder hook 接入、配对鉴权、正式签名包、iOS。
+- 🚧 **AI 联动（DSH hook）开发中**（2026-11-02）：桌面「AI 联动」页 + 本地 `sidekick-hook.mjs` 注入 DSH profile + Rust 回环桥 + `status` 协议 + 手机四态动作/三音效；产品规则 `docs/prd/hook/`，技术方案 `docs/engineering/dsh-hook.md`；首次开启需重启 DSH 一次，之后热开关。
+- ❌ 尚未开始：手机回答 AI 提问、文本消息、Claude Code / Qoder 接入、配对鉴权、正式签名包、iOS。
 
 ## 2.5 文档导航（懒加载）
 
@@ -182,6 +183,7 @@ sidekick/
 - **自动粘贴 TCC**：`core-graphics` 合成 Cmd+V 需要 macOS 辅助功能勾选当前程序；开发二进制每次重编译可能被当成新程序，需要重新勾选（设置页有请求权限/重新检测）。不勾选只复制。
 - **麦克风录音 UI 锚点**：手持模式底部居中的 96dp 按钮容器只能包含按钮本身；录音条/结果卡片/临时提示必须放在独立绝对定位层（`left-0 right-0 mx-auto w-[min(82vw,360px)] bottom-[104px]`、`pointer-events-none`），否则会把 flex 容器撑宽、按钮被挤偏，看起来「按住后跳走」。居中要用 `inset-x-0` + flex `items-center` / `left-0 right-0 mx-auto`，**不要用 `left-1/2 -translate-x-1/2`**（WebView 103 不支持 CSS translate，会偏右半宽）。取消只保留上滑手势（≥48dp，滑回 <24dp 继续），**不要再加左下取消按钮**：按住说话时去点它必须先松手，而松手就已经结束录音，按钮自相矛盾。
 - **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind = "voice"` 入库（暂停记录时仍写系统剪贴板、但不入历史）；最多 100 条（置顶优先淘汰）；文件 `~/Library/Application Support/Sidekick/clipboard.json` 权限 600。
+- **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume`，不要加对话内容/工具参数/路径。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 
 ## 9. 协作约定
@@ -202,8 +204,9 @@ sidekick/
 2. 情绪宠物 P0：代码已完成（静态 SVG 降级、方向自动双姿态（手动覆盖）、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
 3. ✅ 外设麦克风 P0：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层已完成；下一步勾选 macOS 辅助功能验证自动粘贴，并补真机 60 秒/断连/密码框矩阵。
 4. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
-5. 接入 Claude Code hooks：`notify` / `ask` 事件推手机，手机回答回传并作为 hook 结果（协议扩展 status / ask / notify / input）。
-6. 配对鉴权 + release 签名/桌面打包/开机自启。
-7. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
-8. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
-9. P2：系统级虚拟麦克风、云同步/多语言。
+5. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效；代码开发中，待真机/隐私验收（2026-11-02）。
+6. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
+7. 配对鉴权 + release 签名/桌面打包/开机自启。
+8. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
+9. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
+10. P2：系统级虚拟麦克风、云同步/多语言。

@@ -9,6 +9,7 @@ children:
   - protocol-audio.md
   - asr-model.md
   - clipboard-manager.md
+  - dsh-hook.md
   - pet-runtime.md
   - quality.md
   - lan-discovery.md
@@ -27,6 +28,7 @@ children:
 | 下载/选择本机语音模型 | [asr-model.md](./asr-model.md) | M |
 | 桌面剪贴板历史与隐私过滤 | [clipboard-manager.md](./clipboard-manager.md) | M |
 | 做自动发现、端口冲突、桌面二维码 | [lan-discovery.md](./lan-discovery.md) | M |
+| 做 AI 联动：DSH 脚本注入、Rust 桥、四态协议 | [dsh-hook.md](./dsh-hook.md) | M |
 | 做宠物：Rive、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
 | 写测试、真机验收、发版 | [quality.md](./quality.md) | M |
 
@@ -34,6 +36,7 @@ children:
 
 - 麦克风 P0 已实现（二进制音频协议、内存 whisper-rs、自动粘贴降级复制、模型管理、手机完整状态 UI）；剪贴板 P1 辅助能力已实现。
 - 宠物 P0 代码已完成；局域网自动发现与动态端口已实现。
+- AI 联动（DSH）开发中：本地脚本注入 + 回环桥 + status 协议 + 手机四态/三音效；见 [dsh-hook.md](./dsh-hook.md)。
 - 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
 - 现有架构事实：[architecture.md](../architecture.md)、[frontend-architecture.md](../frontend-architecture.md)。
 - 现有协议事实：[protocol/README.md](../../protocol/README.md)。

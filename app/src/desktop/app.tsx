@@ -1,18 +1,28 @@
 import { cn } from "cn";
-import { Clipboard, MessageCircle } from "lucide-react";
+import { Clipboard, MessageCircle, Plug } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ClipboardPanel } from "@/desktop/features/clipboard/components/clipboard-panel";
 import { ConnectionPanel } from "@/desktop/features/connect/components/connection-panel";
+import { HookPanel } from "@/desktop/features/hook/components/hook-panel";
 import { MicStatusOverlay } from "@/desktop/features/mic-receiver/mic-status-overlay";
 import { SettingsSheet } from "@/desktop/features/settings/components/settings-sheet";
 import { ChatPanel } from "./features/chat/components/chat-panel";
 import { useDesktopConnection } from "./use-desktop-connection";
 
-type DesktopView = "chat" | "clipboard";
+type DesktopView = "chat" | "clipboard" | "hook";
+
+/** 浏览器开发时可用 ?view=hook|clipboard 直接打开对应页；生产构建恒为聊天。 */
+function initialView(): DesktopView {
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    const requested = new URLSearchParams(window.location.search).get("view");
+    if (requested === "chat" || requested === "clipboard" || requested === "hook") return requested;
+  }
+  return "chat";
+}
 
 export function DesktopApp() {
   const { status, info, error, sendText, retry } = useDesktopConnection();
-  const [view, setView] = useState<DesktopView>("chat");
+  const [view, setView] = useState<DesktopView>(initialView);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -42,10 +52,22 @@ export function DesktopApp() {
             label="剪贴板"
             onClick={() => setView("clipboard")}
           />
+          <ViewTab
+            active={view === "hook"}
+            icon={<Plug className="size-3.5" />}
+            label="AI 联动"
+            onClick={() => setView("hook")}
+          />
         </nav>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {view === "chat" ? <ChatPanel onSend={sendText} /> : <ClipboardPanel />}
+          {view === "chat" ? (
+            <ChatPanel onSend={sendText} />
+          ) : view === "clipboard" ? (
+            <ClipboardPanel />
+          ) : (
+            <HookPanel />
+          )}
         </div>
       </section>
 

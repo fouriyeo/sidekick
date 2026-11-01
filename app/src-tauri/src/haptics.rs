@@ -80,14 +80,16 @@ where
 
     window
         .with_webview(move |webview| {
-            webview.jni_handle().exec(move |env, activity, webview_obj| {
-                let raw = **webview_obj;
-                if raw.is_null() {
-                    eprintln!("[haptics] WebView 尚未就绪，本次调用跳过");
-                    return;
-                }
-                on_ready(env, activity, webview_obj);
-            });
+            webview
+                .jni_handle()
+                .exec(move |env, activity, webview_obj| {
+                    let raw = **webview_obj;
+                    if raw.is_null() {
+                        eprintln!("[haptics] WebView 尚未就绪，本次调用跳过");
+                        return;
+                    }
+                    on_ready(env, activity, webview_obj);
+                });
         })
         .map_err(|error| format!("触感调用失败: {error}"))
 }

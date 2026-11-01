@@ -52,3 +52,26 @@ describe("PetSettings Android 返回键", () => {
     expect(pressBack()).toBe(false);
   });
 });
+
+describe("PetSettings 声音设置", () => {
+  it("提供声音开关、三个试听按钮和限制说明", () => {
+    render(<PetSettings open onClose={vi.fn()} />);
+
+    expect(screen.getByRole("switch", { name: "声音" })).toBeInTheDocument();
+    for (const name of ["开工", "提问", "完成"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByText(/只在宠物页前台播放/)).toBeInTheDocument();
+    expect(screen.getByText(/录音时不响/)).toBeInTheDocument();
+  });
+
+  it("点击试听按钮不会抛错（无 Web Audio 时静默降级）", () => {
+    render(<PetSettings open onClose={vi.fn()} />);
+
+    expect(() => {
+      fireEvent.click(screen.getByRole("button", { name: "开工" }));
+      fireEvent.click(screen.getByRole("button", { name: "提问" }));
+      fireEvent.click(screen.getByRole("button", { name: "完成" }));
+    }).not.toThrow();
+  });
+});

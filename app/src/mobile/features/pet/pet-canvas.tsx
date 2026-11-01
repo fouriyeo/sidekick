@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { AiState } from "./ai-status";
 import { PetFallback } from "./pet-fallback";
 import type { Mood, PetPhase } from "./types";
 
@@ -9,11 +10,18 @@ type PetCanvasProps = {
   energy: number;
   isNight: boolean;
   phase: PetPhase;
+  /** 舞台最终展示的 AI 姿态；非静态时暂停随机 idle 小动作。 */
+  aiState: AiState;
   active: boolean;
   reducedMotion: boolean;
 };
 
 type IdleAction = "look" | "stretch" | null;
+
+/** 静态时每 30–45 秒才伸个懒腰/打个哈欠：低、慢、安静。 */
+const IDLE_ACTION_MIN_MS = 30_000;
+const IDLE_ACTION_EXTRA_MS = 15_000;
+const IDLE_ACTION_HOLD_MS = 1200;
 
 function useIdleAction(enabled: boolean): IdleAction {
   const [action, setAction] = useState<IdleAction>(null);
@@ -36,10 +44,10 @@ function useIdleAction(enabled: boolean): IdleAction {
           setAction(Math.random() < 0.5 ? "look" : "stretch");
           resetTimer.current = window.setTimeout(() => {
             if (!cancelled) setAction(null);
-          }, 1200);
+          }, IDLE_ACTION_HOLD_MS);
           schedule();
         },
-        4000 + Math.random() * 8000,
+        IDLE_ACTION_MIN_MS + Math.random() * IDLE_ACTION_EXTRA_MS,
       );
     };
 
@@ -57,8 +65,16 @@ function useIdleAction(enabled: boolean): IdleAction {
   return action;
 }
 
-export function PetCanvas({ mood, energy, isNight, phase, active, reducedMotion }: PetCanvasProps) {
-  const idleAction = useIdleAction(active && !reducedMotion);
+export function PetCanvas({
+  mood,
+  energy,
+  isNight,
+  phase,
+  aiState,
+  active,
+  reducedMotion,
+}: PetCanvasProps) {
+  const idleAction = useIdleAction(active && !reducedMotion && aiState === "idle");
 
   return (
     <PetFallback
@@ -66,6 +82,7 @@ export function PetCanvas({ mood, energy, isNight, phase, active, reducedMotion 
       energy={energy}
       isNight={isNight}
       phase={phase}
+      aiState={aiState}
       reducedMotion={reducedMotion}
       idleAction={idleAction}
     />

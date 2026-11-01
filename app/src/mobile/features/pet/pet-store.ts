@@ -1,7 +1,19 @@
 import { create } from "zustand";
+import type { StatusMessage } from "@/protocol/messages";
+import {
+  AI_WORK_CAPTION_MS,
+  type AiState,
+  type AiStatus,
+  aiCaptionCopyId,
+  createIdleAiStatus,
+  finishCompleted,
+  applyAiStatus as reduceAiStatus,
+  settleAiStatus,
+} from "./ai-status";
 import { renderCopy } from "./copy";
 import { createHaptics, type Haptics } from "./haptics";
 import { defaultPetState, normalizeName, parsePetSave, petSaveFromState } from "./persistence";
+import { createPetSounds } from "./sound";
 import { reducePet } from "./state-machine";
 import { createTauriPetStorage } from "./tauri-pet-storage";
 import type {
@@ -20,10 +32,23 @@ import type {
   RiveSignal,
 } from "./types";
 
+/** AI 联动只用到声音播放器的一小部分；测试里可以注入假实现。 */
+export type PetStoreSounds = {
+  unlock: () => void;
+  playWork: () => boolean;
+  playComplete: () => boolean;
+  startAsking: () => void;
+  stopAsking: () => void;
+};
+
 type PetStoreDeps = {
   storage: PetStorage;
   haptics: Haptics;
   now: () => number;
+  /** 可选的合成音效；缺省静音（测试/浏览器无 Web Audio 时）。 */
+  sounds?: PetStoreSounds;
+  /** App 是否在前台；缺省读 document.visibilityState。 */
+  isAppVisible?: () => boolean;
 };
 
 const BUBBLE_COOLDOWN_MS = 30_000;
@@ -32,17 +57,25 @@ const HEART_DURATION_MS = 1200;
 const SAVE_DEBOUNCE_MS = 500;
 const PETTING_COMPLETE_MS = 3000;
 
+function defaultAppVisible(): boolean {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState !== "hidden";
+}
+
 export function createPetStore(deps: PetStoreDeps) {
   let hydratePromise: Promise<void> | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
   let heartTimer: ReturnType<typeof setTimeout> | null = null;
   let pettingTimer: ReturnType<typeof setTimeout> | null = null;
+  let completedTimer: ReturnType<typeof setTimeout> | null = null;
+  let captionTimer: ReturnType<typeof setTimeout> | null = null;
   let writeChain: Promise<void> = Promise.resolve();
   let lastBubbleAt = 0;
   let bubbleId = 0;
   let heartId = 0;
   let riveId = 0;
+  let captionId = 0;
 
   return create<PetStoreState>((set, get) => {
     function scheduleSave() {
@@ -57,6 +90,22 @@ export function createPetStore(deps: PetStoreDeps) {
       if (pettingTimer === null) return;
       clearTimeout(pettingTimer);
       pettingTimer = null;
+    }
+
+    function clearCompletedTimer() {
+      if (completedTimer === null) return;
+      clearTimeout(completedTimer);
+      completedTimer = null;
+    }
+
+    function clearCaptionTimer() {
+      if (captionTimer === null) return;
+      clearTimeout(captionTimer);
+      captionTimer = null;
+    }
+
+    function appVisible(): boolean {
+      return deps.isAppVisible ? deps.isAppVisible() : defaultAppVisible();
     }
 
     function showBubble(copyId: CopyId, durationMs = BUBBLE_DURATION_MS) {
@@ -84,6 +133,104 @@ export function createPetStore(deps: PetStoreDeps) {
         bubbleTimer = null;
         set({ bubble: null });
       }, durationMs);
+    }
+
+    /** AI 状态文案与闲聊气泡共用槽位；这里只维护「当前该显示哪条」。 */
+    function updateAiCaption(status: AiStatus, now: number, force = false) {
+      const copyId = aiCaptionCopyId(status, now);
+      clearCaptionTimer();
+
+      if (!copyId) {
+        if (get().aiCaption !== null) set({ aiCaption: null });
+        return;
+      }
+
+      const current = get().aiCaption;
+      if (force || current === null || current.copyId !== copyId) {
+        captionId += 1;
+        set({
+          aiCaption: {
+            id: captionId,
+            copyId,
+            text: renderCopy(copyId, get().pet.name),
+          },
+        });
+      }
+
+      if (status.state === "working") {
+        // 工作文案只陪 5 秒，之后只保留忙碌动作。
+        const remaining = Math.max(0, AI_WORK_CAPTION_MS - (now - status.enteredAt));
+        captionTimer = setTimeout(() => {
+          captionTimer = null;
+          set({ aiCaption: null });
+        }, remaining);
+      }
+    }
+
+    function scheduleCompletedTimer(status: AiStatus) {
+      clearCompletedTimer();
+      if (status.state !== "completed" || status.completedUntil === null) return;
+
+      const delay = Math.max(0, status.completedUntil - deps.now());
+      completedTimer = setTimeout(() => {
+        completedTimer = null;
+        const now = deps.now();
+        const settled = settleAiStatus(get().ai, now);
+        set({ ai: settled });
+
+        if (settled.state === "completed") {
+          // 计时器被提前触发（系统时间跳跃）时按剩余时间再排一次。
+          scheduleCompletedTimer(settled);
+          return;
+        }
+
+        if (settled.state === "asking") {
+          updateAiCaption(settled, now, true);
+          return;
+        }
+
+        // 庆祝结束回到静态/工作时不补新文案（工作文案只在真正开工时出现）。
+        clearCaptionTimer();
+        set({ aiCaption: null });
+      }, delay);
+    }
+
+    function applyAiSignals(
+      transition: { from: AiState; to: AiState },
+      visible: boolean,
+      mic: boolean,
+    ) {
+      if (transition.to === "asking") {
+        if (get().pet.settings.haptics && visible && !mic) {
+          // 进入「等你决定」：两次短促轻震，只响一次。
+          deps.haptics.light();
+          deps.haptics.light();
+        }
+        deps.sounds?.startAsking();
+        return;
+      }
+
+      if (transition.to === "completed") {
+        if (get().pet.settings.haptics && visible && !mic) {
+          deps.haptics.success();
+        }
+        deps.sounds?.stopAsking();
+        deps.sounds?.playComplete();
+        return;
+      }
+
+      if (transition.to === "working") {
+        if (transition.from === "completed" || transition.from === "asking") {
+          // 从庆祝/等待直接切到工作时不补开工音，避免连续三声响。
+          deps.sounds?.stopAsking();
+          return;
+        }
+        deps.sounds?.playWork();
+        return;
+      }
+
+      // 回到静态：不再提醒。
+      deps.sounds?.stopAsking();
     }
 
     function processEffects(effects: PetEffect[], pet: PetState) {
@@ -125,6 +272,9 @@ export function createPetStore(deps: PetStoreDeps) {
       bubble: null,
       heartBurst: null,
       riveSignal: null,
+      ai: createIdleAiStatus(),
+      aiCaption: null,
+      micListening: false,
 
       hydrate: () => {
         if (get().hydrated) return Promise.resolve();
@@ -165,9 +315,22 @@ export function createPetStore(deps: PetStoreDeps) {
         processEffects(effects, state);
 
         if (event.type === "VISIBILITY" && !event.visible) {
+          // 切后台时立刻结束 completed 姿态：回前台/重连不重播庆祝。
+          clearCompletedTimer();
+          clearCaptionTimer();
+          deps.sounds?.stopAsking();
+
+          set({ ai: finishCompleted(get().ai, event.now), aiCaption: null });
           void get().flush();
         } else {
           scheduleSave();
+
+          // asking 会一直保留：切后台再回来时恢复文案，并补一次提问音（SPEC §2.5）。
+          const ai = get().ai;
+          if (event.type === "VISIBILITY" && event.visible && ai.state === "asking") {
+            updateAiCaption(ai, event.now, true);
+            deps.sounds?.startAsking();
+          }
         }
       },
 
@@ -201,6 +364,38 @@ export function createPetStore(deps: PetStoreDeps) {
             break;
           }
         }
+      },
+
+      applyAiStatus: (message: StatusMessage, options = {}) => {
+        const now = options.now ?? deps.now();
+        const micListening = options.micListening ?? get().micListening;
+        const visible = options.visible ?? appVisible();
+
+        if (options.micListening !== undefined && options.micListening !== get().micListening) {
+          set({ micListening: options.micListening });
+        }
+
+        const { status, transition, stale } = reduceAiStatus(get().ai, message, { now });
+        if (stale) return;
+
+        set({ ai: status });
+        scheduleCompletedTimer(status);
+
+        if (!transition) return;
+
+        updateAiCaption(status, now, true);
+        applyAiSignals(transition, visible, micListening);
+      },
+
+      setMicListening: (listening: boolean) => {
+        if (get().micListening === listening) return;
+        set({ micListening: listening });
+        // 录音时不播放提醒，并把排队中的第二次提醒停掉。
+        if (listening) deps.sounds?.stopAsking();
+      },
+
+      unlockSound: () => {
+        deps.sounds?.unlock();
       },
 
       setName: async (name: string) => {
@@ -288,4 +483,14 @@ export const usePetStore = createPetStore({
   storage: createTauriPetStorage(),
   haptics: createHaptics(),
   now: () => Date.now(),
+  isAppVisible: defaultAppVisible,
+  sounds: createPetSounds(() => {
+    const state = usePetStore.getState();
+    return {
+      enabled: () => state.pet.settings.sound,
+      visible: () => defaultAppVisible(),
+      petVisible: () => state.pet.visible,
+      micListening: () => state.micListening,
+    };
+  }),
 });

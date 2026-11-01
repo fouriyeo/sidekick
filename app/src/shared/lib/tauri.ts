@@ -5,8 +5,10 @@ import { type DiscoveredServer, isDiscoveredServer } from "@/protocol/discovery"
 import {
   type ConnEvent,
   isConnEvent,
+  isStatusState,
   type MicStopReason,
   type ServerInfo,
+  type StatusState,
 } from "@/protocol/messages";
 
 export type AppRole = "desktop" | "mobile";
@@ -74,6 +76,42 @@ export type ClipboardSnapshot = {
   maxItems: number;
 };
 
+/** AI 联动：与协议层 status.state 同义；idle 对应产品里的「静态」。 */
+export type DshHookState = StatusState;
+
+export type DshHookEvent = {
+  at: number;
+  state: DshHookState;
+  sessions: number;
+  source: string;
+};
+
+export type DshProfileInfo = {
+  name: string;
+  label: string;
+  active: boolean;
+  installed: boolean;
+};
+
+export type DshHookStatus = {
+  installed: boolean;
+  enabled: boolean;
+  connected: boolean;
+  profile: string | null;
+  currentState: DshHookState;
+  sessions: number;
+  lastEventAt: number | null;
+  lastHeartbeatAt: number | null;
+  pluginVersion: number | null;
+  endpoint: string | null;
+  configPath: string;
+  pluginPath: string | null;
+  patchPath: string | null;
+  error: string | null;
+  recentEvents: DshHookEvent[];
+  profiles: DshProfileInfo[];
+};
+
 const COMMANDS = {
   appRole: "app_role",
   setKeepScreenOn: "set_keep_screen_on",
@@ -103,6 +141,12 @@ const COMMANDS = {
   clipboardDelete: "clipboard_delete",
   clipboardClear: "clipboard_clear",
   clipboardSetEnabled: "clipboard_set_enabled",
+  sendStatusRequest: "send_status_request",
+  dshHookStatus: "dsh_hook_status",
+  dshHookInstall: "dsh_hook_install",
+  dshHookSetEnabled: "dsh_hook_set_enabled",
+  dshHookRemove: "dsh_hook_remove",
+  dshHookTest: "dsh_hook_test",
 } as const;
 
 const EVENTS = {
@@ -110,6 +154,7 @@ const EVENTS = {
   conn: "conn",
   modelProgress: "model-progress",
   clipboardChanged: "clipboard-changed",
+  dshHookStatus: "dsh-hook-status",
 } as const;
 
 type Listener<T> = (payload: T) => void;
@@ -173,6 +218,7 @@ const chatChannel = createEventChannel(EVENTS.chat);
 const connChannel = createEventChannel(EVENTS.conn);
 const modelProgressChannel = createEventChannel(EVENTS.modelProgress);
 const clipboardChannel = createEventChannel(EVENTS.clipboardChanged);
+const dshHookChannel = createEventChannel(EVENTS.dshHookStatus);
 
 export async function getAppRole(): Promise<AppRole> {
   const role = await invoke<string>(COMMANDS.appRole);
@@ -309,6 +355,56 @@ export function clearClipboard(): Promise<ClipboardSnapshot> {
 
 export function setClipboardEnabled(enabled: boolean): Promise<ClipboardSnapshot> {
   return invoke<ClipboardSnapshot>(COMMANDS.clipboardSetEnabled, { enabled });
+}
+
+/** 手机端请求一次当前 AI 状态快照；桌面端收到后回一条 status（广播）。 */
+export function sendStatusRequest(): Promise<void> {
+  return invoke<void>(COMMANDS.sendStatusRequest);
+}
+
+export function getDshHookStatus(): Promise<DshHookStatus> {
+  return invoke<DshHookStatus>(COMMANDS.dshHookStatus);
+}
+
+/** 写入本地 DSH 联动脚本 + profile patch；首次生效需要重启 DSH。 */
+export function installDshHook(profile: string): Promise<DshHookStatus> {
+  return invoke<DshHookStatus>(COMMANDS.dshHookInstall, { profile });
+}
+
+/** 只切换 enabled 配置；已安装时 1 秒内热生效，不需要重启 DSH。 */
+export function setDshHookEnabled(enabled: boolean): Promise<DshHookStatus> {
+  return invoke<DshHookStatus>(COMMANDS.dshHookSetEnabled, { enabled });
+}
+
+/** 移除 Sidekick 写入的 patch 标记、脚本和配置；DSH 下次启动不再加载。 */
+export function removeDshHook(): Promise<DshHookStatus> {
+  return invoke<DshHookStatus>(COMMANDS.dshHookRemove);
+}
+
+/** 本机模拟一次状态，走同一条广播链路，便于不启动 DSH 时验收手机四态。 */
+export function testDshHook(state: DshHookState): Promise<DshHookStatus> {
+  return invoke<DshHookStatus>(COMMANDS.dshHookTest, { state });
+}
+
+export function isDshHookStatus(value: unknown): value is DshHookStatus {
+  if (typeof value !== "object" || value === null) return false;
+  const status = value as Record<string, unknown>;
+  return (
+    typeof status.installed === "boolean" &&
+    typeof status.enabled === "boolean" &&
+    typeof status.connected === "boolean" &&
+    isStatusState(status.currentState) &&
+    typeof status.sessions === "number" &&
+    typeof status.configPath === "string" &&
+    Array.isArray(status.recentEvents) &&
+    Array.isArray(status.profiles)
+  );
+}
+
+export function subscribeDshHookStatus(handler: (status: DshHookStatus) => void): Unsubscribe {
+  return dshHookChannel((payload) => {
+    if (isDshHookStatus(payload)) handler(payload);
+  });
 }
 
 export function subscribeChat(handler: (raw: string) => void): Unsubscribe {

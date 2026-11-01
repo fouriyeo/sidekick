@@ -12,7 +12,30 @@ export type SystemMessage = {
   text: string;
 };
 
-export type IncomingMessage = ChatMessage | SystemMessage;
+/** AI 联动状态：宠物四态的协议层名称（idle 对应产品里的「静态」）。 */
+export type StatusState = "idle" | "working" | "asking" | "completed";
+
+export type StatusSource = "dsh" | "test";
+
+/**
+ * AI 状态系统消息。桌面端把 AI 的聚合状态广播给所有手机；
+ * completed 只持续几秒，桌面会补发 resume 状态，remainingMs 供手机本地兜底。
+ */
+export type StatusMessage = {
+  type: "status";
+  v: 1;
+  source: StatusSource;
+  state: StatusState;
+  /** 进行中的顶层会话数；只用于桌面 UI/调试，手机不展示数字。 */
+  sessions: number;
+  /** 仅 completed 有值：3 秒后回到哪个稳定态。 */
+  resume?: StatusState | null;
+  /** 仅 completed 有值：桌面计算的剩余展示时长，避免手机时钟偏差。 */
+  remainingMs?: number | null;
+  ts: number;
+};
+
+export type IncomingMessage = ChatMessage | SystemMessage | StatusMessage;
 
 export type ServerInfo = {
   ip: string;
@@ -121,6 +144,49 @@ export function isSystemMessage(value: unknown): value is SystemMessage {
   if (typeof value !== "object" || value === null) return false;
   const message = value as Record<string, unknown>;
   return message.type === "system" && typeof message.text === "string";
+}
+
+export function isStatusState(value: unknown): value is StatusState {
+  return value === "idle" || value === "working" || value === "asking" || value === "completed";
+}
+
+export function isStatusMessage(value: unknown): value is StatusMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const message = value as Record<string, unknown>;
+  if (message.type !== "status" || message.v !== 1) return false;
+  if (message.source !== "dsh" && message.source !== "test") return false;
+  if (!isStatusState(message.state)) return false;
+  if (
+    typeof message.sessions !== "number" ||
+    !Number.isInteger(message.sessions) ||
+    message.sessions < 0
+  ) {
+    return false;
+  }
+  if (typeof message.ts !== "number" || !Number.isFinite(message.ts)) return false;
+  if (message.resume !== undefined && message.resume !== null && !isStatusState(message.resume)) {
+    return false;
+  }
+  if (
+    message.remainingMs !== undefined &&
+    message.remainingMs !== null &&
+    (typeof message.remainingMs !== "number" ||
+      !Number.isFinite(message.remainingMs) ||
+      message.remainingMs < 0)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function parseStatusMessage(raw: string): StatusMessage | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return isStatusMessage(value) ? value : null;
 }
 
 export function isConnEvent(value: unknown): value is ConnEvent {
