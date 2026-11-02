@@ -123,6 +123,17 @@ describe("ModelsPanel 百炼配置", () => {
     expect(screen.getAllByText("¥0.12").length).toBeGreaterThan(0);
   });
 
+  it("一键恢复推荐模型", async () => {
+    await renderPanel();
+
+    const model = screen.getByLabelText("模型");
+    fireEvent.change(model, { target: { value: "custom-model" } });
+    expect(model).toHaveValue("custom-model");
+
+    fireEvent.click(screen.getByRole("button", { name: "使用推荐模型" }));
+    expect(model).toHaveValue("qwen-audio-3.1-asr-flash-streaming");
+  });
+
   it("保存提交配置、同意与 Key，并显示已保存", async () => {
     await renderPanel();
 

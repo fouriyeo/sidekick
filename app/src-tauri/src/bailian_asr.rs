@@ -712,6 +712,21 @@ mod tests {
     }
 
     #[test]
+    fn replaces_corrected_intermediate_text() {
+        let mut assembler = Assembler::default();
+        assembler.apply(1, "你好", false);
+        assembler.apply(1, "你好，世界", false);
+        assert_eq!(assembler.visible_text(), "你好，世界");
+    }
+
+    #[test]
+    fn shows_current_sentence_even_with_zero_id() {
+        let mut assembler = Assembler::default();
+        assembler.apply(0, "临时文本", false);
+        assert_eq!(assembler.visible_text(), "临时文本");
+    }
+
+    #[test]
     fn installs_rustls_crypto_provider() {
         ensure_crypto_provider();
         assert!(rustls::crypto::CryptoProvider::get_default().is_some());

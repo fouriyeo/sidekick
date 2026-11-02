@@ -425,3 +425,12 @@
 - 原因：OLED 每个像素自发光，功耗与亮度和点亮面积近似成正比；纯黑/深色像素几乎不耗电。省电收益直接体现在常亮场景，同时降低烧屏概率。
 - 代价：舞台少了氛围光，宠物与背景对比更强；靠气泡/按钮自身令牌保证可读性。
 - 规范：`docs/standards/visual.md` §6/§9、`app/src/mobile/features/pet/pet-stage.tsx`、`app/src/shared/styles/tokens.css`、`AGENTS.md`。
+
+## D59 · rustls 显式 ring CryptoProvider，修复删 reqwest 后的云端 TLS panic（2026-11-02）
+
+- 背景：686df69 删除 `reqwest` 后，云端 ASR 突然全部报“连不上百炼”。复现日志显示 rustls 0.23 在建连时 panic：`Could not automatically determine the process-level CryptoProvider from Rustls crate features`。
+- 决策：在 desktop 依赖中直接加入 `rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }`，并在 `bailian_asr::connect()` 前用 `std::sync::Once` 调 `rustls::crypto::ring::default_provider().install_default()`；新增单元测试确保 provider 可用。`cloud` 任务异常结束改为 `cloud_internal`，不再误报成 `cloud_network`。
+- 原因：rustls 0.23 要求进程级 provider；`reqwest` 之前通过 feature 合并提供了默认 provider，删掉后 `tokio-tungstenite` 的 rustls 只剩 `std`，TLS 握手直接 panic，oneshot 被丢弃后 `wait()` 只能看到“会话已结束”。用 `ring` 避免重新引入 `aws-lc-rs`/cmake 构建依赖。
+- 放弃：重新引入 `reqwest`（只为一个 provider，体积/依赖代价大）；启用 rustls 默认 `aws_lc_rs`（会重新引入 C/cmake 构建链）；依赖未来某个 crate 的 feature 合并（不可控）。
+- 代价：直接多一个 rustls 依赖；以后删/换 TLS 相关依赖时要跑 `cargo tree -e features -i rustls` 确认 `ring` 仍在。
+- 规范：`app/src-tauri/Cargo.toml`、`app/src-tauri/src/bailian_asr.rs`、`docs/engineering/asr-cloud-bailian.md`、`AGENTS.md`。

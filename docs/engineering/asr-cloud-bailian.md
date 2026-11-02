@@ -98,7 +98,7 @@ idle
 - 默认（北京，兼容旧域名）：`wss://dashscope.aliyuncs.com/api-ws/v1/inference`。
 - 新加坡：`wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`。
 - 业务空间：直接填完整 URL，例如 `wss://ws-123.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference`（新加坡 `ap-southeast-1`）；把 `{WorkspaceId}` 换成真实 ID。不再发送 `X-DashScope-WorkSpace`。
-- 请求头：`Authorization: Bearer <API Key>`、`user-agent: Sidekick/0.1`；不传 `X-DashScope-DataInspection`。
+- 请求头：`Authorization: Bearer <API Key>`、`user-agent: Sidekick/0.1`；不传 `X-DashScope-DataInspection`。TLS 用 rustls 0.23，必须在建连前显式安装 CryptoProvider（`rustls::crypto::ring::default_provider().install_default()`）；`Cargo.toml` 直接依赖 `rustls`（`default-features=false`，features `ring`/`std`/`tls12`），不要依赖其它 crate 的 feature 合并。删除 `reqwest` 后曾因没有 provider 在 TLS 握手 panic，被误报成 `cloud_network`。
 - 握手 401 → `cloud_key_invalid`；403 → `cloud_forbidden`（Key 有效但无模型/业务空间权限）；其他 HTTP 状态 → `cloud_network`。
 
 ### 5.2 run-task
@@ -145,12 +145,11 @@ idle
 | --- | --- |
 | `task-started` | 结束等待，补发缓存，进入实时转发 |
 | `result-generated` | 读 `payload.output.sentence`：`text`、`sentence_id`、`sentence_end`、`heartbeat` |
-| `task-finished` | 读 `payload.usage`，组装最终文本，记用量，结束会话 |
+| `task-finished` | 读 `payload.usage`（duration 秒→毫秒），组装最终文本，记用量，结束会话 |
 | `task-failed` | 读 `header.error_code/error_message`，映射错误码 |
 
 - `heartbeat=true` 或空文本丢弃。
-- `sentence_end=false` 更新当前句；`true` 写入已定稿句表，按 `sentence_id` 升序拼接。
-- `usage`：`input_tokens` / `output_tokens` / `total_tokens` / `duration`（秒，转毫秒）。
+- `sentence_end=false` 更新当前句；`true` 写入已定稿句表，按 `sentence_id` 升序拼接。3.1 的中间结果按 `sentence_id` **整体替换**，不要逐条追加；`sentence_begin=true` 且 `text` 为空时忽略。可见文本通过 `mic.partial` 实时回显手机，最终文本仍只插入一次。
 
 ## 6. 配置与密钥
 
@@ -258,6 +257,7 @@ idle
 | `cloud_network` | DNS/TLS/断网/写失败 | 连不上百炼，检查电脑网络。 |
 | `cloud_timeout` | 连接/等待/收尾超时 | 百炼响应超时，这段没转完。 |
 | `cloud_task_failed` | 其他 task-failed | 百炼识别失败，再说一次试试。 |
+| `cloud_internal` | 云端任务 panic/异常结束 | 云端会话异常结束，请重启 Sidekick 再试。 |
 | `cloud_key_unavailable` | Keychain 读取失败 | 读取不到电脑上保存的密钥，去「模型」页重新保存。 |
 | `cloud_cancelled` | 内部取消（不面向用户） | 已取消 |
 

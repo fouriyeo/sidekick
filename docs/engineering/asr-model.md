@@ -31,6 +31,8 @@ owner: engineering
 | 心跳 | 开 | `heartbeat=true` |
 
 - 服务地址：北京 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；新加坡 `wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`。
+- 模型推荐并默认 `qwen-audio-3.1-asr-flash-streaming`；模型页“使用推荐模型”可一键恢复，不静默覆盖自定义值。
+- 3.1 是流式模型：`result-generated` 的 `sentence_end=false` 会按句实时更新到手机，松手后只插入最终文本。
 - 用业务空间专属域名时，直接把完整 URL 粘贴到服务地址，例如 `wss://ws-123.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference`（新加坡把 region 换成 `ap-southeast-1`）。把 `{WorkspaceId}` 换成真实 ID；未替换会报“请填写完整服务地址…”。
 - 代码会把 `https://`→`wss://`、`http://`→`ws://`，缺路径补 `/api-ws/v1/inference`；但业务空间占位符不会自动替换。
 - 模型不下载到本机、不入 APK/Git；识别在百炼服务端完成。
