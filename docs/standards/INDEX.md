@@ -2,7 +2,7 @@
 doc: standards/INDEX
 title: 规范分支索引
 status: active
-updated: 2026-10-31
+updated: 2026-11-02
 load: on-demand
 children:
   - documentation.md
@@ -10,6 +10,7 @@ children:
   - ux.md
   - visual.md
   - engineering.md
+  - git.md
 ---
 
 # 规范分支
@@ -25,6 +26,7 @@ children:
 | 设计横屏、触控、手势、反馈、错误文案 | [ux.md](./ux.md) | L |
 | 定视觉、配色、字体、宠物资产、动效 | [visual.md](./visual.md) | L |
 | 改前端/平台边界/依赖/测试 | [engineering.md](./engineering.md) | M |
+| 提交/推送代码，写 commit、判断能不能 push | [git.md](./git.md) | S |
 
 ## 约束力顺序
 

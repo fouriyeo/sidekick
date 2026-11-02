@@ -201,7 +201,7 @@ sidekick/
 - 平台边界：`mobile` 不 import `desktop`，`desktop` 不 import `mobile`，`shared` 不 import 两者；详见 `docs/standards/engineering.md`。
 - 前端改动遵循 `docs/frontend-architecture.md`；新增/升级依赖遵循 `docs/dependency-policy.md`，新增运行时依赖追加到 `docs/decisions.md`。
 - 不提交构建产物（`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、`.venv`）。
-- GitHub 推送已配置（gh 登录 fouriyeo，已 `gh auth setup-git`）。共享/不可逆操作（force push、改仓库可见性）先确认。
+- **Git**：提交信息**用中文**（`type(scope): 中文摘要` + 中文正文，type/scope 保留英文）；push 前跑完 `typecheck/lint/test/build`、手机端真机验证、文档检查；`force push`/改仓库可见性等不可逆操作先确认；完整规则见 [docs/standards/git.md](docs/standards/git.md)。GitHub 推送已配置（gh 登录 fouriyeo，已 `gh auth setup-git`）。
 
 ## 10. 下一步路线（按优先级）
 
