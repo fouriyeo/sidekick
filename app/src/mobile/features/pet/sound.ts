@@ -74,6 +74,12 @@ const PATTERNS: Record<PetSoundKind, Tone[]> = {
 /** asking 最多提醒两次：进入时一次，12 秒后仍 asking 再补一次。 */
 export const ASK_REPEAT_MS = 12_000;
 
+/**
+ * 总音量倍数：1 = 原始设计音量，2 = 放大一倍，3 = 在放大一倍的基础上再 +50%。
+ * 单音峰值最高 0.18 × 3 = 0.54；开工音 E5+B5 有 0.04s 重叠，峰值和 0.78 < 1，不削波。
+ */
+const MASTER_GAIN = 3;
+
 function defaultContextFactory(): AudioContext | null {
   if (typeof AudioContext === "undefined") return null;
   try {
@@ -107,18 +113,22 @@ export function createPetSounds(
     return context;
   }
 
+  /** 挂起时尽力恢复；没有用户手势时可能被拒绝，失败静默。 */
+  function resumeIfSuspended(current: AudioContext): void {
+    if (current.state !== "suspended") return;
+    try {
+      void current.resume().catch(() => undefined);
+    } catch {
+      // 部分 WebView 上 resume 会同步抛错，忽略即可。
+    }
+  }
+
   function unlock(): boolean {
     const current = ensureContext();
     if (!current) return false;
 
     unlocked = true;
-    if (current.state === "suspended") {
-      try {
-        void current.resume().catch(() => undefined);
-      } catch {
-        // 部分 WebView 上 resume 会同步抛错，忽略即可。
-      }
-    }
+    resumeIfSuspended(current);
     return true;
   }
 
@@ -136,6 +146,10 @@ export function createPetSounds(
     const current = ensureContext();
     if (!current) return false;
 
+    // 切后台/音频焦点丢失后 WebView 可能把 AudioContext 挂起；
+    // 首次解锁只发生一次，这里再补一次 resume，避免之后永久静音。
+    resumeIfSuspended(current);
+
     const start = current.currentTime || 0;
     try {
       for (const tone of PATTERNS[kind]) {
@@ -145,8 +159,9 @@ export function createPetSounds(
 
         oscillator.type = tone.type;
         oscillator.frequency.setValueAtTime(tone.frequency, toneStart);
+        const peak = Math.min(1, tone.gain * MASTER_GAIN);
         gain.gain.setValueAtTime(0.0001, toneStart);
-        gain.gain.linearRampToValueAtTime(tone.gain, toneStart + 0.012);
+        gain.gain.linearRampToValueAtTime(peak, toneStart + 0.012);
         gain.gain.exponentialRampToValueAtTime(0.0001, toneStart + tone.duration);
 
         oscillator.connect(gain);

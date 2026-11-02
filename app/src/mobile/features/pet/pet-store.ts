@@ -13,7 +13,7 @@ import {
 import { renderCopy } from "./copy";
 import { createHaptics, type Haptics } from "./haptics";
 import { defaultPetState, normalizeName, parsePetSave, petSaveFromState } from "./persistence";
-import { createPetSounds } from "./sound";
+import { createPetSounds, type PetSoundGates } from "./sound";
 import { reducePet } from "./state-machine";
 import { createTauriPetStorage } from "./tauri-pet-storage";
 import type {
@@ -60,6 +60,25 @@ const PETTING_COMPLETE_MS = 3000;
 function defaultAppVisible(): boolean {
   if (typeof document === "undefined") return true;
   return document.visibilityState !== "hidden";
+}
+
+/**
+ * 音效门禁的唯一接线点：声音开关 + App 前台 + 宠物页可见 + 录音中。
+ * 「宠物页可见」= App 可见且没打开聊天/设置（overlayOpen）。
+ */
+export function createPetSoundGates(
+  getState: () => Pick<PetStoreState, "pet" | "micListening">,
+  appVisible: () => boolean,
+): PetSoundGates {
+  return {
+    enabled: () => getState().pet.settings.sound,
+    visible: () => appVisible(),
+    petVisible: () => {
+      const pet = getState().pet;
+      return pet.visible && !pet.overlayOpen;
+    },
+    micListening: () => getState().micListening,
+  };
 }
 
 export function createPetStore(deps: PetStoreDeps) {
@@ -484,13 +503,7 @@ export const usePetStore = createPetStore({
   haptics: createHaptics(),
   now: () => Date.now(),
   isAppVisible: defaultAppVisible,
-  sounds: createPetSounds(() => {
-    const state = usePetStore.getState();
-    return {
-      enabled: () => state.pet.settings.sound,
-      visible: () => defaultAppVisible(),
-      petVisible: () => state.pet.visible,
-      micListening: () => state.micListening,
-    };
-  }),
+  sounds: createPetSounds(() =>
+    createPetSoundGates(() => usePetStore.getState(), defaultAppVisible),
+  ),
 });

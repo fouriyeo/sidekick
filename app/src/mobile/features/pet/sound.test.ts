@@ -28,6 +28,7 @@ class FakeAudioContext {
   state: AudioContextState = "running";
   destination = { connect: vi.fn() };
   oscillators: FakeOscillator[] = [];
+  gains: FakeParam[] = [];
   resume = vi.fn(async () => undefined);
   close = vi.fn(async () => undefined);
 
@@ -52,14 +53,13 @@ class FakeAudioContext {
   }
 
   createGain() {
-    return {
-      gain: {
-        setValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn(),
-      },
-      connect: vi.fn(),
+    const gain: FakeParam = {
+      setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn(),
+      exponentialRampToValueAtTime: vi.fn(),
     };
+    this.gains.push(gain);
+    return { gain, connect: vi.fn() };
   }
 
   static context(): FakeAudioContext {
@@ -163,6 +163,20 @@ describe("createPetSounds 门禁", () => {
         (osc) => osc.frequency.setValueAtTime.mock.calls[0]?.[0],
       ),
     ).toEqual([523.25, 659.25, 783.99]);
+  });
+
+  it("播放音量是设计值的三倍（MASTER_GAIN = 3）", () => {
+    const { sounds } = createSounds();
+    sounds.unlock();
+
+    expect(sounds.play("complete")).toBe(true);
+    expect(
+      FakeAudioContext.context().gains.map((gain) =>
+        Number(
+          ((gain.linearRampToValueAtTime.mock.calls[0]?.[0] as number | undefined) ?? 0).toFixed(6),
+        ),
+      ),
+    ).toEqual([0.39, 0.42, 0.45]);
   });
 });
 
