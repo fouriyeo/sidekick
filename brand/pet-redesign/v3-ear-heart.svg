@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="猫心">
+  <defs>
+    <mask id="v3-eyes" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <rect width="100" height="100" fill="#fff"/>
+      <circle cx="42" cy="49" r="3" fill="#000"/>
+      <circle cx="58" cy="49" r="3" fill="#000"/>
+    </mask>
+  </defs>
+  <g fill="currentColor">
+    <path mask="url(#v3-eyes)" d="M 50 78 C 34 68 26 56 26 46 C 26 36 33 29 41 29 C 45 29 48 31 50 34 C 52 31 55 29 59 29 C 67 29 74 36 74 46 C 74 56 66 68 50 78 Z"/>
+    <path d="M 37 33 L 34 20 L 47 29 Z"/>
+    <path d="M 63 33 L 66 20 L 53 29 Z"/>
+  </g>
+</svg>

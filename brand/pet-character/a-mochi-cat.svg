@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="a-title"
+     style="--body:#F3D6B3;--shade:#DFB78C;--belly:#FFF4E6;--ear:#FFC3AB;--ink:#3A2E3F;--accent:#FF7A59;--mint:#7FE0C3">
+  <title id="a-title">A · 麻薯猫猫（分层）</title>
+  <g class="pet-shadow"><ellipse cx="160" cy="292" rx="86" ry="13" fill="#000" opacity=".10"/></g>
+
+  <g class="pet-tail">
+    <path d="M 212 250 C 256 258 284 232 272 200" fill="none" stroke="var(--shade)" stroke-width="16" stroke-linecap="round"/>
+  </g>
+
+  <g class="pet-legs">
+    <ellipse cx="132" cy="282" rx="25" ry="13" fill="var(--shade)"/>
+    <ellipse cx="188" cy="282" rx="25" ry="13" fill="var(--shade)"/>
+  </g>
+
+  <g class="pet-body">
+    <ellipse cx="160" cy="228" rx="64" ry="56" fill="var(--body)"/>
+    <ellipse cx="160" cy="240" rx="40" ry="32" fill="var(--belly)"/>
+  </g>
+
+  <g class="pet-arms">
+    <ellipse cx="100" cy="226" rx="14" ry="20" fill="var(--body)" transform="rotate(-14 100 226)"/>
+    <ellipse cx="220" cy="226" rx="14" ry="20" fill="var(--body)" transform="rotate(14 220 226)"/>
+  </g>
+
+  <g class="pet-head">
+    <path d="M 106 24 L 146 66 L 96 72 Z" fill="var(--body)" stroke="var(--body)" stroke-width="18" stroke-linejoin="round"/>
+    <path d="M 214 24 L 174 66 L 224 72 Z" fill="var(--body)" stroke="var(--body)" stroke-width="18" stroke-linejoin="round"/>
+    <path d="M 108 36 L 130 60 L 104 64 Z" fill="var(--ear)" stroke="var(--ear)" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M 212 36 L 190 60 L 216 64 Z" fill="var(--ear)" stroke="var(--ear)" stroke-width="8" stroke-linejoin="round"/>
+    <ellipse cx="160" cy="128" rx="80" ry="72" fill="var(--body)"/>
+    <g class="pet-face">
+      <ellipse cx="134" cy="130" rx="8" ry="10" fill="var(--ink)"/>
+      <ellipse cx="186" cy="130" rx="8" ry="10" fill="var(--ink)"/>
+      <circle cx="137" cy="126" r="3" fill="#fff" opacity=".9"/>
+      <circle cx="189" cy="126" r="3" fill="#fff" opacity=".9"/>
+      <path d="M 156 146 Q 160 150 164 146 Q 162 153 160 153 Q 158 153 156 146 Z" fill="var(--accent)"/>
+      <path d="M 152 158 Q 156 162 160 158 Q 164 162 168 158" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="112" cy="150" rx="11" ry="6" fill="var(--accent)" opacity=".32"/>
+      <ellipse cx="208" cy="150" rx="11" ry="6" fill="var(--accent)" opacity=".32"/>
+    </g>
+  </g>
+</svg>

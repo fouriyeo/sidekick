@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>deepseek-openpet.zip · 拆包检查报告</title>
+<style>
+  :root{--ink:#1B1726;--muted:#6E6880;--faint:#A09AAF;--line:#E9E5EF;--bg:#FBFAF7;--card:#fff;--blue:#6078A8;--blue-ink:#486090;--warm:#F0D8D8}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.6}
+  .wrap{max-width:1120px;margin:0 auto;padding:80px 32px 110px}
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  header{margin-bottom:56px}
+  header .mono{display:block;margin-bottom:16px}
+  h1{font-size:40px;font-weight:250;letter-spacing:.01em;margin-bottom:14px}
+  .lede{max-width:760px;color:var(--muted);font-size:14.5px;font-weight:300}
+  .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:34px 0 56px}
+  .facts div{background:var(--card);padding:18px 20px}
+  .facts h3{font-size:10.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .facts p{font-size:14px;font-weight:400}
+  .facts .sub{font-size:11.5px;color:var(--faint);font-weight:300;margin-top:2px}
+  section{margin-bottom:64px}
+  section h2{font-size:22px;font-weight:300;letter-spacing:.01em;margin-bottom:6px}
+  section > .mono{display:block;margin-bottom:12px}
+  section .desc{color:var(--muted);font-size:13.5px;font-weight:300;margin-bottom:24px;max-width:800px}
+  .states{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .state{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;text-align:center}
+  .state img{width:100%;height:auto;display:block;border-radius:10px;background:#F5F2EC}
+  .state h3{font-size:14px;font-weight:600;margin-top:12px}
+  .state .row{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .state p{font-size:12px;color:var(--muted);font-weight:300;text-align:left;margin-top:6px;min-height:64px}
+  .state .spec{font-size:11px;color:var(--faint);text-align:left;margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
+  .sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .sheet img{width:100%;height:auto;display:block;border-radius:8px}
+  .sheet .cap{font-size:11.5px;color:var(--faint);margin-top:10px;font-weight:300}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:13px}
+  th,td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600;background:#FAF8F4}
+  tr:last-child td{border-bottom:none}
+  .ok{color:#2F7D5B;font-weight:600}
+  .warn{color:#B4691F;font-weight:600}
+  .bad{color:#B03A3A;font-weight:600}
+  pre{background:#1E1B4B;color:#EDEBFF;border-radius:12px;padding:18px 20px;font-size:12px;line-height:1.7;overflow:auto}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  .options{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .options div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .options h4{font-size:13px;font-weight:600;margin-bottom:6px}
+  .options p{font-size:12.5px;color:var(--muted);font-weight:300}
+  .options .tag{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+  footer{margin-top:80px;text-align:center;color:var(--faint);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  @media (max-width:900px){.states{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:repeat(2,1fr)}.options{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="mono">deepseek-openpet.zip · unpack &amp; inspect</span>
+    <h1>这是一个 OpenPets / Codex 格式的动画桌宠包</h1>
+    <p class="lede">zip 里只有两个文件：<code>pet.json</code>（元数据 + 状态机）和 <code>spritesheet.png</code>（4096×1024 的 64 帧图集）。角色 label 是「大肥鱼」，从配色和轮廓看是 DeepSeek 的蓝色小鲸鱼形象。它不是 logo 素材，而是一套<strong>可直接播放的宠物动画图集</strong>——正好和 Sidekick 想要的「手机宠物」是同一类东西。</p>
+  </header>
+
+  <div class="facts">
+    <div><h3>帧数</h3><p>64 帧</p><div class="sub">4 状态 × 16 帧</div></div>
+    <div><h3>单帧</h3><p>256 × 256 px</p><div class="sub">图集 4096 × 1024</div></div>
+    <div><h3>体积</h3><p>4.0 MB</p><div class="sub">RGBA PNG，未压缩</div></div>
+    <div><h3>格式</h3><p>schema 2</p><div class="sub">OpenPets / Codex 兼容</div></div>
+  </div>
+
+  <section>
+    <span class="mono">States</span>
+    <h2>四个状态，正好对得上 Sidekick 的 AI 四态</h2>
+    <p class="desc">每行 16 帧，100ms 一帧（working 80ms）。done 是「播一次 + 最后一帧停 1.5 秒」，其它三个循环。下面是按 pet.json 还原的播放效果（GIF 首帧透明底，白底卡片上不好看可忽略）。</p>
+    <div class="states">
+      <div class="state"><img src="idle.gif" alt="idle"><h3>idle</h3><div class="row">row 0 · 16 帧 × 100ms</div><p>默认待机：呼吸、轻微摆动，循环播放。</p><div class="spec">对应 Sidekick：静态 / 空闲</div></div>
+      <div class="state"><img src="working.gif" alt="working"><h3>working</h3><div class="row">row 1 · 16 帧 × 80ms</div><p>工作状态：节奏最快，动作幅度最大。</p><div class="spec">对应 Sidekick：工作中</div></div>
+      <div class="state"><img src="attention.gif" alt="attention"><h3>attention</h3><div class="row">row 2 · 16 帧 × 100ms</div><p>需要你注意：动作幅度大、有明显招手/提示感。</p><div class="spec">对应 Sidekick：等你决定</div></div>
+      <div class="state"><img src="done.gif" alt="done"><h3>done</h3><div class="row">row 3 · 15 帧 × 100ms + 1.5s</div><p>完成庆祝：播一次，最后一帧定格。</p><div class="spec">对应 Sidekick：完成</div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="mono">Atlas</span>
+    <h2>整张图集长这样</h2>
+    <div class="sheet">
+      <img src="contact-sheet.png" alt="spritesheet contact sheet">
+      <div class="cap">4 行 × 16 列，每格 256×256；每格内容都完整落在格子里（实测 bbox 最小 x=30、最大 x=206，没有跨格溢出），背景全透明。</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="mono">Assessment</span>
+    <h2>能不能用？先看技术账</h2>
+    <table>
+      <thead><tr><th>项</th><th>结论</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>美术质量</td><td class="ok">可用</td><td>64 帧全手绘动画、透明背景、每帧都有实际形变（相邻帧差异 2k–21k 像素，不是复制帧凑数）。</td></tr>
+        <tr><td>状态设计</td><td class="ok">很贴</td><td>idle / working / attention / done 与 Sidekick AI 联动的四态一一对应，连 done 的「播一次 + 定格」都想到了。</td></tr>
+        <tr><td>尺寸</td><td class="warn">偏大</td><td>4MB PNG → 解码后 4096×1024×4 = 16MB 内存；手机上首屏加载和内存都要掂量。转 WebP + 按状态切 4 张能降到几百 KB。</td></tr>
+        <tr><td>渲染成本</td><td class="ok">低</td><td>100ms/帧 = 10fps，CSS sprite（background-position）或 canvas 都轻松，比 Rive 省事得多。</td></tr>
+        <tr><td>格式标准</td><td class="ok">现成</td><td>pet.json 带 grid/states/transitions（task:start / need-approval / completed），是 OpenPets / Codex 的 schema 2，不是野格式。</td></tr>
+        <tr><td>授权 / 品牌</td><td class="bad">有风险</td><td>zip 里没有 LICENSE；角色是 DeepSeek 的「大肥鱼」鲸鱼 IP。直接放进 Sidekick 涉及品牌撞车，建议只当格式参考和美术基准。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <span class="mono">Integration</span>
+    <h2>如果要做，Sidekick 这边的接入成本</h2>
+    <p class="desc">渲染层很小：一个 <code>&lt;SpritePet state="working" /&gt;</code> 组件，背景图按状态行偏移 + steps() 每帧，done 用 animationend 停帧。下面是骨架，不是最终实现：</p>
+    <pre><code>// 思路：一张图集按行取状态，按列 steps 播放
+const ROWS = { idle: 0, working: 1, attention: 2, done: 3 };
+const FRAMES = 16;
+
+.sprite {
+  width: 256px; height: 256px;
+  background-image: url(/pets/dafeiyu.webp);
+  background-size: 4096px 1024px;      /* 16×256, 4×256 */
+  background-position-y: calc(var(--row) * -256px);
+  animation: play 1.6s steps(16) infinite;   /* 16 × 100ms */
+}
+@keyframes play {
+  to { background-position-x: -4096px; }
+}
+/* done：animation-iteration-count: 1，结束后停在最后一帧 */</code></pre>
+    <p class="desc" style="margin-top:18px">需要额外处理的点：① 减少动效时定格在首帧；② 后台/录音时暂停（现有 <code>useReducedMotion</code> / <code>hidden</code> 逻辑可复用）；③ dpr 上限 2，256px 在 2x 屏上够用；④ 图集要先转 WebP 并考虑拆成 4 张按状态懒加载。</p>
+  </section>
+
+  <section>
+    <span class="mono">Next</span>
+    <h2>三个可选方向</h2>
+    <div class="options">
+      <div><span class="tag">A · 用格式</span><h4>把我们的 Q 版做成同款</h4><p>按 schema 2 把你选的 A/B/C 形象做成 64 帧图集：idle / working / attention / done，直接吃现成播放器逻辑，美术还是我们自己的。</p></div>
+      <div><span class="tag">B · 用资产</span><h4>先拿来当占位</h4><p>在宠物页接这个 DeepSeek 鲸鱼当临时占位，验证「图集 + 状态机 + 播放」链路，跑通后再换自己的图集。品牌问题在正式发版前解决。</p></div>
+      <div><span class="tag">C · 只参考</span><h4>当美术与分镜基准</h4><p>研究它的四态动作设计（尤其 attention 和 done 的表演），回头改进我们 SVG 版的动作，不引入位图资产。</p></div>
+    </div>
+  </section>
+
+  <footer>deepseek-openpet.zip · inspected 2026-11-02 · OpenPets schema 2</footer>
+</div>
+</body>
+</html>
