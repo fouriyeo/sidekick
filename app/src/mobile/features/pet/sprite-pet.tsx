@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AiState } from "./ai-status";
 import styles from "./pet.module.css";
 import { MANIFEST, PET_POSTER_URL, PET_SHEET_URL, type SpriteState } from "./sprite-manifest";
-import { advanceFrames } from "./sprite-player";
+import { advanceFrames, fitCellSize } from "./sprite-player";
 import { resolveSpriteState, spriteStateChain } from "./sprite-state-map";
 import type { PetPhase } from "./types";
 
@@ -43,14 +43,14 @@ export function SpritePet({ ai, phase, night, active, reducedMotion }: SpritePet
   const lastStateRef = useRef<string | null>(null);
   const [status, setStatus] = useState<SheetStatus>(MANIFEST ? "loading" : "error");
   const [sheet, setSheet] = useState<SheetInfo | null>(null);
-  const [size, setSize] = useState(0);
+  const [box, setBox] = useState({ width: 0, height: 0 });
   const [hidden, setHidden] = useState(false);
 
   const stateName = MANIFEST
     ? resolveSpriteState(spriteStateChain(phase, ai), MANIFEST.states, MANIFEST.defaultState)
     : null;
   const state = stateName && MANIFEST ? (MANIFEST.states[stateName] ?? null) : null;
-  const cell = size > 0 ? size : (MANIFEST?.cell ?? 256);
+  const cell = fitCellSize(box.width, box.height, MANIFEST?.cell ?? 256);
 
   // 解码 + 尺寸校验：宽必须 = cols × cell，高必须是 cell 的整数倍且覆盖所有行。
   useEffect(() => {
@@ -97,12 +97,14 @@ export function SpritePet({ ai, phase, night, active, reducedMotion }: SpritePet
     const element = rootRef.current;
     if (!element) return;
     if (typeof ResizeObserver === "undefined") {
-      setSize(element.clientWidth || 0);
+      setBox({ width: element.clientWidth || 0, height: element.clientHeight || 0 });
       return;
     }
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      if (width > 0) setSize(width);
+      const rect = entries[0]?.contentRect;
+      if (rect && rect.width > 0 && rect.height > 0) {
+        setBox({ width: rect.width, height: rect.height });
+      }
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -120,6 +122,8 @@ export function SpritePet({ ai, phase, night, active, reducedMotion }: SpritePet
     const element = spriteRef.current;
     if (!element || !MANIFEST || !state || !sheet || status !== "ready") return;
 
+    element.style.width = `${cell}px`;
+    element.style.height = `${cell}px`;
     element.style.backgroundSize = `${MANIFEST.cols * cell}px ${sheet.rows * cell}px`;
 
     if (lastStateRef.current !== stateName) {

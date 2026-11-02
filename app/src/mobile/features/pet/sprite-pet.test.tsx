@@ -56,6 +56,9 @@ describe("SpritePet", () => {
     const sprite = spriteOf(container);
     expect(sprite.style.backgroundSize).toBe("4096px 1024px");
     expect(sprite.style.backgroundPosition).toBe("0px -256px");
+    // 容器尺寸未知时用 cell 兜底，方形裁切，不会露出下一行
+    expect(sprite.style.width).toBe("256px");
+    expect(sprite.style.height).toBe("256px");
   });
 
   it("状态切换后从新状态第 0 帧开始", async () => {

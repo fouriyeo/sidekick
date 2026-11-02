@@ -712,6 +712,12 @@ mod tests {
     }
 
     #[test]
+    fn installs_rustls_crypto_provider() {
+        ensure_crypto_provider();
+        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+    }
+
+    #[test]
     fn ignores_duplicate_final_sentence() {
         let mut assembler = Assembler::default();
         assembler.apply(1, "第一句。", true);

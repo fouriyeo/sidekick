@@ -181,6 +181,19 @@ export function CloudAsrForm() {
         <datalist id="cloud-model-presets">
           <option value={DEFAULT_CLOUD_MODEL} />
         </datalist>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={() => setDraft({ model: DEFAULT_CLOUD_MODEL })}
+          >
+            使用推荐模型
+          </Button>
+          <span className="text-[11px] text-muted-foreground">
+            实时流式，推荐 {DEFAULT_CLOUD_MODEL}
+          </span>
+        </div>
         <FieldError message={fieldErrors.model} />
       </div>
 

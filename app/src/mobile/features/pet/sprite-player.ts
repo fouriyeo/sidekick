@@ -1,5 +1,13 @@
 import type { SpriteFrame, SpriteLoopMode } from "./sprite-manifest";
 
+/** 容器可能不是正方形（`.petSlot` 被 max-width 卡成竖长），取较短边做格子并居中。 */
+export function fitCellSize(width: number, height: number, fallback: number): number {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return fallback;
+  }
+  return Math.min(width, height);
+}
+
 export type FrameStep = {
   index: number;
   /** 当前帧内已播放的毫秒数。 */

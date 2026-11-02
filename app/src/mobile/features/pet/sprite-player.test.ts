@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceFrames } from "./sprite-player";
+import { advanceFrames, fitCellSize } from "./sprite-player";
 
 const frames16 = Array.from({ length: 16 }, (_, col) => ({ col, duration: 100 }));
 
@@ -36,5 +36,19 @@ describe("advanceFrames", () => {
 
   it("空帧防御", () => {
     expect(advanceFrames([], 500, "loop")).toEqual({ index: 0, elapsedInFrame: 0 });
+  });
+});
+
+describe("fitCellSize", () => {
+  it("取容器较短边做方形格子，防止露出相邻行/列", () => {
+    expect(fitCellSize(316, 512, 256)).toBe(316);
+    expect(fitCellSize(512, 316, 256)).toBe(316);
+    expect(fitCellSize(300, 300, 256)).toBe(300);
+  });
+
+  it("容器尺寸未知时回落到 manifest.cell", () => {
+    expect(fitCellSize(0, 0, 256)).toBe(256);
+    expect(fitCellSize(Number.NaN, 400, 256)).toBe(256);
+    expect(fitCellSize(-10, 400, 256)).toBe(256);
   });
 });

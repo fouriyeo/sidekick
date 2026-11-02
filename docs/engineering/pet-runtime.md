@@ -50,7 +50,7 @@ app/src/mobile/features/pet/
 - **一列一帧**：`grid.cell` 是单帧边长（当前 256），`grid.cols` 是列数（当前 16；上限 32），行号由 `states.*.row` 声明。
 - 单状态帧数 1–32，兼容 16；不同状态可以帧数不同，只播 `frames` 里列出的列。
 - 播放：按 `frames[].duration` 累计推进（rAF，只在帧号变化时改 `background-position`）；`loop` 循环，`once` 播完停在末帧（done 的 1.5s 定格由末帧 duration 表达）。
-- 尺寸：`ResizeObserver` 量容器后按 px 设置 `background-size/position`，旋转/姿态变化不重新解码；DPR 上限 2。
+- 尺寸：`ResizeObserver` 量容器后取 `min(宽,高)` 做方形格子（`.petSlot` 可能被 max-width 卡成竖长），元素本身设成该方形 + `overflow:hidden` 居中，再按 px 设置 `background-size/position`；旋转/姿态变化不重新解码，DPR 上限 2。
 - 降级：manifest 校验失败、解码失败、或图片尺寸与 `cols/cell` 不匹配 → 显示 `poster.webp`；气泡/触感/录音不受影响。
 - 内存：4096×1024 解码约 16.8MB；需要再降可拆状态条按需解码（协议不变）。
 

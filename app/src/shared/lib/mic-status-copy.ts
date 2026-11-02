@@ -22,6 +22,7 @@ export const MIC_STATUS_COPY = {
   cloudNetwork: "连不上百炼，检查电脑网络。",
   cloudTimeout: "百炼响应超时，这段没转完。",
   cloudTaskFailed: "百炼识别失败，再说一次试试。",
+  cloudInternal: "云端会话异常结束，请重启 Sidekick 再试。",
   cloudKeyUnavailable: "读取不到电脑上保存的密钥，去电脑「模型」页重新保存。",
 } as const;
 
@@ -73,6 +74,8 @@ export function micErrorText(code: string): string {
       return MIC_STATUS_COPY.cloudTimeout;
     case "cloud_task_failed":
       return MIC_STATUS_COPY.cloudTaskFailed;
+    case "cloud_internal":
+      return MIC_STATUS_COPY.cloudInternal;
     case "cloud_key_unavailable":
       return MIC_STATUS_COPY.cloudKeyUnavailable;
     default:

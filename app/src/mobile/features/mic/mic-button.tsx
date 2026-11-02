@@ -649,7 +649,10 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
                 className="mt-2"
               />
               {partialText ? (
-                <p className="mt-2 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap opacity-80">
+                <p
+                  aria-live="polite"
+                  className="mt-2 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap opacity-80"
+                >
                   {partialText}
                 </p>
               ) : (

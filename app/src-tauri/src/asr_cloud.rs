@@ -87,20 +87,7 @@ impl AsrCloudState {
     }
 
     pub fn status(&self) -> CloudAsrStatus {
-        let settings = self.snapshot();
-        let key = self.key().ok().flatten();
-        let configured =
-            settings.consent_cloud.granted && key.is_some() && settings.validate().is_ok();
-        CloudAsrStatus {
-            configured,
-            consent: settings.consent_cloud.granted,
-            has_key: key.is_some(),
-            key_masked: key
-                .as_deref()
-                .map(asr_config::mask_key)
-                .filter(|value| !value.is_empty()),
-            config: settings.bailian,
-        }
+        status_from_settings(&self.snapshot())
     }
 
     pub fn save(&self, input: CloudAsrSaveInput) -> Result<CloudAsrStatus, String> {
@@ -298,6 +285,22 @@ fn test_error(code: &'static str, detail: String, model: Option<String>) -> Clou
     }
 }
 
+/// 只读 `asr.json` 的元数据，不访问 Keychain；真正的 Key 在测试连接/录音建会话时才读。
+fn status_from_settings(settings: &AsrSettings) -> CloudAsrStatus {
+    CloudAsrStatus {
+        configured: settings.consent_cloud.granted
+            && settings.key_present
+            && settings.validate().is_ok(),
+        consent: settings.consent_cloud.granted,
+        has_key: settings.key_present,
+        key_masked: settings
+            .key_hint
+            .clone()
+            .filter(|value| !value.trim().is_empty()),
+        config: settings.bailian.clone(),
+    }
+}
+
 pub fn user_error_text(code: &str) -> &'static str {
     match code {
         "cloud_not_configured" => "云端还没配置完整",
@@ -309,6 +312,7 @@ pub fn user_error_text(code: &str) -> &'static str {
         "cloud_network" => "连不上百炼，检查电脑网络",
         "cloud_timeout" => "百炼响应超时",
         "cloud_task_failed" => "百炼识别失败",
+        "cloud_internal" => "云端会话异常结束，请重启 Sidekick",
         "cloud_key_unavailable" => "读取不到本机保存的密钥，请重新保存",
         _ => "云端识别失败",
     }
@@ -359,5 +363,25 @@ mod tests {
         let settings = AsrSettings::default();
         assert!(!settings.consent_cloud.granted);
         assert_eq!(settings.bailian.model, asr_config::DEFAULT_MODEL);
+    }
+
+    #[test]
+    fn status_uses_key_metadata_without_keychain() {
+        let mut settings = AsrSettings::default();
+        settings.consent_cloud.granted = true;
+        settings.key_present = true;
+        settings.key_hint = Some("sk-••••cdef".to_string());
+
+        let status = status_from_settings(&settings);
+        assert!(status.configured);
+        assert!(status.has_key);
+        assert_eq!(status.key_masked.as_deref(), Some("sk-••••cdef"));
+
+        settings.key_present = false;
+        settings.key_hint = None;
+        let status = status_from_settings(&settings);
+        assert!(!status.configured);
+        assert!(!status.has_key);
+        assert!(status.key_masked.is_none());
     }
 }
