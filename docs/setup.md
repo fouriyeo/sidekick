@@ -132,6 +132,15 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 - 剪贴板历史在 `~/Library/Application Support/Sidekick/clipboard.json`，权限 `600`；可在桌面「剪贴板」页暂停/清空。
 - 可用 `SIDEKICK_MODEL_DIR` 指向临时空目录验证“无模型”提示，不改动现有模型。
 
+## 百炼云端 ASR（可选）
+
+- 在阿里云百炼控制台创建 **API Key**（`sk-...`）；Key 只保存在电脑，不写入配置文件、不写日志。
+- 服务地址：北京 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；新加坡 `wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`。如用业务空间专属域名，填 `wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference`（新加坡为 `ap-southeast-1`）并在设置页填业务空间 ID。
+- 桌面「设置 → 语音识别 → 百炼云端」：填服务地址、业务空间 ID（可选）、API Key、模型（默认 `qwen-audio-3.1-asr-flash-streaming`），按需调语言/场景/静音断句/热词；点「测试连接」→「保存并启用」。
+- 首次保存 Key 时 macOS 可能弹一次钥匙串授权；开发版每次重编译后可能再次提示，属预期。读取失败时重新保存即可，不会落明文。
+- 启用云端需勾选“录音会发送到阿里云百炼”的隐私同意；关闭云端用「切回本机」，Key 可用「清除 Key」删除。
+- 云端失败默认回退本机（需已下载本机模型）；结果会标注“本机（云端失败）”。
+
 ## Release（待办）
 
 - 生成 keystore，在 `gen/android` 中配置 `signingConfigs`；

@@ -2,21 +2,22 @@
 doc: engineering/asr-model
 title: 本机语音模型管理
 status: active
-updated: 2026-10-31
+updated: 2026-11-02
 load: on-demand
 owner: engineering
 ---
 
 # 本机语音模型管理
 
-> 回答“模型从哪来、放哪、怎么选、怎么保证不落盘”。产品规则见 [mic PRD](../prd/mic/PRD.md)；链路见 [audio-pipeline.md](./audio-pipeline.md)。
+> 回答“模型从哪来、放哪、怎么选、怎么保证不落盘”。产品规则见 [mic PRD](../prd/mic/PRD.md)；链路见 [audio-pipeline.md](./audio-pipeline.md)；云端引擎见 [asr-cloud-bailian.md](./asr-cloud-bailian.md)。
 
 ## 1. 结论
 
 - ASR 使用 **whisper-rs 0.16 + whisper.cpp（Metal）**，在桌面进程内转写。
 - 模型文件保存在电脑；手机不下载、不持有模型。
 - 音频只在内存和局域网中，转写结束立即释放；不再生成临时 WAV。
-- 模型可以用桌面「设置 → 语音模型」下载、取消、删除、切换。
+- 模型可以用桌面「设置 → 语音识别 → 本机」下载、取消、删除、切换。
+- 云端百炼是另一种引擎：不需要下载模型，也不在手机或桌面存模型文件；默认仍用本机。
 
 ## 2. 模型与体积
 
@@ -65,14 +66,14 @@ owner: engineering
 
 ## 6. 设置页
 
-桌面「设置 → 语音模型」显示：
+桌面「设置 → 语音识别 → 本机」显示：
 
 - 当前模型与存储目录；
 - 四个模型的状态、体积、下载/取消/删除/使用；
 - 下载进度条；
 - 目录复制与 Finder 入口。
 
-没有模型时，连接面板与语音结果会提示先下载；模型下载完成后可直接切换。
+没有模型时，连接面板与语音结果会提示先下载；模型下载完成后可直接切换。云端引擎的地址/Key/模型/热词/测试连接在同页「百炼云端」标签，见 [asr-cloud-bailian.md](./asr-cloud-bailian.md)。
 
 ## 7. 验收
 
@@ -84,6 +85,7 @@ owner: engineering
 
 ## 8. P1 / 已知限制
 
+- 云端引擎不下载模型；切换云端不要求本机有模型，但云端失败时只有本机有模型才会回退。
 - 不做模型哈希校验（只校验长度）；后续可读取 Hugging Face ETag 做 SHA256。
 - 不做多语言 UI 选择；当前中文优先，英文混说依赖模型。
 - 不做“删除时保留缓存”，切换模型会重新加载。

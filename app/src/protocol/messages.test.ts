@@ -114,6 +114,40 @@ describe("status messages", () => {
 describe("parseMicMessage", () => {
   const session = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
+  it("parses streamed partial results", () => {
+    const message = parseMicMessage(
+      JSON.stringify({
+        v: 1,
+        type: "mic.partial",
+        session,
+        rev: 3,
+        text: "帮我把这段异步",
+        sentence: 1,
+        engine: "bailian",
+        ts: 2,
+      }),
+    );
+    expect(message).toMatchObject({ type: "mic.partial", rev: 3, engine: "bailian" });
+  });
+
+  it("rejects partial results without a positive integer rev", () => {
+    const base = { v: 1, type: "mic.partial", session, text: "hi", sentence: 1, ts: 2 };
+    expect(parseMicMessage(JSON.stringify({ ...base, rev: 0 }))).toBeNull();
+    expect(parseMicMessage(JSON.stringify({ ...base, rev: 1.5 }))).toBeNull();
+    expect(parseMicMessage(JSON.stringify({ ...base, rev: 1, engine: "other" }))).toBeNull();
+  });
+
+  it("keeps legacy ready/result messages valid", () => {
+    expect(
+      parseMicMessage(JSON.stringify({ v: 1, type: "mic.ready", session, ts: 1 })),
+    ).toMatchObject({ type: "mic.ready" });
+    expect(
+      parseMicMessage(
+        JSON.stringify({ v: 1, type: "mic.result", session, outcome: "inserted", ts: 1 }),
+      ),
+    ).toMatchObject({ type: "mic.result" });
+  });
+
   it("parses result, state, error and ready messages", () => {
     expect(
       parseMicMessage(

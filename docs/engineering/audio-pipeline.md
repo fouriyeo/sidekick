@@ -2,15 +2,15 @@
 doc: engineering/audio-pipeline
 title: 麦克风音频链路方案
 status: active
-updated: 2026-10-31
+updated: 2026-11-02
 load: on-demand
 owner: engineering
 ---
 
 # 麦克风音频链路方案
 
-> 目标：手机按住说话 → 局域网 → 桌面本机转写 → 输入到当前应用。
-> 状态：spike 已验证，P0 已实现（2026-10-31）。采集/传输/内存 ASR/自动粘贴降级/模型管理已落地；真机与 macOS 权限矩阵继续回归。
+> 目标：手机按住说话 → 局域网 → 桌面转写（本机或百炼云端）→ 输入到当前应用。
+> 状态：本机 P0 已实现（2026-10-31）；百炼云端流式识别已实现（2026-11-02），真实账号/真机验收待补。
 
 ## 1. 范围与非目标
 
@@ -18,7 +18,7 @@ owner: engineering
 
 - 手机横屏采集 16kHz 单声道音频。
 - 通过现有局域网 WS 通道发送到桌面。
-- 桌面本机转写（不上云）。
+- 桌面转写：默认本机 whisper；可选百炼云端流式识别（显式开启）。
 - 桌面把文本输入到当前焦点应用；失败时复制。
 - 全链路状态回传手机与桌面浮窗。
 
@@ -26,7 +26,7 @@ owner: engineering
 
 - 系统级虚拟麦克风（会议/录音软件）。
 - 后台录音、录音历史、音频回放。
-- 云端 ASR、多语言、语音指令（P1/P2）。
+- 多厂商云端 ASR、强制云转写、多语言、语音指令（P1/P2）。
 - 蓝牙传输（P2）。
 
 ## 2. 端到端流程
@@ -37,7 +37,9 @@ owner: engineering
   → Tauri 命令 mic_frame（base64 PCM，Rust 组二进制帧）
   → WS 二进制帧（局域网，magic=SK01）
   → 桌面 axum 按 session 追加到内存缓冲（不广播）
-  → mic.stop(release/timeout) → whisper-rs 内存转写
+  → 引擎路由：本机 whisper 或 百炼 WebSocket（流式）
+  → 本机：mic.stop 后内存转写；云端：音频实时转发 + mic.partial 回显
+  → mic.stop(release/timeout) → 最终文本一次性落字
   → CGEvent Cmd+V / 仅复制
   → mic.result 回传手机 + 桌面应用内浮层
 ```
@@ -45,8 +47,8 @@ owner: engineering
 关键点：
 
 - 音频不经过 WebView 的 `new WebSocket`（混合内容限制）；由 Rust 发送。
-- 桌面服务不把音频广播给其它客户端；按 session 路由，`mic.stop` 后才转写。
-- 音频只在内存；转写完成/失败/取消后立即丢弃；不写临时 WAV。
+- 桌面服务不把音频广播给其它客户端；按 session 路由，`mic.stop` 后才落字。
+- 音频只在内存；本机转写完成/失败/取消后立即丢弃；云端只在用户显式启用并同意时上传，不写临时 WAV。
 - 控制消息仍是 JSON；手机停止/取消有明确 `reason`，取消类不转写。
 
 ## 3. 采集方案（已选定）
@@ -84,14 +86,31 @@ owner: engineering
 - 断线/取消/后台：立即丢弃缓冲，不后台重连补发。
 - 65 秒或 2.2MB 缓冲上限，超过丢弃；单帧上限 64KB。
 
-## 6. 本机转写（已选定 whisper-rs）
+## 6. 引擎路由与转写
+
+### 6.1 路由
+
+- 会话开始时读取 `asr.json` 快照：`engine=local|bailian`；云端未配置/未同意且本机可用时直接走本机。
+- 本机：PCM 全部缓冲，`mic.stop` 后 whisper 转写；云端：音频帧同时进入桌面缓冲（供回退）并转发给百炼，中间结果通过 `mic.partial` 回显。
+- 云端失败/空结果：若 `fallbackToLocal` 且本机模型可用，用同一份 PCM 跑本机；结果 `engine=local`、`fallback=true`，只插入一次。
+- 云端配置、Keychain、协议细节见 [asr-cloud-bailian.md](./asr-cloud-bailian.md)；协议字段见 [protocol-audio.md](./protocol-audio.md)。
+
+### 6.2 本机（已选定 whisper-rs）
 
 - 使用 whisper-rs 0.16 / whisper.cpp + Metal，在桌面进程内转写；模型加载缓存并启动时 prewarm。
 - 模型可选 tiny/base/small/medium，下载、存储、切换见 [asr-model.md](./asr-model.md)。
 - 默认中文（`language=zh`）+ 简体 prompt；文本换行替换为空格，最多 2000 字。
 - 10 秒语音在 base 模型上实测约 0.2–0.3s（模型已加载）；首次加载通过 prewarm 隐藏。
 - 原始音频不写文件；模型文件本身除外。
-- macOS Speech 未采用：命令行访问受 TCC 限制，且准确率/模型可控性不如 whisper.cpp；云端 ASR 本期不做。
+- macOS Speech 未采用：命令行访问受 TCC 限制，且准确率/模型可控性不如 whisper.cpp。
+
+### 6.3 百炼云端（可选）
+
+- 桌面直连百炼 WebSocket，模型默认 `qwen-audio-3.1-asr-flash-streaming`；手机不直连、不持 Key。
+- 连接后 `run-task`，收到 `task-started` 前缓存音频，之后补发并实时转发；`result-generated` 的中间/最终句组装为可见文本。
+- `mic.partial` 以 50ms 节流回显；最终文本仍由 `desktop_mic::insert_transcript` 统一落字。
+- Key 存 macOS Keychain；`asr.json` 0600 且不含 Key；未同意不上传。
+- 完整方案、错误码与验收见 [asr-cloud-bailian.md](./asr-cloud-bailian.md)。
 
 ## 7. 文本输入（macOS）
 
@@ -130,6 +149,8 @@ owner: engineering
 | 局域网 RTT | ≤20ms | 同一 Wi-Fi，可信网络 |
 | 停止 → 解码/拼接 | ≤50ms | PCM16 无需解码 |
 | ASR（10 秒语音） | ≤2s | 本机，模型已就绪 |
+| 云端首条 partial | ≤1.5s | 从开口算；含连接/补发 |
+| 云端收尾 | ≤8s | `finish-task` 到 `task-finished` |
 | 文本输入 | ≤150ms | 剪贴板 + Cmd+V |
 | **松手 → 输入完成** | **≤3s** | 目标值；p50 ≤1.5s |
 
@@ -145,6 +166,9 @@ owner: engineering
 | WS 断开 | 停止并丢弃 | “连接断了，这段没有发送。” |
 | 桌面转写超时 10s | 丢弃，回到 idle | “电脑端没回应，再说一次？” |
 | ASR 返回空 | 不输入 | “没听清，靠近一点。” |
+| 云端未配置/未同意 | 不静默上传；有本机则本机 | “云端还没配置…” |
+| 云端握手/网络/收尾失败 | 有本机则回退；否则失败 | “云端不可用，已用本机转写。”/“连不上百炼” |
+| 云端 Keychain 读取失败 | 不落明文；提示重存 | “读取不到密钥，去设置重新保存。” |
 | 辅助功能未授权 | 只复制 | “已复制；要自动输入请授权。” |
 | 目标窗口变化 | 只复制 | “你切到了别的窗口，文字已复制。” |
 | 密码框 | 只复制 | “当前是密码框，已复制。” |
@@ -155,7 +179,8 @@ owner: engineering
 
 - 原始音频只在内存；转写完成/失败/取消后立即释放。
 - 不写临时文件、不做录音缓存、不做后台重试队列。
-- 日志只记阶段、错误码、时长；不记音频、全文、剪贴板、目标应用名。
+- 日志只记阶段、错误码、时长；不记音频、全文、剪贴板、目标应用名、API Key。
+- 云端为显式可选：设置页需勾选同意；音频直达用户配置的百炼地域，不经 Sidekick 服务器；Key 只存 Keychain。
 - 录音时手机端始终有可见指示；App 后台立即停止。
 - 当前局域网无鉴权/加密：仅可信网络；公共 Wi-Fi 明确警告；P1 做配对与加密。
 - ASR 模型/运行时/编解码依赖按 [dependency-policy.md](../dependency-policy.md) 审核，记录决策。
@@ -185,7 +210,7 @@ owner: engineering
 - 延迟：5/10/30 秒语音各 20 次，记录 p50/p95。
 - 稳定性：连续 20 次录音、60 秒长录音、录音中切后台/来电/断网。
 - 输入安全：密码框、无输入框、目标窗口切换、全屏应用、终端/编辑器/浏览器。
-- 隐私：检查应用目录无音频文件；抓包确认无云端上传。
+- 隐私：默认本机时检查应用目录无音频文件、抓包无云端上传；云端开启时确认只连用户配置的百炼地址、无 Key/全文日志。
 - 电量：30 分钟混合使用掉电/温度。
 - 详见 [quality.md](./quality.md)。
 
@@ -197,11 +222,12 @@ owner: engineering
 - AX 焦点是否可编辑输入框的检查（P1）如何覆盖终端/浏览器？
 - 局域网配对/加密仍在 P1。
 
-## 15. 实现状态（2026-10-31）
+## 15. 实现状态（2026-11-02）
 
 - 采集：WebView `getUserMedia` + `AudioContext(16000)` + `ScriptProcessor(2048)`；Realme/WebView 103 可用；Android 权限已配置。手机 UI 含波形、计时、上滑取消、50/60 秒、后台取消、权限说明。
 - 协议：`mic.start` / `mic.ready` / `mic.stop` / `mic.result` / `mic.state` / `mic.error` + `SK01` PCM16 二进制帧；服务端单会话缓冲，音频不广播、不落盘。
 - ASR：whisper-rs + `ggml-base`，启动 prewarm；实测 3.9 秒中文在模型已加载时约 0.2–0.3s。base 对“异步/注释”等术语仍有误识，可用模型页切换 small。
 - 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不发送回车。
 - 桌面：设置页管理模型与辅助功能；应用内语音浮层显示倾听/转写/结果；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
-- 待验证：macOS 辅助功能实际勾选后的自动粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、测试集准确率。
+- 云端（2026-11-02）：`asr.json` + Keychain + `asr_cloud_*` 命令；百炼 WS 会话（run-task/finish-task/二进制 PCM）；`mic.partial` 50ms 节流；`mic.ready`/`mic.result` 带 engine/model/fallback/usage；失败回退本机；设置页语音识别页（引擎/地址/Key/模型/热词/测试）。
+- 待验证：macOS 辅助功能实际勾选后的自动粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、测试集准确率；百炼真实账号/Keychain 授权/真机流式与回退验收。

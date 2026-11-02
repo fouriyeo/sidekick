@@ -834,6 +834,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "reqwest",
+ "security-framework",
  "serde",
  "serde_json",
  "tauri",
@@ -842,6 +843,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.24.0",
  "tokio-util",
+ "uuid",
  "whisper-rs",
 ]
 
@@ -4314,7 +4316,11 @@ checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
 dependencies = [
  "futures-util",
  "log",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
  "tokio",
+ "tokio-rustls",
  "tungstenite 0.24.0",
 ]
 
@@ -4558,6 +4564,8 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.8.8",
+ "rustls",
+ "rustls-pki-types",
  "sha1",
  "thiserror 1.0.69",
  "utf-8",

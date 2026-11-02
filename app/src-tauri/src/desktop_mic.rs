@@ -153,8 +153,25 @@ pub fn transcribe_and_insert(
         });
     }
 
+    insert_transcript(
+        clipboard,
+        &transcript.text,
+        transcript.truncated,
+        expected_app,
+    )
+}
+
+/// 把已经拿到的文本落到目标应用：写剪贴板 + 安全校验 + 可选 Cmd+V。
+///
+/// 本机转写与云端转写共用这一条路径，保证“云端失败回退本机”时不会出现两套插入逻辑。
+pub fn insert_transcript(
+    clipboard: &ClipboardManager,
+    text: &str,
+    truncated: bool,
+    expected_app: Option<&FrontApp>,
+) -> Result<MicInsertResult, MicFailure> {
     clipboard
-        .write_text_and_record(&transcript.text, "voice")
+        .write_text_and_record(text, "voice")
         .map_err(|error| MicFailure {
             code: "insert_failed",
             message: error,
@@ -188,8 +205,8 @@ pub fn transcribe_and_insert(
     Ok(MicInsertResult {
         outcome,
         reason,
-        text: transcript.text,
-        truncated: transcript.truncated,
+        text: text.to_string(),
+        truncated,
     })
 }
 

@@ -381,3 +381,12 @@
 - 原因：手机在支架上远看，单靠眼睛/嘴角不够；道具和速度比细微表情更可识别。声音是辅助，办公室/夜间默认不该打扰；合成音零资源/零版权，先验证触发时机，P1 再换专门设计的小宠物叫声。
 - 代价：新增 SVG 短爪/道具层和一套 CSS 动画，需要真机 60fps/识别测试；P0 声音可能受系统静音/音乐焦点影响，P1 接原生提示音/音频焦点。
 - 规范：`docs/prd/hook/SPEC.md`、`app/src/mobile/features/pet/sound.ts`、`pet-fallback.tsx`、`pet.module.css`。
+
+## D55 · 百炼云端流式 ASR：桌面中转 + Keychain + 默认本机 + 失败回退（2026-11-02）
+
+- 背景：本机 whisper base 在中文术语/同音字上准确率不够；用户要求接入云端语音识别大模型，先只做阿里云百炼，默认模型 `qwen-audio-3.1-asr-flash-streaming`，并要流式回显与桌面模型设置页。
+- 决策：桌面端直连百炼 WebSocket（`wss://dashscope.aliyuncs.com/api-ws/v1/inference`，支持业务空间域名）；手机仍只采集 16k PCM16、经局域网送桌面，由桌面转发，手机不接触 API Key。新增 `asr.json`（`0600`，不含 Key）与 macOS Keychain（service `dev.sidekick.app.asr.bailian`）；新增 `asr_cloud_status/save/test/engine_select/clear` 命令与设置页「语音识别」（本机/百炼切换、地址、业务空间、Key、模型、语言/场景/热词、测试连接、回退开关、隐私同意）。流式中间结果用 `mic.partial`（50ms 节流、`rev` 只增、整体替换）回显到手机与桌面浮层；最终文本仍只插入一次。云端失败/空结果且本机模型可用时用同一份 PCM 回退本机，`mic.result` 带 `engine/model/fallback/usage`。默认引擎仍是本机，云端必须显式保存并勾选同意后才能启用。
+- 原因：Key 只在桌面、音频不经 Sidekick 服务器，符合本地优先与隐私原则；流式只做可见反馈、最终一次落字，避免中间结果重复/乱序污染目标应用；每会话新建 WS 实现简单、取消干净，连接耗时被音频缓冲掩盖；回退保证一次可用。
+- 放弃：手机直连百炼（Key 落手机、网络/降级分散）；流式逐字输入目标应用（中间结果会改字，无法安全撤销）；把 Key 明文写 `asr.json`（泄露面大）；默认强制云端（违背 P5）；多厂商（v1 先单厂商，代码按 provider 隔离）。
+- 代价：云端依赖公网/额度/地域；Keychain 在 dev 重编译后可能弹授权；旧域名是否支持该模型需真实账号验证；音频上传需用户显式同意；`mic.partial` 增加协议与 UI 复杂度。
+- 规范：`docs/engineering/asr-cloud-bailian.md`、`docs/engineering/audio-pipeline.md` §6、`docs/engineering/protocol-audio.md` §3.5、`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`desktop_server.rs`、`app/src/protocol/messages.ts`、`docs/prd/mic/*`、`protocol/README.md`。

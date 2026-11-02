@@ -42,7 +42,16 @@ function resetStores() {
   localStorage.setItem("sidekick:mic-primer", "1");
   localStorage.setItem("sidekick:mic-permission-denied", "0");
   useConnectionStore.setState({ status: "connected" });
-  useMicStore.setState({ phase: "listening", session: "session-1", result: null, error: null });
+  useMicStore.setState({
+    phase: "listening",
+    session: "session-1",
+    result: null,
+    error: null,
+    partialText: "",
+    partialRev: 0,
+    engine: "local",
+    fallback: false,
+  });
 }
 
 beforeEach(() => {
@@ -53,7 +62,16 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  useMicStore.setState({ phase: "idle", session: null, result: null, error: null });
+  useMicStore.setState({
+    phase: "idle",
+    session: null,
+    result: null,
+    error: null,
+    partialText: "",
+    partialRev: 0,
+    engine: "local",
+    fallback: false,
+  });
 });
 
 function renderButton(posture: Posture) {
@@ -197,5 +215,53 @@ describe("MicButton 支架模式：保持居中胶囊", () => {
     // 支架模式没有取消按钮，录音提示在胶囊内部
     expect(screen.queryByRole("button", { name: "取消录音" })).toBeNull();
     expect(mic.textContent).toContain("上滑取消");
+  });
+});
+
+describe("MicButton 流式识别回显", () => {
+  it("手持录音卡显示实时文本、百炼来源和上传提示", () => {
+    useMicStore.setState({
+      phase: "listening",
+      session: "session-1",
+      partialText: "帮我把这段异步的注释",
+      partialRev: 3,
+      engine: "bailian",
+    });
+    render(<MicButton active posture="handheld" />);
+
+    expect(screen.getByText("帮我把这段异步的注释")).toBeInTheDocument();
+    expect(screen.getByText(/百炼 · 音频上传中/)).toBeInTheDocument();
+  });
+
+  it("云端收尾时保留最后一段实时文本", () => {
+    useMicStore.setState({
+      phase: "processing",
+      session: "session-1",
+      partialText: "帮我把这段异步的注释改成中文",
+      partialRev: 4,
+      engine: "bailian",
+    });
+    render(<MicButton active posture="handheld" />);
+
+    expect(screen.getByText("云端收尾…")).toBeInTheDocument();
+    expect(screen.getByText("帮我把这段异步的注释改成中文")).toBeInTheDocument();
+  });
+
+  it("支架模式在胶囊上方显示实时文本，不撑宽胶囊", () => {
+    useMicStore.setState({
+      phase: "listening",
+      session: "session-1",
+      partialText: "支架模式实时文本",
+      partialRev: 2,
+      engine: "local",
+    });
+    render(<MicButton active posture="docked" />);
+
+    const text = screen.getByText("支架模式实时文本");
+    const card = text.closest("div.rounded-2xl");
+    expect(card).not.toBeNull();
+    expect(card?.className).toContain("w-[min(82vw,520px)]");
+    const mic = screen.getByRole("button", { name: /松开结束录音/ });
+    expect(mic.className).toContain("w-[min(82vw,520px)]");
   });
 });

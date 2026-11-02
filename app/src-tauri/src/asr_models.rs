@@ -189,6 +189,10 @@ impl ModelManager {
         }
     }
 
+    pub fn selected_id(&self) -> Option<String> {
+        self.selected.lock().unwrap().clone()
+    }
+
     pub fn selected_available(&self) -> bool {
         let selected = self.selected.lock().unwrap().clone();
         selected

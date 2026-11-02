@@ -49,6 +49,8 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
   const phase = useMicStore((state) => state.phase);
   const result = useMicStore((state) => state.result);
   const error = useMicStore((state) => state.error);
+  const partialText = useMicStore((state) => state.partialText);
+  const engine = useMicStore((state) => state.engine);
 
   const reducedMotion = useReducedMotion();
   const hapticsEnabled = usePetStore((state) => state.pet.settings.haptics);
@@ -521,8 +523,13 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
   const showResult = (phase === "delivered" || phase === "error") && (result || error);
 
   const timerText = formatDuration(elapsedMs);
+  const processingLabel = engine === "bailian" ? MIC_COPY.cloudProcessing : MIC_COPY.processing;
+  const engineLabel =
+    engine === "bailian"
+      ? `${MIC_COPY.engineCloud} · ${MIC_COPY.audioUploading}`
+      : MIC_COPY.engineLocal;
   const statusLabel = processing
-    ? MIC_COPY.processing
+    ? processingLabel
     : phase === "arming"
       ? MIC_COPY.arming
       : listening
@@ -534,7 +541,7 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
   const label = !connected
     ? MIC_COPY.idleDisconnected
     : processing
-      ? MIC_COPY.processing
+      ? processingLabel
       : phase === "arming"
         ? MIC_COPY.arming
         : MIC_COPY.idle;
@@ -622,11 +629,14 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-1.5 text-xs font-medium">
-                  <span className="size-1.5 animate-pulse rounded-full bg-current" />
-                  {statusLabel}
+                <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
+                  <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-current" />
+                  <span className="truncate">{statusLabel}</span>
+                  <span className="shrink-0 rounded-full border border-current px-1.5 py-0.5 text-[10px] font-normal opacity-70">
+                    {engineLabel}
+                  </span>
                 </span>
-                <span className="text-[11px] opacity-80">
+                <span className="shrink-0 text-[11px] opacity-80">
                   {cancelZone
                     ? MIC_COPY.releaseToCancel
                     : warning
@@ -640,6 +650,50 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
                 reducedMotion={reducedMotion}
                 className="mt-2"
               />
+              {partialText ? (
+                <p className="mt-2 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap opacity-80">
+                  {partialText}
+                </p>
+              ) : engine === "bailian" && recording ? (
+                <p className="mt-2 text-[11px] leading-relaxed opacity-60">
+                  {MIC_COPY.cloudConnecting}
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {processing && (partialText || engine === "bailian") && (
+            <div
+              className={cn(
+                "rounded-2xl border border-pet-border bg-pet-bg px-4 py-3 text-left shadow-lg",
+                layoutPosture === "docked" ? "w-[min(82vw,420px)]" : "w-[min(82vw,360px)]",
+              )}
+            >
+              <div className="flex items-center gap-1.5 text-xs font-medium text-pet-text">
+                <Loader2 className="size-3.5 animate-spin" />
+                <span>{processingLabel}</span>
+                <span className="ml-1 rounded-full border border-current px-1.5 py-0.5 text-[10px] font-normal opacity-70">
+                  {engine === "bailian" ? MIC_COPY.engineCloud : MIC_COPY.engineLocal}
+                </span>
+              </div>
+              {partialText && (
+                <p className="mt-2 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap text-pet-muted">
+                  {partialText}
+                </p>
+              )}
+            </div>
+          )}
+
+          {layoutPosture === "docked" && recording && (partialText || engine === "bailian") && (
+            <div className="w-[min(82vw,520px)] rounded-2xl border border-pet-border bg-pet-bg px-4 py-2.5 text-left shadow-lg">
+              <div className="flex items-center gap-1.5 text-[10px] text-pet-muted">
+                <span className="rounded-full border border-current px-1.5 py-0.5">
+                  {engineLabel}
+                </span>
+              </div>
+              <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap text-pet-muted">
+                {partialText || MIC_COPY.cloudConnecting}
+              </p>
             </div>
           )}
         </div>

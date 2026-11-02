@@ -2,7 +2,7 @@
 doc: INDEX
 title: Sidekick 文档总索引
 status: active
-updated: 2026-10-31
+updated: 2026-11-02
 load: always
 children:
   - product/INDEX.md
@@ -34,7 +34,7 @@ children:
 | 设计横屏、触控、反馈 | [standards/INDEX.md](./standards/INDEX.md) | [standards/ux.md](./standards/ux.md) |
 | 视觉、配色、动效、宠物资产 | [standards/INDEX.md](./standards/INDEX.md) | [standards/visual.md](./standards/visual.md) |
 | 实现宠物 | [prd/pet/INDEX.md](./prd/pet/INDEX.md) | PRD / SPEC + [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
-| 实现麦克风 | [prd/mic/INDEX.md](./prd/mic/INDEX.md) | PRD / SPEC + [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) + [engineering/protocol-audio.md](./engineering/protocol-audio.md) + [engineering/asr-model.md](./engineering/asr-model.md) |
+| 实现麦克风 | [prd/mic/INDEX.md](./prd/mic/INDEX.md) | PRD / SPEC + [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) + [engineering/protocol-audio.md](./engineering/protocol-audio.md) + [engineering/asr-model.md](./engineering/asr-model.md) + [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 做桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) | 该篇 |
 | 做自动发现 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) | 该篇 |
 | 做 AI 联动 / DSH hook / 宠物四态 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
@@ -101,7 +101,7 @@ docs/
 
 ## 4. 当前阶段（2026-11-02）
 
-- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风 P0 代码（协议/内存 ASR/模型管理/手机 UI/桌面设置）、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感。
+- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风 P0 代码（协议/内存 ASR/模型管理/手机 UI/桌面设置）、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感；百炼云端流式 ASR 代码已实现（2026-11-02，真机/账号验收待补）。
 - 进行中：**AI 联动（DSH hook）**——桌面 AI 联动页、本地脚本注入、手机四态动作/声音；产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
 - 麦克风：自动粘贴依赖 macOS 辅助功能，需用户手动勾选一次；真机/密码框矩阵继续回归。
 - 未开始：手机回答 AI 提问、Claude Code / Qoder hook、release 打包、配对鉴权、iOS、Rive 资产。
@@ -120,7 +120,7 @@ docs/
 | 依赖准入 | [dependency-policy.md](./dependency-policy.md) |
 | 现有协议 | [../protocol/README.md](../protocol/README.md) |
 | 麦克风音频协议 | [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
-| 语音模型管理 | [engineering/asr-model.md](./engineering/asr-model.md) |
+| 语音模型管理 / 云端识别 | [engineering/asr-model.md](./engineering/asr-model.md) / [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) |
 | 重大决策 | [decisions.md](./decisions.md) |
 | 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |

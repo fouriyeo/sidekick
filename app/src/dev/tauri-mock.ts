@@ -101,6 +101,42 @@ export function installTauriMock(): void {
   ];
   let selectedModel: MockModel["id"] | null = "base";
   let downloading: { id: MockModel["id"]; received: number; total: number } | null = null;
+
+  // 云端 ASR（浏览器 mock）：只用于设置页/浮层预览，不联网。
+  const cloudConfig = {
+    endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+    workspaceId: "",
+    model: "qwen-audio-3.1-asr-flash-streaming",
+    languageHints: ["zh"],
+    keepDialect: false,
+    vadModel: "near_meeting_16k" as const,
+    maxSentenceSilenceMs: 800,
+    heartbeat: true,
+    vocabulary: [] as string[],
+  };
+  let cloudEngine: "local" | "bailian" = "local";
+  let cloudConsent = false;
+  let cloudFallback = true;
+  let cloudKeyMasked: string | null = null;
+  let cloudKeySet = false;
+
+  function cloudSnapshot() {
+    return {
+      engine: cloudEngine,
+      configured: cloudConsent && cloudKeySet,
+      consent: cloudConsent,
+      hasKey: cloudKeySet,
+      keyMasked: cloudKeyMasked,
+      fallbackToLocal: cloudFallback,
+      localReady: models.some((model) => model.id === selectedModel && model.downloaded),
+      config: {
+        ...cloudConfig,
+        languageHints: [...cloudConfig.languageHints],
+        vocabulary: [...cloudConfig.vocabulary],
+      },
+    };
+  }
+
   let downloadTimer: number | null = null;
   let downloadCancelled = false;
 
@@ -481,6 +517,63 @@ export function installTauriMock(): void {
       if (command === "asr_cancel_download") {
         downloadCancelled = true;
         return null;
+      }
+
+      if (command === "asr_cloud_status") return cloudSnapshot();
+      if (command === "asr_cloud_save") {
+        const input = (args?.input ?? {}) as Record<string, unknown>;
+        const config = input.config as Record<string, unknown> | undefined;
+        if (config) {
+          Object.assign(cloudConfig, config);
+        }
+        cloudConsent = Boolean(input.consent);
+        cloudFallback = Boolean(input.fallbackToLocal);
+        if (input.clearKey) {
+          cloudKeySet = false;
+          cloudKeyMasked = null;
+        }
+        const apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
+        if (apiKey) {
+          cloudKeySet = true;
+          cloudKeyMasked = `sk-••••${apiKey.slice(-4)}`;
+        }
+        if (cloudConsent && cloudKeySet) cloudEngine = "bailian";
+        else if (cloudEngine === "bailian") cloudEngine = "local";
+        return cloudSnapshot();
+      }
+      if (command === "asr_cloud_test") {
+        const apiKey = typeof args?.apiKey === "string" ? args.apiKey.trim() : "";
+        if (apiKey === "bad") {
+          return {
+            ok: false,
+            latencyMs: null,
+            model: cloudConfig.model,
+            errorCode: "cloud_key_invalid",
+            message: "百炼 API Key 无效或已过期（mock）",
+          };
+        }
+        return {
+          ok: true,
+          latencyMs: 286,
+          model: cloudConfig.model,
+          errorCode: null,
+          message: "连接成功 · 286ms（mock）",
+        };
+      }
+      if (command === "asr_engine_select") {
+        const engine = String(args?.engine ?? "local");
+        if (engine === "bailian" && !(cloudConsent && cloudKeySet)) {
+          throw new Error("云端还没配置完整");
+        }
+        cloudEngine = engine === "bailian" ? "bailian" : "local";
+        return cloudSnapshot();
+      }
+      if (command === "asr_cloud_clear") {
+        cloudEngine = "local";
+        cloudConsent = false;
+        cloudKeySet = false;
+        cloudKeyMasked = null;
+        return cloudSnapshot();
       }
 
       if (command === "clipboard_list" || command === "clipboard_status") {

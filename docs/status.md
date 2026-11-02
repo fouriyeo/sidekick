@@ -28,6 +28,7 @@
 22. 修复真机 WebView 103 居中偏移：Tailwind v4 的 `translate` 工具类输出 CSS `translate` 属性，WebView 103 不支持，导致底部居中按钮整体偏右 48px；把麦克风按钮/覆盖层、再按一次退出提示、宠物保存失败提示改为 `inset-x-0 + flex` 或 `left-0 right-0 mx-auto`。真机 CDP 复验按钮中心偏差 0px（2026-11-01）。
 23. 触感接管 + 可配时长：关闭 WebView 默认长按震动（`setHapticFeedbackEnabled(false)`），App 用原生 `performHapticFeedback` 发轻/中/成功/失败触感（不申请 VIBRATE）；麦克风按下即中震；宠物页禁长按选中/复制；自动变暗默认 5 分钟、屏幕常亮最长默认 2 小时，均可在设置页调整（2026-11-02）。
 24. AI 联动（DSH hook）开发：产品/体验/验收文档落地（`docs/prd/hook`）；桌面「AI 联动」页、本地 DSH 脚本注入、Rust 回环桥、`status` 协议、手机四态动作与三音效；首次开启需重启 DSH 一次，之后热开关（2026-11-02，开发中）。
+25. 百炼云端流式语音识别代码实现：桌面设置「语音识别」页（本机/百炼切换、地址、业务空间、Key、模型、语言/场景/热词、测试连接、回退开关、隐私同意）；`asr.json`（0600，无 Key）+ macOS Keychain；桌面直连百炼 WS（run-task/finish-task、二进制 PCM、result 组装）；`mic.partial` 50ms 节流回显；`mic.result` 带 engine/model/fallback/usage；云端失败回退本机；`protocol-audio`/PRD/SPEC/ACCEPTANCE 同步（2026-11-02，代码完成，真实账号/真机待验收）。
 
 ## 已验证（有实际证据）
 
@@ -63,7 +64,7 @@
 - **触感/时长可配已通过质量门（2026-11-02）**：`haptic` / `disable_webview_haptics`（`app/src-tauri/src/haptics.rs`，decorView `performHapticFeedback` + WebView `setHapticFeedbackEnabled(false)`）通过 `cargo check --target aarch64-linux-android`；前端 `haptics.ts` 收敛为唯一入口、麦克风按下中震、宠物页禁用长按选中；`dimMinutes`（默认 5）与 `keepAwakeHours`（默认 2，0 = 不限）落地并含旧存档迁移；`useKeepAwake(active, maxDurationMs)` 到点释放。`pnpm typecheck / lint / test（174 tests / 28 files）` 全绿；真机触感/变暗/常亮到点待验收。
 - **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
 - **AI 联动代码质量门（2026-11-02）**：`pnpm typecheck / lint / test（291 tests / 36 files）/ build` 全绿；`cargo test --lib` 71 passed（新增 dsh_hook 23 + install 24）；脚本 `node --check` + `vitest run src/dsh-hook` 32 passed；`node scripts/check-docs.mjs` 0 warning、`check-boundaries` 通过。浏览器 mock DOM 核对四态 `data-ai-state`、文案、asking 6s 降速、completed 3s 回 idle、桌面 AI 联动页首次/已连接态。**未做真实 DSH 插件加载/重启**，也未写真实 `~/.dsh`；需要在用户方便时重启 DSH 验收。
-- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、模型下载真实网络、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别。
+- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、模型下载真实网络、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、百炼真实账号/Keychain 授权/真机流式 partial/回退/60s。
 
 ## 已知问题 / 技术债
 
@@ -79,6 +80,9 @@
 | withGlobalTauri | `tauri.conf.json` 仍为 `true`；Phase 4 收紧为 `false` 时需回归 IPC/事件/QR |
 | 麦克风 P0 | 已实现；自动粘贴依赖 macOS 辅助功能，需要用户手动勾选一次；开发二进制重编译后可能需重勾选 |
 | 麦克风未完成项 | 真机 60 秒/断连、密码框/窗口切换完整矩阵、辅助功能实测、模型准确率测试集待补 |
+| 百炼云端未真机验收 | 403 已单独映射 `cloud_forbidden`、保存失败已回滚 Key；真实账号/Keychain 授权/流式 partial/回退/60s 仍待验；默认旧域名是否支持该模型需用真实 Key 验证 |
+| 云端依赖公网/额度 | 断网/限流/额度不足会回退本机；无本机模型时直接失败；音频仅在用户显式同意后上传 |
+| Keychain dev 授权 | 开发版重编译可能弹一次 macOS 钥匙串授权；读取失败提示重新保存，不落明文 |
 | 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | AI 联动未真机验证 | 本地 DSH 脚本注入、首次重启、四态动作、三音效、杀 DSH/重连待真机回归；P0 只聚合顶层会话，子代理可能提前完成 |

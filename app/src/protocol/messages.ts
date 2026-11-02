@@ -58,6 +58,17 @@ export type MicStopReason =
   | "disconnect"
   | "mic_lost";
 
+/** 一次语音会话实际使用的识别引擎；bailian 表示云端百炼。 */
+export type MicEngine = "local" | "bailian";
+
+/** 百炼返回的单次用量（只用于桌面 UI/日志，不上报）。 */
+export type MicUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  audioDurationMs: number;
+};
+
 export type MicStartMessage = {
   v: 1;
   type: "mic.start";
@@ -74,6 +85,10 @@ export type MicReadyMessage = {
   v: 1;
   type: "mic.ready";
   session: string;
+  /** 本次会话选用的引擎；旧桌面不带，按 local 处理。 */
+  engine?: MicEngine;
+  /** 引擎侧模型名；本机为 whisper 模型 id，云端为百炼模型名。 */
+  model?: string;
   ts: number;
 };
 
@@ -87,6 +102,21 @@ export type MicStopMessage = {
 
 export type MicResultOutcome = "inserted" | "copied" | "failed";
 
+/**
+ * 流式中间结果：text 是「已定稿句 + 当前句」的完整可见文本，客户端整体替换。
+ * rev 从 1 递增，同一 session 只接受更大的值；只用于回显，不用于落字。
+ */
+export type MicPartialMessage = {
+  v: 1;
+  type: "mic.partial";
+  session: string;
+  rev: number;
+  text: string;
+  sentence: number;
+  engine?: MicEngine;
+  ts: number;
+};
+
 export type MicResultMessage = {
   v: 1;
   type: "mic.result";
@@ -96,6 +126,12 @@ export type MicResultMessage = {
   text?: string | null;
   truncated?: boolean;
   latencyMs?: number;
+  /** 本次实际使用的引擎；旧桌面不带，按 local 处理。 */
+  engine?: MicEngine;
+  model?: string;
+  /** 云端失败后由本机兜底完成时为 true。 */
+  fallback?: boolean;
+  usage?: MicUsage | null;
   ts: number;
 };
 
@@ -119,6 +155,7 @@ export type MicMessage =
   | MicStartMessage
   | MicReadyMessage
   | MicStopMessage
+  | MicPartialMessage
   | MicResultMessage
   | MicStateMessage
   | MicErrorMessage;
@@ -249,6 +286,25 @@ export function isMicReadyMessage(value: unknown): value is MicReadyMessage {
   return (value as Record<string, unknown>).type === "mic.ready";
 }
 
+export function isMicEngine(value: unknown): value is MicEngine {
+  return value === "local" || value === "bailian";
+}
+
+export function isMicPartialMessage(value: unknown): value is MicPartialMessage {
+  if (!isMicBase(value)) return false;
+  const message = value as Record<string, unknown>;
+  return (
+    message.type === "mic.partial" &&
+    typeof message.text === "string" &&
+    typeof message.rev === "number" &&
+    Number.isInteger(message.rev) &&
+    message.rev >= 1 &&
+    typeof message.sentence === "number" &&
+    Number.isInteger(message.sentence) &&
+    (message.engine === undefined || isMicEngine(message.engine))
+  );
+}
+
 export function isMicErrorMessage(value: unknown): value is MicErrorMessage {
   if (typeof value !== "object" || value === null) return false;
   const message = value as Record<string, unknown>;
@@ -271,6 +327,7 @@ export function parseMicMessage(raw: string): MicMessage | null {
   }
 
   if (
+    isMicPartialMessage(value) ||
     isMicResultMessage(value) ||
     isMicStateMessage(value) ||
     isMicErrorMessage(value) ||

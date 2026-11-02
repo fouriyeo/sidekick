@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import type {
+  MicEngine,
   MicErrorMessage,
+  MicPartialMessage,
+  MicReadyMessage,
   MicResultMessage,
   MicResultOutcome,
   MicStateMessage,
@@ -25,9 +28,19 @@ type MicState = {
   result: MicResultView | null;
   error: string | null;
   failureCount: number;
+  /** 最近一条流式中间结果（完整可见文本，整体替换）。 */
+  partialText: string;
+  /** 已接受的中间结果版本号；用于丢弃重复/乱序消息。 */
+  partialRev: number;
+  /** 本次会话实际使用的引擎；旧桌面不带 engine 时按 local 处理。 */
+  engine: MicEngine;
+  /** 云端失败后由本机兜底完成。 */
+  fallback: boolean;
   begin: (session: string) => void;
   markListening: () => void;
   markProcessing: () => void;
+  handleReady: (message: MicReadyMessage) => void;
+  handlePartial: (message: MicPartialMessage) => void;
   handleResult: (message: MicResultMessage) => void;
   handleState: (message: MicStateMessage) => void;
   handleError: (message: MicErrorMessage) => void;
@@ -39,6 +52,11 @@ type MicState = {
 let resultTimer: number | null = null;
 let timeoutTimer: number | null = null;
 let errorTimer: number | null = null;
+
+const EMPTY_PARTIAL = {
+  partialText: "",
+  partialRev: 0,
+} as const;
 
 function clearTimers() {
   if (resultTimer !== null) {
@@ -65,10 +83,21 @@ export const useMicStore = create<MicState>((set, get) => ({
   result: null,
   error: null,
   failureCount: 0,
+  ...EMPTY_PARTIAL,
+  engine: "local",
+  fallback: false,
 
   begin: (session) => {
     clearTimers();
-    set({ phase: "arming", session, result: null, error: null });
+    set({
+      phase: "arming",
+      session,
+      result: null,
+      error: null,
+      ...EMPTY_PARTIAL,
+      engine: "local",
+      fallback: false,
+    });
     petDispatch("MIC_START");
   },
 
@@ -85,6 +114,25 @@ export const useMicStore = create<MicState>((set, get) => ({
     }, 10_000);
   },
 
+  handleReady: (message) => {
+    if (message.session !== get().session) return;
+    set({
+      ...EMPTY_PARTIAL,
+      engine: message.engine ?? "local",
+      fallback: false,
+    });
+  },
+
+  handlePartial: (message) => {
+    if (message.session !== get().session) return;
+    if (message.rev <= get().partialRev) return;
+    set({
+      partialText: message.text,
+      partialRev: message.rev,
+      engine: message.engine ?? get().engine,
+    });
+  },
+
   handleResult: (message) => {
     if (message.session !== get().session) return;
 
@@ -92,6 +140,8 @@ export const useMicStore = create<MicState>((set, get) => ({
     const failed = message.outcome === "failed";
     const base = micReasonText(message.outcome, message.reason);
     const withTruncated = message.truncated ? `${base}${MIC_COPY.truncated}` : base;
+    const withFallback =
+      !failed && message.fallback ? `${withTruncated}${MIC_COPY.cloudFallback}` : withTruncated;
     const failureCount = failed ? get().failureCount + 1 : 0;
     const shown =
       failed &&
@@ -99,8 +149,8 @@ export const useMicStore = create<MicState>((set, get) => ({
       ["asr_failed", "empty_transcript", "asr_timeout", "insert_failed"].includes(
         message.reason ?? "",
       )
-        ? `${withTruncated}${MIC_COPY.checkSettings}`
-        : withTruncated;
+        ? `${withFallback}${MIC_COPY.checkSettings}`
+        : withFallback;
 
     set({
       phase: failed ? "error" : "delivered",
@@ -114,6 +164,9 @@ export const useMicStore = create<MicState>((set, get) => ({
       },
       error: failed ? shown : null,
       failureCount,
+      ...EMPTY_PARTIAL,
+      engine: message.engine ?? get().engine,
+      fallback: Boolean(message.fallback),
     });
 
     petDispatch(failed ? "MIC_ERROR" : "MIC_SUCCESS");
@@ -151,7 +204,14 @@ export const useMicStore = create<MicState>((set, get) => ({
         ? `${message}${MIC_COPY.checkSettings}`
         : message;
 
-    set({ phase: "error", error: shown, result: null, failureCount });
+    set({
+      phase: "error",
+      error: shown,
+      result: null,
+      failureCount,
+      ...EMPTY_PARTIAL,
+      fallback: false,
+    });
     petDispatch("MIC_ERROR");
 
     errorTimer = window.setTimeout(() => {
@@ -162,12 +222,28 @@ export const useMicStore = create<MicState>((set, get) => ({
 
   cancel: () => {
     clearTimers();
-    set({ phase: "idle", session: null, result: null, error: null });
+    set({
+      phase: "idle",
+      session: null,
+      result: null,
+      error: null,
+      ...EMPTY_PARTIAL,
+      engine: "local",
+      fallback: false,
+    });
     petDispatch("MIC_CANCEL");
   },
 
   reset: () => {
     clearTimers();
-    set({ phase: "idle", session: null, result: null, error: null });
+    set({
+      phase: "idle",
+      session: null,
+      result: null,
+      error: null,
+      ...EMPTY_PARTIAL,
+      engine: "local",
+      fallback: false,
+    });
   },
 }));

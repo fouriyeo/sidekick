@@ -63,10 +63,10 @@ export function ModelManager() {
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <HardDrive className="size-4 text-muted-foreground" />
-            语音模型
+            本机模型
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            模型只存在这台电脑，不会上传到手机或云端。首次转写前需要下载一个。
+            模型只存在这台电脑，不会上传；云端识别不需要下载本机模型，但本机模型可作为云端失败时的回退。
           </p>
         </div>
         <Button

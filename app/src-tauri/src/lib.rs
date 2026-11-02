@@ -3,7 +3,15 @@ use tauri::Manager;
 #[cfg(desktop)]
 mod app_paths;
 #[cfg(desktop)]
+mod asr_cloud;
+#[cfg(desktop)]
+mod asr_config;
+#[cfg(desktop)]
+mod asr_keychain;
+#[cfg(desktop)]
 mod asr_models;
+#[cfg(desktop)]
+mod bailian_asr;
 #[cfg(desktop)]
 mod clipboard_manager;
 #[cfg(desktop)]
@@ -50,6 +58,9 @@ pub fn run() {
             app.manage(models.clone());
             models.prewarm();
 
+            let asr_cloud = std::sync::Arc::new(asr_cloud::AsrCloudState::new());
+            app.manage(asr_cloud.clone());
+
             let clipboard =
                 std::sync::Arc::new(clipboard_manager::ClipboardManager::new(handle.clone()));
             app.manage(clipboard.clone());
@@ -60,7 +71,7 @@ pub fn run() {
             app.manage(hook.clone());
             hook.start();
 
-            tauri::async_runtime::spawn(desktop_server::start(models, clipboard, hook));
+            tauri::async_runtime::spawn(desktop_server::start(models, clipboard, hook, asr_cloud));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -76,6 +87,11 @@ pub fn run() {
             asr_models::asr_cancel_download,
             asr_models::asr_delete_model,
             asr_models::asr_reveal_dir,
+            asr_cloud::asr_cloud_status,
+            asr_cloud::asr_cloud_save,
+            asr_cloud::asr_cloud_test,
+            asr_cloud::asr_cloud_clear,
+            asr_cloud::asr_engine_select,
             clipboard_manager::clipboard_list,
             clipboard_manager::clipboard_status,
             clipboard_manager::clipboard_copy,

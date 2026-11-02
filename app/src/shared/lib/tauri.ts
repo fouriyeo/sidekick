@@ -43,6 +43,52 @@ export type AsrStatus = {
   downloading: AsrDownloadInfo | null;
 };
 
+/** 云端识别引擎（v1 只有百炼）。 */
+export type CloudAsrEngine = "local" | "bailian";
+
+export type CloudAsrVadModel = "near_meeting_16k" | "far_field_meeting_16k";
+
+export type CloudAsrConfig = {
+  endpoint: string;
+  workspaceId: string;
+  model: string;
+  languageHints: string[];
+  keepDialect: boolean;
+  vadModel: CloudAsrVadModel;
+  maxSentenceSilenceMs: number;
+  heartbeat: boolean;
+  vocabulary: string[];
+};
+
+export type CloudAsrStatus = {
+  engine: CloudAsrEngine;
+  configured: boolean;
+  consent: boolean;
+  hasKey: boolean;
+  keyMasked: string | null;
+  fallbackToLocal: boolean;
+  localReady: boolean;
+  config: CloudAsrConfig;
+};
+
+export type CloudAsrSaveInput = {
+  config: CloudAsrConfig;
+  consent: boolean;
+  fallbackToLocal: boolean;
+  /** 新 Key；留空表示保持已保存的 Key。 */
+  apiKey?: string | null;
+  /** 删除已保存的 Key。 */
+  clearKey?: boolean;
+};
+
+export type CloudAsrTestResult = {
+  ok: boolean;
+  latencyMs: number | null;
+  model: string | null;
+  errorCode: string | null;
+  message: string | null;
+};
+
 export type ModelProgressState = "downloading" | "done" | "error" | "cancelled";
 
 export type ModelProgress = {
@@ -134,6 +180,11 @@ const COMMANDS = {
   asrCancelDownload: "asr_cancel_download",
   asrDeleteModel: "asr_delete_model",
   asrRevealDir: "asr_reveal_dir",
+  asrCloudStatus: "asr_cloud_status",
+  asrCloudSave: "asr_cloud_save",
+  asrCloudTest: "asr_cloud_test",
+  asrCloudClear: "asr_cloud_clear",
+  asrEngineSelect: "asr_engine_select",
   clipboardList: "clipboard_list",
   clipboardStatus: "clipboard_status",
   clipboardCopy: "clipboard_copy",
@@ -327,6 +378,32 @@ export function deleteAsrModel(id: AsrModelId): Promise<AsrStatus> {
 
 export function revealAsrDir(): Promise<void> {
   return invoke<void>(COMMANDS.asrRevealDir);
+}
+
+export function getCloudAsrStatus(): Promise<CloudAsrStatus> {
+  return invoke<CloudAsrStatus>(COMMANDS.asrCloudStatus);
+}
+
+export function saveCloudAsr(input: CloudAsrSaveInput): Promise<CloudAsrStatus> {
+  return invoke<CloudAsrStatus>(COMMANDS.asrCloudSave, { input });
+}
+
+export function testCloudAsr(input: {
+  config: CloudAsrConfig;
+  apiKey?: string | null;
+}): Promise<CloudAsrTestResult> {
+  return invoke<CloudAsrTestResult>(COMMANDS.asrCloudTest, {
+    config: input.config,
+    apiKey: input.apiKey ?? null,
+  });
+}
+
+export function selectAsrEngine(engine: CloudAsrEngine): Promise<CloudAsrStatus> {
+  return invoke<CloudAsrStatus>(COMMANDS.asrEngineSelect, { engine });
+}
+
+export function clearCloudAsr(): Promise<CloudAsrStatus> {
+  return invoke<CloudAsrStatus>(COMMANDS.asrCloudClear);
 }
 
 export function listClipboard(): Promise<ClipboardSnapshot> {

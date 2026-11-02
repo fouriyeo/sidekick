@@ -157,6 +157,8 @@ export function MobileApp() {
       if (micMessage) {
         const store = useMicStore.getState();
         if (micMessage.type === "mic.result") store.handleResult(micMessage);
+        else if (micMessage.type === "mic.ready") store.handleReady(micMessage);
+        else if (micMessage.type === "mic.partial") store.handlePartial(micMessage);
         else if (micMessage.type === "mic.state") store.handleState(micMessage);
         else if (micMessage.type === "mic.error") store.handleError(micMessage);
         return;
