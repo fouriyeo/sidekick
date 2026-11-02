@@ -3,6 +3,7 @@ import {
   Check,
   Clipboard,
   Copy,
+  Eye,
   Link2,
   Mic,
   Pause,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatRelativeTime } from "@/shared/lib/format";
-import { subscribeClipboardChanged } from "@/shared/lib/tauri";
+import { type ClipboardItem, subscribeClipboardChanged } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -28,7 +29,9 @@ import { Input } from "@/shared/ui/input";
 import {
   DEFAULT_CLIPBOARD_MAX_ITEMS,
   filterClipboardItems,
+  formatClipboardCharCount,
   formatClipboardCount,
+  formatClipboardKind,
   useClipboardStore,
 } from "../clipboard-store";
 
@@ -46,6 +49,7 @@ export function ClipboardPanel() {
 
   const [query, setQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
 
@@ -64,6 +68,8 @@ export function ClipboardPanel() {
   const filtered = filterClipboardItems(items, query);
   const enabled = snapshot?.enabled ?? true;
   const maxItems = snapshot?.maxItems ?? DEFAULT_CLIPBOARD_MAX_ITEMS;
+  // 从最新快照里找，删除/清空后详情弹层会自动关闭。
+  const detailItem = detailId ? (items.find((item) => item.id === detailId) ?? null) : null;
 
   async function handleCopy(id: string) {
     await copy(id);
@@ -163,13 +169,7 @@ export function ClipboardPanel() {
                 )}
               >
                 <span className="mt-0.5 text-muted-foreground">
-                  {item.kind === "voice" ? (
-                    <Mic className="size-3.5" />
-                  ) : item.kind === "url" ? (
-                    <Link2 className="size-3.5" />
-                  ) : (
-                    <Type className="size-3.5" />
-                  )}
+                  <ClipboardKindIcon kind={item.kind} />
                 </span>
 
                 <button
@@ -193,6 +193,16 @@ export function ClipboardPanel() {
                 </button>
 
                 <div className="flex shrink-0 items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="查看详情"
+                    title="查看详情（全文）"
+                    onClick={() => setDetailId(item.id)}
+                  >
+                    <Eye className="size-3.5" />
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -233,9 +243,81 @@ export function ClipboardPanel() {
       </div>
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        最多保留最近 {maxItems}{" "}
+        点条目复制；点眼睛看全文。最多保留最近 {maxItems}{" "}
         条；新内容淘汰最旧的未置顶项。只记录文本；密码管理器标记为隐藏的内容不会记录。数据仅保存在本机，不联网、不写日志。
       </p>
+
+      <Dialog
+        open={detailItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setDetailId(null);
+        }}
+      >
+        <DialogContent className="flex max-h-[min(80vh,560px)] flex-col gap-3 sm:max-w-xl">
+          {detailItem && (
+            <>
+              <DialogHeader className="shrink-0 pr-7">
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="text-muted-foreground">
+                    <ClipboardKindIcon kind={detailItem.kind} />
+                  </span>
+                  剪贴板详情
+                  {detailItem.pinned && (
+                    <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-px text-[10px] font-normal text-primary">
+                      已置顶
+                    </span>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  {formatClipboardKind(detailItem.kind)} ·{" "}
+                  {formatClipboardCharCount(detailItem.text)} · 最近使用{" "}
+                  {formatRelativeTime(detailItem.lastUsedAt)}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap select-text text-foreground">
+                  {detailItem.text}
+                </p>
+              </div>
+
+              <DialogFooter className="shrink-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    void remove(detailItem.id);
+                    setDetailId(null);
+                  }}
+                >
+                  <Trash2 className="size-3.5" />
+                  删除
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={detailItem.pinned ? "text-primary" : undefined}
+                  onClick={() => void togglePin(detailItem.id)}
+                >
+                  <Pin className={detailItem.pinned ? "size-3.5 fill-current" : "size-3.5"} />
+                  {detailItem.pinned ? "取消置顶" : "置顶"}
+                </Button>
+                <Button type="button" size="sm" onClick={() => void handleCopy(detailItem.id)}>
+                  {copiedId === detailItem.id ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copiedId === detailItem.id ? "已复制" : "复制"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
@@ -261,4 +343,10 @@ export function ClipboardPanel() {
       </Dialog>
     </section>
   );
+}
+
+function ClipboardKindIcon({ kind }: { kind: ClipboardItem["kind"] }) {
+  if (kind === "voice") return <Mic className="size-3.5" />;
+  if (kind === "url") return <Link2 className="size-3.5" />;
+  return <Type className="size-3.5" />;
 }

@@ -2,7 +2,7 @@
 doc: engineering/clipboard-manager
 title: 桌面剪贴板管理
 status: active
-updated: 2026-11-01
+updated: 2026-11-02
 load: on-demand
 owner: engineering
 ---
@@ -83,6 +83,7 @@ owner: engineering
 
 - 每次变更广播 `clipboard-changed` 快照；桌面 UI 订阅后刷新。
 - 桌面右侧「聊天 / 剪贴板」切换；剪贴板页含搜索、暂停、清空、条目预览与操作。
+- 列表只截两行；每条右侧「查看详情（眼睛）」打开弹层，展示完整文本（可滚动、可选中）、来源类型、字数/行数与最近使用时间，并支持复制、置顶、删除。
 - 设置页显示记录开关、条数、清空入口和隐私说明。
 
 ## 5. 隐私与安全
@@ -97,6 +98,7 @@ owner: engineering
 
 - 在 TextEdit 复制文本 → 1 秒内出现在列表；
 - 搜索命中/不命中正确；点击条目复制回填，粘贴内容一致；
+- 长文本点「查看详情」能看到完整内容，弹层内复制/置顶/删除即时生效；
 - 置顶项保持顶部；删除/清空即时生效；重启应用历史恢复；
 - 暂停后复制不进入列表，继续后只记录新内容；
 - 模拟 `org.nspasteboard.ConcealedType` 的密码内容不出现；

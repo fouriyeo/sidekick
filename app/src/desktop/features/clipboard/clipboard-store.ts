@@ -38,6 +38,21 @@ export function formatClipboardCount(count: number, maxItems?: number): string {
   return `${count} / ${limit} 条 · 仅保存在这台电脑`;
 }
 
+/** 详情弹层里给来源类型一个可读名字。 */
+export function formatClipboardKind(kind: ClipboardItem["kind"]): string {
+  if (kind === "voice") return "语音转写";
+  if (kind === "url") return "链接";
+  return "文本";
+}
+
+/** 列表只显示两行，详情里补全「多少字 / 多少行」，让人知道到底有多少内容。 */
+export function formatClipboardCharCount(text: string): string {
+  // 换行不算「字」，否则多行文本的字数会虚高。
+  const chars = Array.from(text).filter((char) => char !== "\n" && char !== "\r").length;
+  const lines = text.split("\n").length;
+  return lines > 1 ? `共 ${chars} 字 · ${lines} 行` : `共 ${chars} 字`;
+}
+
 export const useClipboardStore = create<ClipboardState>((set) => ({
   snapshot: null,
   loading: false,
