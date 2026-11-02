@@ -49,8 +49,6 @@ function resetStores() {
     error: null,
     partialText: "",
     partialRev: 0,
-    engine: "local",
-    fallback: false,
   });
 }
 
@@ -69,8 +67,6 @@ afterEach(() => {
     error: null,
     partialText: "",
     partialRev: 0,
-    engine: "local",
-    fallback: false,
   });
 });
 
@@ -225,7 +221,6 @@ describe("MicButton 流式识别回显", () => {
       session: "session-1",
       partialText: "帮我把这段异步的注释",
       partialRev: 3,
-      engine: "bailian",
     });
     render(<MicButton active posture="handheld" />);
 
@@ -239,11 +234,11 @@ describe("MicButton 流式识别回显", () => {
       session: "session-1",
       partialText: "帮我把这段异步的注释改成中文",
       partialRev: 4,
-      engine: "bailian",
     });
     render(<MicButton active posture="handheld" />);
 
     expect(screen.getByText("云端收尾…")).toBeInTheDocument();
+    expect(screen.getByText("百炼")).toBeInTheDocument();
     expect(screen.getByText("帮我把这段异步的注释改成中文")).toBeInTheDocument();
   });
 
@@ -253,7 +248,6 @@ describe("MicButton 流式识别回显", () => {
       session: "session-1",
       partialText: "支架模式实时文本",
       partialRev: 2,
-      engine: "local",
     });
     render(<MicButton active posture="docked" />);
 

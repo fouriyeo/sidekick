@@ -24,8 +24,8 @@
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
 - ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、方向自动双姿态（手动覆盖）、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
-- ✅ **麦克风 P0 已实现**（2026-10-31）：手机 WebView 流式 PCM16 → 正式二进制协议（`mic.*` + `SK01`）→ 桌面按会话内存缓冲 → whisper-rs 内存转写（启动 prewarm）→ `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制；手机含上滑取消、波形、计时、权限说明、结果卡片；桌面设置页管理模型与自动输入权限。真机/辅助功能实测待补。
-- ✅ **百炼云端流式语音识别**（2026-11-02）：桌面设置「语音识别」页（本机/百炼切换、地址/业务空间/API Key/模型/语言/场景/热词/测试连接/回退开关/隐私同意）；`asr.json`（`0600`，无 Key）+ macOS Keychain；桌面直连百炼 WS（run-task/finish-task、二进制 PCM）；`mic.partial` 50ms 节流回显；`mic.result` 带 engine/model/fallback/usage；云端失败回退本机。真实账号/真机验收待补。
+- ✅ **麦克风（百炼云端唯一）**（2026-11-02）：手机 WebView 流式 PCM16 → `mic.*` + `SK01` 二进制帧 → 桌面直连百炼 WS（run-task/finish-task、二进制 PCM）→ `mic.partial` 50ms 流式回显 → `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制。本机 whisper/模型下载已下线，失败直接报错、不回退。
+- ✅ **模型页 + 用量统计**（2026-11-02）：桌面主导航新增「模型」（AI 联动之后），上半部分配置百炼（完整地址/Keychain API Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；无业务空间 ID 字段），下半部分区间切换（今天/近 7 天/近 1 个月/近 1 年；今天无明细、7/30 按天、1 年按月）+ 金额/Token/会话/时长（人民币微元，北京/新加坡价格估算）；`asr_usage.json` 0600、按天、最多 400 天；`asr_usage_stats()` 返回 365 天 `days`。
 - ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多 100 条；本地 `0600` JSON。
 - 🚧 **AI 联动（DSH hook）开发中**（2026-11-02）：桌面「AI 联动」页 + 本地 `sidekick-hook.mjs` 注入 DSH profile + Rust 回环桥 + `status` 协议 + 手机四态动作/三音效；产品规则 `docs/prd/hook/`，技术方案 `docs/engineering/dsh-hook.md`；首次开启需重启 DSH 一次，之后热开关。
 - ❌ 尚未开始：手机回答 AI 提问、文本消息、Claude Code / Qoder 接入、配对鉴权、正式签名包、iOS。
@@ -58,7 +58,8 @@
 | WS | `/ws` | 消息通道 |
 | UDP | `47820` | 发现响应器：收 `sidekick.discover` 探测，单播回主机名 + 真实端口 |
 | Tauri 命令 | `server_info` | 等就绪后返回 `{ip, port, url, discoveryPort}`，前端展示地址/发现状态/二维码 |
-| Tauri 命令 | `asr_cloud_status` / `asr_cloud_save` / `asr_cloud_test` / `asr_engine_select` / `asr_cloud_clear` | 百炼云端配置/状态/测试/引擎切换/清除；Key 只进 Keychain，状态只返回掩码 |
+| Tauri 命令 | `asr_cloud_status` / `asr_cloud_save` / `asr_cloud_test` / `asr_cloud_clear` | 百炼配置/状态/测试/清除；状态内部用 `keyPresent`/`keyHint` 不读 Keychain（对外返回 `hasKey`/`keyMasked`），Key 只进 Keychain |
+| Tauri 命令 | `asr_usage_stats` / `asr_usage_clear` | 今天/7/30/365 汇总 + 最近 365 天 `days`；清空只重置本地统计 |
 
 ### 手机端接口
 
@@ -181,8 +182,10 @@ sidekick/
 - **变暗/常亮时长**：`dimMinutes`（默认 5，1–60）与 `keepAwakeHours`（默认 2，0 = 不限）在 `persistence.ts` 归一化；改默认值要同步迁移测试与 `docs/prd/pet/SPEC.md` §7。
 - **方向自动姿态**：`use-orientation.ts` 用 `matchMedia("(orientation: portrait)")` + resize/orientationchange；横屏 docked、竖屏 handheld，设置手动覆盖只持续到下次旋转。
 - **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
-- **麦克风 P0**：`whisper-rs` 构建需 cmake + libclang（`LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib`）；模型目录 `~/Library/Application Support/Sidekick/models`，启动会 prewarm，首次手动加载可能 5–6 秒；音频只在内存，不再有临时 WAV。
-- **百炼云端 ASR**：默认引擎仍是本机；云端必须显式保存并勾选隐私同意。`asr.json` 权限 `0600` 且不含 Key，Key 存 Keychain（service `dev.sidekick.app.asr.bailian`，account `default`）；dev 重编译可能弹一次钥匙串授权，读取失败不落明文。默认地址 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`，业务空间域名用 `{WorkspaceId}.cn-beijing.maas.aliyuncs.com` 并填 Workspace ID。`task-started` 前只缓存音频，之后二进制 PCM 转发；`mic.partial` 50ms 节流、`rev` 只增、整体替换、只回显不落字；最终只插入一次；云端失败/空结果用同一份 PCM 回退本机（`engine=local`、`fallback=true`）。
+- **百炼云端 ASR（唯一）**：本机 whisper 已下线；`whisper-rs`/cmake/libclang 不再是构建前提。未同意/地址或模型无效/无 Key 时 `mic.start` 直接回 `mic.error(cloud_not_configured|cloud_key_unavailable)`，不建会话、不回退。`asr.json`（0600，无 Key，含 `keyPresent`/`keyHint`）+ Keychain（service `dev.sidekick.app.asr.bailian`，account `default`）。**打开模型页/`asr_cloud_status` 不读 Keychain**，只用元数据；保存新 Key/清除 Key、测试连接、录音建会话才读，所以开页不弹密码；dev 重编译可能弹一次授权。地址必须完整 URL；业务空间直接粘贴并把 `{WorkspaceId}` 换成真实 ID，未替换报“请填写完整服务地址…”，不再发 `X-DashScope-WorkSpace`。`task-started` 前只缓存音频，之后二进制 PCM 转发；`mic.partial` 50ms 节流、`rev` 只增、整体替换、只回显不落字；最终只插入一次。
+- **用量统计**：`asr_usage.json`（0600，原子写，最多 400 天）只存每日汇总，不存文本/Key/音频；按本机时区切天；每次 `task-finished` 有 usage 就记账（插入失败/空结果也计费）；`asr_usage_stats()` 返回今天/7/30/365 汇总 + 最近 365 天 `days`（今天起倒序、缺失为 0）；模型页区间切换，今天无明细、7/30 按天、1 年按自然月。金额人民币微元，北京 ¥6/¥4.5、新加坡 ¥6.781/¥5.104 每百万 Token，自定义地址按北京估算；`priceNote` 明示估算，以百炼账单为准。清空统计只重置该文件的每日汇总，不影响配置/Key。
+- **Keychain 跨平台**：当前只实现 macOS 登录钥匙串；Windows/Linux 的 `asr_keychain` 是报错占位，需接 Credential Manager / libsecret（或跨平台 keyring）；桌面目前只发 macOS。
+- **旧 models 目录**：`~/Library/Application Support/Sidekick/models/` 可能还在磁盘上，但不参与运行，可手动删除；不要把它当作可用模型来源。
 - **自动粘贴 TCC**：`core-graphics` 合成 Cmd+V 需要 macOS 辅助功能勾选当前程序；开发二进制每次重编译可能被当成新程序，需要重新勾选（设置页有请求权限/重新检测）。不勾选只复制。
 - **麦克风录音 UI 锚点**：手持模式底部居中的 96dp 按钮容器只能包含按钮本身；录音条/结果卡片/临时提示必须放在独立绝对定位层（`left-0 right-0 mx-auto w-[min(82vw,360px)] bottom-[104px]`、`pointer-events-none`），否则会把 flex 容器撑宽、按钮被挤偏，看起来「按住后跳走」。居中要用 `inset-x-0` + flex `items-center` / `left-0 right-0 mx-auto`，**不要用 `left-1/2 -translate-x-1/2`**（WebView 103 不支持 CSS translate，会偏右半宽）。取消只保留上滑手势（≥48dp，滑回 <24dp 继续），**不要再加左下取消按钮**：按住说话时去点它必须先松手，而松手就已经结束录音，按钮自相矛盾。
 - **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind = "voice"` 入库（暂停记录时仍写系统剪贴板、但不入历史）；最多 100 条（置顶优先淘汰）；文件 `~/Library/Application Support/Sidekick/clipboard.json` 权限 600。
@@ -205,8 +208,8 @@ sidekick/
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
 2. 情绪宠物 P0：代码已完成（静态 SVG 降级、方向自动双姿态（手动覆盖）、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
-3. ✅ 外设麦克风 P0：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层已完成；下一步勾选 macOS 辅助功能验证自动粘贴，并补真机 60 秒/断连/密码框矩阵。
-4. ✅ 百炼云端流式 ASR：桌面中转、Keychain、`mic.partial`、回退本机、设置页已完成（2026-11-02）；下一步真实账号/Keychain 授权/真机流式与回退验收，并验证默认旧域名是否支持该模型。
+3. ✅ 外设麦克风（百炼云端唯一）：二进制协议、云端流式、`mic.partial`、手机 UI、桌面浮层已完成；下一步 macOS 辅助功能自动粘贴与真机 60 秒/断连/密码框矩阵。
+4. ✅ 模型页 + 用量统计：百炼配置（无业务空间 ID）、Keychain 元数据、区间切换（今天/7/30/365，1 年按月）、清空统计已完成（2026-11-02）；下一步真实账号/Keychain 开页不弹/金额对账与真机验收。
 5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
 6. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效；代码开发中，待真机/隐私验收（2026-11-02）。
 7. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。

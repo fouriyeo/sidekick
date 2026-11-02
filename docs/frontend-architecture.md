@@ -49,7 +49,8 @@ app/
 │  │  │  ├─ chat/             # 消息列表、输入、系统消息
 │  │  │  ├─ clipboard/        # 剪贴板历史：搜索、复制、置顶、清空
 │  │  │  ├─ mic-receiver/     # 麦克风状态浮层、结果提示
-│  │  │  └─ settings/         # 语音模型、辅助功能、剪贴板开关
+│  │  │  ├─ models/           # 模型页：百炼配置 + 用量统计
+│  │  │  └─ settings/         # 自动输入权限、剪贴板开关
 │  │  └─ components/
 │  ├─ mobile/                 # 手机专属（不强制横竖屏）
 │  │  ├─ features/

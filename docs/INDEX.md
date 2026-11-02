@@ -82,7 +82,7 @@ docs/
 │  ├─ INDEX.md
 │  ├─ audio-pipeline.md         # 采集 → 传输 → 转写 → 输入
 │  ├─ protocol-audio.md         # 麦克风音频协议（已实现）
-│  ├─ asr-model.md              # whisper-rs 模型下载/存储/转写
+│  ├─ asr-model.md              # 百炼模型页、Token/费用统计
 │  ├─ clipboard-manager.md      # 桌面剪贴板历史与隐私过滤
 │  ├─ dsh-hook.md               # DSH 本地脚本注入、Rust 桥、四态协议
 │  ├─ lan-discovery.md          # UDP 发现与动态端口
@@ -101,9 +101,9 @@ docs/
 
 ## 4. 当前阶段（2026-11-02）
 
-- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风 P0 代码（协议/内存 ASR/模型管理/手机 UI/桌面设置）、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感；百炼云端流式 ASR 代码已实现（2026-11-02，真机/账号验收待补）。
+- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风（百炼云端唯一）代码、模型页 + 用量统计、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感（2026-11-02；真实账号/真机/金额对账待补）。
 - 进行中：**AI 联动（DSH hook）**——桌面 AI 联动页、本地脚本注入、手机四态动作/声音；产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
-- 麦克风：自动粘贴依赖 macOS 辅助功能，需用户手动勾选一次；真机/密码框矩阵继续回归。
+- 麦克风：只走百炼云端，未配置直接报错；自动粘贴依赖 macOS 辅助功能；真机/密码框矩阵继续回归。
 - 未开始：手机回答 AI 提问、Claude Code / Qoder hook、release 打包、配对鉴权、iOS、Rive 资产。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 
@@ -120,7 +120,7 @@ docs/
 | 依赖准入 | [dependency-policy.md](./dependency-policy.md) |
 | 现有协议 | [../protocol/README.md](../protocol/README.md) |
 | 麦克风音频协议 | [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
-| 语音模型管理 / 云端识别 | [engineering/asr-model.md](./engineering/asr-model.md) / [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
+| 模型页 / 用量统计 / 云端识别 | [engineering/asr-model.md](./engineering/asr-model.md) / [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) |
 | 重大决策 | [decisions.md](./decisions.md) |
 | 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |

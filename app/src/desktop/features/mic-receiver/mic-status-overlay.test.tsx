@@ -12,8 +12,6 @@ beforeEach(() => {
     visible: true,
     partialText: "帮我把这段异步的注释",
     partialRev: 2,
-    engine: "bailian",
-    fallback: false,
   });
 });
 
@@ -39,15 +37,14 @@ describe("MicStatusOverlay 流式回显", () => {
     expect(screen.getByText("帮我把这段异步的注释")).toBeInTheDocument();
   });
 
-  it("回退结果在文案里带出「本机转写」提示", () => {
+  it("结果阶段只显示最终文案，不再出现本机回退提示", () => {
     useDesktopMicStore.setState({
       phase: "delivered",
-      message: "已输入云端不可用，已用本机转写。",
-      fallback: true,
-      engine: "local",
+      message: "已输入",
     });
     render(<MicStatusOverlay />);
 
-    expect(screen.getByText(/已用本机转写/)).toBeInTheDocument();
+    expect(screen.getByText("已输入")).toBeInTheDocument();
+    expect(screen.queryByText(/本机转写/)).toBeNull();
   });
 });

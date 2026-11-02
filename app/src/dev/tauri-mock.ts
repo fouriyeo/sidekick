@@ -1,12 +1,6 @@
 type MockRole = "desktop" | "mobile";
 
-const MOCK_EVENTS = [
-  "chat",
-  "conn",
-  "model-progress",
-  "clipboard-changed",
-  "dsh-hook-status",
-] as const;
+const MOCK_EVENTS = ["chat", "conn", "clipboard-changed", "dsh-hook-status"] as const;
 type MockEvent = (typeof MOCK_EVENTS)[number];
 
 type MockHookState = "idle" | "working" | "asking" | "completed";
@@ -23,16 +17,6 @@ type MockInternals = {
   transformCallback: (callback: (payload: unknown) => void) => number;
   unregisterCallback: (id: number) => void;
   convertFileSrc: (path: string) => string;
-};
-
-type MockModel = {
-  id: "tiny" | "base" | "small" | "medium";
-  label: string;
-  fileName: string;
-  approxBytes: number;
-  sizeBytes: number;
-  downloaded: boolean;
-  note: string;
 };
 
 type MockClipboardItem = {
@@ -61,51 +45,9 @@ export function installTauriMock(): void {
   let nextId = 1;
   let nextStoreId = 1000;
 
-  const models: MockModel[] = [
-    {
-      id: "tiny",
-      label: "Tiny",
-      fileName: "ggml-tiny.bin",
-      approxBytes: 77_691_713,
-      sizeBytes: 0,
-      downloaded: false,
-      note: "最快，准确率低",
-    },
-    {
-      id: "base",
-      label: "Base",
-      fileName: "ggml-base.bin",
-      approxBytes: 147_951_465,
-      sizeBytes: 147_951_465,
-      downloaded: true,
-      note: "平衡，推荐起步",
-    },
-    {
-      id: "small",
-      label: "Small",
-      fileName: "ggml-small.bin",
-      approxBytes: 487_601_967,
-      sizeBytes: 0,
-      downloaded: false,
-      note: "更准，体积更大",
-    },
-    {
-      id: "medium",
-      label: "Medium",
-      fileName: "ggml-medium.bin",
-      approxBytes: 1_533_774_201,
-      sizeBytes: 0,
-      downloaded: false,
-      note: "最准，占用较大",
-    },
-  ];
-  let selectedModel: MockModel["id"] | null = "base";
-  let downloading: { id: MockModel["id"]; received: number; total: number } | null = null;
-
-  // 云端 ASR（浏览器 mock）：只用于设置页/浮层预览，不联网。
+  // 云端 ASR（浏览器 mock）：只用于模型页/浮层预览，不联网。
   const cloudConfig = {
     endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
-    workspaceId: "",
     model: "qwen-audio-3.1-asr-flash-streaming",
     languageHints: ["zh"],
     keepDialect: false,
@@ -114,21 +56,16 @@ export function installTauriMock(): void {
     heartbeat: true,
     vocabulary: [] as string[],
   };
-  let cloudEngine: "local" | "bailian" = "local";
   let cloudConsent = false;
-  let cloudFallback = true;
   let cloudKeyMasked: string | null = null;
   let cloudKeySet = false;
 
   function cloudSnapshot() {
     return {
-      engine: cloudEngine,
       configured: cloudConsent && cloudKeySet,
       consent: cloudConsent,
       hasKey: cloudKeySet,
       keyMasked: cloudKeyMasked,
-      fallbackToLocal: cloudFallback,
-      localReady: models.some((model) => model.id === selectedModel && model.downloaded),
       config: {
         ...cloudConfig,
         languageHints: [...cloudConfig.languageHints],
@@ -137,8 +74,93 @@ export function installTauriMock(): void {
     };
   }
 
-  let downloadTimer: number | null = null;
-  let downloadCancelled = false;
+  function usageCost(input: number, output: number) {
+    return Math.round((input * 6_000_000 + output * 4_500_000) / 1_000_000);
+  }
+
+  function dayLabel(offset: number) {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  function usageDay(
+    offset: number,
+    sessions: number,
+    input: number,
+    output: number,
+    audioMs: number,
+  ) {
+    return {
+      date: dayLabel(offset),
+      sessions,
+      inputTokens: input,
+      outputTokens: output,
+      totalTokens: input + output,
+      audioDurationMs: audioMs,
+      costCnyMicros: usageCost(input, output),
+    };
+  }
+
+  const mockDays = [
+    usageDay(0, 3, 1280, 180, 42_000),
+    usageDay(1, 5, 2100, 260, 71_000),
+    usageDay(2, 2, 640, 90, 22_000),
+    usageDay(3, 4, 1750, 210, 58_000),
+    usageDay(6, 1, 320, 40, 11_000),
+    usageDay(9, 2, 980, 120, 33_000),
+    usageDay(20, 3, 1120, 150, 38_000),
+    usageDay(45, 4, 1600, 200, 55_000),
+    usageDay(120, 2, 700, 80, 24_000),
+  ];
+
+  function summarize(offset: number) {
+    const recent = mockDays.filter((day) => {
+      const start = new Date();
+      start.setDate(start.getDate() - offset);
+      return (
+        day.date >=
+        `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`
+      );
+    });
+    return {
+      sessions: recent.reduce((sum, day) => sum + day.sessions, 0),
+      inputTokens: recent.reduce((sum, day) => sum + day.inputTokens, 0),
+      outputTokens: recent.reduce((sum, day) => sum + day.outputTokens, 0),
+      totalTokens: recent.reduce((sum, day) => sum + day.totalTokens, 0),
+      audioDurationMs: recent.reduce((sum, day) => sum + day.audioDurationMs, 0),
+      costCnyMicros: recent.reduce((sum, day) => sum + day.costCnyMicros, 0),
+    };
+  }
+
+  function usageSnapshot() {
+    const byDate = new Map(mockDays.map((day) => [day.date, day]));
+    const days = Array.from({ length: 365 }, (_, offset) => {
+      const date = dayLabel(offset);
+      return (
+        byDate.get(date) ?? {
+          date,
+          sessions: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          audioDurationMs: 0,
+          costCnyMicros: 0,
+        }
+      );
+    });
+    return {
+      today: summarize(0),
+      last7Days: summarize(6),
+      last30Days: summarize(29),
+      last365Days: summarize(364),
+      days,
+      priceNote:
+        "按百炼北京/新加坡地域价格估算（输入 ¥6/¥6.781、输出 ¥4.5/¥5.104 每百万 Token），实际以百炼账单为准。",
+    };
+  }
 
   const clipboard = {
     enabled: true,
@@ -188,18 +210,6 @@ export function installTauriMock(): void {
     }
   }
 
-  function modelSnapshot() {
-    return {
-      dir: "/Mock/Application Support/Sidekick/models",
-      selected: selectedModel,
-      models: models.map((model) => ({
-        ...model,
-        selected: model.downloaded && selectedModel === model.id,
-      })),
-      downloading,
-    };
-  }
-
   function clipboardSnapshot() {
     return {
       enabled: clipboard.enabled,
@@ -214,15 +224,6 @@ export function installTauriMock(): void {
 
   function emitClipboard() {
     emit("clipboard-changed", clipboardSnapshot());
-  }
-
-  function stopDownload() {
-    if (downloadTimer !== null) {
-      window.clearInterval(downloadTimer);
-      downloadTimer = null;
-    }
-    downloading = null;
-    downloadCancelled = false;
   }
 
   // ── AI 联动 mock：浏览器里模拟 DSH 安装/连接/状态推送 ────────────────
@@ -427,11 +428,7 @@ export function installTauriMock(): void {
           isDev: true,
         };
       }
-      if (
-        command === "accessibility_open_settings" ||
-        command === "accessibility_reveal_app" ||
-        command === "asr_reveal_dir"
-      ) {
+      if (command === "accessibility_open_settings" || command === "accessibility_reveal_app") {
         return null;
       }
       if (command === "accessibility_request") {
@@ -443,91 +440,12 @@ export function installTauriMock(): void {
         };
       }
 
-      if (command === "asr_status") return modelSnapshot();
-      if (command === "asr_select_model") {
-        const id = args?.id as MockModel["id"];
-        const model = models.find((item) => item.id === id);
-        if (model?.downloaded) selectedModel = id;
-        return modelSnapshot();
-      }
-      if (command === "asr_delete_model") {
-        const id = args?.id as MockModel["id"];
-        const model = models.find((item) => item.id === id);
-        if (model) {
-          model.downloaded = false;
-          model.sizeBytes = 0;
-        }
-        if (selectedModel === id) selectedModel = null;
-        return modelSnapshot();
-      }
-      if (command === "asr_download_model") {
-        const id = args?.id as MockModel["id"];
-        const model = models.find((item) => item.id === id);
-        if (!model || model.downloaded || downloading) return null;
-
-        downloadCancelled = false;
-        downloading = { id, received: 0, total: model.approxBytes };
-        emit("model-progress", {
-          modelId: id,
-          received: 0,
-          total: model.approxBytes,
-          state: "downloading",
-        });
-
-        downloadTimer = window.setInterval(() => {
-          if (!downloading) return;
-          if (downloadCancelled) {
-            emit("model-progress", {
-              modelId: id,
-              received: downloading.received,
-              total: downloading.total,
-              state: "cancelled",
-            });
-            stopDownload();
-            return;
-          }
-
-          downloading.received = Math.min(
-            downloading.total,
-            downloading.received + Math.ceil(downloading.total / 8),
-          );
-          if (downloading.received >= downloading.total) {
-            model.downloaded = true;
-            model.sizeBytes = downloading.total;
-            if (selectedModel === null) selectedModel = id;
-            emit("model-progress", {
-              modelId: id,
-              received: downloading.total,
-              total: downloading.total,
-              state: "done",
-            });
-            stopDownload();
-            return;
-          }
-
-          emit("model-progress", {
-            modelId: id,
-            received: downloading.received,
-            total: downloading.total,
-            state: "downloading",
-          });
-        }, 350);
-        return null;
-      }
-      if (command === "asr_cancel_download") {
-        downloadCancelled = true;
-        return null;
-      }
-
       if (command === "asr_cloud_status") return cloudSnapshot();
       if (command === "asr_cloud_save") {
         const input = (args?.input ?? {}) as Record<string, unknown>;
         const config = input.config as Record<string, unknown> | undefined;
-        if (config) {
-          Object.assign(cloudConfig, config);
-        }
+        if (config) Object.assign(cloudConfig, config);
         cloudConsent = Boolean(input.consent);
-        cloudFallback = Boolean(input.fallbackToLocal);
         if (input.clearKey) {
           cloudKeySet = false;
           cloudKeyMasked = null;
@@ -537,8 +455,6 @@ export function installTauriMock(): void {
           cloudKeySet = true;
           cloudKeyMasked = `sk-••••${apiKey.slice(-4)}`;
         }
-        if (cloudConsent && cloudKeySet) cloudEngine = "bailian";
-        else if (cloudEngine === "bailian") cloudEngine = "local";
         return cloudSnapshot();
       }
       if (command === "asr_cloud_test") {
@@ -560,20 +476,16 @@ export function installTauriMock(): void {
           message: "连接成功 · 286ms（mock）",
         };
       }
-      if (command === "asr_engine_select") {
-        const engine = String(args?.engine ?? "local");
-        if (engine === "bailian" && !(cloudConsent && cloudKeySet)) {
-          throw new Error("云端还没配置完整");
-        }
-        cloudEngine = engine === "bailian" ? "bailian" : "local";
-        return cloudSnapshot();
-      }
       if (command === "asr_cloud_clear") {
-        cloudEngine = "local";
         cloudConsent = false;
         cloudKeySet = false;
         cloudKeyMasked = null;
         return cloudSnapshot();
+      }
+      if (command === "asr_usage_stats") return usageSnapshot();
+      if (command === "asr_usage_clear") {
+        mockDays.splice(0, mockDays.length);
+        return usageSnapshot();
       }
 
       if (command === "clipboard_list" || command === "clipboard_status") {

@@ -2,13 +2,12 @@ import { KeyRound, Loader2, ShieldCheck, TestTube2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { Switch } from "@/shared/ui/switch";
 import {
   CLOUD_ENDPOINT_PRESETS,
-  type CloudAsrLanguage,
+  type CloudLanguage,
   DEFAULT_CLOUD_MODEL,
   useCloudAsrStore,
-} from "../cloud-asr-store";
+} from "./cloud-asr-store";
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
@@ -33,49 +32,48 @@ export function CloudAsrForm() {
   const testing = useCloudAsrStore((state) => state.testing);
   const error = useCloudAsrStore((state) => state.error);
   const testResult = useCloudAsrStore((state) => state.testResult);
+  const savedNotice = useCloudAsrStore((state) => state.savedNotice);
   const setDraft = useCloudAsrStore((state) => state.setDraft);
   const runTest = useCloudAsrStore((state) => state.runTest);
-  const saveAndEnable = useCloudAsrStore((state) => state.saveAndEnable);
+  const save = useCloudAsrStore((state) => state.save);
   const clearKey = useCloudAsrStore((state) => state.clearKey);
-  const selectLocal = useCloudAsrStore((state) => state.selectLocal);
 
   if (!status || !draft) {
-    return <p className="text-xs text-muted-foreground">正在读取云端识别设置…</p>;
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-muted-foreground">正在读取百炼配置…</p>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    );
   }
 
   const busy = saving || testing;
-  const enabled = status.engine === "bailian";
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2.5">
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-xs font-medium">
-            {enabled ? "云端已启用" : "云端未启用"}
-            {enabled && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                当前生效
+          <p className="text-xs font-medium">
+            {status.configured ? "已配置" : "未配置"}
+            {status.configured && (
+              <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                云端识别
               </span>
             )}
           </p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
             {status.configured
-              ? `${status.config.model} · ${status.hasKey ? (status.keyMasked ?? "Key 已保存") : "未保存 Key"}`
-              : "还没配置完整"}
+              ? `${status.config.model}${status.hasKey ? ` · ${status.keyMasked ?? "Key 已保存"}` : ""}`
+              : "填好地址和 API Key，测试连接后保存即可使用"}
           </p>
         </div>
-        {enabled && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            disabled={busy}
-            onClick={() => void selectLocal()}
-          >
-            切回本机
-          </Button>
-        )}
       </div>
 
       <label className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-relaxed">
@@ -88,10 +86,10 @@ export function CloudAsrForm() {
         <span>
           <span className="flex items-center gap-1 font-medium">
             <ShieldCheck className="size-3.5 text-muted-foreground" />
-            我了解使用云端时录音会发送到阿里云百炼
+            我了解使用语音识别时录音会发送到阿里云百炼
           </span>
           <span className="mt-1 block text-muted-foreground">
-            电脑直连百炼，不经过 Sidekick 服务器；可随时切回本机。未勾选不能保存启用。
+            电脑直连百炼，不经过 Sidekick 服务器；录音不保存。未勾选不能保存。
           </span>
         </span>
       </label>
@@ -126,34 +124,12 @@ export function CloudAsrForm() {
           >
             新加坡
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => setDraft({ endpoint: CLOUD_ENDPOINT_PRESETS.workspace })}
-          >
-            业务空间域名
-          </Button>
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          默认北京；可换成新加坡或业务空间专属域名（需填业务空间 ID）。必须使用 wss://。
+          默认北京；可换成新加坡；如使用业务空间专属域名，请直接粘贴完整地址并把 WorkspaceId
+          占位符换成真实 ID。必须使用 wss://。
         </p>
         <FieldError message={fieldErrors.endpoint} />
-      </div>
-
-      <div>
-        <Label htmlFor="cloud-workspace" className="text-xs">
-          业务空间 ID（可选）
-        </Label>
-        <Input
-          id="cloud-workspace"
-          value={draft.workspaceId}
-          placeholder="使用业务空间域名时填写"
-          aria-invalid={Boolean(fieldErrors.workspaceId)}
-          className="mt-1.5"
-          onChange={(event) => setDraft({ workspaceId: event.target.value })}
-        />
-        <FieldError message={fieldErrors.workspaceId} />
       </div>
 
       <div>
@@ -217,7 +193,7 @@ export function CloudAsrForm() {
             id="cloud-language"
             className={`${selectClass} mt-1.5`}
             value={draft.language}
-            onChange={(event) => setDraft({ language: event.target.value as CloudAsrLanguage })}
+            onChange={(event) => setDraft({ language: event.target.value as CloudLanguage })}
           >
             <option value="zh">中文（推荐）</option>
             <option value="auto">自动识别</option>
@@ -242,7 +218,7 @@ export function CloudAsrForm() {
         </div>
       </div>
 
-      <details className="rounded-xl border border-border bg-card p-3">
+      <details className="rounded-xl border border-border bg-background/60 p-3">
         <summary className="cursor-pointer text-xs font-medium">高级</summary>
         <div className="mt-3 flex flex-col gap-3">
           <div>
@@ -295,20 +271,6 @@ export function CloudAsrForm() {
         </div>
       </details>
 
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
-        <div>
-          <p className="text-xs font-medium">云端失败时回退本机</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            需要本机模型已下载；结果会标注来源。
-          </p>
-        </div>
-        <Switch
-          aria-label="云端失败时回退本机"
-          checked={draft.fallbackToLocal}
-          onCheckedChange={(checked) => setDraft({ fallbackToLocal: checked })}
-        />
-      </div>
-
       {testResult && (
         <p
           role="status"
@@ -317,6 +279,12 @@ export function CloudAsrForm() {
           {testResult.ok
             ? `连接成功 · ${testResult.latencyMs ?? "?"}ms${testResult.model ? ` · ${testResult.model}` : ""}`
             : (testResult.message ?? "连接失败，请检查地址、Key 与网络。")}
+        </p>
+      )}
+
+      {savedNotice && (
+        <p role="status" className="text-xs text-success">
+          {savedNotice}
         </p>
       )}
 
@@ -329,7 +297,7 @@ export function CloudAsrForm() {
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant="outline"
@@ -348,15 +316,13 @@ export function CloudAsrForm() {
           type="button"
           size="sm"
           disabled={busy || !draft.consent}
-          onClick={() => void saveAndEnable()}
+          onClick={() => void save()}
         >
           {saving && <Loader2 className="size-3.5 animate-spin" />}
-          保存并启用
+          保存
         </Button>
         {!draft.consent && (
-          <span className="self-center text-[11px] text-muted-foreground">
-            先勾选上方同意才能保存启用。
-          </span>
+          <span className="text-[11px] text-muted-foreground">先勾选上方同意才能保存。</span>
         )}
       </div>
     </div>

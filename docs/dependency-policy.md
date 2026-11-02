@@ -215,13 +215,15 @@
 
 - 同一套原则：必要性、维护、许可证、体积（编译时间/产物体积）、安全、可替换。
 - 基线：`tauri` 2.x、`serde`、`tokio`、`axum`、`tokio-tungstenite`、`tauri-plugin-store` 2.5.0、`base64` 0.22、`arboard` 3.7（仅桌面剪贴板，关闭 image feature）；不重复引入 HTTP/WS 框架。
-- 麦克风 P0 新增（桌面）：`whisper-rs` 0.16（MIT/Unlicense，Metal；构建需 cmake + libclang）、`reqwest` 0.13（blocking + rustls，模型下载）、`core-graphics` 0.25（Cmd+V）、`macos-accessibility-client` 0.0.2（辅助功能授权提示）、`objc2-app-kit` / `objc2-foundation` 0.3（NSPasteboard 类型过滤）。均为桌面目标，不进安卓包。
+- 桌面剪贴板/自动输入：`core-graphics` 0.25（Cmd+V）、`macos-accessibility-client` 0.0.2（辅助功能授权提示）、`objc2-app-kit` / `objc2-foundation` 0.3（NSPasteboard 类型过滤）。均为桌面目标，不进安卓包。
+- 本机 whisper 下线（2026-11-02）：移除 `whisper-rs` 0.16 及 cmake/libclang 构建前提；不再有模型下载/选择/删除。旧 `models/` 目录不参与运行。
 - 百炼云端 ASR（2026-11-02，桌面目标；均已存在于 Cargo.lock，无新增版本）：
   - `security-framework = "3"`：macOS Keychain 存取 API Key；Cargo.lock `3.7.0`，原本已是传递依赖，本次只加直接依赖；MIT/Apache-2.0。
   - `tokio-tungstenite = "0.24"`（desktop target，features `connect` + `rustls-tls-native-roots`）：百炼 WebSocket；TLS 使用系统根证书，`rustls` / `tokio-rustls` / `rustls-native-certs` 已在 lock；MIT。
   - `uuid = "1"`（v4）：生成 `run-task` 的 `task_id`；Cargo.lock `1.29.0`；MIT/Apache-2.0。
-  - 三者都只在桌面目标使用，不进安卓包；无新 crate 版本，无额外前端依赖。
-- 模型权重不入库/不入包；模型由桌面设置页下载到本机，许可与分发见 [asr-model.md](./engineering/asr-model.md)。
+  - `chrono = "0.4"`（features `clock`）：用量按本机时区切天；Cargo.lock `0.4.45`；MIT/Apache-2.0。
+  - 以上都只在桌面目标使用，不进安卓包；无额外前端依赖。
+- 不再下载模型权重；旧 `models/` 目录不参与运行；模型与用量口径见 [asr-model.md](./engineering/asr-model.md)。
 - Tauri 插件只用官方或维护良好的社区插件；capabilities 最小权限。
 - 新增 crate 前跑 `cargo tree -d` 看是否已有重复能力；`cargo deny` 管许可证；`cargo audit` 管漏洞。
 - 协议类型如果引入 `ts-rs` / `tauri-specta`，生成物入库并在 CI 校验一致性。

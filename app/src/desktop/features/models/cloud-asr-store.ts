@@ -1,14 +1,11 @@
 import { create } from "zustand";
 import {
   type CloudAsrConfig,
-  type CloudAsrEngine,
   type CloudAsrStatus,
   type CloudAsrTestResult,
-  type CloudAsrVadModel,
   getCloudAsrStatus,
   normalizeError,
   saveCloudAsr,
-  selectAsrEngine,
   testCloudAsr,
 } from "@/shared/lib/tauri";
 
@@ -18,59 +15,55 @@ export const DEFAULT_CLOUD_MODEL = "qwen-audio-3.1-asr-flash-streaming";
 export const CLOUD_ENDPOINT_PRESETS = {
   beijing: DEFAULT_CLOUD_ENDPOINT,
   singapore: "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference",
-  workspace: "wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
 } as const;
 
-export type CloudAsrLanguage = "zh" | "auto" | "zh-en";
+export type CloudLanguage = "zh" | "auto" | "zh-en";
 
-export type CloudAsrDraft = {
+export type CloudVadModel = "near_meeting_16k" | "far_field_meeting_16k";
+
+export type CloudDraft = {
   endpoint: string;
-  workspaceId: string;
   model: string;
-  language: CloudAsrLanguage;
+  language: CloudLanguage;
   keepDialect: boolean;
-  vadModel: CloudAsrVadModel;
+  vadModel: CloudVadModel;
   maxSentenceSilenceMs: number;
   vocabularyText: string;
-  fallbackToLocal: boolean;
   consent: boolean;
   apiKey: string;
 };
 
-export type CloudAsrField =
+export type CloudField =
   | "endpoint"
-  | "workspaceId"
   | "model"
   | "apiKey"
   | "maxSentenceSilenceMs"
   | "vocabulary"
   | "consent";
 
-export type CloudAsrFieldErrors = Partial<Record<CloudAsrField, string>>;
+export type CloudFieldErrors = Partial<Record<CloudField, string>>;
 
-export type CloudAsrValidation = {
+export type CloudValidation = {
   config: CloudAsrConfig | null;
-  fieldErrors: CloudAsrFieldErrors;
+  fieldErrors: CloudFieldErrors;
 };
 
-type CloudAsrState = {
+type CloudState = {
   status: CloudAsrStatus | null;
-  draft: CloudAsrDraft | null;
-  activeEngine: CloudAsrEngine;
+  draft: CloudDraft | null;
   loading: boolean;
   saving: boolean;
   testing: boolean;
   error: string | null;
-  fieldErrors: CloudAsrFieldErrors;
+  fieldErrors: CloudFieldErrors;
   testResult: CloudAsrTestResult | null;
+  savedNotice: string | null;
   load: () => Promise<void>;
-  setActiveEngine: (engine: CloudAsrEngine) => void;
-  setDraft: (patch: Partial<CloudAsrDraft>) => void;
+  setDraft: (patch: Partial<CloudDraft>) => void;
   resetDraft: () => void;
-  saveAndEnable: () => Promise<void>;
+  save: () => Promise<void>;
   runTest: () => Promise<void>;
   clearKey: () => Promise<void>;
-  selectLocal: () => Promise<void>;
   clearMessages: () => void;
   reset: () => void;
 };
@@ -78,22 +71,22 @@ type CloudAsrState = {
 const initialState = {
   status: null,
   draft: null,
-  activeEngine: "local" as CloudAsrEngine,
   loading: false,
   saving: false,
   testing: false,
   error: null,
-  fieldErrors: {} as CloudAsrFieldErrors,
+  fieldErrors: {} as CloudFieldErrors,
   testResult: null,
+  savedNotice: null,
 };
 
-export function languageToHints(language: CloudAsrLanguage): string[] {
+export function languageToHints(language: CloudLanguage): string[] {
   if (language === "auto") return [];
   if (language === "zh-en") return ["zh", "en"];
   return ["zh"];
 }
 
-export function hintsToLanguage(hints: string[]): CloudAsrLanguage {
+export function hintsToLanguage(hints: string[]): CloudLanguage {
   if (hints.length === 0) return "auto";
   if (hints.includes("zh") && hints.includes("en")) return "zh-en";
   return "zh";
@@ -150,12 +143,11 @@ export function parseVocabulary(text: string): string[] {
   return values;
 }
 
-export function validateCloudAsrDraft(
-  draft: CloudAsrDraft,
+export function validateCloudDraft(
+  draft: CloudDraft,
   status: CloudAsrStatus | null,
-  options: { requireKey?: boolean } = {},
-): CloudAsrValidation {
-  const fieldErrors: CloudAsrFieldErrors = {};
+): CloudValidation {
+  const fieldErrors: CloudFieldErrors = {};
   const endpoint = normalizeEndpoint(draft.endpoint);
 
   if (!endpoint) {
@@ -169,10 +161,6 @@ export function validateCloudAsrDraft(
     } else if (!isWss && !isLocalWs) {
       fieldErrors.endpoint = "服务地址必须是 wss://（本机测试可用 ws://localhost）";
     }
-  }
-
-  if (/\{workspaceid\}/i.test(endpoint) && !draft.workspaceId.trim()) {
-    fieldErrors.workspaceId = "使用业务空间域名时必须填写业务空间 ID";
   }
 
   if (!draft.model.trim()) {
@@ -189,7 +177,7 @@ export function validateCloudAsrDraft(
     fieldErrors.vocabulary = "热词最多 50 个";
   }
 
-  if (options.requireKey !== false && !status?.hasKey && !draft.apiKey.trim()) {
+  if (!status?.hasKey && !draft.apiKey.trim()) {
     fieldErrors.apiKey = "请填写百炼 API Key";
   }
 
@@ -200,7 +188,6 @@ export function validateCloudAsrDraft(
   return {
     config: {
       endpoint,
-      workspaceId: draft.workspaceId.trim(),
       model: draft.model.trim(),
       languageHints: languageToHints(draft.language),
       keepDialect: draft.keepDialect,
@@ -213,42 +200,32 @@ export function validateCloudAsrDraft(
   };
 }
 
-export function draftFromStatus(status: CloudAsrStatus): CloudAsrDraft {
+export function draftFromStatus(status: CloudAsrStatus): CloudDraft {
   return {
     endpoint: status.config.endpoint,
-    workspaceId: status.config.workspaceId,
     model: status.config.model,
     language: hintsToLanguage(status.config.languageHints),
     keepDialect: status.config.keepDialect,
     vadModel: status.config.vadModel,
     maxSentenceSilenceMs: status.config.maxSentenceSilenceMs,
     vocabularyText: status.config.vocabulary.join("\n"),
-    fallbackToLocal: status.fallbackToLocal,
     consent: status.consent,
     apiKey: "",
   };
 }
 
-export const useCloudAsrStore = create<CloudAsrState>((set, get) => ({
+export const useCloudAsrStore = create<CloudState>((set, get) => ({
   ...initialState,
 
   load: async () => {
     set({ loading: true, error: null });
     try {
       const status = await getCloudAsrStatus();
-      set({
-        status,
-        draft: draftFromStatus(status),
-        activeEngine: status.engine,
-        loading: false,
-      });
+      set({ status, draft: draftFromStatus(status), loading: false });
     } catch (cause) {
-      set({ loading: false, error: `读取语音识别设置失败：${normalizeError(cause)}` });
+      set({ loading: false, error: `读取百炼配置失败：${normalizeError(cause)}` });
     }
   },
-
-  setActiveEngine: (engine) =>
-    set({ activeEngine: engine, error: null, testResult: null, fieldErrors: {} }),
 
   setDraft: (patch) => {
     const { draft } = get();
@@ -258,63 +235,56 @@ export const useCloudAsrStore = create<CloudAsrState>((set, get) => ({
       fieldErrors: {},
       error: null,
       testResult: null,
+      savedNotice: null,
     });
   },
 
   resetDraft: () => {
     const { status } = get();
     if (!status) return;
-    set({ draft: draftFromStatus(status), fieldErrors: {}, testResult: null, error: null });
+    set({
+      draft: draftFromStatus(status),
+      fieldErrors: {},
+      testResult: null,
+      error: null,
+      savedNotice: null,
+    });
   },
 
-  saveAndEnable: async () => {
+  save: async () => {
     const { draft, status } = get();
     if (!draft || !status) return;
 
     if (!draft.consent) {
       set({
-        fieldErrors: { consent: "请先勾选同意，再保存启用" },
-        error: "请先勾选同意，再保存启用。",
+        fieldErrors: { consent: "请先勾选同意，再保存" },
+        error: "请先勾选同意，再保存。",
       });
       return;
     }
 
-    const validation = validateCloudAsrDraft(draft, status);
+    const validation = validateCloudDraft(draft, status);
     if (!validation.config) {
       set({ fieldErrors: validation.fieldErrors, error: "请检查表单后再保存。" });
       return;
     }
 
-    set({ saving: true, error: null, fieldErrors: {} });
-    let saved: CloudAsrStatus;
+    set({ saving: true, error: null, fieldErrors: {}, savedNotice: null });
     try {
-      saved = await saveCloudAsr({
+      const saved = await saveCloudAsr({
         config: validation.config,
         consent: draft.consent,
-        fallbackToLocal: draft.fallbackToLocal,
         apiKey: draft.apiKey.trim() || null,
         clearKey: false,
       });
+      set({
+        status: saved,
+        draft: draftFromStatus(saved),
+        saving: false,
+        savedNotice: "已保存",
+      });
     } catch (cause) {
       set({ saving: false, error: `保存失败：${normalizeError(cause)}` });
-      return;
-    }
-
-    set({ status: saved, draft: draftFromStatus(saved) });
-    try {
-      const next = await selectAsrEngine("bailian");
-      set({
-        status: next,
-        draft: draftFromStatus(next),
-        activeEngine: "bailian",
-        saving: false,
-        testResult: null,
-      });
-    } catch (cause) {
-      set({
-        saving: false,
-        error: `已保存，但启用失败：${normalizeError(cause)}`,
-      });
     }
   },
 
@@ -322,7 +292,7 @@ export const useCloudAsrStore = create<CloudAsrState>((set, get) => ({
     const { draft, status } = get();
     if (!draft || !status) return;
 
-    const validation = validateCloudAsrDraft(draft, status);
+    const validation = validateCloudDraft(draft, status);
     if (!validation.config) {
       set({ fieldErrors: validation.fieldErrors, error: "请检查表单后再测试。" });
       return;
@@ -353,47 +323,26 @@ export const useCloudAsrStore = create<CloudAsrState>((set, get) => ({
     const { status } = get();
     if (!status) return;
 
-    set({ saving: true, error: null });
+    set({ saving: true, error: null, savedNotice: null });
     try {
       const next = await saveCloudAsr({
         config: status.config,
         consent: status.consent,
-        fallbackToLocal: status.fallbackToLocal,
         apiKey: null,
         clearKey: true,
       });
       set({
         status: next,
         draft: draftFromStatus(next),
-        activeEngine: next.engine,
         saving: false,
-        testResult: null,
+        savedNotice: "已清除 Key",
       });
     } catch (cause) {
       set({ saving: false, error: `清除 Key 失败：${normalizeError(cause)}` });
     }
   },
 
-  selectLocal: async () => {
-    const { status } = get();
-    if (!status) return;
-
-    set({ saving: true, error: null });
-    try {
-      const next = await selectAsrEngine("local");
-      set({
-        status: next,
-        draft: draftFromStatus(next),
-        activeEngine: "local",
-        saving: false,
-        testResult: null,
-      });
-    } catch (cause) {
-      set({ saving: false, error: `切回本机失败：${normalizeError(cause)}` });
-    }
-  },
-
-  clearMessages: () => set({ error: null, fieldErrors: {}, testResult: null }),
+  clearMessages: () => set({ error: null, fieldErrors: {}, testResult: null, savedNotice: null }),
 
   reset: () => set({ ...initialState, fieldErrors: {} }),
 }));

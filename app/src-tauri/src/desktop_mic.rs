@@ -1,10 +1,8 @@
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Serialize;
 
-use crate::asr_models::{ModelManager, TranscribeFailure};
 use crate::clipboard_manager::ClipboardManager;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,32 +133,6 @@ fn paste_cmd_v() -> bool {
     }
 }
 
-pub fn transcribe_and_insert(
-    models: &ModelManager,
-    clipboard: &ClipboardManager,
-    pcm16: &[u8],
-    expected_app: Option<&FrontApp>,
-    cancel: &AtomicBool,
-) -> Result<MicInsertResult, MicFailure> {
-    let transcript = models
-        .transcribe(pcm16, cancel)
-        .map_err(failure_from_transcribe)?;
-
-    if cancel.load(Ordering::Relaxed) {
-        return Err(MicFailure {
-            code: "asr_timeout",
-            message: "转写超时".to_string(),
-        });
-    }
-
-    insert_transcript(
-        clipboard,
-        &transcript.text,
-        transcript.truncated,
-        expected_app,
-    )
-}
-
 /// 把已经拿到的文本落到目标应用：写剪贴板 + 安全校验 + 可选 Cmd+V。
 ///
 /// 本机转写与云端转写共用这一条路径，保证“云端失败回退本机”时不会出现两套插入逻辑。
@@ -208,13 +180,6 @@ pub fn insert_transcript(
         text: text.to_string(),
         truncated,
     })
-}
-
-fn failure_from_transcribe(error: TranscribeFailure) -> MicFailure {
-    MicFailure {
-        code: error.code(),
-        message: error.message(),
-    }
 }
 
 #[tauri::command]

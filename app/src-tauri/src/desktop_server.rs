@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -18,7 +18,8 @@ use tokio::sync::broadcast;
 use tokio_util::io::ReaderStream;
 
 use crate::asr_cloud::AsrCloudState;
-use crate::asr_models::ModelManager;
+use crate::asr_pricing::{self, Pricing};
+use crate::asr_usage::UsageStore;
 use crate::bailian_asr::{self, CloudHandle};
 use crate::clipboard_manager::ClipboardManager;
 use crate::desktop_mic::{self, FrontApp};
@@ -44,10 +45,10 @@ struct AppState {
     clients: Arc<AtomicUsize>,
     next_client: Arc<AtomicU64>,
     mic: Arc<Mutex<Option<ActiveMic>>>,
-    models: Arc<ModelManager>,
     clipboard: Arc<ClipboardManager>,
     hook: Arc<HookBridge>,
     asr_cloud: Arc<AsrCloudState>,
+    usage: Arc<UsageStore>,
 }
 
 struct ActiveMic {
@@ -58,11 +59,8 @@ struct ActiveMic {
     last_sequence: u32,
     started: Instant,
     front_app: Option<FrontApp>,
-    engine: String,
-    model: String,
-    cloud: Option<CloudHandle>,
-    /// 云端配置在会话开始时不可用、已静默改用本机时记录原因。
-    start_fallback: Option<String>,
+    pricing: Pricing,
+    cloud: CloudHandle,
 }
 
 #[derive(Serialize)]
@@ -259,44 +257,23 @@ fn handle_mic_start(state: &AppState, client_id: u64, value: &Value) {
         }
     };
 
-    let local_ready = state.models.selected_available();
-    let local_model = state
-        .models
-        .selected_id()
-        .unwrap_or_else(|| "whisper".to_string());
-
-    let mut start_fallback: Option<String> = None;
-    let (engine, model, cloud) = if state.asr_cloud.cloud_selected() {
-        match state.asr_cloud.session_config(state.models.as_ref()) {
-            Ok(config) => {
-                let model = config.model.clone();
-                let handle = bailian_asr::spawn(config, message.session.clone(), state.tx.clone());
-                ("bailian".to_string(), model, Some(handle))
-            }
-            Err(error) if local_ready => {
-                start_fallback = Some(error.code.to_string());
-                println!(
-                    "[mic] cloud unavailable ({}), fallback local: {}",
-                    error.code, error.message
-                );
-                ("local".to_string(), local_model, None)
-            }
-            Err(error) => {
-                send_json(state, mic_error(Some(&message.session), error.code));
-                return;
-            }
+    let config = match state.asr_cloud.session_config() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("[mic] cloud not ready: {} ({})", error.code, error.message);
+            send_json(state, mic_error(Some(&message.session), error.code));
+            return;
         }
-    } else if local_ready {
-        ("local".to_string(), local_model, None)
-    } else {
-        send_json(state, mic_error(Some(&message.session), "model_missing"));
-        return;
     };
-
+    let model = config.model.clone();
+    let pricing = asr_pricing::for_endpoint(&config.endpoint);
+    let cloud = bailian_asr::spawn(config, message.session.clone(), state.tx.clone());
     let front_app = desktop_mic::front_app();
+
     {
         let mut mic = state.mic.lock().unwrap();
         if mic.is_some() {
+            cloud.abort();
             send_json(state, mic_error(Some(&message.session), "session_busy"));
             return;
         }
@@ -308,15 +285,13 @@ fn handle_mic_start(state: &AppState, client_id: u64, value: &Value) {
             last_sequence: 0,
             started: Instant::now(),
             front_app,
-            engine: engine.clone(),
-            model: model.clone(),
+            pricing,
             cloud,
-            start_fallback,
         });
     }
 
     println!(
-        "[mic] start session={} engine={engine} model={model}",
+        "[mic] start session={} engine=bailian model={model}",
         short_session(&message.session)
     );
     send_json(
@@ -325,8 +300,6 @@ fn handle_mic_start(state: &AppState, client_id: u64, value: &Value) {
             "v": 1,
             "type": "mic.ready",
             "session": message.session,
-            "engine": engine,
-            "model": model,
             "ts": now_ms(),
         }),
     );
@@ -363,9 +336,8 @@ fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
     };
 
     println!(
-        "[mic] stop session={} engine={} frames={} bytes={} seq={} transcribe={}",
+        "[mic] stop session={} frames={} bytes={} seq={} transcribe={}",
         short_session(&active.session),
-        active.engine,
         active.frames,
         active.pcm.len(),
         active.last_sequence,
@@ -379,9 +351,7 @@ fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
             finish_session(state, active).await;
         });
     } else {
-        if let Some(cloud) = active.cloud.as_ref() {
-            cloud.abort();
-        }
+        active.cloud.abort();
         send_json(state, mic_state(&active.session, "cancelled"));
     }
 }
@@ -391,28 +361,16 @@ struct SessionOutcome {
     reason: Option<&'static str>,
     text: Option<String>,
     truncated: bool,
-    engine: &'static str,
-    model: String,
-    fallback: bool,
     usage: Option<bailian_asr::CloudUsage>,
 }
 
 impl SessionOutcome {
-    fn failed(
-        code: &'static str,
-        model: String,
-        engine: &'static str,
-        fallback: bool,
-        usage: Option<bailian_asr::CloudUsage>,
-    ) -> Self {
+    fn failed(code: &'static str, usage: Option<bailian_asr::CloudUsage>) -> Self {
         Self {
             outcome: "failed",
             reason: Some(code),
             text: None,
             truncated: false,
-            engine,
-            model,
-            fallback,
             usage,
         }
     }
@@ -422,18 +380,18 @@ async fn finish_session(state: AppState, active: ActiveMic) {
     let session = active.session.clone();
     let started = Instant::now();
     let expected = active.front_app;
-    let start_fallback = active.start_fallback.clone();
-    let fallback_allowed = state.asr_cloud.fallback_to_local();
-    let local_ready = state.models.selected_available();
-    let local_model = state
-        .models
-        .selected_id()
-        .unwrap_or_else(|| "whisper".to_string());
+    let pricing = active.pricing;
 
-    let outcome = if let Some(cloud) = active.cloud {
-        cloud.stop();
-        match cloud.wait().await {
-            Ok(transcript) if !transcript.text.trim().is_empty() => {
+    active.cloud.stop();
+    let outcome = match active.cloud.wait().await {
+        Ok(transcript) => {
+            if let Some(usage) = transcript.usage.as_ref() {
+                // 只要百炼返回了 usage 就计费入账，即使后续插入失败/空结果。
+                state.usage.record(usage, pricing);
+            }
+            if transcript.text.trim().is_empty() {
+                SessionOutcome::failed("empty_transcript", transcript.usage)
+            } else {
                 match desktop_mic::insert_transcript(
                     &state.clipboard,
                     &transcript.text,
@@ -445,74 +403,28 @@ async fn finish_session(state: AppState, active: ActiveMic) {
                         reason: insert.reason,
                         text: Some(insert.text),
                         truncated: insert.truncated,
-                        engine: "bailian",
-                        model: active.model.clone(),
-                        fallback: false,
                         usage: transcript.usage,
                     },
-                    Err(failure) => SessionOutcome::failed(
-                        failure.code,
-                        active.model.clone(),
-                        "bailian",
-                        false,
-                        transcript.usage,
-                    ),
-                }
-            }
-            Ok(_) => {
-                if fallback_allowed && local_ready {
-                    println!("[mic] cloud returned empty transcript, fallback local");
-                    local_fallback(&state, active.pcm, expected, local_model.clone()).await
-                } else {
-                    SessionOutcome::failed(
-                        "empty_transcript",
-                        active.model.clone(),
-                        "bailian",
-                        false,
-                        None,
-                    )
-                }
-            }
-            Err(error) => {
-                eprintln!("[mic] cloud failed: {} ({})", error.code, error.detail);
-                if fallback_allowed && local_ready {
-                    local_fallback(&state, active.pcm, expected, local_model.clone()).await
-                } else {
-                    SessionOutcome::failed(error.code, active.model.clone(), "bailian", false, None)
+                    Err(failure) => {
+                        eprintln!(
+                            "[mic] insert failed: {} ({})",
+                            failure.code, failure.message
+                        );
+                        SessionOutcome::failed(failure.code, transcript.usage)
+                    }
                 }
             }
         }
-    } else {
-        match run_local(&state, active.pcm, expected).await {
-            Ok(insert) => SessionOutcome {
-                outcome: insert.outcome,
-                reason: insert.reason,
-                text: Some(insert.text),
-                truncated: insert.truncated,
-                engine: "local",
-                model: local_model,
-                fallback: start_fallback.is_some(),
-                usage: None,
-            },
-            Err(failure) => {
-                eprintln!("[mic] local failed: {} ({})", failure.code, failure.message);
-                SessionOutcome::failed(
-                    failure.code,
-                    active.model.clone(),
-                    "local",
-                    start_fallback.is_some(),
-                    None,
-                )
-            }
+        Err(error) => {
+            eprintln!("[mic] cloud failed: {} ({})", error.code, error.detail);
+            SessionOutcome::failed(error.code, None)
         }
     };
 
     let latency = started.elapsed().as_millis() as u64;
     println!(
-        "[mic] result session={} engine={} fallback={} outcome={} reason={} latency={}ms",
+        "[mic] result session={} engine=bailian outcome={} reason={} latency={}ms",
         short_session(&session),
-        outcome.engine,
-        outcome.fallback,
         outcome.outcome,
         outcome.reason.unwrap_or("ok"),
         latency
@@ -534,9 +446,6 @@ async fn finish_session(state: AppState, active: ActiveMic) {
             "text": outcome.text,
             "truncated": outcome.truncated,
             "latencyMs": latency,
-            "engine": outcome.engine,
-            "model": outcome.model,
-            "fallback": outcome.fallback,
             "usage": usage,
             "ts": now_ms(),
         }),
@@ -552,68 +461,6 @@ async fn finish_session(state: AppState, active: ActiveMic) {
             },
         ),
     );
-}
-
-async fn local_fallback(
-    state: &AppState,
-    pcm: Vec<u8>,
-    expected: Option<FrontApp>,
-    model: String,
-) -> SessionOutcome {
-    match run_local(state, pcm, expected).await {
-        Ok(insert) => SessionOutcome {
-            outcome: insert.outcome,
-            reason: insert.reason,
-            text: Some(insert.text),
-            truncated: insert.truncated,
-            engine: "local",
-            model,
-            fallback: true,
-            usage: None,
-        },
-        Err(failure) => {
-            eprintln!(
-                "[mic] local fallback failed: {} ({})",
-                failure.code, failure.message
-            );
-            SessionOutcome::failed(failure.code, model, "local", true, None)
-        }
-    }
-}
-
-async fn run_local(
-    state: &AppState,
-    pcm: Vec<u8>,
-    expected: Option<FrontApp>,
-) -> Result<desktop_mic::MicInsertResult, desktop_mic::MicFailure> {
-    let models = Arc::clone(&state.models);
-    let clipboard = Arc::clone(&state.clipboard);
-    let cancel = Arc::new(AtomicBool::new(false));
-    let task_cancel = Arc::clone(&cancel);
-    let join = tokio::task::spawn_blocking(move || {
-        desktop_mic::transcribe_and_insert(
-            &models,
-            &clipboard,
-            &pcm,
-            expected.as_ref(),
-            &task_cancel,
-        )
-    });
-
-    match tokio::time::timeout(Duration::from_secs(10), join).await {
-        Ok(Ok(result)) => result,
-        Ok(Err(error)) => Err(desktop_mic::MicFailure {
-            code: "asr_failed",
-            message: format!("worker failed: {error}"),
-        }),
-        Err(_) => {
-            cancel.store(true, Ordering::Relaxed);
-            Err(desktop_mic::MicFailure {
-                code: "asr_timeout",
-                message: "转写超时".to_string(),
-            })
-        }
-    }
 }
 
 fn handle_audio_frame(state: &AppState, client_id: u64, data: &[u8]) {
@@ -644,10 +491,8 @@ fn handle_audio_frame(state: &AppState, client_id: u64, data: &[u8]) {
     active.last_sequence = frame.sequence;
     let _last_flag = frame.flags & 0x01;
 
-    if let Some(cloud) = active.cloud.as_ref() {
-        if !cloud.send_frame(frame.payload.to_vec()) {
-            eprintln!("[mic] cloud session closed while forwarding audio");
-        }
+    if !active.cloud.send_frame(frame.payload.to_vec()) {
+        eprintln!("[mic] cloud session closed while forwarding audio");
     }
 }
 
@@ -665,9 +510,7 @@ fn cleanup_session(state: &AppState, client_id: u64) {
             "[mic] session cancelled on disconnect session={}",
             short_session(&active.session)
         );
-        if let Some(cloud) = active.cloud.as_ref() {
-            cloud.abort();
-        }
+        active.cloud.abort();
         send_json(state, mic_state(&active.session, "cancelled"));
     }
 }
@@ -712,20 +555,20 @@ fn now_ms() -> u64 {
 }
 
 pub async fn start(
-    models: Arc<ModelManager>,
     clipboard: Arc<ClipboardManager>,
     hook: Arc<HookBridge>,
     asr_cloud: Arc<AsrCloudState>,
+    usage: Arc<UsageStore>,
 ) {
     let state = AppState {
         tx: hook.sender(),
         clients: Arc::new(AtomicUsize::new(0)),
         next_client: Arc::new(AtomicU64::new(1)),
         mic: Arc::new(Mutex::new(None)),
-        models,
         clipboard,
         hook,
         asr_cloud,
+        usage,
     };
     let app = Router::new()
         .route("/", get(mobile_page))

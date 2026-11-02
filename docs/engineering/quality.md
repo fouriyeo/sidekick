@@ -168,7 +168,7 @@ node ../scripts/check-docs.mjs
 - 麦克风协议：`cargo test --lib`（`mic_protocol` 帧往返/非法帧/session）；前端 `audio-frame.test.ts`、`messages.test.ts`。
 - 录音 UI：真机长按、上滑取消、50/60 秒、后台、断连、权限说明、结果卡片；WebView 103 的 `ScriptProcessor` 必须 2 的幂。
 - 自动粘贴：授权前后各跑一次；目标窗口切换、密码框/安全输入只复制；确认不发送 Return。
-- 模型：已有 base 被识别；tiny 下载/取消/切换/删除；无模型时提示；`models/` 无音频文件。
+- 模型页：百炼配置可保存/测试（完整 URL，无业务空间 ID）；开页不读 Keychain；未配置时手机明确报错；用量今天/7/30/365 区间切换（今天无明细、1 年按月）；清空统计只重置本地文件；`models/` 旧目录不参与运行。
 - 剪贴板：复制/搜索/回填/置顶/删除/清空/暂停；Concealed 类型不记录；`clipboard.json` 权限 `600`；日志无正文。
 
 ## 14. 缺陷分级

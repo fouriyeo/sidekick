@@ -1,6 +1,6 @@
 //! 云端 ASR 配置状态与 Tauri 命令。
 //!
-//! 负责：配置读写、Keychain 缓存、状态/掩码、地址解析、引擎选择、
+//! 只保留百炼云端引擎：负责配置读写、Keychain 缓存、状态/掩码、地址解析、
 //! 设置页“测试连接”。真正的 WebSocket 会话在 bailian_asr.rs。
 
 use std::sync::{Arc, Mutex};
@@ -10,22 +10,15 @@ use tauri::State;
 
 use crate::asr_config::{self, AsrSettings, BailianConfig, CloudConsent};
 use crate::asr_keychain;
-use crate::asr_models::ModelManager;
 use crate::bailian_asr::{self, CloudSessionConfig};
-
-const ENGINE_LOCAL: &str = "local";
-const ENGINE_BAILIAN: &str = "bailian";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudAsrStatus {
-    pub engine: String,
     pub configured: bool,
     pub consent: bool,
     pub has_key: bool,
     pub key_masked: Option<String>,
-    pub fallback_to_local: bool,
-    pub local_ready: bool,
     pub config: BailianConfig,
 }
 
@@ -34,7 +27,6 @@ pub struct CloudAsrStatus {
 pub struct CloudAsrSaveInput {
     pub config: BailianConfig,
     pub consent: bool,
-    pub fallback_to_local: bool,
     #[serde(default)]
     pub api_key: Option<String>,
     #[serde(default)]
@@ -70,14 +62,6 @@ impl AsrCloudState {
         }
     }
 
-    pub fn fallback_to_local(&self) -> bool {
-        self.settings.lock().unwrap().fallback_to_local
-    }
-
-    pub fn cloud_selected(&self) -> bool {
-        self.settings.lock().unwrap().cloud_selected()
-    }
-
     fn key(&self) -> Result<Option<String>, String> {
         let mut cache = self.key_cache.lock().unwrap();
         if let Some(cached) = cache.as_ref() {
@@ -102,13 +86,12 @@ impl AsrCloudState {
         Ok(())
     }
 
-    pub fn status(&self, models: &ModelManager) -> CloudAsrStatus {
+    pub fn status(&self) -> CloudAsrStatus {
         let settings = self.snapshot();
         let key = self.key().ok().flatten();
         let configured =
             settings.consent_cloud.granted && key.is_some() && settings.validate().is_ok();
         CloudAsrStatus {
-            engine: settings.engine,
             configured,
             consent: settings.consent_cloud.granted,
             has_key: key.is_some(),
@@ -116,22 +99,15 @@ impl AsrCloudState {
                 .as_deref()
                 .map(asr_config::mask_key)
                 .filter(|value| !value.is_empty()),
-            fallback_to_local: settings.fallback_to_local,
-            local_ready: models.selected_available(),
             config: settings.bailian,
         }
     }
 
-    pub fn save(
-        &self,
-        input: CloudAsrSaveInput,
-        models: &ModelManager,
-    ) -> Result<CloudAsrStatus, String> {
+    pub fn save(&self, input: CloudAsrSaveInput) -> Result<CloudAsrStatus, String> {
         let mut next = self.snapshot();
         next.bailian = input.config;
         next.normalize();
         next.validate()?;
-        next.fallback_to_local = input.fallback_to_local;
         next.consent_cloud = if input.consent {
             CloudConsent {
                 granted: true,
@@ -141,32 +117,32 @@ impl AsrCloudState {
             CloudConsent::default()
         };
 
-        // 记住旧 Key，配置落盘失败时回滚，避免“Key 已换、配置没换”的半更新状态。
-        let previous_key = self.key()?;
-        let mut key_changed = false;
-        let mut has_key = previous_key.is_some();
-
-        if input.clear_key {
-            asr_keychain::delete_key()?;
-            self.invalidate_key();
-            key_changed = true;
-            has_key = false;
-        }
-        if let Some(api_key) = input
+        let new_key = input
             .api_key
             .as_deref()
             .map(str::trim)
-            .filter(|key| !key.is_empty())
-        {
-            asr_keychain::set_key(api_key)?;
-            self.invalidate_key();
-            key_changed = true;
-            has_key = true;
-        }
+            .filter(|key| !key.is_empty());
+        let key_changed = input.clear_key || new_key.is_some();
+        // 只有真的要改 Key 且元数据表明已有 Key 时才读钥匙串；
+        // 保存地址/模型、首次保存 Key 都不应触发系统授权弹窗。
+        let previous_key = if key_changed && next.key_present {
+            self.key()?
+        } else {
+            None
+        };
 
-        let configured = next.consent_cloud.granted && has_key && next.validate().is_ok();
-        if next.engine == ENGINE_BAILIAN && !configured {
-            next.engine = ENGINE_LOCAL.to_string();
+        if input.clear_key {
+            asr_keychain::delete_key()?;
+            *self.key_cache.lock().unwrap() = Some(None);
+            next.key_present = false;
+            next.key_hint = None;
+        }
+        if let Some(api_key) = new_key {
+            asr_keychain::set_key(api_key)?;
+            // 保存后把 Key 留在内存缓存：本次 App 运行期间首次录音不再触发钥匙串授权。
+            *self.key_cache.lock().unwrap() = Some(Some(api_key.to_string()));
+            next.key_present = true;
+            next.key_hint = Some(asr_config::mask_key(api_key));
         }
 
         if let Err(error) = self.persist(next) {
@@ -182,50 +158,19 @@ impl AsrCloudState {
             }
             return Err(error);
         }
-        Ok(self.status(models))
+        Ok(self.status())
     }
 
-    pub fn select_engine(
-        &self,
-        engine: &str,
-        models: &ModelManager,
-    ) -> Result<CloudAsrStatus, String> {
-        if engine != ENGINE_LOCAL && engine != ENGINE_BAILIAN {
-            return Err("未知的语音引擎".to_string());
-        }
-        if engine == ENGINE_BAILIAN {
-            let settings = self.snapshot();
-            let has_key = self.key()?.is_some();
-            if !settings.consent_cloud.granted || !has_key || settings.validate().is_err() {
-                return Err("云端还没配置完整，请先填写地址、API Key 并同意隐私说明".to_string());
-            }
-        }
-        let mut next = self.snapshot();
-        next.engine = engine.to_string();
-        self.persist(next)?;
-        Ok(self.status(models))
-    }
-
-    pub fn clear(&self, models: &ModelManager) -> Result<CloudAsrStatus, String> {
+    pub fn clear(&self) -> Result<CloudAsrStatus, String> {
         asr_keychain::delete_key()?;
         self.invalidate_key();
-        let next = AsrSettings::default();
-        self.persist(next)?;
-        Ok(self.status(models))
+        self.persist(AsrSettings::default())?;
+        Ok(self.status())
     }
 
-    /// 会话开始时取一次配置快照；云端不可用时调用方决定本机回退。
-    pub fn session_config(
-        &self,
-        models: &ModelManager,
-    ) -> Result<CloudSessionConfig, CloudStartError> {
+    /// 会话开始时取一次配置快照；未配置完整时返回错误，由调用方回给手机。
+    pub fn session_config(&self) -> Result<CloudSessionConfig, CloudStartError> {
         let settings = self.snapshot();
-        if settings.engine != ENGINE_BAILIAN {
-            return Err(CloudStartError {
-                code: "cloud_not_configured",
-                message: "当前没有启用云端引擎".to_string(),
-            });
-        }
         if !settings.consent_cloud.granted {
             return Err(CloudStartError {
                 code: "cloud_not_configured",
@@ -236,6 +181,12 @@ impl AsrCloudState {
             return Err(CloudStartError {
                 code: "cloud_not_configured",
                 message: error,
+            });
+        }
+        if !settings.key_present {
+            return Err(CloudStartError {
+                code: "cloud_not_configured",
+                message: "还没有保存百炼 API Key".to_string(),
             });
         }
         let key = match self.key() {
@@ -259,10 +210,8 @@ impl AsrCloudState {
                 code: "cloud_not_configured",
                 message: error,
             })?;
-        let _ = models;
         Ok(CloudSessionConfig {
             endpoint,
-            workspace_id: settings.bailian.workspace_id.clone(),
             api_key: key,
             model: settings.bailian.model.clone(),
             language_hints: settings.bailian.language_hints.clone(),
@@ -299,7 +248,13 @@ impl AsrCloudState {
             .map(str::trim)
             .filter(|key| !key.is_empty())
             .map(str::to_string)
-            .or_else(|| self.key().ok().flatten());
+            .or_else(|| {
+                if draft.key_present {
+                    self.key().ok().flatten()
+                } else {
+                    None
+                }
+            });
         let Some(key) = key else {
             return test_error(
                 "cloud_not_configured",
@@ -310,7 +265,6 @@ impl AsrCloudState {
 
         let session = CloudSessionConfig {
             endpoint,
-            workspace_id: draft.bailian.workspace_id.clone(),
             api_key: key,
             model: model.clone(),
             language_hints: draft.bailian.language_hints.clone(),
@@ -361,20 +315,16 @@ pub fn user_error_text(code: &str) -> &'static str {
 }
 
 #[tauri::command]
-pub fn asr_cloud_status(
-    state: State<'_, Arc<AsrCloudState>>,
-    models: State<'_, Arc<ModelManager>>,
-) -> CloudAsrStatus {
-    state.status(models.inner())
+pub fn asr_cloud_status(state: State<'_, Arc<AsrCloudState>>) -> CloudAsrStatus {
+    state.status()
 }
 
 #[tauri::command]
 pub fn asr_cloud_save(
     state: State<'_, Arc<AsrCloudState>>,
-    models: State<'_, Arc<ModelManager>>,
     input: CloudAsrSaveInput,
 ) -> Result<CloudAsrStatus, String> {
-    state.save(input, models.inner())
+    state.save(input)
 }
 
 #[tauri::command]
@@ -387,20 +337,8 @@ pub async fn asr_cloud_test(
 }
 
 #[tauri::command]
-pub fn asr_engine_select(
-    state: State<'_, Arc<AsrCloudState>>,
-    models: State<'_, Arc<ModelManager>>,
-    engine: String,
-) -> Result<CloudAsrStatus, String> {
-    state.select_engine(&engine, models.inner())
-}
-
-#[tauri::command]
-pub fn asr_cloud_clear(
-    state: State<'_, Arc<AsrCloudState>>,
-    models: State<'_, Arc<ModelManager>>,
-) -> Result<CloudAsrStatus, String> {
-    state.clear(models.inner())
+pub fn asr_cloud_clear(state: State<'_, Arc<AsrCloudState>>) -> Result<CloudAsrStatus, String> {
+    state.clear()
 }
 
 #[cfg(test)]
@@ -417,9 +355,9 @@ mod tests {
     }
 
     #[test]
-    fn status_engine_defaults_to_local() {
+    fn default_settings_have_no_key() {
         let settings = AsrSettings::default();
-        assert_eq!(settings.engine, "local");
-        assert!(!settings.cloud_selected());
+        assert!(!settings.consent_cloud.granted);
+        assert_eq!(settings.bailian.model, asr_config::DEFAULT_MODEL);
     }
 }

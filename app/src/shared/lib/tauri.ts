@@ -17,64 +17,28 @@ export type Unsubscribe = () => void;
 /** App 主动触感的语义；具体映射到哪个 Android HapticFeedbackConstants 由原生层决定。 */
 export type HapticStyle = "light" | "medium" | "success" | "error";
 
-export type AsrModelId = "tiny" | "base" | "small" | "medium";
-
-export type AsrModelInfo = {
-  id: AsrModelId;
-  label: string;
-  fileName: string;
-  approxBytes: number;
-  sizeBytes: number;
-  downloaded: boolean;
-  selected: boolean;
-  note: string;
-};
-
-export type AsrDownloadInfo = {
-  id: AsrModelId;
-  received: number;
-  total: number;
-};
-
-export type AsrStatus = {
-  dir: string;
-  selected: AsrModelId | null;
-  models: AsrModelInfo[];
-  downloading: AsrDownloadInfo | null;
-};
-
-/** 云端识别引擎（v1 只有百炼）。 */
-export type CloudAsrEngine = "local" | "bailian";
-
-export type CloudAsrVadModel = "near_meeting_16k" | "far_field_meeting_16k";
-
 export type CloudAsrConfig = {
   endpoint: string;
-  workspaceId: string;
   model: string;
   languageHints: string[];
   keepDialect: boolean;
-  vadModel: CloudAsrVadModel;
+  vadModel: "near_meeting_16k" | "far_field_meeting_16k";
   maxSentenceSilenceMs: number;
   heartbeat: boolean;
   vocabulary: string[];
 };
 
 export type CloudAsrStatus = {
-  engine: CloudAsrEngine;
   configured: boolean;
   consent: boolean;
   hasKey: boolean;
   keyMasked: string | null;
-  fallbackToLocal: boolean;
-  localReady: boolean;
   config: CloudAsrConfig;
 };
 
 export type CloudAsrSaveInput = {
   config: CloudAsrConfig;
   consent: boolean;
-  fallbackToLocal: boolean;
   /** 新 Key；留空表示保持已保存的 Key。 */
   apiKey?: string | null;
   /** 删除已保存的 Key。 */
@@ -89,14 +53,25 @@ export type CloudAsrTestResult = {
   message: string | null;
 };
 
-export type ModelProgressState = "downloading" | "done" | "error" | "cancelled";
+/** 单次/单日/区间用量汇总；金额单位为人民币微元（1 元 = 1,000,000）。 */
+export type UsageSummary = {
+  sessions: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  audioDurationMs: number;
+  costCnyMicros: number;
+};
 
-export type ModelProgress = {
-  modelId: AsrModelId;
-  received: number;
-  total: number;
-  state: ModelProgressState;
-  message?: string | null;
+export type UsageDay = UsageSummary & { date: string };
+
+export type UsageStats = {
+  today: UsageSummary;
+  last7Days: UsageSummary;
+  last30Days: UsageSummary;
+  last365Days: UsageSummary;
+  days: UsageDay[];
+  priceNote: string;
 };
 
 export type AccessibilityInfo = {
@@ -174,17 +149,12 @@ const COMMANDS = {
   accessibilityOpenSettings: "accessibility_open_settings",
   accessibilityRequest: "accessibility_request",
   accessibilityRevealApp: "accessibility_reveal_app",
-  asrStatus: "asr_status",
-  asrSelectModel: "asr_select_model",
-  asrDownloadModel: "asr_download_model",
-  asrCancelDownload: "asr_cancel_download",
-  asrDeleteModel: "asr_delete_model",
-  asrRevealDir: "asr_reveal_dir",
   asrCloudStatus: "asr_cloud_status",
   asrCloudSave: "asr_cloud_save",
   asrCloudTest: "asr_cloud_test",
   asrCloudClear: "asr_cloud_clear",
-  asrEngineSelect: "asr_engine_select",
+  asrUsageStats: "asr_usage_stats",
+  asrUsageClear: "asr_usage_clear",
   clipboardList: "clipboard_list",
   clipboardStatus: "clipboard_status",
   clipboardCopy: "clipboard_copy",
@@ -203,7 +173,6 @@ const COMMANDS = {
 const EVENTS = {
   chat: "chat",
   conn: "conn",
-  modelProgress: "model-progress",
   clipboardChanged: "clipboard-changed",
   dshHookStatus: "dsh-hook-status",
 } as const;
@@ -267,7 +236,6 @@ function createEventChannel(name: string) {
 
 const chatChannel = createEventChannel(EVENTS.chat);
 const connChannel = createEventChannel(EVENTS.conn);
-const modelProgressChannel = createEventChannel(EVENTS.modelProgress);
 const clipboardChannel = createEventChannel(EVENTS.clipboardChanged);
 const dshHookChannel = createEventChannel(EVENTS.dshHookStatus);
 
@@ -356,30 +324,6 @@ export function revealAccessibilityApp(): Promise<void> {
   return invoke<void>(COMMANDS.accessibilityRevealApp);
 }
 
-export function getAsrStatus(): Promise<AsrStatus> {
-  return invoke<AsrStatus>(COMMANDS.asrStatus);
-}
-
-export function selectAsrModel(id: AsrModelId): Promise<AsrStatus> {
-  return invoke<AsrStatus>(COMMANDS.asrSelectModel, { id });
-}
-
-export function downloadAsrModel(id: AsrModelId): Promise<void> {
-  return invoke<void>(COMMANDS.asrDownloadModel, { id });
-}
-
-export function cancelAsrDownload(): Promise<void> {
-  return invoke<void>(COMMANDS.asrCancelDownload);
-}
-
-export function deleteAsrModel(id: AsrModelId): Promise<AsrStatus> {
-  return invoke<AsrStatus>(COMMANDS.asrDeleteModel, { id });
-}
-
-export function revealAsrDir(): Promise<void> {
-  return invoke<void>(COMMANDS.asrRevealDir);
-}
-
 export function getCloudAsrStatus(): Promise<CloudAsrStatus> {
   return invoke<CloudAsrStatus>(COMMANDS.asrCloudStatus);
 }
@@ -398,12 +342,16 @@ export function testCloudAsr(input: {
   });
 }
 
-export function selectAsrEngine(engine: CloudAsrEngine): Promise<CloudAsrStatus> {
-  return invoke<CloudAsrStatus>(COMMANDS.asrEngineSelect, { engine });
-}
-
 export function clearCloudAsr(): Promise<CloudAsrStatus> {
   return invoke<CloudAsrStatus>(COMMANDS.asrCloudClear);
+}
+
+export function getUsageStats(): Promise<UsageStats> {
+  return invoke<UsageStats>(COMMANDS.asrUsageStats);
+}
+
+export function clearUsageStats(): Promise<UsageStats> {
+  return invoke<UsageStats>(COMMANDS.asrUsageClear);
 }
 
 export function listClipboard(): Promise<ClipboardSnapshot> {
@@ -493,23 +441,6 @@ export function subscribeChat(handler: (raw: string) => void): Unsubscribe {
 export function subscribeConn(handler: (payload: ConnEvent) => void): Unsubscribe {
   return connChannel((payload) => {
     if (isConnEvent(payload)) handler(payload);
-  });
-}
-
-export function isModelProgress(value: unknown): value is ModelProgress {
-  if (typeof value !== "object" || value === null) return false;
-  const progress = value as Record<string, unknown>;
-  return (
-    typeof progress.modelId === "string" &&
-    typeof progress.received === "number" &&
-    typeof progress.total === "number" &&
-    ["downloading", "done", "error", "cancelled"].includes(String(progress.state))
-  );
-}
-
-export function subscribeModelProgress(handler: (payload: ModelProgress) => void): Unsubscribe {
-  return modelProgressChannel((payload) => {
-    if (isModelProgress(payload)) handler(payload);
   });
 }
 

@@ -123,18 +123,17 @@ describe("parseMicMessage", () => {
         rev: 3,
         text: "帮我把这段异步",
         sentence: 1,
-        engine: "bailian",
         ts: 2,
       }),
     );
-    expect(message).toMatchObject({ type: "mic.partial", rev: 3, engine: "bailian" });
+    expect(message).toMatchObject({ type: "mic.partial", rev: 3 });
   });
 
   it("rejects partial results without a positive integer rev", () => {
     const base = { v: 1, type: "mic.partial", session, text: "hi", sentence: 1, ts: 2 };
     expect(parseMicMessage(JSON.stringify({ ...base, rev: 0 }))).toBeNull();
     expect(parseMicMessage(JSON.stringify({ ...base, rev: 1.5 }))).toBeNull();
-    expect(parseMicMessage(JSON.stringify({ ...base, rev: 1, engine: "other" }))).toBeNull();
+    expect(parseMicMessage(JSON.stringify({ ...base, rev: 1, text: 1 }))).toBeNull();
   });
 
   it("keeps legacy ready/result messages valid", () => {
@@ -169,8 +168,8 @@ describe("parseMicMessage", () => {
     ).toMatchObject({ type: "mic.state", state: "processing" });
 
     expect(
-      parseMicMessage(JSON.stringify({ v: 1, type: "mic.error", code: "model_missing" })),
-    ).toMatchObject({ type: "mic.error", code: "model_missing" });
+      parseMicMessage(JSON.stringify({ v: 1, type: "mic.error", code: "cloud_network" })),
+    ).toMatchObject({ type: "mic.error", code: "cloud_network" });
 
     expect(
       parseMicMessage(JSON.stringify({ v: 1, type: "mic.ready", session, ts: 1 })),

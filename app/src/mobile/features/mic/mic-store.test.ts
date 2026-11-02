@@ -56,15 +56,15 @@ describe("mic store", () => {
     expect(useMicStore.getState().result).toBeNull();
   });
 
-  it("reports a missing model and ignores stale sessions", () => {
+  it("reports a cloud failure and ignores stale sessions", () => {
     const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
     useMicStore.getState().begin(SESSION);
     useMicStore
       .getState()
-      .handleResult(result({ outcome: "failed", reason: "model_missing", text: null }));
+      .handleResult(result({ outcome: "failed", reason: "cloud_network", text: null }));
 
     expect(useMicStore.getState().phase).toBe("error");
-    expect(useMicStore.getState().error).toContain("语音模型");
+    expect(useMicStore.getState().error).toContain("百炼");
     expect(dispatch).toHaveBeenCalledWith({ type: "MIC_ERROR", now: expect.any(Number) });
 
     const stale = useMicStore.getState().phase;
@@ -106,11 +106,9 @@ describe("mic store streaming fields", () => {
       rev: 1,
       text: "帮我把这段",
       sentence: 1,
-      engine: "bailian",
       ts: 2,
     });
     expect(useMicStore.getState().partialText).toBe("帮我把这段");
-    expect(useMicStore.getState().engine).toBe("bailian");
 
     // 重复/更小 rev 忽略。
     useMicStore.getState().handlePartial({
@@ -147,12 +145,11 @@ describe("mic store streaming fields", () => {
     });
     expect(useMicStore.getState().partialText).toBe("帮我把这段异步的注释改成中文");
 
-    useMicStore.getState().handleResult(result({ fallback: true, engine: "local" }));
+    useMicStore.getState().handleResult(result());
     const state = useMicStore.getState();
     expect(state.phase).toBe("delivered");
     expect(state.partialText).toBe("");
-    expect(state.fallback).toBe(true);
-    expect(state.result?.message).toContain("云端不可用，已用本机转写");
+    expect(state.result?.message).not.toContain("已用本机转写");
   });
 
   it("clears partial on begin, cancel and reset", () => {
@@ -168,7 +165,6 @@ describe("mic store streaming fields", () => {
     });
     useMicStore.getState().cancel();
     expect(useMicStore.getState().partialText).toBe("");
-    expect(useMicStore.getState().engine).toBe("local");
 
     useMicStore.getState().begin(SESSION);
     useMicStore.getState().handlePartial({
@@ -187,7 +183,7 @@ describe("mic store streaming fields", () => {
 });
 
 describe("mic store ready message", () => {
-  it("records the engine and clears stale partial text for the session", () => {
+  it("clears stale partial text for the session", () => {
     useMicStore.getState().begin(SESSION);
     useMicStore.getState().handlePartial({
       v: 1,
@@ -204,22 +200,27 @@ describe("mic store ready message", () => {
       v: 1,
       type: "mic.ready",
       session: SESSION,
-      engine: "bailian",
-      model: "qwen-audio-3.1-asr-flash-streaming",
       ts: 3,
     });
-    expect(useMicStore.getState().engine).toBe("bailian");
     expect(useMicStore.getState().partialText).toBe("");
     expect(useMicStore.getState().partialRev).toBe(0);
 
-    // 别的 session 的 ready 不影响当前会话。
+    // 别的 session 的 ready 不影响当前会话的实时文本。
+    useMicStore.getState().handlePartial({
+      v: 1,
+      type: "mic.partial",
+      session: SESSION,
+      rev: 1,
+      text: "当前会话文本",
+      sentence: 1,
+      ts: 4,
+    });
     useMicStore.getState().handleReady({
       v: 1,
       type: "mic.ready",
       session: "another-session",
-      engine: "local",
-      ts: 4,
+      ts: 5,
     });
-    expect(useMicStore.getState().engine).toBe("bailian");
+    expect(useMicStore.getState().partialText).toBe("当前会话文本");
   });
 });

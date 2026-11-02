@@ -104,7 +104,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给�
 
 `mic.stop` 的 `reason`：`release` / `cancel` / `timeout` / `background` / `disconnect` / `mic_lost`；只有 `release` / `timeout` 会转写。
 
-`mic.ready` 可选带 `engine`（`local` / `bailian`）与 `model`；`mic.result` 可选带 `engine` / `model` / `fallback` / `usage`（`inputTokens` / `outputTokens` / `totalTokens` / `audioDurationMs`）。旧客户端/旧桌面按 `local`、无 usage 处理。
+`mic.result` 可选带 `usage`（`inputTokens` / `outputTokens` / `totalTokens` / `audioDurationMs`）。语音识别只走百炼云端，`mic.ready`/`mic.partial`/`mic.result` 不再有 `engine`/`model`/`fallback` 字段（2026-11-02 双端同版本升级）。
 
 `mic.partial`（桌面 → 手机/UI，云端流式）：
 
@@ -116,7 +116,6 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给�
   "rev": 12,
   "text": "帮我把这段异步的注释",
   "sentence": 1,
-  "engine": "bailian",
   "ts": 1730000000000
 }
 ```
@@ -124,6 +123,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给�
 - `text` 是“已定稿句 + 当前句”的完整可见文本，客户端整体替换；`rev` 只增，客户端丢弃旧 rev。
 - 只用于回显，不落字；最终文本以 `mic.result.text` 为准。
 - 服务端 50ms 节流，句子结束强制发送；旧手机忽略该类型。
+- 不再带 `engine`。
 
 音频帧：
 
@@ -136,7 +136,8 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 - 音频帧绝不广播；服务端按 session 追加到内存缓冲。
 - 单会话；重复 `mic.start` 返回 `mic.error(session_busy)`。
 - `mic.result` 含结果原因和文本；文本只给手机结果卡片，不写日志。
-- 云端引擎由桌面直连百炼，手机不接触 API Key；云端失败可回退本机，`mic.result.fallback=true`。
+- 语音识别只由桌面直连百炼，手机不接触 API Key；失败直接报错，不回退本机。
+- `mic.result.usage` 记入 `asr_usage.json`，模型页区间切换展示今天/7/30/365；`asr_usage_stats()` 返回最近 365 天 `days`。
 - 详细字段、超时与测试向量见协议文档。
 
 ## 实现映射（当前代码）
@@ -145,7 +146,7 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 - 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）；麦克风状态浮层 `desktop/features/mic-receiver`
 - 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
 - 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`
-- 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
+- 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`（DSH 本地脚本）、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
 - 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）

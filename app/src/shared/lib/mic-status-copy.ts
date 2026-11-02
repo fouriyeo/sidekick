@@ -2,7 +2,6 @@ export const MIC_STATUS_COPY = {
   inserted: "已输入",
   copied: "已复制到电脑",
   timeout: "电脑端没回应，再说一次？",
-  noModel: "电脑端还没有语音模型，去电脑设置下载。",
   busy: "电脑端正在处理上一段语音。",
   sessionError: "语音会话出了点问题，再试一次。",
   insertFailed: "电脑端没能输入，再试一次？",
@@ -14,8 +13,8 @@ export const MIC_STATUS_COPY = {
   copiedFallback: "已复制到电脑。",
   truncated: "太长了，只输入了前 2000 字。",
   warning: "快到 1 分钟了",
-  cloudNotConfigured: "云端还没配置，去电脑设置 → 语音识别填百炼地址和 API Key。",
-  cloudKeyInvalid: "百炼 API Key 无效或已过期，去电脑设置重新保存。",
+  cloudNotConfigured: "云端还没配置，去电脑「模型」页填百炼地址和 API Key。",
+  cloudKeyInvalid: "百炼 API Key 无效或已过期，去电脑「模型」页重新保存。",
   cloudForbidden: "这个 Key 没有该模型或业务空间的权限。",
   cloudRateLimited: "百炼限流了，稍等一会儿再说。",
   cloudQuotaExceeded: "百炼额度不足，去控制台检查。",
@@ -23,8 +22,7 @@ export const MIC_STATUS_COPY = {
   cloudNetwork: "连不上百炼，检查电脑网络。",
   cloudTimeout: "百炼响应超时，这段没转完。",
   cloudTaskFailed: "百炼识别失败，再说一次试试。",
-  cloudKeyUnavailable: "读取不到电脑上保存的密钥，去设置重新保存。",
-  cloudFallback: "云端不可用，已用本机转写。",
+  cloudKeyUnavailable: "读取不到电脑上保存的密钥，去电脑「模型」页重新保存。",
 } as const;
 
 export function micReasonText(outcome: string, reason?: string | null): string {
@@ -45,8 +43,6 @@ export function micReasonText(outcome: string, reason?: string | null): string {
 
 export function micErrorText(code: string): string {
   switch (code) {
-    case "model_missing":
-      return MIC_STATUS_COPY.noModel;
     case "session_busy":
       return MIC_STATUS_COPY.busy;
     case "asr_timeout":

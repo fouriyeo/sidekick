@@ -15,7 +15,6 @@ pub const MIN_SENTENCE_SILENCE_MS: u32 = 200;
 #[serde(rename_all = "camelCase")]
 pub struct BailianConfig {
     pub endpoint: String,
-    pub workspace_id: String,
     pub model: String,
     pub language_hints: Vec<String>,
     pub keep_dialect: bool,
@@ -29,7 +28,6 @@ impl Default for BailianConfig {
     fn default() -> Self {
         Self {
             endpoint: DEFAULT_ENDPOINT.to_string(),
-            workspace_id: String::new(),
             model: DEFAULT_MODEL.to_string(),
             language_hints: vec!["zh".to_string()],
             keep_dialect: false,
@@ -61,9 +59,13 @@ impl Default for CloudConsent {
 #[serde(rename_all = "camelCase")]
 pub struct AsrSettings {
     pub version: u32,
-    pub engine: String,
     pub consent_cloud: CloudConsent,
-    pub fallback_to_local: bool,
+    /// 是否已保存 API Key。只是“存在性”标记，不存 Key 本身，用于状态展示时避免读钥匙串。
+    #[serde(default)]
+    pub key_present: bool,
+    /// 掩码后的 Key 尾号，仅用于 UI 提示；不是密钥。
+    #[serde(default)]
+    pub key_hint: Option<String>,
     pub bailian: BailianConfig,
 }
 
@@ -71,25 +73,18 @@ impl Default for AsrSettings {
     fn default() -> Self {
         Self {
             version: 1,
-            engine: "local".to_string(),
             consent_cloud: CloudConsent::default(),
-            fallback_to_local: true,
+            key_present: false,
+            key_hint: None,
             bailian: BailianConfig::default(),
         }
     }
 }
 
 impl AsrSettings {
-    pub fn cloud_selected(&self) -> bool {
-        self.engine == "bailian"
-    }
-
     pub fn normalize(&mut self) {
         if self.version == 0 {
             self.version = 1;
-        }
-        if self.engine != "local" && self.engine != "bailian" {
-            self.engine = "local".to_string();
         }
         if self.consent_cloud.at == 0 && self.consent_cloud.granted {
             self.consent_cloud.at = now_ms();
@@ -100,7 +95,6 @@ impl AsrSettings {
         if self.bailian.endpoint.is_empty() {
             self.bailian.endpoint = defaults.endpoint;
         }
-        self.bailian.workspace_id = self.bailian.workspace_id.trim().to_string();
         self.bailian.model = self.bailian.model.trim().to_string();
         if self.bailian.model.is_empty() {
             self.bailian.model = defaults.model;
@@ -155,28 +149,13 @@ impl AsrSettings {
         if self.bailian.model.is_empty() {
             return Err("请填写模型名".to_string());
         }
-        if !self.bailian.workspace_id.is_empty()
-            && !self
-                .bailian
-                .workspace_id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-        {
-            return Err("业务空间 ID 只能包含字母、数字、- 和 _".to_string());
-        }
         Ok(())
     }
 
     pub fn resolve_endpoint(&self) -> Result<String, String> {
-        let mut endpoint = normalize_endpoint(&self.bailian.endpoint)?;
+        let endpoint = normalize_endpoint(&self.bailian.endpoint)?;
         if endpoint.contains("{WorkspaceId}") || endpoint.contains("{workspaceId}") {
-            let workspace = self.bailian.workspace_id.trim();
-            if workspace.is_empty() {
-                return Err("使用业务空间域名时请填写业务空间 ID".to_string());
-            }
-            endpoint = endpoint
-                .replace("{WorkspaceId}", workspace)
-                .replace("{workspaceId}", workspace);
+            return Err("请填写完整服务地址（把 {WorkspaceId} 换成真实业务空间 ID）".to_string());
         }
         Ok(endpoint)
     }
@@ -311,12 +290,13 @@ mod tests {
     }
 
     #[test]
-    fn substitutes_workspace_placeholder() {
+    fn rejects_unfilled_workspace_placeholder() {
         let mut settings = AsrSettings::default();
         settings.bailian.endpoint =
             "wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference".to_string();
         assert!(settings.resolve_endpoint().is_err());
-        settings.bailian.workspace_id = "ws-123".to_string();
+        settings.bailian.endpoint =
+            "wss://ws-123.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference".to_string();
         assert_eq!(
             settings.resolve_endpoint().unwrap(),
             "wss://ws-123.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference"
@@ -333,7 +313,6 @@ mod tests {
     #[test]
     fn normalizes_defaults_and_clamps() {
         let mut settings = AsrSettings {
-            engine: "unknown".to_string(),
             bailian: BailianConfig {
                 endpoint: " ".to_string(),
                 model: " ".to_string(),
@@ -345,7 +324,6 @@ mod tests {
             ..AsrSettings::default()
         };
         settings.normalize();
-        assert_eq!(settings.engine, "local");
         assert_eq!(settings.bailian.endpoint, DEFAULT_ENDPOINT);
         assert_eq!(settings.bailian.model, DEFAULT_MODEL);
         assert_eq!(

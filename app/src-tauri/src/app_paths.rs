@@ -13,12 +13,6 @@ pub fn data_dir() -> PathBuf {
     }
 }
 
-pub fn models_dir() -> PathBuf {
-    std::env::var("SIDEKICK_MODEL_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| data_dir().join("models"))
-}
-
 pub fn clipboard_file() -> PathBuf {
     data_dir().join("clipboard.json")
 }

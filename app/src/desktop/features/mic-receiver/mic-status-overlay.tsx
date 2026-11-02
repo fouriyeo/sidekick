@@ -9,7 +9,6 @@ export function MicStatusOverlay() {
   const message = useDesktopMicStore((state) => state.message);
   const visible = useDesktopMicStore((state) => state.visible);
   const partialText = useDesktopMicStore((state) => state.partialText);
-  const engine = useDesktopMicStore((state) => state.engine);
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -27,7 +26,6 @@ export function MicStatusOverlay() {
   if (!visible) return null;
 
   const live = phase === "listening" || phase === "processing";
-  const engineLabel = engine === "bailian" ? "百炼" : "本机";
 
   return (
     <div className="pointer-events-none fixed top-4 right-4 z-50 flex w-[min(92vw,380px)] flex-col gap-1.5 rounded-xl border border-border bg-popover px-3.5 py-2.5 text-sm text-popover-foreground shadow-lg">
@@ -64,7 +62,7 @@ export function MicStatusOverlay() {
 
         {live && (
           <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {engineLabel}
+            百炼
           </span>
         )}
       </div>

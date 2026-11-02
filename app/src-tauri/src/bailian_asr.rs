@@ -19,7 +19,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
-use crate::asr_models::normalize_transcript;
+use crate::transcript::normalize_transcript;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const START_TIMEOUT: Duration = Duration::from_secs(3);
@@ -33,7 +33,6 @@ type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 #[derive(Clone, Debug)]
 pub struct CloudSessionConfig {
     pub endpoint: String,
-    pub workspace_id: String,
     pub api_key: String,
     pub model: String,
     pub language_hints: Vec<String>,
@@ -435,13 +434,6 @@ async fn connect(config: &CloudSessionConfig) -> Result<Socket, CloudError> {
             .map_err(|_| CloudError::new("cloud_network", "API Key 含非法字符"))?,
     );
     headers.insert("user-agent", HeaderValue::from_static("Sidekick/0.1"));
-    if !config.workspace_id.trim().is_empty() {
-        headers.insert(
-            "X-DashScope-WorkSpace",
-            HeaderValue::from_str(config.workspace_id.trim())
-                .map_err(|_| CloudError::new("cloud_network", "业务空间 ID 含非法字符"))?,
-        );
-    }
 
     match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(request)).await {
         Ok(Ok((socket, _response))) => Ok(socket),
@@ -517,7 +509,6 @@ impl PartialEmitter {
             "rev": self.rev,
             "text": text,
             "sentence": sentence,
-            "engine": "bailian",
             "ts": crate::asr_config::now_ms(),
         });
         let _ = tx.send(payload.to_string());
@@ -664,7 +655,6 @@ mod tests {
     fn config() -> CloudSessionConfig {
         CloudSessionConfig {
             endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference".to_string(),
-            workspace_id: String::new(),
             api_key: "sk-test".to_string(),
             model: "qwen-audio-3.1-asr-flash-streaming".to_string(),
             language_hints: vec!["zh".to_string()],

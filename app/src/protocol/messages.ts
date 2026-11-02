@@ -58,9 +58,6 @@ export type MicStopReason =
   | "disconnect"
   | "mic_lost";
 
-/** 一次语音会话实际使用的识别引擎；bailian 表示云端百炼。 */
-export type MicEngine = "local" | "bailian";
-
 /** 百炼返回的单次用量（只用于桌面 UI/日志，不上报）。 */
 export type MicUsage = {
   inputTokens: number;
@@ -85,10 +82,6 @@ export type MicReadyMessage = {
   v: 1;
   type: "mic.ready";
   session: string;
-  /** 本次会话选用的引擎；旧桌面不带，按 local 处理。 */
-  engine?: MicEngine;
-  /** 引擎侧模型名；本机为 whisper 模型 id，云端为百炼模型名。 */
-  model?: string;
   ts: number;
 };
 
@@ -113,7 +106,6 @@ export type MicPartialMessage = {
   rev: number;
   text: string;
   sentence: number;
-  engine?: MicEngine;
   ts: number;
 };
 
@@ -126,11 +118,6 @@ export type MicResultMessage = {
   text?: string | null;
   truncated?: boolean;
   latencyMs?: number;
-  /** 本次实际使用的引擎；旧桌面不带，按 local 处理。 */
-  engine?: MicEngine;
-  model?: string;
-  /** 云端失败后由本机兜底完成时为 true。 */
-  fallback?: boolean;
   usage?: MicUsage | null;
   ts: number;
 };
@@ -286,10 +273,6 @@ export function isMicReadyMessage(value: unknown): value is MicReadyMessage {
   return (value as Record<string, unknown>).type === "mic.ready";
 }
 
-export function isMicEngine(value: unknown): value is MicEngine {
-  return value === "local" || value === "bailian";
-}
-
 export function isMicPartialMessage(value: unknown): value is MicPartialMessage {
   if (!isMicBase(value)) return false;
   const message = value as Record<string, unknown>;
@@ -300,8 +283,7 @@ export function isMicPartialMessage(value: unknown): value is MicPartialMessage 
     Number.isInteger(message.rev) &&
     message.rev >= 1 &&
     typeof message.sentence === "number" &&
-    Number.isInteger(message.sentence) &&
-    (message.engine === undefined || isMicEngine(message.engine))
+    Number.isInteger(message.sentence)
   );
 }
 

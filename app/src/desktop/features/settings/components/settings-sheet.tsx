@@ -12,7 +12,6 @@ import {
 } from "@/shared/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/ui/sheet";
 import { AccessibilityCard } from "./accessibility-card";
-import { AsrEngineCard } from "./asr-engine-card";
 
 type SettingsSheetProps = {
   open: boolean;
@@ -38,12 +37,10 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
       <SheetContent side="right" className="w-full overflow-y-auto bg-background sm:max-w-[480px]">
         <SheetHeader className="border-b border-border">
           <SheetTitle>桌面设置</SheetTitle>
-          <SheetDescription>语音识别、自动输入权限与剪贴板。</SheetDescription>
+          <SheetDescription>自动输入权限与剪贴板。</SheetDescription>
         </SheetHeader>
 
         <div className="px-4 pb-6">
-          <AsrEngineCard />
-          <div className="my-5 border-t border-border" />
           <AccessibilityCard />
           <div className="my-5 border-t border-border" />
 

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { MicEngine, MicMessage } from "@/protocol/messages";
+import type { MicMessage } from "@/protocol/messages";
 import { MIC_STATUS_COPY, micErrorText, micReasonText } from "@/shared/lib/mic-status-copy";
 
 export type DesktopMicPhase = "idle" | "listening" | "processing" | "delivered" | "error";
@@ -14,10 +14,6 @@ type DesktopMicState = {
   partialText: string;
   /** 已接受的中间结果版本号；用于丢弃重复/乱序消息。 */
   partialRev: number;
-  /** 本次会话实际使用的引擎；旧桌面不带 engine 时按 local 处理。 */
-  engine: MicEngine;
-  /** 云端失败后由本机兜底完成。 */
-  fallback: boolean;
   handleMessage: (message: MicMessage) => void;
   reset: () => void;
 };
@@ -43,8 +39,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
   message: "",
   visible: false,
   ...EMPTY_PARTIAL,
-  engine: "local",
-  fallback: false,
 
   handleMessage: (message) => {
     if (message.type === "mic.ready") {
@@ -56,8 +50,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
         message: "",
         visible: true,
         ...EMPTY_PARTIAL,
-        engine: message.engine ?? "local",
-        fallback: false,
       });
       return;
     }
@@ -68,7 +60,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
       set({
         partialText: message.text,
         partialRev: message.rev,
-        engine: message.engine ?? get().engine,
       });
       return;
     }
@@ -95,8 +86,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
           message: "已取消",
           visible: true,
           ...EMPTY_PARTIAL,
-          engine: "local",
-          fallback: false,
         });
         hideTimer = window.setTimeout(() => {
           hideTimer = null;
@@ -110,11 +99,7 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
       clearHideTimer();
       const failed = message.outcome === "failed";
       const base = micReasonText(message.outcome, message.reason);
-      const withTruncated = message.truncated ? `${base}${MIC_STATUS_COPY.truncated}` : base;
-      const messageText =
-        !failed && message.fallback
-          ? `${withTruncated}${MIC_STATUS_COPY.cloudFallback}`
-          : withTruncated;
+      const messageText = message.truncated ? `${base}${MIC_STATUS_COPY.truncated}` : base;
 
       set({
         phase: failed ? "error" : "delivered",
@@ -123,8 +108,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
         message: messageText,
         visible: true,
         ...EMPTY_PARTIAL,
-        engine: message.engine ?? get().engine,
-        fallback: Boolean(message.fallback),
       });
 
       hideTimer = window.setTimeout(
@@ -136,8 +119,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
             session: null,
             message: "",
             ...EMPTY_PARTIAL,
-            engine: "local",
-            fallback: false,
           });
         },
         failed ? 5000 : 2000,
@@ -163,8 +144,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
           session: null,
           message: "",
           ...EMPTY_PARTIAL,
-          engine: "local",
-          fallback: false,
         });
       }, 5000);
     }
@@ -179,8 +158,6 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
       message: "",
       visible: false,
       ...EMPTY_PARTIAL,
-      engine: "local",
-      fallback: false,
     });
   },
 }));

@@ -57,7 +57,7 @@ describe("desktop mic status store", () => {
       v: 1,
       type: "mic.error",
       session: "another",
-      code: "model_missing",
+      code: "cloud_network",
       ts: 2,
     });
 
@@ -71,11 +71,8 @@ describe("desktop mic streaming fields", () => {
       v: 1,
       type: "mic.ready",
       session: SESSION,
-      engine: "bailian",
-      model: "qwen-audio-3.1-asr-flash-streaming",
       ts: 1,
     });
-    expect(useDesktopMicStore.getState().engine).toBe("bailian");
     expect(useDesktopMicStore.getState().partialText).toBe("");
 
     useDesktopMicStore.getState().handleMessage({
@@ -85,7 +82,6 @@ describe("desktop mic streaming fields", () => {
       rev: 1,
       text: "帮我把这段",
       sentence: 1,
-      engine: "bailian",
       ts: 2,
     });
     expect(useDesktopMicStore.getState().partialText).toBe("帮我把这段");
@@ -145,15 +141,13 @@ describe("desktop mic streaming fields", () => {
       ts: 7,
     });
     expect(useDesktopMicStore.getState().partialText).toBe("");
-    expect(useDesktopMicStore.getState().engine).toBe("local");
   });
 
-  it("clears partial on a new ready and appends the fallback note on result", () => {
+  it("clears partial on a new ready and shows the final result", () => {
     useDesktopMicStore.getState().handleMessage({
       v: 1,
       type: "mic.ready",
       session: SESSION,
-      engine: "bailian",
       ts: 1,
     });
     useDesktopMicStore.getState().handleMessage({
@@ -170,7 +164,6 @@ describe("desktop mic streaming fields", () => {
       v: 1,
       type: "mic.ready",
       session: "new-session",
-      engine: "bailian",
       ts: 3,
     });
     expect(useDesktopMicStore.getState().partialText).toBe("");
@@ -182,21 +175,16 @@ describe("desktop mic streaming fields", () => {
       session: "new-session",
       outcome: "copied",
       reason: "accessibility_off",
-      text: "云端失败后的本机结果",
+      text: "最终结果",
       truncated: false,
-      engine: "local",
-      fallback: true,
       ts: 4,
     });
     const state = useDesktopMicStore.getState();
     expect(state.phase).toBe("delivered");
-    expect(state.fallback).toBe(true);
-    expect(state.engine).toBe("local");
-    expect(state.message).toContain("云端不可用，已用本机转写");
+    expect(state.message).not.toContain("已用本机转写");
     expect(state.partialText).toBe("");
 
     vi.advanceTimersByTime(2000);
     expect(useDesktopMicStore.getState().visible).toBe(false);
-    expect(useDesktopMicStore.getState().fallback).toBe(false);
   });
 });

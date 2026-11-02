@@ -382,7 +382,7 @@
 - 代价：新增 SVG 短爪/道具层和一套 CSS 动画，需要真机 60fps/识别测试；P0 声音可能受系统静音/音乐焦点影响，P1 接原生提示音/音频焦点。
 - 规范：`docs/prd/hook/SPEC.md`、`app/src/mobile/features/pet/sound.ts`、`pet-fallback.tsx`、`pet.module.css`。
 
-## D55 · 百炼云端流式 ASR：桌面中转 + Keychain + 默认本机 + 失败回退（2026-11-02）
+## D55 · 百炼云端流式 ASR：桌面中转 + Keychain + 默认本机 + 失败回退（2026-11-02，已被 D56 取代）
 
 - 背景：本机 whisper base 在中文术语/同音字上准确率不够；用户要求接入云端语音识别大模型，先只做阿里云百炼，默认模型 `qwen-audio-3.1-asr-flash-streaming`，并要流式回显与桌面模型设置页。
 - 决策：桌面端直连百炼 WebSocket（`wss://dashscope.aliyuncs.com/api-ws/v1/inference`，支持业务空间域名）；手机仍只采集 16k PCM16、经局域网送桌面，由桌面转发，手机不接触 API Key。新增 `asr.json`（`0600`，不含 Key）与 macOS Keychain（service `dev.sidekick.app.asr.bailian`）；新增 `asr_cloud_status/save/test/engine_select/clear` 命令与设置页「语音识别」（本机/百炼切换、地址、业务空间、Key、模型、语言/场景/热词、测试连接、回退开关、隐私同意）。流式中间结果用 `mic.partial`（50ms 节流、`rev` 只增、整体替换）回显到手机与桌面浮层；最终文本仍只插入一次。云端失败/空结果且本机模型可用时用同一份 PCM 回退本机，`mic.result` 带 `engine/model/fallback/usage`。默认引擎仍是本机，云端必须显式保存并勾选同意后才能启用。
@@ -390,3 +390,21 @@
 - 放弃：手机直连百炼（Key 落手机、网络/降级分散）；流式逐字输入目标应用（中间结果会改字，无法安全撤销）；把 Key 明文写 `asr.json`（泄露面大）；默认强制云端（违背 P5）；多厂商（v1 先单厂商，代码按 provider 隔离）。
 - 代价：云端依赖公网/额度/地域；Keychain 在 dev 重编译后可能弹授权；旧域名是否支持该模型需真实账号验证；音频上传需用户显式同意；`mic.partial` 增加协议与 UI 复杂度。
 - 规范：`docs/engineering/asr-cloud-bailian.md`、`docs/engineering/audio-pipeline.md` §6、`docs/engineering/protocol-audio.md` §3.5、`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`desktop_server.rs`、`app/src/protocol/messages.ts`、`docs/prd/mic/*`、`protocol/README.md`。
+
+## D56 · 下线本机 whisper，云端唯一；模型页从设置移出；新增按天 Token/费用统计（2026-11-02，已被 D57 更新）
+
+- 背景：本机 whisper 的中文术语/同音字准确率不足，且同时维护本机/云端两套引擎带来 engine/fallback、模型下载、设置页与协议分支的复杂度；用户确定只保留百炼云端。另需回答“今天/这周/这一年用了多少、花了多少”。
+- 决策：删除 `asr_models.rs`、`whisper-rs` 依赖、模型下载/选择/删除命令与 `models_dir`，`AsrSettings` 只保留 `{version, consentCloud, bailian}`（旧 `engine/fallbackToLocal` 忽略）；`session_config()` 未配置/未同意/无 Key 直接回 `mic.error`，不再回退本机。桌面主导航改为 聊天 / 剪贴板 / AI 联动 / **模型**，设置 Sheet 只留自动输入权限与剪贴板；模型页含百炼配置与用量统计。新增 `asr_usage.json`（0600、原子写、最多 400 天）按本机日期汇总每次 `task-finished` 的 usage，模型页展示今天/7/30/365 与近 14 天；金额人民币微元，北京 ¥6/¥4.5、新加坡 ¥6.781/¥5.104 每百万 Token，自定义地址按北京估算，`priceNote` 明示估算。协议移除 `mic.ready.engine/model`、`mic.partial.engine`、`mic.result.engine/model/fallback`，保留 `usage`。
+- 原因：单引擎减少分支与故障面；失败直接报错比“悄悄换本机”更可解释；模型页把连接配置与费用放在一起，避免设置 Sheet 承担运行态页面；本地按天汇总足以回答费用问题，且不需要后端/账单 API。
+- 放弃：保留本机作为兜底（双套逻辑/模型下载/隐私分支）；只存总量不按天（无法看趋势）；直接读百炼账单（无按日 API/凭证复杂）；把模型页留在设置 Sheet（入口深、与聊天/剪贴板不一致）。
+- 代价：离线/无网不可用；云端额度/网络成为硬依赖；用量为估算，可能与账单有偏差；旧 `models/` 目录留在磁盘但不参与运行；协议字段移除需双端同版本升级。
+- 规范：`docs/engineering/asr-model.md`、`asr-cloud-bailian.md`、`audio-pipeline.md`、`protocol-audio.md`、`docs/prd/mic/*`、`app/src-tauri/src/asr_usage.rs`、`asr_pricing.rs`、`desktop/features/models`、`protocol/README.md`、`AGENTS.md`。
+
+## D57 · 模型页去掉业务空间 ID、用量区间切换、Keychain 开页不读（2026-11-02）
+
+- 背景：业务空间专属域名已经能覆盖权限/地域需求，单独的 `workspaceId` 字段与 `X-DashScope-WorkSpace` 头增加表单/校验复杂度；四张用量卡+14 天固定明细在小屏上信息过密；打开模型页就读 Keychain 会反复触发 macOS 授权。
+- 决策：删除 `BailianConfig.workspaceId`；模型页只保留北京/新加坡快捷按钮，业务空间由用户把 `{WorkspaceId}` 换成真实 ID 后粘贴完整 URL；不再发送 `X-DashScope-WorkSpace`，未替换占位符报“请填写完整服务地址…”。`UsageStats.recentDays` 改为 `days`（最近 365 天、今天起倒序、缺失补 0）；模型页改为区间切换（今天/近 7 天/近 1 个月/近 1 年），只显示当前区间一张汇总卡，今天无明细、7/30 按天、1 年按自然月。`AsrSettings` 增加 `keyPresent`/`keyHint` 元数据；`asr_cloud_status()`/模型页开页不读 Keychain，只有保存新 Key/清除、测试连接、录音建会话才读。
+- 原因：减少表单字段与错误路径；365 天数据一次返回，前端按区间聚合更简单；避免开页弹系统密码，提升可解释性。
+- 放弃：自动拼 business workspace URL（IDs 格式/地域差异大，容易拼错）；一次展示四张卡（屏幕密度低）；状态每次读 Keychain（授权摩擦）。
+- 代价：业务空间用户需自己拼 URL；`days` 365 条响应略大；旧 `asr.json` 没有 keyPresent 元数据时需重新保存 Key 才能显示“已保存”；Windows/Linux 仍无 Keychain 实现。
+- 规范：`docs/engineering/asr-model.md`、`asr-cloud-bailian.md`、`docs/prd/mic/*`、`docs/setup.md`、`AGENTS.md`、`app/src-tauri/src/asr_config.rs`、`asr_cloud.rs`、`asr_usage.rs`、`desktop/features/models`。
