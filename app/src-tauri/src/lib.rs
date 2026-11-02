@@ -54,6 +54,16 @@ fn app_role() -> &'static str {
 pub fn run() {
     #[cfg(desktop)]
     let builder = tauri::Builder::default()
+        // 单实例插件必须最先注册：再次启动时只把已有窗口叫到前台，然后新进程退出。
+        // 两个桌面实例会争抢 UDP 47820 发现端口、互相覆盖 DSH hook 端点，结果手机
+        // 连到那个收不到 AI 状态的进程，宠物一直是 idle（D60）。
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();

@@ -159,6 +159,8 @@ DSH session/event
   - `snapshot_json()`：当前状态 + `remainingMs`；新连接/`status.request` 使用。
 - `desktop_server.rs`：`AppState` 持有 `Arc<HookBridge>`；新 socket 在 spawn send task 之前直接发快照；收到 `status.request` 回快照。
 - 端口：先绑定成功者生效；实际 endpoint 写回 `config.json`，脚本 1s 内切换。
+- 单实例前提：桌面端由 `tauri-plugin-single-instance` 保证一台机器只有一个进程（D60）。多开时后启动实例会把 endpoint 改成自己的回环端口，它退出后 hook 上报全部打空，存活实例一直 idle；排查时先看 `lsof -nP -iTCP:47815-47819` 与 `config.json` 的 endpoint 是否指向活着的进程。
+- 快照补发：新 WS 连接直发 `snapshot_json()`；手机上线/回前台发 `status.request`，服务端广播快照。手机重启不会丢状态。
 - 命令：`dsh_hook_status/install/set_enabled/remove/test`；移动端只注册 `send_status_request`。
 
 ## 7. 手机端

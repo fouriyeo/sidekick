@@ -434,3 +434,12 @@
 - 放弃：重新引入 `reqwest`（只为一个 provider，体积/依赖代价大）；启用 rustls 默认 `aws_lc_rs`（会重新引入 C/cmake 构建链）；依赖未来某个 crate 的 feature 合并（不可控）。
 - 代价：直接多一个 rustls 依赖；以后删/换 TLS 相关依赖时要跑 `cargo tree -e features -i rustls` 确认 `ring` 仍在。
 - 规范：`app/src-tauri/Cargo.toml`、`app/src-tauri/src/bailian_asr.rs`、`docs/engineering/asr-cloud-bailian.md`、`AGENTS.md`。
+
+## D60 · 桌面端强制单实例，避免多开抢发现端口/覆盖 DSH hook 端点（2026-11-03）
+
+- 背景：用户反馈「DSH 明明在工作，手机宠物却一直是 idle」。排查发现桌面上同时跑过两个实例（47810/桥 47815 与 47811/桥 47816）：后启动的实例启动时把 `~/.dsh/sidekick/config.json` 的 `endpoint` 回写成自己的回环端口 `127.0.0.1:47816`，随后该实例退出；DSH hook 脚本每秒重读配置，之后所有上报都 POST 到已无人监听的 47816（`curl` 连接被拒），存活实例的桥永远收不到状态。手机通过 UDP 发现只会拿到先启动实例（47820 归它），所以手机侧一直不更新。手机重启这条路径本身是好的：新 WS 连接会直发快照，手机上线/回前台还会补 `status.request`，实测 force-stop 后重启立刻拿到当前状态。
+- 决策：桌面端加入 `tauri-plugin-single-instance`（`Builder` 里最先注册）：再次启动只把已有窗口 `show/unminimize/set_focus` 后让新进程退出；不自己写锁文件/socket。
+- 原因：同一台机器上两个桌面实例必然争抢 UDP 47820 发现端口与 47815–47819 回环桥端口，又都能改写同一份 hook 配置，属于设计上就不该存在的状态；官方插件从源头拦住最简单，顺带修掉「双击两次出现两个窗口」。端口本身是动态的，单实例后启动时的 endpoint 回写（`on_endpoint`）就能覆盖端口漂移。
+- 放弃：自研 `flock`/Unix socket 单实例（拿不到「聚焦已有窗口」能力，还要自己处理 Windows）；只做 endpoint 周期自愈（两个实例都活着时仍会互相覆盖，手机连的那个依旧拿不到状态）；hook 脚本多端口回退（token 按实例生成，跨实例会 401，且解决不了发现指向问题）。
+- 代价：新增一个官方插件依赖（Cargo.lock 新增 34 个条目，`zbus` 等只在 Linux 目标编译，macOS 增量编译约 13s）；不能再同时开两个桌面实例对比调试（需要对比时临时移除插件或改 identifier）；手机、网页预览仍可多客户端同时连。
+- 规范：`app/src-tauri/Cargo.toml`、`app/src-tauri/src/lib.rs`、`docs/engineering/dsh-hook.md`、`docs/engineering/lan-discovery.md`、`docs/architecture.md`、`docs/status.md`、`docs/dependency-policy.md`、`AGENTS.md`。

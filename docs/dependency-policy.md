@@ -222,6 +222,7 @@
   - `uuid = "1"`（v4）：生成 `run-task` 的 `task_id`；Cargo.lock `1.29.0`；MIT/Apache-2.0。
   - `chrono = "0.4"`（features `clock`）：用量按本机时区切天；Cargo.lock `0.4.45`；MIT/Apache-2.0。
   - 以上都只在桌面目标使用，不进安卓包；无额外前端依赖。
+- 单实例（2026-11-03，仅桌面目标）：`tauri-plugin-single-instance = "2"`（Cargo.lock `2.5.5`），防止桌面端多开抢 UDP 47820 发现端口、互相覆盖 DSH hook endpoint（D60）；Apache-2.0 OR MIT；官方 Tauri 插件，macOS 用 Unix socket 加锁，`zbus` 等依赖只在 Linux 目标编译；不进安卓包。
 - 不再下载模型权重；旧 `models/` 目录不参与运行；模型与用量口径见 [asr-model.md](./engineering/asr-model.md)。
 - Tauri 插件只用官方或维护良好的社区插件；capabilities 最小权限。
 - 新增 crate 前跑 `cargo tree -d` 看是否已有重复能力；`cargo deny` 管许可证；`cargo audit` 管漏洞。
