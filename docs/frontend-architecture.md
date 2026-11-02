@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现静态 SVG 降级，Rive 资产待补。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -24,7 +24,7 @@
 | 组件 | shadcn/ui + Base UI | shadcn 4.23.x（base-nova）/ `@base-ui/react` 1.9.x | 组件复制进仓库；Base UI 为唯一 primitive base |
 | 类名合并 | `cn` + CVA | `cn` 0.5.x / CVA 0.7.x | `cn` 替代 clsx + tailwind-merge |
 | UI 动画 | Motion | 14.8.x | 进出场、布局、手势、spring |
-| 宠物动画 | Rive | `@rive-app/react-canvas` 4.38.x | 状态机驱动；懒加载 |
+| 宠物动画 | 帧动画图集 | OpenPets schema 2（WebP） | 一列一帧；rAF 播放；mobile chunk 内 |
 | 状态 | Zustand | 5.0.x | 跨 feature 客户端状态 |
 | 图标 | lucide-react | 1.65.x | SVG，按需 tree-shake |
 | 动效工具 | `tw-animate-css` | 1.4.x | shadcn 组件内置 CSS 过渡类，不替代 Motion |
@@ -55,7 +55,7 @@ app/
 │  ├─ mobile/                 # 手机专属（不强制横竖屏）
 │  │  ├─ features/
 │  │  │  ├─ connect/          # 地址输入、连接状态
-│  │  │  ├─ pet/              # 宠物舞台、Rive 绑定、状态映射
+│  │  │  ├─ pet/              # 宠物舞台、图集播放、状态映射
 │  │  │  ├─ mic/              # 按住说话、波形、权限、结果
 │  │  │  └─ settings/         # 设置、配对、关于
 │  │  └─ components/
@@ -72,7 +72,7 @@ app/
 │  │  ├─ messages.ts          # 与 Rust 协议一一对应的类型
 │  │  └─ audio-frame.ts       # 麦克风二进制帧编解码/测试向量
 │  └─ assets/
-│     ├─ pet/                 # .riv、宠物贴图（懒加载）
+│     ├─ pet/                 # 图集/海报（mobile chunk）
 │     └─ icons/               # 少量自有 SVG
 ```
 
@@ -130,7 +130,7 @@ void bootstrap();
 规则：
 
 - 不再给 `<body>` 加 `mobile` 类来切换视图；两个 entry 各自挂载，CSS 作用域冲突从结构上消失。
-- `mobile/features/pet` 内部用 `lazy(() => import(...))` 加载 Rive 运行时；`.riv` 资源在宠物视图挂载后再加载，不进入首屏 chunk。
+- `mobile/features/pet` 内部加载 `assets/openpet/` 的图集与播放器；图集独立文件、只进 mobile chunk，不进入桌面首屏。
 - 开发时开启 `StrictMode`，用来暴露重复订阅/缺失清理；所有 `listen` 必须返回清理函数。
 - 落地页 `app/src-tauri/mobile/index.html` 继续走 Rust `include_str!`，不接 React。
 
@@ -242,7 +242,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 | --- | --- | --- | --- |
 | 微动效 | CSS transition/keyframes | hover、press、颜色、透明度、呼吸灯 | ≤ 150–200ms；只动 transform/opacity/color |
 | 界面 | Motion | 进出场、列表增删、布局变化、弹窗/抽屉、手势 | spring 或统一 easing；`AnimatePresence` 管卸载 |
-| 角色 | Rive | 宠物 idle/开心/困倦/倾听/庆祝、交互反馈；AI 状态后续接入 | 状态机输入驱动；懒加载；后台暂停 |
+| 角色 | 帧动画图集 | 宠物 idle/工作/等待/完成与后续状态行 | 10fps；后台暂停；减少动效冻结首帧；图集失败降级 poster |
 
 规则：
 
@@ -253,13 +253,13 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - 首屏关键内容不做入场动画；避免“先空后跳”。
 - 长列表（> 50 条）不做 `layout` 动画；超过 200 条考虑虚拟列表（按需引入）。
 
-**宠物与 Rive**
+**宠物与帧动画图集**
 
-- 情绪状态 → Rive 输入映射集中在 `mobile/features/pet/stateMachine.ts`，UI 不直接操作 Rive 内部节点；AI 四态由 `mobile/features/pet/ai-status.ts` 独立驱动，`status` 协议已接入，Rive `ai_state` 待资产。
-- Rive 运行时和 `.riv` 只在宠物视图挂载时加载；离开页面销毁实例。
-- 监听 `visibilitychange`，后台暂停 Rive，回前台恢复，省电。
-- 先在 Realme 真机测 60fps，再决定是否需要 WebGL 渲染器；默认 canvas 渲染器。
-- 若最终美术是像素风，改用序列帧 + CSS/Canvas 更合适；该选择由美术方向决定，需在 `decisions.md` 记录。
+- App 语义 → 图集状态的映射集中在 `mobile/features/pet/sprite-state-map.ts`（候选链，先匹配存在的状态行，否则回落 idle）；AI 四态由 `ai-status.ts` 独立驱动。
+- 图集在 mobile entry 内按需加载；播放器 `sprite-pet.tsx` 只改 `background-position`，不创建额外 canvas。
+- 监听 `visibilitychange` / 覆盖层状态，后台暂停帧循环，回前台继续；减少动效冻结第 0 帧。
+- 先在 Realme 真机测 60fps；单帧 256px 在 ~500px 舞台是 2 倍放大，必要时换 512 cell 资产（代码不用改）。
+- 新增状态行流程见 `docs/engineering/pet-runtime.md` §3.2；不再引入 Rive 等重运行时。
 
 ## 9. 状态管理
 
@@ -289,13 +289,13 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 | 首屏 JS（gzip） | ≤ 150KB | `pnpm build` + 可视化分析 |
 | 首屏 CSS（gzip） | ≤ 40KB | 同上 |
 | 宠物懒加载 chunk | ≤ 600KB（JS+WASM） | 同上 |
-| `.riv` 资源 | ≤ 2MB，按需 | 构建产物 |
+| 宠物图集 | ≤ 1MB WebP，按需 | 构建产物 |
 | 中端安卓首屏 | ≤ 1.5s | Realme 真机 + WebView 远程调试 |
 | 动画帧率 | 60fps | Chrome Performance / 真机目测 |
 | 长任务 | 无 > 50ms 的主线程任务 | Performance 面板 |
 
 - 预算是目标值；Phase 1 测完基线后校准一次，放宽必须记录到 `decisions.md`。
-- 只有首屏需要的依赖进主 chunk；Rive、Markdown、语法高亮、虚拟列表一律 `lazy`。
+- 只有首屏需要的依赖进主 chunk；图集、Markdown、语法高亮、虚拟列表一律按需。
 - 禁止全量引入：`import { Button } from "..."` 而不是 `import * as ...`。
 - 图片用 WebP/AVIF；图标用 SVG；不打包字体文件（品牌字体必须子集化）。
 
@@ -320,20 +320,20 @@ adb shell dumpsys package com.android.webview | grep versionName
 **Tauri 配置**
 
 - `withGlobalTauri` 设为 `false`；前端统一 `import { invoke } from "@tauri-apps/api/core"`。
-- CSP 不允许长期为 `null`。上线前按 Tauri 推荐值收紧，并为 Rive 的 WASM 增加 `script-src 'wasm-unsafe-eval'`；逐项验证 IPC、asset 协议、WebSocket `connect-src`。
+- CSP 不允许长期为 `null`。上线前按 Tauri 推荐值收紧；逐项验证 IPC、asset 协议、WebSocket `connect-src`。
 - capabilities 最小权限：只开实际用到的命令/插件。
 - 不在前端保存配对密钥/长期凭证；密钥留在 Rust/系统钥匙串。
 - 不加载 CDN 脚本、字体、样式；所有资源随包分发。
 
 ## 13. 迁移计划
 
-当前进度（2026-10-31）：Phase 1 已完成。React 双 entry、桌面/手机连接与聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；旧 `main.ts` / `styles.css` 已删除，真机双向收发通过。宠物 P0 已实现（静态 SVG 降级，Rive 待资产；真机部分未验证）。
+当前进度（2026-10-31）：Phase 1 已完成。React 双 entry、桌面/手机连接与聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；旧 `main.ts` / `styles.css` 已删除，真机双向收发通过。宠物 P0 已实现（OpenPets schema 2 帧动画图集 + poster 降级；真机部分未验证）。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
 | 0. 预检 | 真机 WebView 版本、开分支、记录当前包体/启动时间 | 版本 ≥ 111 或已决定降级方案 |
 | 1. 骨架 | React + Vite + Tailwind + shadcn + Biome；两个 entry；连接 + 聊天 1:1 复刻 | 双端连接/收发与现状一致，Rust 未改 |
-| 2. 宠物 | 舞台、情绪状态机、plugin-store 存档、手动双姿态（当前静态 SVG，Rive 待资产） | 真机 60fps，聊天仍可用 |
+| 2. 宠物 | 舞台、情绪状态机、plugin-store 存档、手动双姿态（帧动画图集） | 真机 60fps，聊天仍可用 |
 | 3. 麦克风 | 手机采集 + 桌面转写/输入、协议扩展、权限与降级 | 真机按住说话全链路通过 |
 | 4. 收尾 | 设置/配对 UI、补齐测试、包名 `desktop` → `sidekick`（旧 DOM/`styles.css` 已随 Phase 1 删除） | 无旧代码引用，测试通过 |
 | 5. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |
@@ -362,8 +362,8 @@ adb shell dumpsys package com.android.webview | grep versionName
 ## 15. 未决事项
 
 - 真机 WebView 版本（决定 Tailwind v4 是否可直接用）。
-- 宠物美术方向：已定柔软黏土/手绘矢量，Rive（2026-10-31）；像素/序列帧不采用。
+- 宠物美术方向：改用内置 OpenPets schema 2 帧动画图集（2026-11-02，D57）；自绘 SVG 与 Rive 路线停止。
 - 聊天记录是否持久化、存哪里（SQLite/tauri-plugin-store）。
 - 浅色主题是否要做；当前只做暗色。
 - 协议类型是否用 ts-rs 自动生成；等协议字段稳定后再定。
-- iOS 端 Rive/WebView 性能，后续单独评估。
+- iOS 端 WebView 性能与帧动画兼容性，后续单独评估。

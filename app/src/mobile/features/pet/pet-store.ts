@@ -29,7 +29,6 @@ import type {
   PetStorage,
   PetStoreState,
   Posture,
-  RiveSignal,
 } from "./types";
 
 /** AI 联动只用到声音播放器的一小部分；测试里可以注入假实现。 */
@@ -93,7 +92,6 @@ export function createPetStore(deps: PetStoreDeps) {
   let lastBubbleAt = 0;
   let bubbleId = 0;
   let heartId = 0;
-  let riveId = 0;
   let captionId = 0;
 
   return create<PetStoreState>((set, get) => {
@@ -270,13 +268,6 @@ export function createPetStore(deps: PetStoreDeps) {
         }, HEART_DURATION_MS);
       }
 
-      const riveEffect = effects.find((effect) => effect.type === "rive");
-      if (riveEffect) {
-        riveId += 1;
-        const signal: RiveSignal = { id: riveId, trigger: riveEffect.trigger };
-        set({ riveSignal: signal });
-      }
-
       if (pet.settings.haptics) {
         for (const effect of effects) {
           if (effect.type === "haptic") deps.haptics[effect.style]();
@@ -290,7 +281,6 @@ export function createPetStore(deps: PetStoreDeps) {
       saveStatus: "idle",
       bubble: null,
       heartBurst: null,
-      riveSignal: null,
       ai: createIdleAiStatus(),
       aiCaption: null,
       micListening: false,

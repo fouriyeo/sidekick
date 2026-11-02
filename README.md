@@ -55,7 +55,7 @@ scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 
 - [x] 局域网双向通信（2026-10-31）
 - [x] 手机自动发现电脑 + 服务端口自动回退（2026-10-31）
-- [x] 前端脚手架（React 19 + Tailwind v4 + shadcn/Base UI + Motion + Rive）
+- [x] 前端脚手架（React 19 + Tailwind v4 + shadcn/Base UI + Motion）
 - [x] 产品规范与两份 PRD（2026-10-31）
 - [ ] 前端平台分目录 + 连接/聊天迁移
 - [ ] 情绪宠物（手机横屏、纯陪伴）

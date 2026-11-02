@@ -23,7 +23,7 @@
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
-- ✅ **宠物 P0 代码已完成**（2026-10-31）：静态 SVG + CSS 呼吸、状态机/手势/plugin-store 存档、方向自动双姿态（手动覆盖）、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器视觉/交互已验证。Rive 资产、真机 60fps 与存档跨重启待补。
+- ✅ **宠物 P0 代码已完成**（2026-10-31；2026-11-02 改为帧动画图集）：OpenPets schema 2 图集（WebP 764KB + poster）+ 状态候选链 + 解码/降级；状态机/手势/plugin-store 存档、方向自动双姿态（手动覆盖）、命名/设置、宠物主界面 + 聊天入口不变；356 个前端测试通过；真机 60fps 与存档跨重启待补，扩展状态行（睡眠/倾听/摸摸）待美术。
 - ✅ **麦克风（百炼云端唯一）**（2026-11-02）：手机 WebView 流式 PCM16 → `mic.*` + `SK01` 二进制帧 → 桌面直连百炼 WS（run-task/finish-task、二进制 PCM）→ `mic.partial` 50ms 流式回显 → `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制。本机 whisper/模型下载已下线，失败直接报错、不回退。
 - ✅ **模型页 + 用量统计**（2026-11-02）：桌面主导航新增「模型」（AI 联动之后），上半部分配置百炼（完整地址/Keychain API Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；无业务空间 ID 字段），下半部分区间切换（今天/近 7 天/近 1 个月/近 1 年；今天无明细、7/30 按天、1 年按月）+ 金额/Token/会话/时长（人民币微元，北京/新加坡价格估算）；`asr_usage.json` 0600、按天、最多 400 天；`asr_usage_stats()` 返回 365 天 `days`。
 - ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多 100 条；本地 `0600` JSON。
@@ -47,7 +47,7 @@
 - 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；`src/main.tsx` 据此动态 import 并挂载 `entries/desktop.tsx` / `entries/mobile.tsx`。
 - 协议：WebSocket 文本帧 JSON；服务端把消息广播给所有已连接客户端。定义见 `protocol/README.md`。
 - 数据流：手机 App →(ws)→ 桌面服务 → 广播 → 桌面 UI / 其他客户端。
-- 前端重构目标栈（脚手架已就绪，旧 UI 未迁移）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion + Rive；见 `docs/frontend-architecture.md`。
+- 前端重构目标栈（脚手架已就绪，旧 UI 未迁移）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion；宠物为帧动画图集（OpenPets schema 2），见 `docs/frontend-architecture.md`。
 
 ### 桌面端接口
 
@@ -189,6 +189,7 @@ sidekick/
 - **自动粘贴 TCC**：`core-graphics` 合成 Cmd+V 需要 macOS 辅助功能勾选当前程序；开发二进制每次重编译可能被当成新程序，需要重新勾选（设置页有请求权限/重新检测）。不勾选只复制。
 - **麦克风录音 UI 锚点**：手持模式底部居中的 96dp 按钮容器只能包含按钮本身；录音条/结果卡片/临时提示必须放在独立绝对定位层（`left-0 right-0 mx-auto w-[min(82vw,360px)] bottom-[104px]`、`pointer-events-none`），否则会把 flex 容器撑宽、按钮被挤偏，看起来「按住后跳走」。居中要用 `inset-x-0` + flex `items-center` / `left-0 right-0 mx-auto`，**不要用 `left-1/2 -translate-x-1/2`**（WebView 103 不支持 CSS translate，会偏右半宽）。取消只保留上滑手势（≥48dp，滑回 <24dp 继续），**不要再加左下取消按钮**：按住说话时去点它必须先松手，而松手就已经结束录音，按钮自相矛盾。
 - **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind = "voice"` 入库（暂停记录时仍写系统剪贴板、但不入历史）；最多 100 条（置顶优先淘汰）；文件 `~/Library/Application Support/Sidekick/clipboard.json` 权限 600。
+- **宠物图集（OpenPets schema 2）**：资产在 `app/src/mobile/features/pet/assets/openpet/`（webp 764KB + poster 14KB + pet.json）；一列一帧、单状态 ≤32 帧、兼容 16；播放器 rAF 按 `frames[].duration` 推进，done 播一次并在末帧定格；后台/覆盖层暂停，减少动效冻结第 0 帧；manifest 非法/解码失败/尺寸不匹配 → poster 兜底。新增状态行只需图集加行 + manifest 登记（可选改 `sprite-state-map.ts` 候选链），渲染器不用动。单帧 256 在 ~500px 舞台 2 倍放大会偏软，解码约 16.8MB；资产来自 DeepSeek 鲸鱼（zip 无 LICENSE），发版前确认授权。
 - **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume`，不要加对话内容/工具参数/路径。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 
@@ -204,10 +205,10 @@ sidekick/
 
 ## 10. 下一步路线（按优先级）
 
-> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；手机自动发现电脑已落地；宠物 P0 代码完成（真机/Rive 待补）；麦克风 P0 与桌面剪贴板 P1 代码完成，真机/辅助功能待回归。
+> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；手机自动发现电脑已落地；宠物 P0 代码完成（帧动画图集；真机与扩展状态行待补）；麦克风 P0 与桌面剪贴板 P1 代码完成，真机/辅助功能待回归。
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
-2. 情绪宠物 P0：代码已完成（静态 SVG 降级、方向自动双姿态（手动覆盖）、plugin-store 存档）；真机 60fps/存档跨重启与 Rive 资产待补。
+2. 情绪宠物 P0：代码已完成（帧动画图集 + poster 降级、方向自动双姿态、plugin-store 存档）；真机 60fps/存档跨重启、扩展状态行（睡眠/倾听/摸摸）待补。
 3. ✅ 外设麦克风（百炼云端唯一）：二进制协议、云端流式、`mic.partial`、手机 UI、桌面浮层已完成；下一步 macOS 辅助功能自动粘贴与真机 60 秒/断连/密码框矩阵。
 4. ✅ 模型页 + 用量统计：百炼配置（无业务空间 ID）、Keychain 元数据、区间切换（今天/7/30/365，1 年按月）、清空统计已完成（2026-11-02）；下一步真实账号/Keychain 开页不弹/金额对账与真机验收。
 5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。

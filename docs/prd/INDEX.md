@@ -18,7 +18,7 @@ children:
 
 | 功能 | 一句话 | 状态 | 入口 |
 | --- | --- | --- | --- |
-| 情绪宠物 | 横屏手机里的黏土小宠物，纯陪伴 | 代码完成，真机/Rive 待补 | [pet/INDEX.md](./pet/INDEX.md) |
+| 情绪宠物 | 横屏手机里的黏土小宠物，纯陪伴 | 代码完成，真机待补 | [pet/INDEX.md](./pet/INDEX.md) |
 | 外设麦克风 | 按住手机说话，电脑本机转文字并输入 | P0 已实现，真机/自动粘贴待回归 | [mic/INDEX.md](./mic/INDEX.md) |
 | AI 联动（DSH） | 桌面开关把 AI 状态推给手机，宠物四态 + 三音效 | 开发中 | [hook/INDEX.md](./hook/INDEX.md) |
 

@@ -68,7 +68,7 @@ export function reducePet(
         next = { ...next, mood: "curious" };
       }
 
-      const effects: PetEffect[] = [{ type: "rive", trigger: "trigger_wake" }];
+      const effects: PetEffect[] = [];
       if (event.corrupted) {
         effects.push({ type: "bubble", copyId: "corrupted" });
       } else if (!wasOnboarded) {
@@ -106,7 +106,6 @@ export function reducePet(
         },
         effects: [
           { type: "bubble", copyId: "named" },
-          { type: "rive", trigger: "trigger_pet" },
           { type: "hearts", count: 3 },
         ],
       };
@@ -118,15 +117,10 @@ export function reducePet(
         return { state, effects: [{ type: "haptic", style: "light" }] };
       }
 
-      const effects: PetEffect[] = [];
-      if (state.phase === "sleeping") {
-        effects.push({ type: "rive", trigger: "trigger_wake" });
-      }
-      effects.push(
-        { type: "rive", trigger: "trigger_pet" },
+      const effects: PetEffect[] = [
         { type: "haptic", style: "light" },
         { type: "bubble", copyId: "petting" },
-      );
+      ];
 
       return {
         state: {
@@ -198,15 +192,10 @@ export function reducePet(
         return { state, effects: [{ type: "haptic", style: "light" }] };
       }
 
-      const effects: PetEffect[] = [];
-      if (state.phase === "sleeping") {
-        effects.push({ type: "rive", trigger: "trigger_wake" });
-      }
-      effects.push(
-        { type: "rive", trigger: "trigger_poke" },
+      const effects: PetEffect[] = [
         { type: "haptic", style: "light" },
         { type: "bubble", copyId: "poke" },
-      );
+      ];
 
       const next = recordAffinity(state, event.now);
       return {
@@ -242,7 +231,6 @@ export function reducePet(
 
       if (next.phase === "sleeping" && !isNight(event.now)) {
         next = idleState(next, event.now);
-        effects.push({ type: "rive", trigger: "trigger_wake" });
       } else if (
         next.phase === "idle" &&
         next.visible &&
@@ -273,9 +261,6 @@ export function reducePet(
 
         let next = settleEnergy(state, event.now, "foreground");
         const effects: PetEffect[] = [];
-        if (next.phase === "listening") {
-          effects.push({ type: "rive", trigger: "trigger_cancel" });
-        }
 
         next = {
           ...next,
@@ -298,7 +283,7 @@ export function reducePet(
       let next = settleEnergy(state, event.now, "background");
       const previousLastSeenAt = state.lastSeenAt;
       const elapsed = event.now - previousLastSeenAt;
-      const effects: PetEffect[] = [{ type: "rive", trigger: "trigger_wake" }];
+      const effects: PetEffect[] = [];
       let phase: PetPhase = "idle";
       let mood = deriveIdleMood(event.now, next.energy);
 
@@ -372,10 +357,7 @@ export function reducePet(
           phaseUntil: 0,
           lastInteractionAt: event.now,
         },
-        effects: [
-          ...(wasSleeping ? [{ type: "rive" as const, trigger: "trigger_wake" as const }] : []),
-          { type: "rive", trigger: "trigger_listen" },
-        ],
+        effects: [],
       };
     }
 
@@ -392,7 +374,6 @@ export function reducePet(
           lastInteractionAt: event.now,
         },
         effects: [
-          { type: "rive", trigger: "trigger_success" },
           { type: "haptic", style: "success" },
           { type: "bubble", copyId: "mic_success" },
         ],
@@ -411,7 +392,7 @@ export function reducePet(
           phaseUntil: 0,
           lastInteractionAt: event.now,
         },
-        effects: [{ type: "rive", trigger: "trigger_cancel" }],
+        effects: [],
       };
     }
 
@@ -428,7 +409,6 @@ export function reducePet(
           lastInteractionAt: event.now,
         },
         effects: [
-          { type: "rive", trigger: "trigger_error" },
           { type: "haptic", style: "error" },
           { type: "bubble", copyId: "mic_error" },
         ],

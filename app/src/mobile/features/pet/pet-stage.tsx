@@ -18,10 +18,10 @@ import { isNight } from "./mood";
 import { NamePrompt } from "./name-prompt";
 import styles from "./pet.module.css";
 import { PetBubble } from "./pet-bubble";
-import { PetCanvas } from "./pet-canvas";
 import { PetHearts } from "./pet-hearts";
 import { usePetStore } from "./pet-store";
 import { postureForOrientation } from "./posture";
+import { SpritePet } from "./sprite-pet";
 import type { GestureEvent, PetState } from "./types";
 import { useOrientation } from "./use-orientation";
 import { useReducedMotion } from "./use-reduced-motion";
@@ -315,12 +315,10 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
         >
-          <PetCanvas
-            mood={pet.mood}
-            energy={pet.energy}
-            isNight={night}
+          <SpritePet
+            ai={displayAi}
             phase={pet.phase}
-            aiState={displayAi}
+            night={night}
             active={active}
             reducedMotion={reducedMotion}
           />

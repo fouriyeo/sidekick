@@ -31,7 +31,7 @@ children:
 | 桌面剪贴板历史与隐私过滤 | [clipboard-manager.md](./clipboard-manager.md) | M |
 | 做自动发现、端口冲突、桌面二维码 | [lan-discovery.md](./lan-discovery.md) | M |
 | 做 AI 联动：DSH 脚本注入、Rust 桥、四态协议 | [dsh-hook.md](./dsh-hook.md) | M |
-| 做宠物：Rive、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
+| 做宠物：帧动画图集、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
 | 写测试、真机验收、发版 | [quality.md](./quality.md) | M |
 
 ## 当前状态

@@ -47,7 +47,7 @@ AI 状态：DeepSeek Harness（DSH）→ 本地脚本 → Sidekick 回环桥 →
 
 ## 前端（`app/src/main.ts`）
 
-> 目标架构已定稿（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI）+ Motion + Rive；**尚未迁移**，本节描述的是当前实现。规范见 `frontend-architecture.md`，依赖治理见 `dependency-policy.md`。
+> 目标架构已定稿（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI）+ Motion；**尚未迁移**，本节描述的是当前实现。规范见 `frontend-architecture.md`，依赖治理见 `dependency-policy.md`。
 
 - 启动时 `invoke("app_role")` → 给 `<body>` 加 `mobile` 类并渲染手机视图，或渲染桌面视图。
 - 桌面视图：`server_info` → 显示地址、二维码；本地 `ws://127.0.0.1:8848/ws` 收发。

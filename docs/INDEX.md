@@ -86,7 +86,7 @@ docs/
 │  ├─ clipboard-manager.md      # 桌面剪贴板历史与隐私过滤
 │  ├─ dsh-hook.md               # DSH 本地脚本注入、Rust 桥、四态协议
 │  ├─ lan-discovery.md          # UDP 发现与动态端口
-│  ├─ pet-runtime.md            # Rive、状态机、持久化、性能
+│  ├─ pet-runtime.md            # 帧动画图集、状态机、持久化、性能
 │  └─ quality.md                # 测试矩阵、真机验收、发布门
 ├─ architecture.md              # 现有：系统架构与接口
 ├─ frontend-architecture.md     # 现有：前端目标架构与规范
@@ -104,7 +104,7 @@ docs/
 - 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风（百炼云端唯一）代码、模型页 + 用量统计、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感（2026-11-02；真实账号/真机/金额对账待补）。
 - 进行中：**AI 联动（DSH hook）**——桌面 AI 联动页、本地脚本注入、手机四态动作/声音；产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
 - 麦克风：只走百炼云端，未配置直接报错；自动粘贴依赖 macOS 辅助功能；真机/密码框矩阵继续回归。
-- 未开始：手机回答 AI 提问、Claude Code / Qoder hook、release 打包、配对鉴权、iOS、Rive 资产。
+- 未开始：手机回答 AI 提问、Claude Code / Qoder hook、release 打包、配对鉴权、iOS。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 
 ## 5. 事实的唯一归属

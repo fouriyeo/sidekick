@@ -7,6 +7,7 @@
 //! 最终文本由 desktop_server 交给 desktop_mic 统一落字，保证“只插入一次”。
 
 use std::collections::BTreeMap;
+use std::sync::Once;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
@@ -107,7 +108,11 @@ impl CloudHandle {
     pub async fn wait(self) -> Result<CloudTranscript, CloudError> {
         match tokio::time::timeout(Duration::from_secs(9), self.outcome).await {
             Ok(Ok(CloudOutcome { result })) => result,
-            Ok(Err(_)) => Err(CloudError::new("cloud_network", "云端会话已结束")),
+            // 任务 panic 时 outcome sender 被丢弃；这不是网络问题，单独成码便于排障。
+            Ok(Err(_)) => Err(CloudError::new(
+                "cloud_internal",
+                "云端会话异常结束（内部错误）",
+            )),
             Err(_) => Err(CloudError::new("cloud_timeout", "云端收尾超时")),
         }
     }
@@ -421,7 +426,24 @@ fn finish_task_payload(task_id: &str) -> Value {
     })
 }
 
+static CRYPTO_PROVIDER: Once = Once::new();
+
+/// rustls 0.23 不再自动选择 CryptoProvider，必须在第一次 TLS 握手前显式安装。
+/// 此前 `reqwest` 通过 feature 合并提供了 provider；移除 `reqwest` 后必须由这里保证，
+/// 否则云端任务会在 TLS 建连时 panic，最终被误报成 `cloud_network`。
+pub fn ensure_crypto_provider() {
+    CRYPTO_PROVIDER.call_once(|| {
+        if rustls::crypto::ring::default_provider()
+            .install_default()
+            .is_err()
+        {
+            eprintln!("[asr-cloud] rustls CryptoProvider 已安装，跳过 ring provider");
+        }
+    });
+}
+
 async fn connect(config: &CloudSessionConfig) -> Result<Socket, CloudError> {
+    ensure_crypto_provider();
     let mut request = config
         .endpoint
         .as_str()
@@ -540,10 +562,7 @@ impl Assembler {
 
     fn visible_text(&self) -> String {
         let mut parts: Vec<String> = self.finals.values().cloned().collect();
-        if self.current_id > 0
-            && !self.finals.contains_key(&self.current_id)
-            && !self.current_text.is_empty()
-        {
+        if !self.current_text.is_empty() && !self.finals.contains_key(&self.current_id) {
             parts.push(self.current_text.clone());
         }
         parts.join("")

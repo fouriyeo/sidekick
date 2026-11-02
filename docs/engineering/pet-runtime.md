@@ -2,14 +2,14 @@
 doc: engineering/pet-runtime
 title: 宠物运行时方案
 status: draft
-updated: 2026-10-31
+updated: 2026-11-02
 load: on-demand
 owner: engineering
 ---
 
 # 宠物运行时方案
 
-> 目标：手机里稳定跑一只会呼吸、会互动、会记住你的宠物；Rive 失败也能优雅降级。
+> 目标：手机里稳定跑一只会呼吸、会互动、会记住你的宠物；图集加载失败也能优雅降级。
 > 产品/体验规则见 [pet PRD](../prd/pet/PRD.md) 与 [SPEC](../prd/pet/SPEC.md)。
 
 ## 1. 目录
@@ -17,7 +17,11 @@ owner: engineering
 ```text
 app/src/mobile/features/pet/
 ├─ pet-stage.tsx          # 舞台、气泡、设置/聊天入口、姿态布局
-├─ pet-canvas.tsx         # Rive 懒加载与输入驱动
+├─ sprite-pet.tsx         # 帧动画播放器（OpenPets schema 2 图集）
+├─ sprite-manifest.ts     # 图集 manifest 解析与校验
+├─ sprite-state-map.ts    # App 语义 → 图集状态候选链
+├─ sprite-player.ts       # 纯函数帧推进（loop / once）
+├─ assets/openpet/        # spritesheet.webp + poster.webp + pet.json
 ├─ state-machine.ts       # 状态/心情/转移（纯函数优先）
 ├─ mood.ts                # 精力/亲密度/时间计算
 ├─ persistence.ts         # 存档 schema、迁移与 PetStorage 接口
@@ -30,32 +34,25 @@ app/src/mobile/features/pet/
 ├─ pet-settings.tsx       # 设置页（姿态/震动/减少动效/常亮/变暗/重置）
 ├─ haptics.ts             # 触感语义 → 原生 haptic 命令（浏览器回退 navigator.vibrate）
 ├─ use-keep-awake.ts      # 宠物页常亮（含最长时长与到点释放）
-└─ components/
-   ├─ pet-fallback.tsx    # 静态图 + CSS 呼吸
-   ├─ pet-bubble.tsx
-   └─ pet-hearts.tsx
+├─ pet-bubble.tsx         # 气泡
+└─ pet-hearts.tsx         # 爱心粒子
 ```
 
 - 只允许 `mobile/entries` 引用；桌面不 import。
-- 业务状态用纯函数 + Zustand；Rive 节点名不外泄。
+- 业务状态用纯函数 + Zustand；图集状态名只出现在 manifest / `sprite-state-map.ts`。
 - 触感统一走 `haptics.ts` → 原生 `haptic` 命令（`performHapticFeedback`，无 VIBRATE 权限）；WebView 默认长按触感在 App 启动时关闭。
 - 文件命名 kebab-case，组件导出 PascalCase（与 [frontend-architecture](../frontend-architecture.md) 第 7 节一致）。
 - 文案用 `copy_id`，不在组件里散落字符串。
 
-## 2. Rive 集成
+## 2. 帧动画图集（OpenPets schema 2）
 
-- `@rive-app/react-canvas` 已在依赖基线；只在宠物页挂载时动态加载。
-- `.riv` 与静态降级图放 `app/src/assets/pet/`；资源清单与体积登记。
-- 加载流程：
-  1. 优先加载 `.riv`；
-  2. 1.5 秒未就绪或失败 → 显示静态图 + CSS 呼吸；
-  3. 后台恢复后不重复加载已失败的实例，除非用户重试/重启。
-- 生命周期：
-  - 挂载时创建 Rive 实例；卸载时 destroy。
-  - `visibilitychange` 后台暂停，回前台恢复并触发一次眨眼。
-  - 低电量/减少动效：降帧或停用随机 idle。
-- 渲染：Canvas 2D 默认；不在舞台使用 WebGL，除非真机测试证明必要。
-- DPR 上限 2；Canvas 尺寸随舞台变化，避免频繁 resize。
+- 资产：`app/src/mobile/features/pet/assets/openpet/`（`pet.json` + `spritesheet.webp` + `poster.webp`），通过 Vite 资源导入，只进 mobile 包，桌面包不引用。
+- **一列一帧**：`grid.cell` 是单帧边长（当前 256），`grid.cols` 是列数（当前 16；上限 32），行号由 `states.*.row` 声明。
+- 单状态帧数 1–32，兼容 16；不同状态可以帧数不同，只播 `frames` 里列出的列。
+- 播放：按 `frames[].duration` 累计推进（rAF，只在帧号变化时改 `background-position`）；`loop` 循环，`once` 播完停在末帧（done 的 1.5s 定格由末帧 duration 表达）。
+- 尺寸：`ResizeObserver` 量容器后按 px 设置 `background-size/position`，旋转/姿态变化不重新解码；DPR 上限 2。
+- 降级：manifest 校验失败、解码失败、或图片尺寸与 `cols/cell` 不匹配 → 显示 `poster.webp`；气泡/触感/录音不受影响。
+- 内存：4096×1024 解码约 16.8MB；需要再降可拆状态条按需解码（协议不变）。
 
 ## 3. 状态映射
 
@@ -78,29 +75,31 @@ type PetEvent =
 function reducePet(state: PetState, event: PetEvent): { state: PetState; effects: PetEffect[] };
 ```
 
-- 副作用（Rive trigger/震动/气泡/存档）由 `effects` 描述，执行层统一处理。
-- MIC_* 本轮无生产事件源，仅单测注入；状态与 Rive trigger 为 P1 契约保留。
+- 副作用（震动/气泡/爱心/存档）由 `effects` 描述，执行层统一处理。
+- MIC_* 本轮无生产事件源，仅单测注入；状态为 P1 契约保留。
 - **AI 联动四态不新增 `PetPhase`**：静态=idle，工作中/等你决定/完成由 `mobile/features/pet/ai-status.ts` 的独立内存 store 驱动；`displayStateOf` 只决定最终展示姿态，AI 状态不落盘。优先级与动作见 [hook SPEC](../prd/hook/SPEC.md) §2。
 
-### 3.2 Rive 输入（命名稳定）
+### 3.2 图集状态映射（候选链）
 
-| 输入 | 类型 | 来源 | 说明 |
-| --- | --- | --- | --- |
-| `mood` | number | 当前心情枚举 | content/happy/curious/sleepy/listening/proud/concerned |
-| `energy` | number | 0–100 | 影响哈欠/动作幅度 |
-| `is_night` | boolean | 本地时段 | 夜间表情 |
-| `ai_state` | number | AI 联动四态（P1 接 Rive） | idle/working/asking/completed；当前静态 SVG 用 `data-ai-state` 实现 |
-| `trigger_pet` | trigger | 摸摸 | 一次性 |
-| `trigger_poke` | trigger | 戳一戳 | 一次性 |
-| `trigger_listen` | trigger | 麦克风开始（P1） | 一次性 |
-| `trigger_success` | trigger | 转写成功（P1） | 一次性 |
-| `trigger_cancel` | trigger | 取消录音（P1） | 一次性 |
-| `trigger_error` | trigger | 转写失败（P1） | 一次性 |
-| `trigger_wake` | trigger | 触摸/回前台 | 一次性 |
+App 不硬编码四个状态名：`sprite-state-map.ts` 给出**候选链**，`SpritePet` 取第一个在 manifest 里存在的状态；都不存在时回落 `defaultState` → `idle`。以后加行不用改渲染器。
 
-- 输入名是 UI 与 Rive 的契约；改名前必须同步本文与资产。
-- 不在组件里硬编码节点名；映射只出现在 `pet-canvas.tsx`。
-- 缺输入/缺状态机时降级静态，不抛异常给用户。
+| 场景（phase / AI） | 候选链（从左到右） |
+| --- | --- |
+| sleeping | `sleeping` → `idle`（AI 非静态时跟随 AI） |
+| listening | `listening` → `idle`（不落到 attention，避免误解为“等你决定”） |
+| interacting | `petting` → `happy` → `idle` |
+| celebrating | `celebrate` → `done` → `idle` |
+| concerned | `concerned` → `idle` |
+| away | `away` → `idle` |
+| AI working | `working` → `idle` |
+| AI asking | `attention` → `idle` |
+| AI completed | `done` → `celebrate` → `idle` |
+
+- 当前资产只有 `idle/working/attention/done` 四行，预留状态会自动回落。
+- **新增状态行**：① 图集底部加一行；② `pet.json` 增加 `states.<name> = { row, frames, loop? }`（一列一帧，≤32 帧）；③ 如需新触发，在 `sprite-state-map.ts` 的候选链里加名字；④ 渲染器/播放器不用改。
+- 减少动效：冻结每个状态的第 0 帧，保留四套可区分的静态轮廓。
+- 夜间/睡眠：只降亮度或冻结，不额外播素材（当前无睡眠行）。
+- 行数不要求连续；实际行数以解码后的图片高度为准，manifest 声明的行必须都存在。
 
 ## 4. 心情、精力、亲密度
 
@@ -168,7 +167,7 @@ type PetSaveV1 = {
 Pointer 事件
   → 手势分类（tap / petting / 误触）
   → reducePet / dispatch(event)
-  → 副作用：Rive trigger + 震动 + 气泡 + 存档
+  → 副作用：震动 + 气泡 + 爱心 + 存档（画图层由 phase/AI 驱动）
 ```
 
 - 手势阈值集中在 `gestures.ts`/`state-machine.ts`，组件只上报原始点；slop 8px 起步，真机校准。
@@ -183,30 +182,31 @@ Pointer 事件
 ## 8. 性能
 
 - 目标：真机 60fps；单帧主线程 <16ms；长任务 <50ms。
-- Rive 网格/骨骼控制在中端安卓可承受范围；粒子最多 6 个。
+- 图集单帧 256px、10fps 播放，主线程只做背景位置更新；粒子最多 6 个。
 - 不在动画中改 width/height/filter/box-shadow；只 transform/opacity。
 - 舞台不可见时暂停；低电量降频；减少动效去随机 idle。
-- 内存：宠物页常驻 ≤150MB `[待基线]`；卸载时释放 Rive/Canvas。
-- 首屏：宠物 chunk 懒加载；`.riv` ≤2MB；静态图 WebP。
+- 内存：宠物页常驻 ≤150MB `[待基线]`；图集解码约 16.8MB，卸载时释放。
+- 首屏：宠物 chunk 懒加载；图集 WebP ≤1MB；poster ≤20KB。
 
 ## 9. 测试
 
 - 单元：状态转移（含覆盖层/指针抬起）、精力/亲密度边界、时段/问候、plugin-store 迁移/损坏、手势分类与冷却。
-- 组件：静态降级、气泡频率、设置保存、减少动效。
+- 组件：四态行/候选链回落、done 定格、减少动效冻结、气泡频率、设置保存、解码失败降级。
 - 集成：麦克风状态 → 宠物反应（P1 mock）；后台/回前台；低电量。
 - 真机：Realme 16:9/20:9、手动态、60fps、掉电、锁屏恢复。
-- Mock：Rive 组件、震动、时间、PetStorage adapter。
+- Mock：震动、时间、PetStorage adapter、Image 解码。
 
 ## 10. 风险
 
 | 风险 | 缓解 |
 | --- | --- |
-| Rive 资产未就绪阻塞开发 | 先用占位静态图 + 简化状态机；资产后替换 |
-| 中端安卓掉帧 | 限制网格/粒子；真机门禁；降级静态 |
+| 图集资产/分辨率不够 | 复用 OpenPets 格式，换资产只改 `assets/openpet/`；256 帧放大偏软时可换 512 cell |
+| 中端安卓掉帧 | 只改背景位置；真机门禁；降级 poster |
 | 存档格式变更 | 版本号 + 迁移测试；损坏回退 |
 | plugin-store Android 兼容未验证 | Android 编译已通过；真机读写/杀进程恢复待回归，失败则回到 PetStorage adapter 的另一实现 |
 | 屏幕常亮耗电 | 设置可关；仅宠物页前台生效（聊天/后台释放）；最长常亮默认 2 小时（可调，0 = 不限）；无操作默认 5 分钟自动变暗（可调）；JNI 失败静默降级为系统默认熄屏 |
 | 时间/时区边界 | 可注入时钟；只做衰减/恢复 |
+| 图集授权/品牌 | 当前资产来自 DeepSeek 鲸鱼（zip 无 LICENSE）；正式发版前确认授权或替换同格式资产 |
 | 宠物与麦克风抢事件 | 状态优先级；录音中禁用宠物互动 |
 | 卸载丢宠物 | 关于页说明；P1 备份/导出 |
 
@@ -214,8 +214,8 @@ Pointer 事件
 
 - [ ] `state-machine.ts` + `gestures.ts` + 单元测试。
 - [ ] `persistence.ts` + `tauri-pet-storage.ts`（plugin-store adapter）+ 迁移/损坏测试。
-- [ ] `pet-stage.tsx` / `pet-canvas.tsx` / `pet-fallback.tsx`。
-- [ ] Rive 输入映射与资产清单。
+- [ ] `pet-stage.tsx` / `sprite-pet.tsx` / `sprite-manifest.ts` / `sprite-state-map.ts` / `sprite-player.ts`。
+- [ ] 图集 manifest（一列一帧、≤32 帧、多状态行）与资产清单。
 - [ ] 文案库 `copy.ts`。
 - [ ] 真机性能报告 + plugin-store 读写验证。
 - [ ] 文档：SPEC 状态表与本文输入表同步。

@@ -68,15 +68,6 @@ export type PetSaveV1 = {
   settings: PetSettings;
 };
 
-export type RiveTrigger =
-  | "trigger_pet"
-  | "trigger_poke"
-  | "trigger_listen"
-  | "trigger_success"
-  | "trigger_cancel"
-  | "trigger_error"
-  | "trigger_wake";
-
 export type CopyId =
   | "first_meet"
   | "named"
@@ -113,7 +104,6 @@ export type PetEvent =
 export type HapticStyle = "light" | "medium" | "success" | "error";
 
 export type PetEffect =
-  | { type: "rive"; trigger: RiveTrigger }
   | { type: "haptic"; style: HapticStyle }
   | { type: "bubble"; copyId: CopyId; durationMs?: number }
   | { type: "hearts"; count: number };
@@ -144,18 +134,12 @@ export type HeartBurst = {
   count: number;
 };
 
-export type RiveSignal = {
-  id: number;
-  trigger: RiveTrigger;
-};
-
 export type PetStoreState = {
   pet: PetState;
   hydrated: boolean;
   saveStatus: SaveStatus;
   bubble: Bubble | null;
   heartBurst: HeartBurst | null;
-  riveSignal: RiveSignal | null;
   /** AI 联动四态；不落盘，App 重启后从 idle/静态重新开始。 */
   ai: AiStatus;
   /** 状态气泡（asking 常驻 / working 5 秒 / completed 3 秒），与闲聊气泡共享槽位。 */

@@ -11,7 +11,7 @@
 5. 修复首版黑屏（CSS 类名冲突把 `<body>` 隐藏），重新出包并安装；
 6. 真机验证通过：手机 App ↔ 桌面端双向收发消息；
 7. 清理模板残留与未使用插件，前端包管理器从 npm 迁移到 pnpm（`pnpm-lock.yaml` 入库）。
-8. 安装前端重构依赖与脚手架：React 19、Tailwind v4、shadcn/ui（Base UI, base-nova）、Motion、Rive、Zustand；Vite/TS 别名、Biome、Vitest 已配置；旧 UI 尚未迁移。
+8. 安装前端重构依赖与脚手架：React 19、Tailwind v4、shadcn/ui（Base UI, base-nova）、Motion、Zustand；Vite/TS 别名、Biome、Vitest 已配置；旧 UI 尚未迁移。
 9. 落地产品规范与两份 PRD：树形文档（`docs/INDEX.md` + product/standards/prd/engineering）、宠物与麦克风 PRD/SPEC/ACCEPTANCE、项目子智能体与 Skill、`scripts/check-docs.mjs`（2026-10-31）。
 10. 完成前端 Phase 1：React 双 entry（`main.tsx` + `entries/desktop|mobile`）、`desktop`/`mobile` 连接/聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts`；删除旧 `main.ts`/`styles.css`；桌面浏览器与 Realme 真机双向收发通过（2026-10-31）。
 11. 宠物 P0 代码落地：文档预检（麦克风延后/plugin-store）、Tauri plugin-store 2.5.0、状态机/手势/精力亲密度/确定性存档、静态 SVG 舞台、双姿态、命名/设置、宠物主界面 + 聊天入口；84 个前端测试通过，浏览器/无头 Chrome 视觉验证（2026-10-31）。
@@ -65,7 +65,7 @@
 - **触感/时长可配已通过质量门（2026-11-02）**：`haptic` / `disable_webview_haptics`（`app/src-tauri/src/haptics.rs`，decorView `performHapticFeedback` + WebView `setHapticFeedbackEnabled(false)`）通过 `cargo check --target aarch64-linux-android`；前端 `haptics.ts` 收敛为唯一入口、麦克风按下中震、宠物页禁用长按选中；`dimMinutes`（默认 5）与 `keepAwakeHours`（默认 2，0 = 不限）落地并含旧存档迁移；`useKeepAwake(active, maxDurationMs)` 到点释放。`pnpm typecheck / lint / test（174 tests / 28 files）` 全绿；真机触感/变暗/常亮到点待验收。
 - **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
 - **AI 联动代码质量门（2026-11-02）**：`pnpm typecheck / lint / test（291 tests / 36 files）/ build` 全绿；`cargo test --lib` 71 passed（新增 dsh_hook 23 + install 24）；脚本 `node --check` + `vitest run src/dsh-hook` 32 passed；`node scripts/check-docs.mjs` 0 warning、`check-boundaries` 通过。浏览器 mock DOM 核对四态 `data-ai-state`、文案、asking 6s 降速、completed 3s 回 idle、桌面 AI 联动页首次/已连接态。**未做真实 DSH 插件加载/重启**，也未写真实 `~/.dsh`；需要在用户方便时重启 DSH 验收。
-- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、百炼真实账号/Keychain 授权/真机流式/60s、开页不弹 Keychain、用量区间切换/跨天/金额对账、Windows/Linux Keychain。
+- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、百炼真实账号/Keychain 授权/真机流式/60s、开页不弹 Keychain、用量区间切换/跨天/金额对账、Windows/Linux Keychain。
 
 ## 已知问题 / 技术债
 
@@ -91,7 +91,7 @@
 | AI 联动未真机验证 | 本地 DSH 脚本注入、首次重启、四态动作、三音效、杀 DSH/重连待真机回归；P0 只聚合顶层会话，子代理可能提前完成 |
 | AI 联动首次需重启 DSH | profile patch 在启动时加载；desktop profile 默认无 HMR；之后开关只改配置热生效 |
 | AI 联动自由文本提问 | 只认显式提问/审批（ask_user_question/exit_plan_mode/approval/blocked）；模型在回复末尾问一句不算 |
-| Rive 未接入 | 当前静态 SVG + CSS 呼吸；`.riv` 资产与输入映射待补 |
+| 宠物图集只有四态 | 已接 OpenPets schema 2（D57）；睡眠/倾听/摸摸等状态行待美术 |
 | 触感依赖系统设置 | App 主动触感走 `performHapticFeedback`，系统「触摸振动」关闭时不震（尊重用户设置，非 bug）；`navigator.vibrate` 因 APK 未声明 `VIBRATE` 被 WebView 忽略，只作浏览器兜底；iOS 暂无触感 |
 | WebView 默认长按触感 | 已在启动时用 `setHapticFeedbackEnabled(false)` 关闭；若未来需要「长按复制消息」，只恢复功能、不要恢复系统触感 |
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退。也不支持 CSS `translate` 属性（Tailwind v4 的 translate 工具类）：麦克风居中、退出提示、宠物保存提示已改用 `inset-x-0`/`mx-auto`；dialog/sheet/tooltip 仍有 translate 类，真机居中待修 |
@@ -106,8 +106,8 @@
 ## 下一步（按优先级）
 
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
-- [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与 Rive 资产待补。
-- [ ] **宠物真机回归（剩余）**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、Rive 资产；竖屏/设置/存档已通过（2026-10-31）。
+- [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与扩展状态行待补。
+- [ ] **宠物真机回归（剩余）**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行；竖屏/设置/存档已通过（2026-10-31）。
 - [x] **外设麦克风 spike**：WebView 采集、whisper.cpp 本机转写、剪贴板/粘贴降级已跑通。
 - [x] **外设麦克风 P0 代码**：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层；待真机与辅助功能实测。
 - [x] **桌面剪贴板 P1**：文本历史、搜索、置顶、隐私过滤、本地持久化。

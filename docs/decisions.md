@@ -408,3 +408,13 @@
 - 放弃：自动拼 business workspace URL（IDs 格式/地域差异大，容易拼错）；一次展示四张卡（屏幕密度低）；状态每次读 Keychain（授权摩擦）。
 - 代价：业务空间用户需自己拼 URL；`days` 365 条响应略大；旧 `asr.json` 没有 keyPresent 元数据时需重新保存 Key 才能显示“已保存”；Windows/Linux 仍无 Keychain 实现。
 - 规范：`docs/engineering/asr-model.md`、`asr-cloud-bailian.md`、`docs/prd/mic/*`、`docs/setup.md`、`AGENTS.md`、`app/src-tauri/src/asr_config.rs`、`asr_cloud.rs`、`asr_usage.rs`、`desktop/features/models`。
+
+## D57 · 宠物改为 OpenPets schema 2 帧动画图集（复用 deepseek-openpet，下线 SVG/Rive 路线）（2026-11-02）
+
+- 背景：宠物形象没定美术方向；用户提供了可直接播放的 `deepseek-openpet.zip`（OpenPets / Codex schema 2：`pet.json` + `spritesheet`，4 状态 × 16 帧、256px），要求直接复用并压缩为 WebP 内置，协议要「一列一帧、单状态最多 32 帧、兼容 16 帧」，架构预留其它状态行。
+- 决策：删除内联 SVG 画层（`pet-fallback.tsx` / `pet-ai-props.tsx` / `pet-canvas.tsx`）与 Rive 预留（`@rive-app/react-canvas` 依赖移除、状态机里的 `rive` effect 与 `riveSignal` 删除）。新增 `sprite-manifest.ts`（严格校验 schema 2：cols ≤32、帧数 1–32、多行/非连续行、行数以解码图高为准）、`sprite-state-map.ts`（App 语义 → 状态候选链）、`sprite-player.ts`（纯函数帧推进）、`sprite-pet.tsx`（rAF + ResizeObserver + 解码校验 + poster 降级）。资产在 `app/src/mobile/features/pet/assets/openpet/`：`spritesheet.webp`（q85，764KB）、`poster.webp`（14KB）、`pet.json`（原样，`image` 改为 webp）。映射：working→working、asking→attention、completed→done（once + 末帧定格）；sleeping/listening/petting/celebrate 为预留候选，图集没有对应行时自动回落 idle。
+- 原因：复用现成资产最快验证「图集 + 状态机 + 播放」链路；schema 2 是公开格式，四态与 AI 联动一一对应；候选链让以后补状态行只改美术与 manifest，不动渲染器；WebP 比原 PNG 小 81%，绘制成本远低于 Rive。
+- 放弃：继续自绘 SVG 猫与参数化生成图集（`brand/pet-character/` 保留为存档）；Rive 运行时与 `.riv` 资产；把四态写死在渲染器里。
+- 代价：只有四态，摸摸/倾听没有专属表情（爱心/气泡/触感保留）；单帧 256px 在约 500px 舞台是 2 倍放大、边缘偏软；4096×1024 解码约 16.8MB；资产为 DeepSeek 鲸鱼且 zip 无 LICENSE，正式发版前需确认授权或替换。
+- 规范：`app/src/mobile/features/pet/sprite-*.ts(x)`、`assets/openpet/`、`docs/engineering/pet-runtime.md`、`docs/standards/visual.md` §6–§7、`docs/dependency-policy.md`、`docs/prd/pet/SPEC.md` §8。
+

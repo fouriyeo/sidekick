@@ -79,7 +79,7 @@ app/src/
 
 - `beforeBuildCommand` 仍用 `pnpm build`；如果后续要排除另一端 chunk，再引入 `VITE_APP_TARGET` 分平台构建，不在本期增加复杂度。
 - Tauri capabilities 最小权限；新增麦克风/辅助功能相关能力时逐项开，不开 `core:default` 之外的大礼包。
-- CSP 不允许长期为 `null`；上线前收紧，Rive WASM 需显式允许 `wasm-unsafe-eval`。
+- CSP 不允许长期为 `null`；上线前按 Tauri 推荐值收紧。
 - `tauri.conf.json` 的窗口配置只对桌面生效；手机布局不依赖它。
 
 ## 5. 音频边界（P0）

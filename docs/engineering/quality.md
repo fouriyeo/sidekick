@@ -28,7 +28,7 @@ owner: qa
 
 - 单元测试最多、最快；真机测试最少但不可省。
 - 不为 UI 细节写脆弱快照；测状态和可访问性。
-- 外部依赖（Rive、Tauri、ASR、辅助功能）用 adapter/mock 隔离。
+- 外部依赖（Tauri、ASR、辅助功能、图集解码）用 adapter/mock 隔离。
 
 ## 2. 单元测试
 

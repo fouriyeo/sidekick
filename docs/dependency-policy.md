@@ -15,10 +15,10 @@
 
 | 类型 | 例子 | 审查重点 |
 | --- | --- | --- |
-| 运行时依赖 | `react`、`@base-ui/react`、`motion`、`zustand`、`@rive-app/react-canvas` | 许可证、首屏体积、可替换性、安全 |
+| 运行时依赖 | `react`、`@base-ui/react`、`motion`、`zustand` | 许可证、首屏体积、可替换性、安全 |
 | 开发期依赖 | `vite`、`@biomejs/biome`、`vitest` | 维护状态、安全、是否影响构建产物 |
 | 复制型代码 | shadcn/ui 组件 | 来源、版本、许可证头、后续升级方式 |
-| 资源 | 字体、图标、`.riv`、图片 | 授权、体积、是否可商用、是否需署名 |
+| 资源 | 字体、图标、宠物图集（WebP/PNG）、图片 | 授权、体积、是否可商用、是否需署名 |
 
 **基本原则**
 
@@ -68,7 +68,7 @@
 ### 3.6 换得掉吗？
 
 - 网络/存储/传输/动画必须包一层 adapter；feature 只依赖项目内接口。
-- 不把第三方库的类型（如 Rive 节点类型、Base UI 内部类型）暴露到 feature 之外。
+- 不把第三方库的类型（如 Base UI 内部类型、图集播放器内部类型）暴露到 feature 之外。
 - PR 中写一句“如果不用它，替代方案是什么”。
 
 ## 4. 许可证策略
@@ -95,7 +95,7 @@
 - 前端：`pnpm licenses list` + PR 人工确认。
 - Rust：`cargo deny check licenses`；`deny.toml` 在首次引入第三方 crate 时落地。
 - 复制型代码：保留上游版权/许可证；在本文件第 7 节或 PR 中登记来源与版本。
-- 资源：字体/图标/`.riv` 同样按本节审查，不因为是“素材”就跳过。
+- 资源：字体/图标/图集同样按本节审查，不因为是“素材”就跳过。
 
 ## 5. 体积与性能预算
 
@@ -104,8 +104,8 @@
 | 首屏 JS | ≤ 150KB gzip | React + 基础组件 + 连接/聊天壳 |
 | 首屏 CSS | ≤ 40KB gzip | Tailwind 按需输出 |
 | 单次新增依赖 | ≤ 20KB gzip 首屏 | 超过需说明；> 50KB 必须懒加载 |
-| 宠物 chunk | ≤ 600KB JS+WASM | Rive 运行时懒加载 |
-| `.riv` 资源 | ≤ 2MB | 按需加载，不打包进首屏 |
+| 宠物 chunk | ≤ 600KB JS | 图集播放器在 mobile chunk 内 |
+| 宠物图集 | ≤ 1MB WebP | 只进 mobile 按需 chunk；poster ≤ 20KB |
 | 中端安卓首屏 | ≤ 1.5s | Realme 真机 |
 | 动画 | 60fps | 只动 transform/opacity |
 
@@ -134,7 +134,6 @@
 | `tailwindcss` / `@tailwindcss/vite` | 样式 | 构建期 | MIT | 4.3.x |
 | `@base-ui/react` | 无样式 primitive | 首屏（按组件） | MIT | shadcn 的 base |
 | `motion` | UI 动画 | 首屏（按需） | MIT | 14.8.x |
-| `@rive-app/react-canvas` | 宠物动画 | 懒加载 | MIT | 4.38.x；编辑器服务条款另行确认 |
 | `zustand` | 客户端状态 | 首屏 | MIT | 5.0.x |
 | `lucide-react` | 图标 | 首屏（tree-shake） | ISC | 1.65.x |
 | `cn` / `class-variance-authority` | 类名合并 / 变体 | 首屏 | MIT | `cn` 替代 clsx + tailwind-merge |
@@ -157,7 +156,7 @@
 - `tw-animate-css` 是 shadcn 组件的 CSS 过渡类，不是第二套 JS 动画引擎。
 - 复制出来的组件由项目维护，见第 9 节。
 - `qrcode` 如果后续被 React 组件替代，按新增依赖流程走。
-- Rive 运行时是 MIT；Rive 编辑器/云服务的商用条款与运行时许可证分开确认，不要混为一谈。
+- 宠物图集来自外部资产（当前为 DeepSeek 鲸鱼，zip 内无 LICENSE）；仅用于本地实验，正式发版前必须确认授权或替换为自有资产。
 
 ## 8. 禁止与慎用
 

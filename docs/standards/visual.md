@@ -66,35 +66,36 @@ load: on-demand
 
 - 统一 lucide-react，线宽 2，圆角端点；尺寸 20/24/28。
 - 麦克风、取消、设置、重试必须有文字或 `aria-label`，不只靠图标。
-- 不使用 emoji 当图标；宠物表情由 Rive 资产表达，不用 emoji 拼贴。
+- 不使用 emoji 当图标；宠物表情由图集帧表达，不用 emoji 拼贴。
 - 图标颜色跟随文字层级，不单独用彩色图标制造噪音。
 
 ## 6. 宠物美术方向
 
-**风格**：柔软黏土 / 手绘矢量（2.5D 感），圆润、微胖、短肢、大头，表情靠眼睛、眉毛、耳朵、尾巴。
+**风格**：使用内置 OpenPets schema 2 图集资产（当前为蓝白小鲸鱼）；保持圆润、微胖、大眼、短肢，情绪靠帧动画与轮廓表达。
 
 **比例与识别**
 
-- 头部占身体 45–55%；轮廓在 240px 宽时仍可识别。
-- 剪影优先：去掉颜色也能认出是同一只宠物。
-- 眼睛是情绪主载体；嘴部简化；不做拟真毛发。
-- 默认姿态：坐姿，尾巴可见，耳朵有轻微不对称。
+- 剪影优先：去掉颜色也能认出是同一只宠物；轮廓在 240px 宽时仍可识别。
+- 表情由图集行表达；同一状态内至少 8 帧，避免机械抖动。
+- 默认姿态由资产 idle 行决定（坐姿/漂浮均可）。
+- 不在同一阶段内改变外形；换行 = 换状态，不是换宠物。
 - 不穿复杂服装；配饰是 P1，且不影响剪影。
 
 **颜色**
 
-- 本体：暖米/奶油/浅陶土；阴影用低饱和紫灰，不用纯黑。
-- 点缀：珊瑚、琥珀、薄荷（三选二）；与舞台暖光协调。
+- 本体：由资产决定（当前蓝白）；阴影用低饱和紫灰，不用纯黑。
+- UI 点缀继续用舞台令牌里的珊瑚/琥珀/薄荷（三选二）；与资产主色协调。
 - 禁止：荧光色、彩虹渐变、金属质感、写实眼球高光。
 
-**Rive 资产要求**
+**帧动画图集要求**
 
-- 分层：身体、头、耳朵、眼睛、眉毛、嘴、尾巴、光晕分开；便于状态机组合。
-- 网格/骨骼数量控制在中端安卓可 60fps 的范围内；避免大面积网格变形。
-- 状态机输入命名稳定：`mood`、`energy`、`trigger_pet`、`trigger_poke`、`trigger_listen`、`trigger_success`、`trigger_cancel`、`trigger_error`、`trigger_wake`、`is_night`；AI 联动接 Rive 时新增 `ai_state`（idle/working/asking/completed）。
-- 单个 `.riv` ≤2MB；纹理图集 ≤2048；不把音频塞进 `.riv`。
-- 提供静态 SVG/PNG/WebP 降级图；Rive 加载失败时使用（当前实现为内联 SVG + CSS 呼吸）。
-- 动画命名和状态映射写入 [engineering/pet-runtime.md](../engineering/pet-runtime.md)。
+- 格式：OpenPets schema 2（`pet.json` + `spritesheet.webp`），一列一帧。
+- 网格：`cell` 当前 256（可换 512），`cols` ≤32；每状态 1–32 帧，兼容 16 帧。
+- 状态行：`states.*.row` 声明，行数可扩展（sleeping/petting 等），不要求四态齐全。
+- 状态命名不变：`ai_state`（idle/working/asking/completed）与 `is_night` 由 UI 决定候选状态；`trigger_*` 不再作为图集输入（交互反馈由气泡/爱心/触感表达）。
+- 资源：单个图集 ≤1MB WebP；同时提供 `poster.webp`（首帧）用于加载失败降级。
+- 资产登记：来源、授权、体积、sha256 写入 [dependency-policy](../dependency-policy.md) 与 [decisions](../decisions.md)。
+- 映射与新增状态行流程见 [engineering/pet-runtime.md](../engineering/pet-runtime.md) §2–§3。
 
 ## 7. 动效
 
@@ -102,16 +103,16 @@ load: on-demand
 | --- | --- | --- | --- |
 | 微动效 | CSS transition | 按钮按下、颜色、透明度、呼吸灯 | 120–180ms；只动 transform/opacity |
 | 界面 | Motion | 姿态切换、气泡、卡片进出 | 240–320ms；spring 或统一 easing |
-| 角色 | Rive | 宠物 idle、互动、倾听、庆祝、困倦 | 状态机驱动；懒加载；后台暂停 |
+| 角色 | 帧动画图集 | 宠物 idle / 工作 / 等待 / 完成（AI 四态）与后续状态行 | 10fps；后台暂停；减少动效冻结首帧；图集失败降级 poster |
 
 - 时长令牌：120 / 180 / 240 / 320ms；缓动统一 `--ease-out-soft` 或 Motion spring。
 - 宠物 idle：呼吸 3–5 秒循环；眨眼 2–6 秒随机；张望/伸懒腰 4–12 秒随机。
 - 触摸反馈 ≤100ms；开心/庆祝 ≤2 秒；失败关心 ≤1.5 秒。
 - 不做持续全屏粒子；爱心粒子最多 6 个，1 秒内消失。
 - `prefers-reduced-motion: reduce`：去掉随机 idle、弹跳、爱心粒子、闪光；保留状态切换的即时表情（交叉淡入 120ms）与按钮反馈；睡觉/醒来越过动画，直接用静态姿势。
-- 后台/息屏暂停 Rive；回前台恢复并先眨眼一次，避免“突然复活”。
+- 后台/息屏暂停帧播放；回前台恢复，必要时先播一次眨眼帧，避免“突然复活”。
 - **AI 四态动作**：静态（慢呼吸/眨眼/偶尔伸懒腰）、工作中（前倾敲键盘+汗滴/速度线/飞纸）、等你决定（站高+举爪+感叹号+左右找人）、完成（双臂上举+跳+彩纸，3 秒）。四态在轮廓、速度、道具、主色上必须明显不同；减少动效也要保留四套不同静态轮廓。详见 [hook SPEC](../prd/hook/SPEC.md) §2。
-- AI 四态只动 transform/opacity；不新增贴图/emoji；道具用内联 SVG；真机 60fps 与 3 米识别是硬指标。
+- AI 四态由图集行表达（当前 idle/working/attention/done）；只切换背景帧，不新增贴图/emoji；真机 60fps 与 3 米识别是硬指标。
 
 ## 8. 声音
 
@@ -124,7 +125,7 @@ load: on-demand
 
 ## 9. 资源与性能
 
-- 图片 WebP/AVIF；图标 SVG；`.riv` 懒加载，不进首屏。
+- 图片 WebP；图标 SVG；宠物图集只进 mobile 按需 chunk，不进桌面首屏。
 - 不打包中文字体；如需品牌字体，必须子集化并走依赖审批。
 - 宠物舞台 `devicePixelRatio` 上限 2；安卓避免大面积 blur/shadow 动画。
 - 真机 60fps 是硬指标；掉帧就减粒子/网格，不降整体帧率目标。
@@ -133,7 +134,7 @@ load: on-demand
 ## 10. 交接
 
 - 设计令牌落地到 `app/src/shared/styles/tokens.css`；组件只引用语义令牌。
-- Rive 输入/状态映射写入 `engineering/pet-runtime.md`；不在 UI 组件里硬编码节点名。
+- 图集状态映射写入 `engineering/pet-runtime.md`；不在 UI 组件里硬编码状态行/帧号。
 - 新视觉资产登记来源、许可证、体积到 [dependency-policy.md](../dependency-policy.md) 的资源规则。
 - 任何视觉方案变更影响 PRD/SPEC 时，同步更新文档，不只在设计稿里改。
 

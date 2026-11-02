@@ -170,7 +170,7 @@ owner: product
 
 ### 3.5 与麦克风联动（P1，契约保留、未实现）
 
-> 本轮不实现 UI/采集；仅保留状态机 MIC_START/SUCCESS/CANCEL/ERROR 与 Rive trigger，作为下一阶段契约。以下为 P1 目标，AC-22~26 标 P1/未覆盖。
+> 本轮不实现 UI/采集；仅保留状态机 MIC_START/SUCCESS/CANCEL/ERROR，作为下一阶段契约。以下为 P1 目标，AC-22~26 标 P1/未覆盖。
 
 **功能描述**：用户使用外设麦克风时，宠物用表情和动作回应：倾听、得意、关心；但不显示转写内容、不干扰录音。
 
@@ -304,7 +304,7 @@ owner: product
 
 | 阶段 | 预估 | 依赖 | 风险 |
 | --- | --- | --- | --- |
-| 美术方向 + 角色设定 | 4–6 天 | 视觉规范、Rive 资产 | 剪影/表情不满意会返工 |
+| 美术方向 + 角色设定 | 4–6 天 | 视觉规范、帧动画图集 | 剪影/表情不满意会返工 |
 | 舞台与平台壳 | 2–3 天 | 前端平台分目录 | 迁移未完成 |
 | 状态机 + 持久化 | 3 天 | 心情/精力规则 | 时间/存档边界 |
 | 触摸互动 | 2 天 | 手势阈值 | 误触 |
@@ -330,7 +330,7 @@ owner: product
 
 - 已关闭（D28–D35）：姿态方向自动 + 手动覆盖、存档走 plugin-store、麦克风联动延后、声音未接；导出/备份归 P1。屏幕常亮已落地（D46）；自动变暗/最长常亮可配（D52）；触感接管 WebView（D51）。
 - AI 联动 P1 已先做四态；手机回答 AI 提问、文本消息、Claude Code/Qoder 的优先级待定。
-- 美术资产来源（自绘/AI 辅助/外包）与 Rive 编辑器许可。
+- 美术资产来源（自绘/AI 辅助/外部资产）与图集授权。
 - 是否需要“睡眠时间”跟随用户作息，而不是固定 23:00。
 
 ## 10. 质量自检
@@ -352,7 +352,7 @@ owner: product
 
 - [SPEC.md](./SPEC.md)：布局、状态机、手势、文案
 - [ACCEPTANCE.md](./ACCEPTANCE.md)：完整验收
-- [engineering/pet-runtime.md](../../engineering/pet-runtime.md)：Rive/状态机/持久化
+- [engineering/pet-runtime.md](../../engineering/pet-runtime.md)：帧动画图集/状态机/持久化
 - [hook PRD](../hook/PRD.md) / [hook SPEC](../hook/SPEC.md)：AI 联动四态与声音
 - [standards/visual.md](../../standards/visual.md)：视觉与宠物资产
 - [standards/ux.md](../../standards/ux.md)：触控、反馈、安全区

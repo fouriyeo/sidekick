@@ -1,0 +1,326 @@
+{
+  "defaultState": "idle",
+  "grid": {
+    "cell": 256,
+    "cols": 16
+  },
+  "height": 256,
+  "id": "deepseek",
+  "image": "spritesheet.webp",
+  "schema": 2,
+  "states": {
+    "attention": {
+      "frames": [
+        {
+          "col": 0,
+          "duration": 100
+        },
+        {
+          "col": 1,
+          "duration": 100
+        },
+        {
+          "col": 2,
+          "duration": 100
+        },
+        {
+          "col": 3,
+          "duration": 100
+        },
+        {
+          "col": 4,
+          "duration": 100
+        },
+        {
+          "col": 5,
+          "duration": 100
+        },
+        {
+          "col": 6,
+          "duration": 100
+        },
+        {
+          "col": 7,
+          "duration": 100
+        },
+        {
+          "col": 8,
+          "duration": 100
+        },
+        {
+          "col": 9,
+          "duration": 100
+        },
+        {
+          "col": 10,
+          "duration": 100
+        },
+        {
+          "col": 11,
+          "duration": 100
+        },
+        {
+          "col": 12,
+          "duration": 100
+        },
+        {
+          "col": 13,
+          "duration": 100
+        },
+        {
+          "col": 14,
+          "duration": 100
+        },
+        {
+          "col": 15,
+          "duration": 100
+        }
+      ],
+      "row": 2
+    },
+    "done": {
+      "frames": [
+        {
+          "col": 0,
+          "duration": 100
+        },
+        {
+          "col": 1,
+          "duration": 100
+        },
+        {
+          "col": 2,
+          "duration": 100
+        },
+        {
+          "col": 3,
+          "duration": 100
+        },
+        {
+          "col": 4,
+          "duration": 100
+        },
+        {
+          "col": 5,
+          "duration": 100
+        },
+        {
+          "col": 6,
+          "duration": 100
+        },
+        {
+          "col": 7,
+          "duration": 100
+        },
+        {
+          "col": 8,
+          "duration": 100
+        },
+        {
+          "col": 9,
+          "duration": 100
+        },
+        {
+          "col": 10,
+          "duration": 100
+        },
+        {
+          "col": 11,
+          "duration": 100
+        },
+        {
+          "col": 12,
+          "duration": 100
+        },
+        {
+          "col": 13,
+          "duration": 100
+        },
+        {
+          "col": 14,
+          "duration": 100
+        },
+        {
+          "col": 15,
+          "duration": 1500
+        }
+      ],
+      "row": 3,
+      "loop": {
+        "mode": "once"
+      }
+    },
+    "idle": {
+      "frames": [
+        {
+          "col": 0,
+          "duration": 100
+        },
+        {
+          "col": 1,
+          "duration": 100
+        },
+        {
+          "col": 2,
+          "duration": 100
+        },
+        {
+          "col": 3,
+          "duration": 100
+        },
+        {
+          "col": 4,
+          "duration": 100
+        },
+        {
+          "col": 5,
+          "duration": 100
+        },
+        {
+          "col": 6,
+          "duration": 100
+        },
+        {
+          "col": 7,
+          "duration": 100
+        },
+        {
+          "col": 8,
+          "duration": 100
+        },
+        {
+          "col": 9,
+          "duration": 100
+        },
+        {
+          "col": 10,
+          "duration": 100
+        },
+        {
+          "col": 11,
+          "duration": 100
+        },
+        {
+          "col": 12,
+          "duration": 100
+        },
+        {
+          "col": 13,
+          "duration": 100
+        },
+        {
+          "col": 14,
+          "duration": 100
+        },
+        {
+          "col": 15,
+          "duration": 100
+        }
+      ],
+      "row": 0
+    },
+    "working": {
+      "frames": [
+        {
+          "col": 0,
+          "duration": 80
+        },
+        {
+          "col": 1,
+          "duration": 80
+        },
+        {
+          "col": 2,
+          "duration": 80
+        },
+        {
+          "col": 3,
+          "duration": 80
+        },
+        {
+          "col": 4,
+          "duration": 80
+        },
+        {
+          "col": 5,
+          "duration": 80
+        },
+        {
+          "col": 6,
+          "duration": 80
+        },
+        {
+          "col": 7,
+          "duration": 80
+        },
+        {
+          "col": 8,
+          "duration": 80
+        },
+        {
+          "col": 9,
+          "duration": 80
+        },
+        {
+          "col": 10,
+          "duration": 80
+        },
+        {
+          "col": 11,
+          "duration": 80
+        },
+        {
+          "col": 12,
+          "duration": 80
+        },
+        {
+          "col": 13,
+          "duration": 80
+        },
+        {
+          "col": 14,
+          "duration": 80
+        },
+        {
+          "col": 15,
+          "duration": 80
+        }
+      ],
+      "row": 1
+    }
+  },
+  "transitions": [
+    {
+      "from": "*",
+      "on": "task:start",
+      "to": "working"
+    },
+    {
+      "from": "*",
+      "on": "task:need-approval",
+      "to": "attention"
+    },
+    {
+      "from": "attention",
+      "on": "task:approved",
+      "to": "working"
+    },
+    {
+      "from": "*",
+      "on": "task:completed",
+      "to": "done"
+    },
+    {
+      "from": "done",
+      "on": "$finish",
+      "to": "idle"
+    },
+    {
+      "from": "*",
+      "on": "$reset",
+      "to": "idle"
+    }
+  ],
+  "width": 256,
+  "label": "大肥鱼"
+}

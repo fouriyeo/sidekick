@@ -23,7 +23,7 @@ describe("pet state machine", () => {
     const now = at(12);
     const start = reducePet(ready(now), { type: "PET_START", now });
     expect(start.state.phase).toBe("interacting");
-    expect(start.effects).toContainEqual({ type: "rive", trigger: "trigger_pet" });
+    expect(start.effects).toContainEqual({ type: "haptic", style: "light" });
 
     const complete = reducePet(start.state, { type: "PET_PROGRESS", now: now + 3000 });
     expect(complete.state.mood).toBe("happy");
@@ -76,7 +76,6 @@ describe("pet state machine", () => {
     const morning = new Date(2026, 10, 1, 6, 1, 0, 0).getTime();
     const awake = reducePet(sleeping, { type: "TICK", now: morning });
     expect(awake.state.phase).toBe("idle");
-    expect(awake.effects).toContainEqual({ type: "rive", trigger: "trigger_wake" });
   });
 
   it("greets after six hours away", () => {

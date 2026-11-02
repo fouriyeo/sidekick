@@ -41,7 +41,7 @@ children:
 | --- | --- |
 | 某个功能为什么做、优先级 | `standards/ux.md` |
 | 某个按钮在屏幕的坐标 | `prd/*/PRD.md`（PRD 不写视觉布局） |
-| Rive 输入名、协议字段 | `standards/visual.md`（应放 `engineering/`） |
+| 图集状态名、协议字段 | `standards/visual.md`（应放 `engineering/`） |
 | 依赖版本号 | 任何规范文档（以 `pnpm-lock.yaml` / `Cargo.lock` 为准） |
 
 ## 维护
