@@ -243,14 +243,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       data-ai-state={displayAi}
       data-reduced-motion={reducedMotion ? "true" : "false"}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: "radial-gradient(45% 55% at 68% 46%, var(--pet-glow), transparent 72%)",
-        }}
-      />
-
       <div className="absolute top-[calc(env(safe-area-inset-top)+16px)] left-[calc(env(safe-area-inset-left)+24px)] z-30">
         <Button
           type="button"

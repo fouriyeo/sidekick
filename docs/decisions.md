@@ -418,3 +418,10 @@
 - 代价：只有四态，摸摸/倾听没有专属表情（爱心/气泡/触感保留）；单帧 256px 在约 500px 舞台是 2 倍放大、边缘偏软；4096×1024 解码约 16.8MB；资产为 DeepSeek 鲸鱼且 zip 无 LICENSE，正式发版前需确认授权或替换。
 - 规范：`app/src/mobile/features/pet/sprite-*.ts(x)`、`assets/openpet/`、`docs/engineering/pet-runtime.md`、`docs/standards/visual.md` §6–§7、`docs/dependency-policy.md`、`docs/prd/pet/SPEC.md` §8。
 
+## D58 · 宠物舞台去掉背景光晕，纯深色背景省 OLED 功耗（2026-11-02）
+
+- 背景：宠物舞台在宠物身后叠加了一个暖色径向光晕（`--pet-glow`，45%×55% at 68% 46%）。OLED 屏幕上大面积亮像素直接耗电，而宠物页默认屏幕常亮（最长 2 小时），光晕会放大耗电并增加烧屏风险。
+- 决策：删除舞台的 `radial-gradient` 光晕层，移除 `--pet-glow` 与 `--color-pet-glow` 令牌；宠物舞台保持纯 `--pet-bg` 深色背景，只保留宠物本体、气泡与控制区。以后不再往宠物背景加光晕、大渐变或大面积亮色装饰。
+- 原因：OLED 每个像素自发光，功耗与亮度和点亮面积近似成正比；纯黑/深色像素几乎不耗电。省电收益直接体现在常亮场景，同时降低烧屏概率。
+- 代价：舞台少了氛围光，宠物与背景对比更强；靠气泡/按钮自身令牌保证可读性。
+- 规范：`docs/standards/visual.md` §6/§9、`app/src/mobile/features/pet/pet-stage.tsx`、`app/src/shared/styles/tokens.css`、`AGENTS.md`。

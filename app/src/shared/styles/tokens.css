@@ -27,8 +27,8 @@
   --success: #5fd97f;
   --warning: #f0b45c;
 
+  /* 宠物舞台保持纯深色：不加光晕/大面积亮色（OLED 亮像素耗电，见 visual.md §9 / D58）。 */
   --pet-bg: #0f1115;
-  --pet-glow: rgba(240, 180, 92, 0.32);
   --pet-primary: #f0c27a;
   --pet-primary-foreground: #2a241c;
   --pet-coral: #e88a6a;
@@ -78,7 +78,6 @@
     --warning: oklch(0.8 0.14 80);
 
     --pet-bg: oklch(0.17 0.02 260);
-    --pet-glow: oklch(0.82 0.12 75 / 0.32);
     --pet-primary: oklch(0.78 0.13 70);
     --pet-primary-foreground: oklch(0.2 0.03 60);
     --pet-coral: oklch(0.72 0.14 30);
@@ -126,7 +125,6 @@
   --color-warning: var(--warning);
 
   --color-pet-bg: var(--pet-bg);
-  --color-pet-glow: var(--pet-glow);
   --color-pet-primary: var(--pet-primary);
   --color-pet-primary-foreground: var(--pet-primary-foreground);
   --color-pet-coral: var(--pet-coral);
