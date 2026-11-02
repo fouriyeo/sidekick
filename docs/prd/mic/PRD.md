@@ -163,7 +163,7 @@ owner: product
 ### 3.3.1 模型页与用量统计（P0）
 
 - 桌面主导航：聊天 / 剪贴板 / AI 联动 / **模型**；设置 Sheet 只保留自动输入权限与剪贴板。
-- 模型页上半部分配置百炼：完整服务地址（业务空间 URL 自行替换 `{WorkspaceId}` 后粘贴，无独立 ID 字段）、API Key（Keychain）、模型（默认 `qwen-audio-3.1-asr-flash-streaming`）、语言、场景、静音断句、热词、隐私同意、测试连接、保存、清除 Key。
+- 模型页上半部分配置百炼：完整服务地址（业务空间 URL 自行替换 `{WorkspaceId}` 后粘贴，无独立 ID 字段）、API Key（本地 `asr.json` 0600）、模型（默认 `qwen-audio-3.1-asr-flash-streaming`）、语言、场景、静音断句、热词、隐私同意、测试连接、保存、清除 Key。
 - 录音中实时回显中间文本；松手后只插入最终文本一次；失败不回退、不插入。
 - 模型页下半部分用量按区间切换：今天（仅汇总）/近 7 天（按天）/近 1 个月（按天）/近 1 年（按自然月），展示金额、会话、输入/输出/总 Token、音频时长；金额按北京/新加坡价格估算，`priceNote` 明示以百炼账单为准；清空统计只重置本地 `asr_usage.json`。
 - 详细方案见 [engineering/asr-cloud-bailian.md](../../engineering/asr-cloud-bailian.md) 与 [engineering/asr-model.md](../../engineering/asr-model.md)。
@@ -295,7 +295,7 @@ owner: product
 | MIC-AC-11 | 姿态 | 支架/手持 | 切换 | 布局切换；按钮不跳位；不打断录音 |
 | MIC-AC-12 | 隐私 | 使用 30 分钟 | 检查存储/抓包 | 无音频文件；只连配置的百炼；无全文/Key 日志 |
 | MIC-AC-13 | 配置 | 未配置/未同意 | 按麦克风 | 手机明确提示去电脑「模型」页；不建会话 |
-| MIC-AC-14 | 配置 | 模型页 | 测试连接/保存 | 延迟可见；Key 只进 Keychain；保存后可识别 |
+| MIC-AC-14 | 配置 | 模型页 | 测试连接/保存 | 延迟可见；Key 只进本地 `asr.json`；保存后可识别 |
 
 完整用例见 [ACCEPTANCE.md](./ACCEPTANCE.md)。
 

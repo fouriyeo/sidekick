@@ -55,12 +55,15 @@ impl Default for CloudConsent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AsrSettings {
     pub version: u32,
     pub consent_cloud: CloudConsent,
-    /// 是否已保存 API Key。只是“存在性”标记，不存 Key 本身，用于状态展示时避免读钥匙串。
+    /// 百炼 API Key。只存在本机 `asr.json`（0600），不写日志、不经过服务器。
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// 是否已保存 API Key；由 `api_key` 派生，仅用于状态展示。
     #[serde(default)]
     pub key_present: bool,
     /// 掩码后的 Key 尾号，仅用于 UI 提示；不是密钥。
@@ -74,6 +77,7 @@ impl Default for AsrSettings {
         Self {
             version: 1,
             consent_cloud: CloudConsent::default(),
+            api_key: None,
             key_present: false,
             key_hint: None,
             bailian: BailianConfig::default(),
@@ -88,6 +92,20 @@ impl AsrSettings {
         }
         if self.consent_cloud.at == 0 && self.consent_cloud.granted {
             self.consent_cloud.at = now_ms();
+        }
+
+        self.api_key = self
+            .api_key
+            .take()
+            .map(|key| key.trim().to_string())
+            .filter(|key| !key.is_empty());
+        if let Some(key) = self.api_key.as_deref() {
+            self.key_present = true;
+            self.key_hint = Some(mask_key(key));
+        } else {
+            // 旧版本只有 Keychain 元数据时不再回读钥匙串，视为未保存，等用户重新粘贴。
+            self.key_present = false;
+            self.key_hint = None;
         }
 
         let defaults = BailianConfig::default();
@@ -308,6 +326,24 @@ mod tests {
         assert_eq!(mask_key(""), "");
         assert_eq!(mask_key("short"), "••••");
         assert_eq!(mask_key("sk-1234567890abcdef"), "sk-••••cdef");
+    }
+
+    #[test]
+    fn normalizes_local_api_key_and_clears_legacy_metadata() {
+        let mut settings = AsrSettings::default();
+        settings.api_key = Some(" sk-1234567890abcdef ".to_string());
+        settings.normalize();
+        assert_eq!(settings.api_key.as_deref(), Some("sk-1234567890abcdef"));
+        assert!(settings.key_present);
+        assert_eq!(settings.key_hint.as_deref(), Some("sk-••••cdef"));
+
+        // 旧配置只有 Keychain 元数据、没有本地 Key：不再回读钥匙串，按未保存处理。
+        settings.api_key = None;
+        settings.key_present = true;
+        settings.key_hint = Some("sk-••••old".to_string());
+        settings.normalize();
+        assert!(!settings.key_present);
+        assert!(settings.key_hint.is_none());
     }
 
     #[test]

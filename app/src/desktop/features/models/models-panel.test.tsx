@@ -158,6 +158,21 @@ describe("ModelsPanel 百炼配置", () => {
     expect(await screen.findByText("已保存")).toBeInTheDocument();
   });
 
+  it("保存时把新 API Key 提交到本地配置", async () => {
+    await renderPanel();
+
+    fireEvent.change(screen.getByLabelText("API Key"), {
+      target: { value: "sk-local-test-123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() =>
+      expect(tauri.saveCloudAsr).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: "sk-local-test-123456" }),
+      ),
+    );
+  });
+
   it("测试连接成功显示延迟", async () => {
     await renderPanel();
 

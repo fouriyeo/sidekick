@@ -1,7 +1,8 @@
 //! 云端 ASR 配置状态与 Tauri 命令。
 //!
-//! 只保留百炼云端引擎：负责配置读写、Keychain 缓存、状态/掩码、地址解析、
+//! 只保留百炼云端引擎：负责配置读写、本地 Key、状态/掩码、地址解析、
 //! 设置页“测试连接”。真正的 WebSocket 会话在 bailian_asr.rs。
+//! API Key 存在本机 `asr.json`（0600），不再读写 macOS 钥匙串。
 
 use std::sync::{Arc, Mutex};
 
@@ -51,29 +52,13 @@ pub struct CloudStartError {
 
 pub struct AsrCloudState {
     settings: Mutex<AsrSettings>,
-    key_cache: Mutex<Option<Option<String>>>,
 }
 
 impl AsrCloudState {
     pub fn new() -> Self {
         Self {
             settings: Mutex::new(asr_config::load()),
-            key_cache: Mutex::new(None),
         }
-    }
-
-    fn key(&self) -> Result<Option<String>, String> {
-        let mut cache = self.key_cache.lock().unwrap();
-        if let Some(cached) = cache.as_ref() {
-            return Ok(cached.clone());
-        }
-        let key = asr_keychain::get_key()?;
-        *cache = Some(key.clone());
-        Ok(key)
-    }
-
-    fn invalidate_key(&self) {
-        *self.key_cache.lock().unwrap() = None;
     }
 
     fn snapshot(&self) -> AsrSettings {
@@ -109,48 +94,26 @@ impl AsrCloudState {
             .as_deref()
             .map(str::trim)
             .filter(|key| !key.is_empty());
-        let key_changed = input.clear_key || new_key.is_some();
-        // 只有真的要改 Key 且元数据表明已有 Key 时才读钥匙串；
-        // 保存地址/模型、首次保存 Key 都不应触发系统授权弹窗。
-        let previous_key = if key_changed && next.key_present {
-            self.key()?
-        } else {
-            None
-        };
 
         if input.clear_key {
-            asr_keychain::delete_key()?;
-            *self.key_cache.lock().unwrap() = Some(None);
+            next.api_key = None;
             next.key_present = false;
             next.key_hint = None;
+            // 旧版本可能把 Key 放在钥匙串；清除是显式动作，顺手清理旧条目。
+            let _ = asr_keychain::delete_key();
         }
         if let Some(api_key) = new_key {
-            asr_keychain::set_key(api_key)?;
-            // 保存后把 Key 留在内存缓存：本次 App 运行期间首次录音不再触发钥匙串授权。
-            *self.key_cache.lock().unwrap() = Some(Some(api_key.to_string()));
+            next.api_key = Some(api_key.to_string());
             next.key_present = true;
             next.key_hint = Some(asr_config::mask_key(api_key));
         }
 
-        if let Err(error) = self.persist(next) {
-            if key_changed {
-                let rollback = match previous_key.as_deref() {
-                    Some(key) => asr_keychain::set_key(key),
-                    None => asr_keychain::delete_key(),
-                };
-                if let Err(rollback_error) = rollback {
-                    return Err(format!("{error}；回滚系统钥匙串也失败：{rollback_error}"));
-                }
-                self.invalidate_key();
-            }
-            return Err(error);
-        }
+        self.persist(next)?;
         Ok(self.status())
     }
 
     pub fn clear(&self) -> Result<CloudAsrStatus, String> {
-        asr_keychain::delete_key()?;
-        self.invalidate_key();
+        let _ = asr_keychain::delete_key();
         self.persist(AsrSettings::default())?;
         Ok(self.status())
     }
@@ -170,24 +133,16 @@ impl AsrCloudState {
                 message: error,
             });
         }
-        if !settings.key_present {
-            return Err(CloudStartError {
-                code: "cloud_not_configured",
-                message: "还没有保存百炼 API Key".to_string(),
-            });
-        }
-        let key = match self.key() {
-            Ok(Some(key)) => key,
-            Ok(None) => {
+        let key = match settings
+            .api_key
+            .clone()
+            .filter(|key| !key.trim().is_empty())
+        {
+            Some(key) => key,
+            None => {
                 return Err(CloudStartError {
                     code: "cloud_not_configured",
                     message: "还没有保存百炼 API Key".to_string(),
-                });
-            }
-            Err(error) => {
-                return Err(CloudStartError {
-                    code: "cloud_key_unavailable",
-                    message: error,
                 });
             }
         };
@@ -235,13 +190,8 @@ impl AsrCloudState {
             .map(str::trim)
             .filter(|key| !key.is_empty())
             .map(str::to_string)
-            .or_else(|| {
-                if draft.key_present {
-                    self.key().ok().flatten()
-                } else {
-                    None
-                }
-            });
+            .or_else(|| draft.api_key.clone())
+            .filter(|key| !key.trim().is_empty());
         let Some(key) = key else {
             return test_error(
                 "cloud_not_configured",
@@ -285,7 +235,7 @@ fn test_error(code: &'static str, detail: String, model: Option<String>) -> Clou
     }
 }
 
-/// 只读 `asr.json` 的元数据，不访问 Keychain；真正的 Key 在测试连接/录音建会话时才读。
+/// 只读 `asr.json` 的元数据；Key 已存在本地配置里，不再访问 Keychain。
 fn status_from_settings(settings: &AsrSettings) -> CloudAsrStatus {
     CloudAsrStatus {
         configured: settings.consent_cloud.granted
@@ -366,19 +316,34 @@ mod tests {
     }
 
     #[test]
-    fn status_uses_key_metadata_without_keychain() {
+    fn session_config_reads_local_key() {
         let mut settings = AsrSettings::default();
         settings.consent_cloud.granted = true;
-        settings.key_present = true;
-        settings.key_hint = Some("sk-••••cdef".to_string());
+        settings.api_key = Some("sk-local-test-123456".to_string());
+        settings.normalize();
+
+        let state = AsrCloudState {
+            settings: Mutex::new(settings),
+        };
+        let config = state.session_config().unwrap();
+        assert_eq!(config.api_key, "sk-local-test-123456");
+        assert_eq!(config.model, asr_config::DEFAULT_MODEL);
+    }
+
+    #[test]
+    fn status_uses_local_api_key_without_keychain() {
+        let mut settings = AsrSettings::default();
+        settings.consent_cloud.granted = true;
+        settings.api_key = Some("sk-1234567890cdef".to_string());
+        settings.normalize();
 
         let status = status_from_settings(&settings);
         assert!(status.configured);
         assert!(status.has_key);
         assert_eq!(status.key_masked.as_deref(), Some("sk-••••cdef"));
 
-        settings.key_present = false;
-        settings.key_hint = None;
+        settings.api_key = None;
+        settings.normalize();
         let status = status_from_settings(&settings);
         assert!(!status.configured);
         assert!(!status.has_key);

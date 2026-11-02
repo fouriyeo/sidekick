@@ -28,8 +28,8 @@
 22. 修复真机 WebView 103 居中偏移：Tailwind v4 的 `translate` 工具类输出 CSS `translate` 属性，WebView 103 不支持，导致底部居中按钮整体偏右 48px；把麦克风按钮/覆盖层、再按一次退出提示、宠物保存失败提示改为 `inset-x-0 + flex` 或 `left-0 right-0 mx-auto`。真机 CDP 复验按钮中心偏差 0px（2026-11-01）。
 23. 触感接管 + 可配时长：关闭 WebView 默认长按震动（`setHapticFeedbackEnabled(false)`），App 用原生 `performHapticFeedback` 发轻/中/成功/失败触感（不申请 VIBRATE）；麦克风按下即中震；宠物页禁长按选中/复制；自动变暗默认 5 分钟、屏幕常亮最长默认 2 小时，均可在设置页调整（2026-11-02）。
 24. AI 联动（DSH hook）开发：产品/体验/验收文档落地（`docs/prd/hook`）；桌面「AI 联动」页、本地 DSH 脚本注入、Rust 回环桥、`status` 协议、手机四态动作与三音效；首次开启需重启 DSH 一次，之后热开关（2026-11-02，开发中）。
-25. 百炼云端唯一（2026-11-02）：下线本机 whisper（`asr_models.rs`、`whisper-rs`、cmake/libclang 前提、模型下载/选择/删除命令、`models_dir`）；`AsrSettings` 只剩 `{version, consentCloud, bailian}`，旧 `engine/fallbackToLocal` 忽略；未配置/未同意/无 Key 直接 `mic.error`，不再回退本机；协议移除 `engine/model/fallback`，保留 `usage`。
-26. 模型页 + 用量统计（2026-11-02，更新）：桌面主导航新增「模型」（聊天/剪贴板/AI 联动之后），设置 Sheet 只留自动输入权限与剪贴板；百炼配置只填完整服务地址（无业务空间 ID 字段/不传 `X-DashScope-WorkSpace`，占位符未替换会报错）+ Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；用量改为区间切换（今天无明细/7 天/30 天按天/1 年按月），后端返回最近 365 天 `days`；`asr_usage.json`（0600、按本机时区、最多 400 天、原子写、每次 task-finished 有 usage 就记账）；北京/新加坡价格估算。Keychain 只在保存/清除 Key、测试、录音时读，开页用 `keyPresent`/`keyHint` 不弹密码。
+25. 百炼云端唯一（2026-11-02）：下线本机 whisper（`asr_models.rs`、`whisper-rs`、cmake/libclang 前提、模型下载/选择/删除命令、`models_dir`）；`AsrSettings` 只剩 `{version, consentCloud, apiKey, keyPresent, keyHint, bailian}`，旧 `engine/fallbackToLocal` 忽略；未配置/未同意/无 Key 直接 `mic.error`，不再回退本机；协议移除 `engine/model/fallback`，保留 `usage`。
+26. 模型页 + 用量统计（2026-11-02，更新）：桌面主导航新增「模型」（聊天/剪贴板/AI 联动之后），设置 Sheet 只留自动输入权限与剪贴板；百炼配置只填完整服务地址（无业务空间 ID 字段/不传 `X-DashScope-WorkSpace`，占位符未替换会报错）+ Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；用量改为区间切换（今天无明细/7 天/30 天按天/1 年按月），后端返回最近 365 天 `days`；`asr_usage.json`（0600、按本机时区、最多 400 天、原子写、每次 task-finished 有 usage 就记账）；北京/新加坡价格估算。API Key 改存本地 `asr.json`（0600），不再读写 Keychain，开页/测试/录音都不弹密码。
 
 ## 已验证（有实际证据）
 
@@ -65,7 +65,7 @@
 - **触感/时长可配已通过质量门（2026-11-02）**：`haptic` / `disable_webview_haptics`（`app/src-tauri/src/haptics.rs`，decorView `performHapticFeedback` + WebView `setHapticFeedbackEnabled(false)`）通过 `cargo check --target aarch64-linux-android`；前端 `haptics.ts` 收敛为唯一入口、麦克风按下中震、宠物页禁用长按选中；`dimMinutes`（默认 5）与 `keepAwakeHours`（默认 2，0 = 不限）落地并含旧存档迁移；`useKeepAwake(active, maxDurationMs)` 到点释放。`pnpm typecheck / lint / test（174 tests / 28 files）` 全绿；真机触感/变暗/常亮到点待验收。
 - **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
 - **AI 联动代码质量门（2026-11-02）**：`pnpm typecheck / lint / test（291 tests / 36 files）/ build` 全绿；`cargo test --lib` 71 passed（新增 dsh_hook 23 + install 24）；脚本 `node --check` + `vitest run src/dsh-hook` 32 passed；`node scripts/check-docs.mjs` 0 warning、`check-boundaries` 通过。浏览器 mock DOM 核对四态 `data-ai-state`、文案、asking 6s 降速、completed 3s 回 idle、桌面 AI 联动页首次/已连接态。**未做真实 DSH 插件加载/重启**，也未写真实 `~/.dsh`；需要在用户方便时重启 DSH 验收。
-- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、百炼真实账号/Keychain 授权/真机流式/60s、开页不弹 Keychain、用量区间切换/跨天/金额对账、Windows/Linux Keychain。
+- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、百炼真实账号、本地 Key 迁移、真机流式/60s、用量区间切换/跨天/金额对账。
 
 ## 已知问题 / 技术债
 
@@ -80,12 +80,12 @@
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
 | withGlobalTauri | `tauri.conf.json` 仍为 `true`；Phase 4 收紧为 `false` 时需回归 IPC/事件/QR |
 | 麦克风（云端唯一） | 已实现；自动粘贴依赖 macOS 辅助功能，需要用户手动勾选一次；开发二进制重编译后可能需重勾选 |
-| 云端麦克风未完成项 | 真机 60 秒/断连、密码框/窗口切换完整矩阵、辅助功能实测、真实百炼账号/Keychain 授权、用量统计跨天/金额对账 |
-| 百炼云端未真机验收 | 403 已单独映射 `cloud_forbidden`、保存失败已回滚 Key；真实账号/Keychain 授权/流式 partial/60s 仍待验；默认旧域名是否支持该模型需用真实 Key 验证 |
+| 云端麦克风未完成项 | 真机 60 秒/断连、密码框/窗口切换完整矩阵、辅助功能实测、真实百炼账号/本地 Key、用量统计跨天/金额对账 |
+| 百炼云端未真机验收 | 403 已单独映射 `cloud_forbidden`、保存失败已回滚 Key；真实账号/本地 Key/流式 partial/60s 仍待验；默认旧域名是否支持该模型需用真实 Key 验证 |
 | 云端依赖公网/额度 | 断网/限流/额度不足直接失败（无本机回退）；音频仅在用户显式同意后上传 |
 | 旧 models 目录 | `~/Library/Application Support/Sidekick/models/` 可能仍有旧文件，不参与运行，可手动删除 |
 | 用量为估算 | 金额按北京/新加坡公开价估算，未对账百炼账单；`priceNote` 已说明 |
-| Keychain dev 授权 | 开发版重编译可能弹一次 macOS 钥匙串授权；打开模型页不读 Keychain（`keyPresent`/`keyHint`），只有测试/录音才读；Windows/Linux 仍为报错占位 |
+| 本地 Key 明文 | API Key 存 `asr.json`（0600），只靠文件权限保护；不要分享/提交该文件；旧钥匙串 Key 需重新粘贴一次 |
 | 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | AI 联动未真机验证 | 本地 DSH 脚本注入、首次重启、四态动作、三音效、杀 DSH/重连待真机回归；P0 只聚合顶层会话，子代理可能提前完成 |

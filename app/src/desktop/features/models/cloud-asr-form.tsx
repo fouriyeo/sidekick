@@ -161,8 +161,13 @@ export function CloudAsrForm() {
         </div>
         <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
           <KeyRound className="size-3" />
-          只保存在 macOS 钥匙串，不写入配置文件，也不写日志。
+          只保存在本机 asr.json（0600），不写日志、不上传；安全性低于系统钥匙串。
         </p>
+        {!status.hasKey && (
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            之前在系统钥匙串保存过的话，请重新粘贴一次 Key；之后只从本地配置读取，不再弹密码。
+          </p>
+        )}
         <FieldError message={fieldErrors.apiKey} />
       </div>
 

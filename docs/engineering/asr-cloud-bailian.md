@@ -10,7 +10,7 @@ owner: engineering
 # 百炼云端流式语音识别方案
 
 > 回答“云端识别怎么接、音频怎么走、Key 放哪、失败怎么办、费用怎么看”。产品规则见 [mic PRD](../prd/mic/PRD.md)，模型页与用量口径见 [asr-model.md](./asr-model.md)，协议字段见 [protocol-audio.md](./protocol-audio.md)。
-> 状态：代码已实现（2026-11-02）；真实百炼账号、Keychain 授权、真机流式/用量统计验收待补。
+> 状态：代码已实现（2026-11-02）；真实百炼账号、本地 Key、真机流式/用量统计验收待补。
 
 ## 1. 目标、范围与非目标
 
@@ -19,7 +19,7 @@ owner: engineering
 - 语音识别只使用百炼云端，默认模型 `qwen-audio-3.1-asr-flash-streaming`。
 - 手机按住说话时，桌面把 16k PCM16 实时转发到百炼，中间结果实时回显到手机与桌面浮层。
 - 松手后只把最终文本插入一次；失败直接报错，不再回退本机。
-- Key 只在桌面 Keychain；配置文件不出现明文。
+- Key 存在本机 `asr.json`（0600），不写日志、不上传；安全性低于系统钥匙串。
 - 桌面「模型」页配置百炼并查看按天 Token/费用统计。
 
 **范围**
@@ -48,7 +48,7 @@ owner: engineering
 | 手机直连 vs 桌面中转 | 桌面中转 | Key 不下手机；音频、日志、插入集中 |
 | 流式上屏 vs 最终一次插入 | 只回显，最终一次插入 | 中间结果会改字，直接输入会重复/无法撤销 |
 | 每会话新建 WS vs 复用 | 每会话新建 | 隔离/取消简单；连接耗时被音频缓冲掩盖 |
-| Keychain vs 0600 文件 | Keychain | Key 比剪贴板文本更敏感；配置只存非敏感项 |
+| Key 存哪 | 本机 0600 `asr.json` | 避免 Keychain 授权/跨平台差异；代价是明文，靠文件权限保护 |
 | 失败回退本机 vs 直接报错 | 直接报错 | 本机引擎已下线；避免两套识别/插入逻辑 |
 | 用量存本地 vs 只读 API | 本地按天汇总 | 百炼无按日查询；本地足够回答“今天花了多少” |
 
@@ -59,7 +59,7 @@ owner: engineering
   │ mic.start / SK01 音频帧 / mic.stop
   ▼
 桌面 axum WS 服务
-  ├─ 会话开始时读 asr.json + Keychain；未配置直接 mic.error
+  ├─ 会话开始时读 asr.json（含本地 Key）；未配置直接 mic.error
   ├─ 云端会话：PCM 缓冲（等 task-started）→ wss 百炼 → 中间结果
   │     ├─ mic.partial（50ms 节流）→ 手机 + 桌面浮层
   │     └─ task-finished → 记用量 → mic.result（最终文本）→ 剪贴板 + Cmd+V
@@ -161,6 +161,7 @@ idle
 {
   "version": 1,
   "consentCloud": { "granted": false, "at": 0 },
+  "apiKey": null,
   "keyPresent": false,
   "keyHint": null,
   "bailian": {
@@ -176,16 +177,15 @@ idle
 }
 ```
 
-- 只有 `{version, consentCloud, keyPresent, keyHint, bailian}`；旧版 `engine` / `fallbackToLocal` 字段会被忽略。
-- `keyPresent` 只表示是否保存过 Key，`keyHint` 是掩码尾号，用于状态展示，避免每次读 Keychain。
+- 只有 `{version, consentCloud, apiKey, keyPresent, keyHint, bailian}`；旧版 `engine` / `fallbackToLocal` 字段会被忽略。
+- `apiKey` 是明文 Key；`keyPresent`/`keyHint` 由它派生，只用于状态展示，不返回完整 Key。
 - 读取失败/坏 JSON 用默认值并打日志，不阻断启动。
-- 配置里**没有 Key**；Key 只存 Keychain。
+- 文件含明文 Key，权限 `0600`；不要分享 `asr.json`、日志或备份。
 
-### 6.2 Keychain
-
-- Service `dev.sidekick.app.asr.bailian`；Account `default`；macOS 登录钥匙串，不是 Sidekick 文件/服务器。读取时机：打开模型页/`asr_cloud_status()` **不读**，只用 `keyPresent`/`keyHint`；保存新 Key/清除 Key、测试连接（无临时 Key）、真正录音建会话才读，因此开页不弹密码。
-- 使用 `security-framework`；进程内缓存一次，写/删时失效。开发版重编译签名变化可能再次弹 macOS 授权；读取失败回 `cloud_key_unavailable`，不落明文。
-- 跨平台：当前仅 macOS；Windows/Linux 的 `asr_keychain` 是报错占位，需接 Credential Manager / libsecret（或跨平台 keyring）后才支持；桌面目前只发 macOS。
+### 6.2 本地 Key 存储
+- Key 存在 `asr.json` 的 `apiKey` 字段（`0600`）；启动、状态、测试、录音都只读这个文件，**不访问 Keychain**，所以不会再弹系统密码。
+- 旧版本 Keychain 条目不再读取；升级后模型页显示未保存，需要重新粘贴一次 Key。清除 Key 时会顺手尝试删除旧钥匙串条目。
+- 代价：明文 Key 只靠文件权限保护，安全性低于 Keychain；跨平台直接可用（Windows/Linux 无 Keychain 实现也能用）。
 
 ### 6.3 地址解析
 
@@ -197,15 +197,15 @@ idle
 
 | 命令 | 说明 |
 | --- | --- |
-| `asr_cloud_status()` | 是否配置/已保存 Key、同意、完整 `BailianConfig`；内部用 `keyPresent`/`keyHint` 元数据，不读 Keychain、不含完整 Key；对外字段名仍为 `hasKey`/`keyMasked` |
-| `asr_cloud_save({ input })` | `{ config, consent, apiKey?, clearKey? }`；先写 Keychain 再原子写配置，失败回滚 Key |
+| `asr_cloud_status()` | 是否配置/已保存 Key、同意、完整 `BailianConfig`；`hasKey`/`keyMasked` 由本地 `apiKey` 派生，不返回完整 Key |
+| `asr_cloud_save({ input })` | `{ config, consent, apiKey?, clearKey? }`；写入本地 `asr.json`（0600），不再写 Keychain |
 | `asr_cloud_test({ config, apiKey? })` | 草稿或已存配置握手 + 320ms 静音测试；返回 `{ok, latencyMs, model, errorCode, message}` |
-| `asr_cloud_clear()` | 删除 Key、重置配置 |
+| `asr_cloud_clear()` | 删除本地 Key、重置配置；并尝试清理旧钥匙串条目 |
 | `asr_usage_stats()` | 今天/7/30/365 汇总 + 最近 365 天 `days` + `priceNote` |
 | `asr_usage_clear()` | 把 `asr_usage.json` 重置为空汇总并返回空统计 |
 
 - 前端类型在 `app/src/shared/lib/tauri.ts`：`CloudAsrConfig`、`CloudAsrStatus`、`CloudAsrSaveInput`、`CloudAsrTestResult`、`UsageStats`/`UsageSummary`/`UsageDay`。
-- 保存顺序：先记住旧 Key，再写 Keychain（新 Key/清除），最后原子写 `asr.json`；配置落盘失败会用旧 Key 回滚。回滚也失败时错误信息同时说明配置错误与回滚错误。
+- 保存顺序：先更新内存配置（含新 Key/清除），再原子写 `asr.json`（0600）；写失败保留旧配置，不涉及 Keychain 回滚。
 - 测试连接不发送真人音频、不保存草稿。
 
 ## 8. 文本组装、去重与截断
@@ -227,7 +227,7 @@ idle
   - 北京：输入 ¥6/百万、输出 ¥4.5/百万 → 6,000,000 / 4,500,000 微元。
   - 新加坡（含 `dashscope-intl` / `ap-southeast-1` / `singapore`）：输入 ¥6.781/百万、输出 ¥5.104/百万 → 6,781,000 / 5,104,000 微元。
   - 自定义/未知地址按北京估算；`priceNote` 固定说明“估算，以百炼账单为准”。
-- 清空统计只把 `asr_usage.json` 重写为空汇总（文件保留），不影响 `asr.json`/Keychain。
+- 清空统计只把 `asr_usage.json` 重写为空汇总（文件保留），不影响 `asr.json` 与本地 Key。
 
 ## 10. 超时、背压与失败
 
@@ -258,7 +258,7 @@ idle
 | `cloud_timeout` | 连接/等待/收尾超时 | 百炼响应超时，这段没转完。 |
 | `cloud_task_failed` | 其他 task-failed | 百炼识别失败，再说一次试试。 |
 | `cloud_internal` | 云端任务 panic/异常结束 | 云端会话异常结束，请重启 Sidekick 再试。 |
-| `cloud_key_unavailable` | Keychain 读取失败 | 读取不到电脑上保存的密钥，去「模型」页重新保存。 |
+| `cloud_key_unavailable` | 旧 Keychain 迁移失败（很少见） | 去「模型」页重新粘贴一次 API Key。 |
 | `cloud_cancelled` | 内部取消（不面向用户） | 已取消 |
 
 - 错误文案集中在 `app/src/shared/lib/mic-status-copy.ts`。
@@ -268,7 +268,7 @@ idle
 
 - 语音识别只走百炼；使用前必须在模型页勾选“录音会发送到阿里云百炼”。
 - 音频从电脑直达用户配置的百炼地域，不经过 Sidekick 服务器；不落盘、不写历史。
-- Key 只在 Keychain；配置、日志、状态接口、手机端都没有完整 Key。
+- Key 只在本机 `asr.json`（0600）；日志、状态接口、手机端都没有完整 Key。
 - 日志只记模型/连接耗时/首条 partial/收尾耗时/字节数/tokens/错误码；不记文本、音频、Key。
 - 取消/断线立即 abort 云端；不补发、不重试。
 - 用量文件只存每日数字，不含文本/Key/音频。
@@ -281,7 +281,7 @@ idle
 
 - Rust 单测：载荷/地址解析/句子组装/usage/错误映射/价格换算/区间汇总/365 天补零/400 天裁剪。
 - Rust 集成：mock WS 断言 partial、最终文本、`task-started` 前不发音频、usage 入账。
-- 手工/验收：正确/错误 Key、业务空间完整 URL/占位符、断网、Keychain 拒绝、取消、60 秒、统计清空、跨天；见 [ACCEPTANCE.md](../prd/mic/ACCEPTANCE.md) 的 CLOUD-1..12 与 MODEL-1..11。
+- 手工/验收：正确/错误 Key、业务空间完整 URL/占位符、断网、本地 Key 缺失、取消、60 秒、统计清空、跨天；见 [ACCEPTANCE.md](../prd/mic/ACCEPTANCE.md) 的 CLOUD-1..12 与 MODEL-1..11。
 - 指标：首条 partial 延迟、松手→插入 p95、失败率、单次 tokens/费用；只本地记录。
 
 ## 15. 风险与未验证
@@ -289,11 +289,11 @@ idle
 | 风险/待验证 | 影响 | 应对 |
 | --- | --- | --- |
 | 旧域名/业务空间域名支持 | 默认配置不可用 | 用真实 Key 验证；业务空间直接粘贴完整 URL |
-| Keychain 授权/拒绝、保存失败 | 开发体验/半更新 | 失败提示重新保存；配置失败回滚旧 Key |
+| 本地 `asr.json` 读写失败/权限 | Key 丢失或无法保存 | 文件 0600；失败提示重新保存，旧配置保留 |
 | 用量估算与账单不一致 | 费用误读 | `priceNote` 明示估算，以账单为准 |
 
 ## 16. 代码映射
 
-核心：`asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`、`desktop_server.rs`、`desktop_mic.rs`、`transcript.rs`；桌面模型页在 `desktop/features/models`，协议在 `protocol/messages.ts` 与 `shared/lib/tauri.ts`。
+核心：`asr_config.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`、`desktop_server.rs`、`desktop_mic.rs`、`transcript.rs`（`asr_keychain.rs` 仅保留清理旧条目）；桌面模型页在 `desktop/features/models`，协议在 `protocol/messages.ts` 与 `shared/lib/tauri.ts`。
 
 外部参考：[模型页](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-3-1-asr-flash-streaming)、[WebSocket 接入指南](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-websocket-api)、[客户端事件](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-client-events)、[服务端事件](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-server-events)。

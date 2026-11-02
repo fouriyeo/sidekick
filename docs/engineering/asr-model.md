@@ -15,7 +15,7 @@ owner: engineering
 
 - 语音识别**只使用百炼云端**；本机 whisper 已下线，不再下载/选择/删除本机模型。
 - 模型页只填**完整服务地址**、模型、Key 和识别参数；不再有“业务空间 ID”字段，也不发 `X-DashScope-WorkSpace`。
-- 状态展示用 `asr.json` 的 `keyPresent` / `keyHint` 元数据，打开模型页**不读 Keychain、不弹系统密码**；只有保存/清除 Key、测试连接、真正录音建会话时才访问 Keychain。
+- API Key **只存在本机 `asr.json`（0600）**，不再读写系统钥匙串；打开模型页、测试连接、录音都不会弹系统密码。
 - 每次百炼返回 usage 都会按本机日期记入 `asr_usage.json`；模型页用区间切换查看今天/近 7 天/近 1 个月/近 1 年。
 
 ## 2. 模型与默认参数
@@ -53,6 +53,7 @@ owner: engineering
 {
   "version": 1,
   "consentCloud": { "granted": false, "at": 0 },
+  "apiKey": null,
   "keyPresent": false,
   "keyHint": null,
   "bailian": {
@@ -68,8 +69,8 @@ owner: engineering
 }
 ```
 
-- `keyPresent` 只表示“是否保存过 Key”；`keyHint` 是掩码尾号（如 `sk-••••cdef`），不是密钥。
-- Key 只在 macOS 登录钥匙串：service `dev.sidekick.app.asr.bailian`，account `default`；不是 Sidekick 文件，也不经服务器。
+- `apiKey` 是明文 Key；`keyPresent`/`keyHint` 由它派生，`keyHint` 是掩码尾号（如 `sk-••••cdef`），不是密钥。
+- Key 只在本机 `asr.json`（0600），不写日志、不上传；安全性低于系统钥匙串，不要分享该文件/备份。
 - `asr.json`、`asr_usage.json` 均临时文件 + rename 原子写，权限 `0600`。
 - 支持 `SIDEKICK_DATA_DIR` 覆盖数据目录（测试/排障）。
 
@@ -79,10 +80,10 @@ owner: engineering
 
 - 隐私同意：未勾选不能保存。
 - 服务地址：北京/新加坡快捷按钮；业务空间直接粘贴完整 URL（无独立 ID 字段）。
-- API Key：密码框；已保存时只显示掩码；`清除 Key` 删除 Keychain。
+- API Key：密码框；已保存时只显示掩码；`清除 Key` 删除本地 Key（并尝试清理旧钥匙串条目）。
 - 模型、语言、场景、静音断句、热词（高级）。
-- `测试连接`：握手 + 320ms 静音，显示延迟/模型/错误；`保存` 写配置，失败回滚 Key。
-- 打开页面只读 `asr.json` 的 `keyPresent`/`keyHint`，不读 Keychain；只有测试/保存新 Key/录音才读。
+- `测试连接`：握手 + 320ms 静音，显示延迟/模型/错误；`保存` 原子写 `asr.json`。
+- 打开页面只读本地 `asr.json`；不再访问 Keychain，因此不会弹密码。旧版本钥匙串里的 Key 需重新粘贴一次。
 
 设置 Sheet 只保留“自动输入权限 + 剪贴板”，不再有语音识别/本机模型入口。
 
@@ -134,27 +135,25 @@ owner: engineering
 - Token 千分位；音频 <60s 显示秒，否则 `m ss`。
 - 底部固定 `priceNote`；`清空统计` 二次确认（只重置本地统计文件）。
 
-## 6. Keychain 读取时机与跨平台
+## 6. 本地 Key 与跨平台
 
-| 操作 | 是否读 Keychain |
+| 操作 | 读取位置 |
 | --- | --- |
-| 打开模型页 / `asr_cloud_status()` | **否**，只用 `keyPresent`/`keyHint`（对外返回 `hasKey`/`keyMasked`） |
-| 保存配置（不改 Key） | 否 |
-| 保存新 Key | 写（覆盖） |
-| 清除 Key | 删 |
-| 测试连接（未临时输入 Key） | 是 |
-| 真正录音建云端会话 | 是 |
+| 打开模型页 / `asr_cloud_status()` | 只读 `apiKey` 派生的 `keyPresent`/`keyHint`（对外 `hasKey`/`keyMasked`） |
+| 保存配置（不改 Key） | 只读 `asr.json`，不写 Key |
+| 保存新 Key / 清除 Key | 写/清 `asr.json` 的 `apiKey` |
+| 测试连接 / 录音建会话 | 读 `asr.json` 的 `apiKey` |
 
-- 因此进入模型页不会弹系统密码/授权；只有测试或录音时可能弹一次。
-- 开发版每次重编译签名变化可能再次弹 macOS 授权；发布签名后通常只需首次允许。
-- 当前实现仅 macOS：Windows/Linux 的 `asr_keychain` 是报错占位，需分别接 Credential Manager / libsecret（或跨平台 keyring）才能支持；桌面目前只发 macOS。
+- 整个链路不再访问 Keychain，所以不会弹系统密码；macOS/Windows/Linux 行为一致。
+- 代价是明文存储，只靠 `0600` 文件权限保护；不要分享/提交 `asr.json`。
+- 旧版本 Keychain 条目不再读取；清除 Key 时会尝试删除，失败也不影响本地清除。
 
 ## 7. 验收
 
-- 模型页可保存/测试百炼配置；`asr.json` 无 `workspaceId`、无 Key；`keyPresent`/`keyHint` 正确。
-- 打开模型页不弹 Keychain；测试连接/录音才读 Keychain。
+- 模型页可保存/测试百炼配置；`asr.json` 无 `workspaceId`，含 `apiKey`；`keyPresent`/`keyHint` 正确。
+- 打开模型页、测试连接、录音都不弹 Keychain；Key 从本地 `asr.json` 读取。
 - 未替换 `{WorkspaceId}` 的服务地址保存时报“请填写完整服务地址…”。
-- 未配置时手机录音收到 `mic.error(cloud_not_configured|cloud_key_unavailable)`，明确提示去模型页。
+- 未配置时手机录音收到 `mic.error(cloud_not_configured)`，明确提示去模型页重新粘贴 Key。
 - 每次成功/失败但百炼返回 usage 的会话，统计都 +1；今天/7/30/365 数字随测试数据正确变化。
 - 区间切换：今天无明细；7 天 7 行、30 天 30 行、1 年按月约 12 行；缺失日期为 0。
 - 金额按北京/新加坡价格换算正确；清空统计后汇总与明细归零，配置文件与 Key 不受影响。
@@ -164,6 +163,6 @@ owner: engineering
 
 - 不做官方账单同步、按模型/地域分组、导出；统计只是本地估算。
 - 不做多厂商/多套配置；当前单百炼配置。
-- 真实账号、Keychain 授权、跨天/跨时区、金额与百炼账单对账待验收。
-- Windows/Linux Keychain 未实现；目前只支持 macOS。
+- 真实账号、本地 Key 迁移、跨天/跨时区、金额与百炼账单对账待验收。
+- 本地明文 Key 的权限/备份风险需要用户自行注意。
 - 旧 `models/` 目录不自动删除，避免误删用户文件；文档提示可手动清理。

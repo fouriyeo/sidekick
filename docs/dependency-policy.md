@@ -217,7 +217,7 @@
 - 桌面剪贴板/自动输入：`core-graphics` 0.25（Cmd+V）、`macos-accessibility-client` 0.0.2（辅助功能授权提示）、`objc2-app-kit` / `objc2-foundation` 0.3（NSPasteboard 类型过滤）。均为桌面目标，不进安卓包。
 - 本机 whisper 下线（2026-11-02）：移除 `whisper-rs` 0.16 及 cmake/libclang 构建前提；不再有模型下载/选择/删除。旧 `models/` 目录不参与运行。
 - 百炼云端 ASR（2026-11-02，桌面目标；均已存在于 Cargo.lock，无新增版本）：
-  - `security-framework = "3"`：macOS Keychain 存取 API Key；Cargo.lock `3.7.0`，原本已是传递依赖，本次只加直接依赖；MIT/Apache-2.0。
+  - `security-framework = "3"`：仅用于清除旧版 macOS Keychain 条目；API Key 已改存 `asr.json`（0600）。Cargo.lock `3.7.0`，MIT/Apache-2.0。
   - `tokio-tungstenite = "0.24"`（desktop target，features `connect` + `rustls-tls-native-roots`）：百炼 WebSocket；TLS 使用系统根证书，`rustls` / `tokio-rustls` / `rustls-native-certs` 已在 lock；MIT。
   - `uuid = "1"`（v4）：生成 `run-task` 的 `task_id`；Cargo.lock `1.29.0`；MIT/Apache-2.0。
   - `chrono = "0.4"`（features `clock`）：用量按本机时区切天；Cargo.lock `0.4.45`；MIT/Apache-2.0。

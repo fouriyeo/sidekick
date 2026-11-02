@@ -443,3 +443,12 @@
 - 放弃：自研 `flock`/Unix socket 单实例（拿不到「聚焦已有窗口」能力，还要自己处理 Windows）；只做 endpoint 周期自愈（两个实例都活着时仍会互相覆盖，手机连的那个依旧拿不到状态）；hook 脚本多端口回退（token 按实例生成，跨实例会 401，且解决不了发现指向问题）。
 - 代价：新增一个官方插件依赖（Cargo.lock 新增 34 个条目，`zbus` 等只在 Linux 目标编译，macOS 增量编译约 13s）；不能再同时开两个桌面实例对比调试（需要对比时临时移除插件或改 identifier）；手机、网页预览仍可多客户端同时连。
 - 规范：`app/src-tauri/Cargo.toml`、`app/src-tauri/src/lib.rs`、`docs/engineering/dsh-hook.md`、`docs/engineering/lan-discovery.md`、`docs/architecture.md`、`docs/status.md`、`docs/dependency-policy.md`、`AGENTS.md`。
+
+## D61 · API Key 改存本地 asr.json（0600），不再读写 Keychain（2026-11-03）
+
+- 背景：macOS 钥匙串在开发版每次重编译后都可能要求授权/密码，用户反馈模型页和录音链路反复被打断；用户明确提出“直接存成本地 JSON 或应用数据库”。
+- 决策：`AsrSettings` 增加 `apiKey` 字段，与配置一起原子写入 `~/Library/Application Support/Sidekick/asr.json`（0600）；`session_config`/`test`/`status` 都只读本地配置，不再调用 Keychain。`keyPresent`/`keyHint` 由 `apiKey` 派生。旧 Keychain 条目不再读取、不自动迁移；升级后需在模型页重新粘贴一次。清除 Key 时顺手尝试删除旧钥匙串条目。`asr_keychain.rs` 只保留删除旧条目的能力。
+- 原因：彻底消除 macOS 授权弹窗与跨平台 Keychain 实现差异；用户明确接受以文件权限换取便利。文件已 `0600`，不写日志、不上传、状态接口只返回掩码。
+- 放弃：继续用 Keychain（开发体验差、Windows/Linux 无实现）；把 Key 放 Tauri plugin-store/前端 localStorage（更容易被 WebView/前端代码碰到，且不是 Rust 配置的唯一事实源）；自研加密（密钥仍要落地，收益有限）。
+- 代价：明文 Key 只靠 0600 权限保护，安全性低于 Keychain；旧钥匙串 Key 不自动迁移；用户需注意不要分享 `asr.json` 或包含它的备份。
+- 规范：`app/src-tauri/src/asr_config.rs`、`asr_cloud.rs`、`asr_keychain.rs`、`docs/engineering/asr-cloud-bailian.md`、`asr-model.md`、`AGENTS.md`、`desktop/features/models`。
