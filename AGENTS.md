@@ -1,7 +1,7 @@
 # AGENTS.md — Sidekick 项目上下文
 
 > 面向 AI 编码代理：读完这一份就能接手。细节在 `docs/`，协议在 `protocol/`。
-> 最后更新：2026-11-02
+> 最后更新：2026-11-03
 
 ## 1. 项目是什么
 
@@ -97,6 +97,7 @@ sidekick/
 │  ├─ src-tauri/tauri.conf.json   # 产品名 Sidekick / identifier dev.sidekick.app
 │  └─ src-tauri/gen/    # tauri android init 生成（已 gitignore，需重新生成）
 ├─ brand/               # logo 源文件（SVG 图标 / 横版 / App 图标 / favicon）
+├─ release/             # 打包好的安装包（固定文件名，每次覆盖，不建版本号目录）
 ├─ protocol/README.md   # 事件协议 v0
 ├─ docs/
 │  ├─ INDEX.md          # 文档树入口（懒加载）
@@ -120,6 +121,10 @@ sidekick/
   - 等价于：`pnpm tauri android build --debug --target aarch64 --apk`
   - 产物：`app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
 - 安装并启动：`scripts/install-android.sh`（`adb install -r` + `am start`）
+- 打包 release 安装包：`scripts/package-release.sh`（或 `package-desktop.sh` / `package-android.sh`）
+  - 桌面：`pnpm tauri build` → 覆盖 `release/Sidekick-macOS.dmg`（未签名）
+  - 安卓：release 构建 → `zipalign` + `apksigner`（本地密钥）→ 覆盖 `release/Sidekick-Android.apk`
+  - 固定文件名、不建版本号目录；不要提交 debug APK（约 250MB，超 GitHub 100MB 上限）
 - 日志：桌面端看 `tauri dev` 终端；安卓端 `adb logcat`
 - 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm format`（Biome + Vitest；覆盖 entries/desktop/mobile/shared/protocol/test/dev）
 - 重生成全平台图标：`pnpm tauri icon ../brand/logo-appicon.svg`（在 `app/` 内运行；会同步 Android mipmap，`gen/` 清空后需先 `pnpm tauri android init`）
@@ -165,7 +170,8 @@ sidekick/
 - **无线调试两个端口不同**：配对弹窗里的是「配对端口」，无线调试主页的是「连接端口」；`adb pair` 用前者、`adb connect` 用后者。配对码离开弹窗即失效。
 - **adb 出现重复设备**：mDNS 与 IP 两条 transport 同时存在会报 `more than one device/emulator`；`adb disconnect <mDNS 服务名>` 只留 IP 连接。
 - **compileSdk 37**：SDK 包名是 `platforms;android-37.0`，不是 `android-37`。
-- **debug APK 很大**（约 120–240MB，含未剥离调试符号），属正常；release 需签名，体积预计 10–20MB。
+- **debug APK 很大**（约 120–240MB，含未剥离调试符号），属正常；release 需签名，体积预计 10–20MB。`release/` 只放 release 包：debug 包超过 GitHub 单文件 100MB 上限，推不上去。
+- **release/ 固定产物**：`scripts/package-release.sh` 生成 `release/Sidekick-macOS.dmg`（未签名）与 `release/Sidekick-Android.apk`（release + 本地 keystore 签名，首次运行自动生成 `~/.sidekick/android-release.jks`）；文件名固定、每次覆盖，不要改成带版本号。Git 会为每次提交保留二进制历史副本，固定文件名只让工作区保持一份（仓库历史仍随每次推送增长）。
 - **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore；克隆后必须先 `pnpm tauri android init` 再构建。
 - **macOS 防火墙**：第一次接受局域网连接会弹「允许传入网络连接」，必须允许，否则手机连不上。
 - **手机与电脑需同一局域网**；开发机 IP 会变，一般不用手填（自动发现），发现失败时再手动输入桌面窗口显示的地址。
@@ -205,7 +211,7 @@ sidekick/
 - 文档遵循 `docs/standards/documentation.md`：先改“唯一归属”文档，再同步索引；不要一次读完整棵文档树。
 - 平台边界：`mobile` 不 import `desktop`，`desktop` 不 import `mobile`，`shared` 不 import 两者；详见 `docs/standards/engineering.md`。
 - 前端改动遵循 `docs/frontend-architecture.md`；新增/升级依赖遵循 `docs/dependency-policy.md`，新增运行时依赖追加到 `docs/decisions.md`。
-- 不提交构建产物（`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、`.venv`）。
+- 不提交构建产物（`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、`.venv`）；**唯一例外**是 `release/` 下两个固定命名的安装包（`Sidekick-macOS.dmg`、`Sidekick-Android.apk`），它们是要分发/直接下载的成品，每次打包覆盖同名文件、不建版本号目录。
 - **Git**：提交信息**用中文**（`type(scope): 中文摘要` + 中文正文，type/scope 保留英文）；push 前跑完 `typecheck/lint/test/build`、手机端真机验证、文档检查；`force push`/改仓库可见性等不可逆操作先确认；完整规则见 [docs/standards/git.md](docs/standards/git.md)。GitHub 推送已配置（gh 登录 fouriyeo，已 `gh auth setup-git`）。
 
 ## 10. 下一步路线（按优先级）
@@ -219,7 +225,7 @@ sidekick/
 5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
 6. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效 + 会话列表/清除/反问唤起；代码开发中，待真机/隐私验收（2026-11-03）。
 7. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
-8. 配对鉴权 + release 签名/桌面打包/开机自启。
+8. 配对鉴权 + 正式签名/公证/开机自启（`release/` 固定产物与打包脚本已完成 2026-11-03，仍是本地密钥/未签名）。
 9. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
 10. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
 11. P2：系统级虚拟麦克风、云同步/多语言。

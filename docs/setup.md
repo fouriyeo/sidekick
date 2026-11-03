@@ -134,8 +134,18 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 - 自动粘贴需要在「系统设置 → 隐私与安全性 → 辅助功能」勾选当前 `desktop`（开发）或 `Sidekick.app`（正式）。设置页可请求权限、打开系统设置、在 Finder 中定位、重新检测。重新编译开发二进制后可能需要重新勾选。
 - 剪贴板历史在 `~/Library/Application Support/Sidekick/clipboard.json`，权限 `600`；可在桌面「剪贴板」页暂停/清空。
 
-## Release（待办）
+## Release 打包（release/ 固定产物）
 
-- 生成 keystore，在 `gen/android` 中配置 `signingConfigs`；
-- `pnpm tauri android build --apk` 产出正式包；
-- 桌面端 `pnpm tauri build` 打包 .app/.dmg。
+```sh
+scripts/package-release.sh    # 桌面 + 安卓，产物覆盖 release/ 下同名文件
+scripts/package-desktop.sh    # 只打桌面
+scripts/package-android.sh    # 只打安卓
+```
+
+- 桌面：`pnpm tauri build` → `release/Sidekick-macOS.dmg`（arm64，未签名/未公证；Gatekeeper 拦截时右键 → 打开）。
+- 安卓：release 构建（aarch64）→ `zipalign` + `apksigner` → `release/Sidekick-Android.apk`。
+  - 首次运行自动在 `~/.sidekick/` 生成签名密钥 `android-release.jks` 与 `android-signing.properties`（0600）；**备份且不要提交**，密钥丢失后新包无法覆盖安装升级。
+  - 想用已有 keystore：设置 `SIDEKICK_ANDROID_KEYSTORE` / `SIDEKICK_ANDROID_SIGNING_PROPS` 两个环境变量。
+- 文件名固定、每次覆盖、不建版本号目录；`release/` 里只放 release 包（debug APK 约 250MB，超过 GitHub 100MB 单文件上限）。
+- 注意：打包会把安装包写入 Git 历史（每推一次约 +11MB 仓库体积）；仓库明显变大时改走 GitHub Release 或独立分支。
+- 后续：正式签名（Apple Developer 证书 + 公证）、开机自启。

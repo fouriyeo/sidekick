@@ -470,3 +470,12 @@
 - 放弃：保留横屏/平板布局；通过响应式断点兼容横屏；保留 docked/handheld 供未来使用（YAGNI，需要时按 D62 恢复）。
 - 代价：横屏/平板用户看到的是竖屏舞台；旧存档的 `posture` 字段被忽略（不迁移、不报错）；Android 锁竖屏后不能旋转。
 - 规范：`docs/standards/ux.md`、`docs/prd/pet/PRD.md`/`SPEC.md`/`ACCEPTANCE.md`/`INDEX.md`、`docs/product/scope.md`/`users.md`/`INDEX.md`/`metrics.md`、`scripts/patch-android-manifest.mjs`、`app/src/mobile/features/pet/*`、`app/src/mobile/features/mic/mic-button.tsx`、`AGENTS.md`。
+
+## D63 · `release/` 固定文件名安装包提交到 main（2026-11-03）
+
+- 背景：需要一个 `release/` 目录直接存放打包好的电脑端与手机端 App，不按版本号分子目录、每次打包覆盖同名文件，并推送到 `main`；目标是仓库里始终只有最新一份安装包。
+- 决策：`release/` 只放两个固定文件名：`Sidekick-macOS.dmg`（`pnpm tauri build` 产出，未签名/未公证）与 `Sidekick-Android.apk`（release 构建 + `zipalign`/`apksigner`，本地 keystore 签名）；新增 `scripts/package-desktop.sh` / `package-android.sh` / `package-release.sh`，每次构建覆盖同名文件。这两个二进制随提交进 `main`，是「不提交构建产物」规则的唯一例外；Android 签名密钥放 `~/.sidekick/`（0600）不入库。实测 dmg ≈3.8MB、release APK ≈7MB。
+- 原因：固定路径最省事，工作区永远只有一份；release 包体积小，单次推送约 +11MB，可接受。
+- 放弃：版本号目录（会累积多份大文件）；提交 debug APK（约 250MB，超 GitHub 单文件 100MB 上限）；本轮先不用 GitHub Release / 独立分支（用户要求直接进 `main`，仓库变大再迁移）。
+- 代价：Git 按提交保存二进制，**固定文件名不会减小历史体积**——每推一次仓库仍约 +11MB，历史持续增长；后续可迁 GitHub Release 或独立 release 分支（需改推送流程/force push）。
+- 规范：`release/README.md`、`scripts/package-*.sh`、`AGENTS.md` §4/§5/§8/§9、`docs/standards/git.md` §2/§3、`docs/setup.md`。

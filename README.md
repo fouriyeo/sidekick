@@ -15,7 +15,10 @@ cd app && pnpm install
 pnpm tauri dev             # 桌面端
 scripts/build-android.sh   # 构建安卓 debug APK
 scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
+scripts/package-release.sh # 打包桌面 dmg + 安卓 release APK 到 release/
 ```
+
+打好的成品在 [`release/`](release/)：`Sidekick-macOS.dmg`、`Sidekick-Android.apk`。文件名固定、每次打包覆盖，不建版本号目录；重新打包后提交推送即可更新仓库里的安装包（Git 会保留每份历史副本，仓库体积随推送次数增长）。
 
 手机与电脑连同一 Wi-Fi，打开手机 App 会自动找到电脑并连上（单台电脑时零输入）；发现失败可在 App 里手动填桌面窗口显示的地址。桌面窗口默认不常驻大二维码，需要安装 App 时展开「用手机浏览器打开 / 安装 App」扫码即可。
 
@@ -23,9 +26,10 @@ scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
 
 - `app/` — Tauri 项目（桌面端 + 安卓端同一代码库）
 - `brand/` — logo 源文件（SVG 图标、横版组合、App 图标、favicon）
+- `release/` — 打包好的安装包：`Sidekick-macOS.dmg`、`Sidekick-Android.apk`（固定文件名，覆盖更新）
 - `protocol/` — 手机与电脑之间的事件协议
 - `docs/` — 架构、决策、环境、状态、蓝牙预研
-- `scripts/` — 构建/安装脚本
+- `scripts/` — 构建/安装/打包、文档检查脚本
 
 ## 品牌资源
 

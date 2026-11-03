@@ -31,6 +31,7 @@
 25. 百炼云端唯一（2026-11-02）：下线本机 whisper（`asr_models.rs`、`whisper-rs`、cmake/libclang 前提、模型下载/选择/删除命令、`models_dir`）；`AsrSettings` 只剩 `{version, consentCloud, apiKey, keyPresent, keyHint, bailian}`，旧 `engine/fallbackToLocal` 忽略；未配置/未同意/无 Key 直接 `mic.error`，不再回退本机；协议移除 `engine/model/fallback`，保留 `usage`。
 26. 模型页 + 用量统计（2026-11-02，更新）：桌面主导航新增「模型」（聊天/剪贴板/AI 联动之后），设置 Sheet 只留自动输入权限与剪贴板；百炼配置只填完整服务地址（无业务空间 ID 字段/不传 `X-DashScope-WorkSpace`，占位符未替换会报错）+ Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；用量改为区间切换（今天无明细/7 天/30 天按天/1 年按月），后端返回最近 365 天 `days`；`asr_usage.json`（0600、按本机时区、最多 400 天、原子写、每次 task-finished 有 usage 就记账）；北京/新加坡价格估算。API Key 改存本地 `asr.json`（0600），不再读写 Keychain，开页/测试/录音都不弹密码。
 27. AI 会话列表 + 竖屏单布局（2026-11-03，代码完成待真机）：`status` 增加 `sessionList`（id/标题/状态/askKind/时间，最多 50 条）；DSH 插件维护标题/完成时间/列表，Rust 桥清洗广播并随快照下发；手机宠物页上方会话列表（收起 1 条/展开 5 条/新 asking 自动展开/本地清除/完成保留）；点 asking 会话发 `focus.request`，桌面 `open -a "DeepSeek Harness"` 切前台（1.5s 限频，只回错误码）。同时删除方向/双姿态，Android 锁竖屏；麦克风改 56px 高宽胶囊，录音状态并入胶囊。
+28. `release/` 固定文件名安装包 + 打包脚本（2026-11-03，D63）：新增 `release/Sidekick-macOS.dmg`（3.8MB，未签名）与 `release/Sidekick-Android.apk`（7MB，release 构建 + 本地 keystore 签名，`apksigner verify` 通过）；新增 `scripts/package-desktop.sh` / `package-android.sh` / `package-release.sh`，每次打包覆盖同名文件、不建版本号目录，产物随提交进 `main`。
 
 ## 已验证（有实际证据）
 
@@ -117,7 +118,7 @@
 - [ ] **AI 联动（DSH hook）**：桌面 AI 联动页 + 本地脚本注入 + 手机四态/三音效 + 会话列表/清除/反问唤起；代码完成，待真机/隐私验收（2026-11-03）。
 - [ ] **会话列表真机回归**：两会话区分、自动展开、清除重现、focus 切前台/启动/失败提示、断连清空、旧插件兼容（2026-11-03）。
 - [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
-- [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
+- [x] **Release 打包**：`release/` 固定文件名 dmg（3.8MB）+ 签名 APK（7MB）+ 三个打包脚本（2026-11-03，D63）；待正式签名/公证。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
 - [ ] **配对与鉴权**：首次扫码配对、长期密钥、信道加密。
 - [ ] **iOS**：Tauri mobile 初始化，评估后台限制。
@@ -126,6 +127,7 @@
 
 - [ ] `pnpm tauri dev` 正常启动，日志有 `[server] listening on http://0.0.0.0:47810` 与 `[discovery] UDP 响应器已启动`
 - [ ] `scripts/build-android.sh` 成功产出 APK
+- [ ] `scripts/package-release.sh` 产出 `release/` 两个固定文件（< 100MB、APK 已签名、dmg 可挂载）
 - [ ] `scripts/install-android.sh` 安装并启动
 - [ ] 手机打开 App 自动发现电脑并连接（无需输入地址/扫码）
 - [ ] 占用 47810 后桌面服务回退到 47811，手机仍能自动发现并连接
