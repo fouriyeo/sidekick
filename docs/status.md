@@ -78,7 +78,7 @@
 | 自动重连的后台限制 | App 切后台暂停重连（回前台立即重试）；进程被系统杀掉后需重新打开 App 才会再连 |
 | 无持久化 | 消息不落库，重启即清空 |
 | 消息回显 | 广播会把发送者自己的消息也回传（当前 UI 按 `from` 显示） |
-| 包体大 | debug APK 约 120–240MB（含调试符号），未做 release 签名 |
+| 包体 | debug APK 约 120–240MB（含调试符号）；`release/` 放 release 构建 + 本地密钥签名 APK（约 7MB，D63），正式签名/公证待做 |
 | 包名遗留 | `app` 的 npm/Cargo 包名仍为 `desktop`（历史原因，产品名已是 Sidekick） |
 | withGlobalTauri | `tauri.conf.json` 仍为 `true`；Phase 4 收紧为 `false` 时需回归 IPC/事件/QR |
 | 麦克风（云端唯一） | 已实现；自动粘贴依赖 macOS 辅助功能，需要用户手动勾选一次；开发二进制重编译后可能需重勾选 |

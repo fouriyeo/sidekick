@@ -72,5 +72,5 @@ AI 状态：DeepSeek Harness（DSH）→ 本地脚本 → Sidekick 回环桥 →
 - 端口自动回退；桌面端强制单实例（`tauri-plugin-single-instance`），第二个进程只聚焦已有窗口后退出，因此 UDP 47820 与 47815–47819 回环桥都只有一个主人（D60）。
 - 广播可能被路由器/AP 隔离拦截；此时降级为手动地址。
 - 调试客户端会混入在线人数统计。
-- 仅 debug 构建（debug 签名）；release 签名与正式打包未配置。
+- 开发包为 debug 构建（debug 签名）；`release/` 已提供固定命名的 dmg 与 release APK（本地 keystore 签名，未公证，D63），正式签名/公证与自动更新未配置。
 - `app/src-tauri/gen/` 不入库，需 `pnpm tauri android init` 重新生成。
