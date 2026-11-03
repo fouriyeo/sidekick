@@ -2,7 +2,7 @@
 doc: prd/hook/ACCEPTANCE
 title: AI 联动（Hook）验收用例
 status: draft
-updated: 2026-11-02
+updated: 2026-11-04
 load: on-demand
 owner: qa
 related:
@@ -65,7 +65,7 @@ related:
 | HOOK-AC-35 | 录音中 | 收到任何状态 | 静音；不形成回声 |
 | HOOK-AC-36 | App 后台 | 收到任何状态 | 静音；回前台不补播 completed |
 | HOOK-AC-37 | 声音设置页 | 点开工/提问/完成试听 | 分别播放正确音效；开关持久化 |
-| HOOK-AC-38 | 摸摸/倾听中 | 收到 asking/working | 互动优先；结束后恢复 AI；completed 不补播 |
+| HOOK-AC-38 | 倾听中 | 收到 asking/working | 倾听优先；结束后恢复 AI；completed 不补播 |
 
 ## 4. 隐私与回归
 

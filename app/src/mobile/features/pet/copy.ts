@@ -3,9 +3,6 @@ import type { CopyId } from "./types";
 export const COPY: Record<CopyId, string> = {
   first_meet: "你来了。叫我什么？",
   named: "那我就叫{name}。",
-  petting: "嗯，这里。",
-  petting_more: "再摸一下也可以。",
-  poke: "嗯？",
   returning: "回来啦。",
   returning_long: "我刚刚在打盹，没听见你。",
   night: "夜深了，我陪你一会儿。",

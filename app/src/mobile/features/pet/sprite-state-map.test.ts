@@ -12,7 +12,6 @@ describe("spriteStateChain", () => {
 
   it("交互状态优先于 AI 状态", () => {
     expect(spriteStateChain("listening", "working")).toEqual(["listening", "idle"]);
-    expect(spriteStateChain("interacting", "asking")).toEqual(["petting", "happy", "idle"]);
     expect(spriteStateChain("celebrating", "idle")).toEqual(["celebrate", "done", "idle"]);
     expect(spriteStateChain("concerned", "working")).toEqual(["concerned", "idle"]);
     expect(spriteStateChain("away", "working")).toEqual(["away", "idle"]);
@@ -44,13 +43,6 @@ describe("resolveSpriteState", () => {
     expect(
       resolveSpriteState(
         spriteStateChain("sleeping", "idle"),
-        MANIFEST.states,
-        MANIFEST.defaultState,
-      ),
-    ).toBe("idle");
-    expect(
-      resolveSpriteState(
-        spriteStateChain("interacting", "idle"),
         MANIFEST.states,
         MANIFEST.defaultState,
       ),

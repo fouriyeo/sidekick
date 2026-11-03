@@ -1,14 +1,6 @@
 import { cn } from "cn";
 import { MessageCircle, Settings } from "lucide-react";
-import {
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { MicButton } from "@/mobile/features/mic/mic-button";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
@@ -19,7 +11,6 @@ import {
 } from "@/mobile/features/sessions/session-store";
 import { Button } from "@/shared/ui/button";
 import { type AiState, displayStateOf } from "./ai-status";
-import { createGestureRecognizer } from "./gestures";
 import { isNight } from "./mood";
 import { NamePrompt } from "./name-prompt";
 import styles from "./pet.module.css";
@@ -27,7 +18,7 @@ import { PetBubble } from "./pet-bubble";
 import { PetHearts } from "./pet-hearts";
 import { usePetStore } from "./pet-store";
 import { SpritePet } from "./sprite-pet";
-import type { GestureEvent, PetState } from "./types";
+import type { PetState } from "./types";
 import { useReducedMotion } from "./use-reduced-motion";
 
 type PetStageProps = {
@@ -38,7 +29,6 @@ type PetStageProps = {
 
 const STATUS_TEXT: Record<PetState["phase"], string> = {
   idle: "正在陪伴",
-  interacting: "正在陪你玩",
   listening: "正在听",
   celebrating: "很开心",
   concerned: "有点担心",
@@ -52,15 +42,6 @@ const AI_STATUS_TEXT: Record<Exclude<AiState, "idle">, string> = {
   completed: "完成了一件事",
 };
 
-function sampleFromPointer(event: ReactPointerEvent<HTMLDivElement>) {
-  return {
-    pointerId: event.pointerId,
-    x: event.clientX,
-    y: event.clientY,
-    t: Date.now(),
-  };
-}
-
 export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) {
   const pet = usePetStore((state) => state.pet);
   const bubble = usePetStore((state) => state.bubble);
@@ -68,7 +49,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const hydrated = usePetStore((state) => state.hydrated);
   const hydrate = usePetStore((state) => state.hydrate);
   const dispatch = usePetStore((state) => state.dispatch);
-  const handleGesture = usePetStore((state) => state.handleGesture);
   const flush = usePetStore((state) => state.flush);
   const saveStatus = usePetStore((state) => state.saveStatus);
   const ai = usePetStore((state) => state.ai);
@@ -106,7 +86,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const dimMs = Math.max(1, pet.settings.dimMinutes) * 60_000;
   const dimmedRef = useRef(false);
   const dimTimer = useRef<number | null>(null);
-  const recognizer = useRef(createGestureRecognizer());
 
   const markActivity = useCallback(() => {
     if (dimTimer.current !== null) window.clearTimeout(dimTimer.current);
@@ -184,39 +163,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   useEffect(() => {
     if (active && ai.state === "asking") markActivity();
   }, [active, ai.state, markActivity]);
-
-  function emit(events: GestureEvent[]) {
-    for (const event of events) handleGesture(event);
-  }
-
-  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (micBusy) return;
-    if (dimmedRef.current) {
-      markActivity();
-      return;
-    }
-
-    markActivity();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    emit(recognizer.current.down(sampleFromPointer(event)));
-  }
-
-  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (dimmedRef.current) return;
-    emit(recognizer.current.move(sampleFromPointer(event)));
-  }
-
-  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    emit(recognizer.current.up(sampleFromPointer(event)));
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    markActivity();
-  }
-
-  function onPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
-    emit(recognizer.current.cancel(sampleFromPointer(event)));
-  }
 
   const poseStyle = {
     "--pet-x": "0%",
@@ -296,14 +242,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       )}
 
       <div className={styles.petSlot} style={poseStyle}>
-        <div
-          className="relative h-full w-full touch-none select-none"
-          aria-hidden="true"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-        >
+        <div className="relative h-full w-full touch-none select-none" aria-hidden="true">
           <SpritePet
             ai={displayAi}
             phase={pet.phase}

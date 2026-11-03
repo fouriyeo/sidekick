@@ -19,40 +19,6 @@ function ready(now: number): PetState {
 }
 
 describe("pet state machine", () => {
-  it("reaches happy after three seconds of petting", () => {
-    const now = at(12);
-    const start = reducePet(ready(now), { type: "PET_START", now });
-    expect(start.state.phase).toBe("interacting");
-    expect(start.effects).toContainEqual({ type: "haptic", style: "light" });
-
-    const complete = reducePet(start.state, { type: "PET_PROGRESS", now: now + 3000 });
-    expect(complete.state.mood).toBe("happy");
-    expect(complete.state.pettingCompleted).toBe(true);
-    expect(complete.state.affinity).toBe(1);
-    expect(complete.effects).toContainEqual({ type: "hearts", count: 6 });
-  });
-
-  it("returns to idle two seconds after the pointer is released", () => {
-    const now = at(12);
-    const start = reducePet(ready(now), { type: "PET_START", now });
-    const end = reducePet(start.state, { type: "PET_END", now: now + 3200 });
-    expect(end.state.cooldownUntil).toBe(now + 5200);
-
-    const idle = reducePet(end.state, { type: "TICK", now: now + 5300 });
-    expect(idle.state.phase).toBe("idle");
-  });
-
-  it("ignores a second poke during cooldown", () => {
-    const now = at(12);
-    const first = reducePet(ready(now), { type: "POKE", now });
-    expect(first.state.phase).toBe("interacting");
-    expect(first.state.mood).toBe("curious");
-
-    const second = reducePet(first.state, { type: "POKE", now: now + 1000 });
-    expect(second.state.mood).toBe("curious");
-    expect(second.effects).toEqual([{ type: "haptic", style: "light" }]);
-  });
-
   it("falls asleep after five night minutes without interaction", () => {
     const now = at(23);
     const state = {
@@ -109,17 +75,16 @@ describe("pet state machine", () => {
     expect(back.effects.some((effect) => effect.type === "bubble")).toBe(false);
   });
 
-  it("pauses petting when an overlay opens", () => {
+  it("tracks overlay open/close without changing the phase", () => {
     const now = at(12);
-    const poke = reducePet(ready(now), { type: "POKE", now });
-    const overlay = reducePet(poke.state, { type: "OVERLAY", now: now + 100, open: true });
+    const opened = reducePet(ready(now), { type: "OVERLAY", now: now + 100, open: true });
 
-    expect(overlay.state.overlayOpen).toBe(true);
-    expect(overlay.state.phase).toBe("idle");
-    expect(overlay.state.pettingStartedAt).toBeNull();
+    expect(opened.state.overlayOpen).toBe(true);
+    expect(opened.state.phase).toBe("idle");
 
-    const closed = reducePet(overlay.state, { type: "OVERLAY", now: now + 200, open: false });
+    const closed = reducePet(opened.state, { type: "OVERLAY", now: now + 200, open: false });
     expect(closed.state.overlayOpen).toBe(false);
+    expect(closed.state.lastInteractionAt).toBe(now + 200);
   });
 
   it("supports the reserved microphone transitions", () => {

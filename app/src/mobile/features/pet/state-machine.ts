@@ -1,10 +1,7 @@
-import { deriveIdleMood, greetingFor, isNight, recordAffinity, settleEnergy } from "./mood";
+import { deriveIdleMood, greetingFor, isNight, settleEnergy } from "./mood";
 import { defaultPetState, petStateFromSave } from "./persistence";
 import type { PetEffect, PetEvent, PetPhase, PetState } from "./types";
 
-const PETTING_MS = 3000;
-const INTERACTION_HOLD_MS = 2000;
-const POKE_COOLDOWN_MS = 2000;
 const NIGHT_SLEEP_MS = 5 * 60_000;
 const CELEBRATE_MS = 1500;
 const SUCCESS_MS = 2000;
@@ -16,8 +13,6 @@ function idleState(state: PetState, now: number): PetState {
     phase: "idle",
     mood: deriveIdleMood(now, state.energy),
     phaseUntil: 0,
-    pettingStartedAt: null,
-    pettingCompleted: false,
   };
 }
 
@@ -25,10 +20,6 @@ function energyMode(state: PetState): "foreground" | "background" | "sleeping" {
   if (!state.visible) return "background";
   if (state.phase === "sleeping" && !state.overlayOpen) return "sleeping";
   return "foreground";
-}
-
-function canInteract(state: PetState): boolean {
-  return !state.overlayOpen && state.phase !== "listening" && state.visible;
 }
 
 export function reducePet(
@@ -47,9 +38,6 @@ export function reducePet(
         visible: true,
         overlayOpen: false,
         phaseUntil: 0,
-        cooldownUntil: 0,
-        pettingStartedAt: null,
-        pettingCompleted: false,
         resumeMood: null,
         lastSeenAt: now,
       };
@@ -99,8 +87,6 @@ export function reducePet(
           phase: "celebrating",
           mood: "happy",
           phaseUntil: event.now + CELEBRATE_MS,
-          pettingStartedAt: null,
-          pettingCompleted: false,
           resumeMood: null,
           lastInteractionAt: event.now,
         },
@@ -111,115 +97,9 @@ export function reducePet(
       };
     }
 
-    case "PET_START": {
-      if (!canInteract(state)) return { state, effects: [] };
-      if (event.now < state.cooldownUntil) {
-        return { state, effects: [{ type: "haptic", style: "light" }] };
-      }
-
-      const effects: PetEffect[] = [
-        { type: "haptic", style: "light" },
-        { type: "bubble", copyId: "petting" },
-      ];
-
-      return {
-        state: {
-          ...state,
-          phase: "interacting",
-          mood: "curious",
-          pettingStartedAt: event.now,
-          pettingCompleted: false,
-          phaseUntil: event.now + INTERACTION_HOLD_MS,
-          lastInteractionAt: event.now,
-        },
-        effects,
-      };
-    }
-
-    case "PET_PROGRESS": {
-      if (state.phase !== "interacting" || state.pettingStartedAt === null) {
-        return { state, effects: [] };
-      }
-
-      if (!state.pettingCompleted && event.now - state.pettingStartedAt >= PETTING_MS) {
-        const next = recordAffinity(state, event.now);
-        return {
-          state: {
-            ...next,
-            mood: "happy",
-            pettingCompleted: true,
-            phaseUntil: event.now + INTERACTION_HOLD_MS,
-            lastInteractionAt: event.now,
-          },
-          effects: [
-            { type: "hearts", count: 6 },
-            { type: "bubble", copyId: "petting_more" },
-            { type: "haptic", style: "light" },
-          ],
-        };
-      }
-
-      return {
-        state: {
-          ...state,
-          phaseUntil: event.now + INTERACTION_HOLD_MS,
-          lastInteractionAt: event.now,
-        },
-        effects: [],
-      };
-    }
-
-    case "PET_END": {
-      if (state.pettingStartedAt === null) return { state, effects: [] };
-
-      return {
-        state: {
-          ...state,
-          phase: state.phase === "interacting" ? "interacting" : state.phase,
-          phaseUntil: event.now + INTERACTION_HOLD_MS,
-          cooldownUntil: event.now + POKE_COOLDOWN_MS,
-          pettingStartedAt: null,
-          pettingCompleted: false,
-          lastInteractionAt: event.now,
-        },
-        effects: [],
-      };
-    }
-
-    case "POKE": {
-      if (!canInteract(state)) return { state, effects: [] };
-      if (event.now < state.cooldownUntil) {
-        return { state, effects: [{ type: "haptic", style: "light" }] };
-      }
-
-      const effects: PetEffect[] = [
-        { type: "haptic", style: "light" },
-        { type: "bubble", copyId: "poke" },
-      ];
-
-      const next = recordAffinity(state, event.now);
-      return {
-        state: {
-          ...next,
-          phase: "interacting",
-          mood: "curious",
-          pettingStartedAt: null,
-          pettingCompleted: false,
-          phaseUntil: event.now + INTERACTION_HOLD_MS,
-          cooldownUntil: event.now + POKE_COOLDOWN_MS,
-          lastInteractionAt: event.now,
-        },
-        effects,
-      };
-    }
-
     case "TICK": {
       let next = settleEnergy(state, event.now, energyMode(state));
       const effects: PetEffect[] = [];
-
-      if (next.phase === "interacting" && next.phaseUntil > 0 && event.now >= next.phaseUntil) {
-        next = idleState(next, event.now);
-      }
 
       if (
         (next.phase === "celebrating" || next.phase === "concerned") &&
@@ -243,8 +123,6 @@ export function reducePet(
           phase: "sleeping",
           mood: "sleepy",
           phaseUntil: 0,
-          pettingStartedAt: null,
-          pettingCompleted: false,
         };
       } else if (next.phase === "sleeping") {
         next = { ...next, mood: "sleepy" };
@@ -267,10 +145,7 @@ export function reducePet(
           phase: "away",
           visible: false,
           overlayOpen: false,
-          pettingStartedAt: null,
-          pettingCompleted: false,
           phaseUntil: 0,
-          cooldownUntil: 0,
           resumeMood: null,
           lastSeenAt: event.now,
           lastEnergyAt: event.now,
@@ -307,10 +182,7 @@ export function reducePet(
         mood,
         visible: true,
         overlayOpen: false,
-        pettingStartedAt: null,
-        pettingCompleted: false,
         phaseUntil: 0,
-        cooldownUntil: 0,
         resumeMood: null,
         lastSeenAt: event.now,
       };
@@ -322,16 +194,7 @@ export function reducePet(
       if (event.open === state.overlayOpen) return { state, effects: [] };
 
       if (event.open) {
-        return {
-          state: {
-            ...state,
-            ...(state.phase === "interacting" ? idleState(state, event.now) : {}),
-            overlayOpen: true,
-            pettingStartedAt: null,
-            pettingCompleted: false,
-          },
-          effects: [],
-        };
+        return { state: { ...state, overlayOpen: true }, effects: [] };
       }
 
       return {
@@ -352,8 +215,6 @@ export function reducePet(
           phase: "listening",
           mood: "listening",
           resumeMood,
-          pettingStartedAt: null,
-          pettingCompleted: false,
           phaseUntil: 0,
           lastInteractionAt: event.now,
         },

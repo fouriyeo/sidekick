@@ -20,13 +20,6 @@ export function timeOfDay(now: number): TimeOfDay {
   return "night";
 }
 
-export function localDateKey(now: number): string {
-  const date = new Date(now);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
 export function clamp(value: number, min = 0, max = 100): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -62,22 +55,6 @@ export function settleEnergy(
     ...state,
     energy: energyAfterElapsed(state.energy, now - state.lastEnergyAt, mode),
     lastEnergyAt: now,
-  };
-}
-
-export function recordAffinity(state: PetState, now: number): PetState {
-  const date = localDateKey(now);
-  const gainedToday = state.affinityDate === date ? state.affinityGainedToday : 0;
-
-  if (gainedToday >= 5) {
-    return { ...state, affinityDate: date, affinityGainedToday: gainedToday };
-  }
-
-  return {
-    ...state,
-    affinity: clamp(state.affinity + 1),
-    affinityDate: date,
-    affinityGainedToday: gainedToday + 1,
   };
 }
 

@@ -2,7 +2,7 @@
 doc: prd/hook/PRD
 title: AI 联动（Hook）PRD
 status: draft
-updated: 2026-11-02
+updated: 2026-11-04
 load: on-demand
 owner: product
 related:
@@ -127,7 +127,7 @@ related:
 2. 完成脉冲 5 秒内最多一次；完成态只持续 3 秒。
 3. 子代理 P0 不计数、不驱动 asking/completed；已知父 turn 交给后台子代理时可能提前完成。
 4. 只认显式提问/审批；模型在回复末尾问一句不算。
-5. 正在倾听/摸摸时互动优先；结束后恢复 AI 状态；完成态不补播。
+5. 正在倾听时倾听优先；结束后恢复 AI 状态；完成态不补播。
 6. 夜间 AI 状态会唤醒宠物；空闲后恢复睡眠判定。
 
 ### 3.4 手机四态（P0）

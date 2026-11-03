@@ -53,6 +53,16 @@ describe("PetSettings Android 返回键", () => {
   });
 });
 
+describe("PetSettings 触摸互动", () => {
+  it("不再提供摸摸/戳的无障碍替代按钮", () => {
+    render(<PetSettings open onClose={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "摸摸它" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "戳一下" })).not.toBeInTheDocument();
+    expect(screen.queryByText("无障碍互动")).not.toBeInTheDocument();
+  });
+});
+
 describe("PetSettings 声音设置", () => {
   it("提供声音开关、三个试听按钮和限制说明", () => {
     render(<PetSettings open onClose={vi.fn()} />);

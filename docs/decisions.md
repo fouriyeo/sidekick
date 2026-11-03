@@ -479,3 +479,12 @@
 - 放弃：版本号目录（会累积多份大文件）；提交 debug APK（约 250MB，超 GitHub 单文件 100MB 上限）；本轮先不用 GitHub Release / 独立分支（用户要求直接进 `main`，仓库变大再迁移）。
 - 代价：Git 按提交保存二进制，**固定文件名不会减小历史体积**——每推一次仓库仍约 +11MB，历史持续增长；后续可迁 GitHub Release 或独立 release 分支（需改推送流程/force push）。
 - 规范：`release/README.md`、`scripts/package-*.sh`、`AGENTS.md` §4/§5/§8/§9、`docs/standards/git.md` §2/§3、`docs/setup.md`。
+
+## D69 · 下线宠物触摸互动：点击/抚摸不再有任何反应（2026-11-04，取代 D30）
+
+- 背景：用户反馈现在给手机宠物加点击效果太早，这个逻辑之前没考虑清楚；期望点击宠物时「没任何反应，就当没点过」，回到原本只做陪伴与 AI 状态展示的形态。
+- 决策：整体删除手机宠物触摸互动，不只是点击——删除 `gestures.ts` 手势识别、`POKE`/`PET_START`/`PET_PROGRESS`/`PET_END` 事件、`interacting` 状态、`petting*`/`cooldownUntil` 运行时字段、触摸爱心与亲密度（`affinity`/`affinityDate`/`affinityGainedToday`）、`petting*`/`poke` 文案，以及设置页「无障碍互动」（摸摸它/戳一下）。宠物舞台不再挂 pointer 处理器；点击、长按、来回抚摸都不产生气泡/震动/爱心/姿态切换，也不写存档。保留命名完成时的爱心、AI 四态、麦克风反应、睡眠/06:00 醒来、变暗遮罩点击唤醒。存档 version 保持 1，新存档不写 `affinity*`，旧存档多余字段忽略。
+- 原因：交互复杂度与验收成本高于当前阶段价值；未验证的手势阈值容易带来误触和无反馈感；当前重点是 AI 联动与麦克风，宠物先回到「会自己动、会回应 AI/录音」的纯陪伴形态。保留命名爱心是因为它属于命名庆祝流程，不是宠物点击。
+- 放弃：只删点击、保留抚摸（用户已确认全部删除）；保留 dormant 代码待以后恢复（会留下死类型/死测试/文档歧义）；升存档版本或写迁移（旧字段可直接忽略，`version: 1` 不变）；继续保留设置页无障碍替代按钮（入口已无对应行为）。
+- 代价：少了一个情感反馈入口；夜间睡眠不能再靠触摸唤醒，改为 06:00 `TICK` 自动醒/回前台重算；点击宠物不会重置自动变暗计时（变暗遮罩仍可点亮屏幕）；回退到旧版本时旧解析器会把缺失的 `affinity` 记为损坏并回退，但名字/精力/设置仍可恢复。
+- 规范：`app/src/mobile/features/pet/{types,persistence,mood,state-machine,pet-store,pet-stage,pet-settings,sprite-state-map,ai-status,copy}.ts(x)`、`docs/prd/pet/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/product/{principles,scope,users,metrics}.md`、`docs/standards/{ux,visual,engineering}.md`、`docs/engineering/{pet-runtime,quality,dsh-hook}.md`、`docs/prd/hook/{PRD,SPEC,ACCEPTANCE}.md`、`AGENTS.md` §2/§8/§10。

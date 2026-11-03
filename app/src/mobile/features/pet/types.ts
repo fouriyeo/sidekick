@@ -5,14 +5,7 @@ export type Mood = "content" | "happy" | "curious" | "sleepy" | "listening" | "p
 
 export type BaselineMood = "content" | "sleepy";
 
-export type PetPhase =
-  | "idle"
-  | "interacting"
-  | "listening"
-  | "celebrating"
-  | "concerned"
-  | "sleeping"
-  | "away";
+export type PetPhase = "idle" | "listening" | "celebrating" | "concerned" | "sleeping" | "away";
 
 export type ReduceMotionSetting = "system" | "on" | "off";
 
@@ -34,16 +27,10 @@ export type PetState = {
   onboarded: boolean;
   name: string;
   energy: number;
-  affinity: number;
-  affinityDate: string | null;
-  affinityGainedToday: number;
   lastSeenAt: number;
   lastInteractionAt: number;
   lastEnergyAt: number;
-  cooldownUntil: number;
   phaseUntil: number;
-  pettingStartedAt: number | null;
-  pettingCompleted: boolean;
   resumeMood: Mood | null;
   overlayOpen: boolean;
   visible: boolean;
@@ -56,9 +43,6 @@ export type PetSaveV1 = {
   name: string;
   mood: BaselineMood;
   energy: number;
-  affinity: number;
-  affinityDate: string | null;
-  affinityGainedToday: number;
   lastSeenAt: number;
   lastInteractionAt: number;
   lastEnergyAt: number;
@@ -68,9 +52,6 @@ export type PetSaveV1 = {
 export type CopyId =
   | "first_meet"
   | "named"
-  | "petting"
-  | "petting_more"
-  | "poke"
   | "returning"
   | "returning_long"
   | "night"
@@ -84,10 +65,6 @@ export type CopyId =
 export type PetEvent =
   | { type: "BOOT"; now: number; save: PetSaveV1 | null; corrupted?: boolean }
   | { type: "NAME_SET"; now: number; name: string; skipped: boolean }
-  | { type: "PET_START"; now: number }
-  | { type: "PET_PROGRESS"; now: number }
-  | { type: "PET_END"; now: number }
-  | { type: "POKE"; now: number }
   | { type: "TICK"; now: number }
   | { type: "VISIBILITY"; now: number; visible: boolean }
   | { type: "OVERLAY"; now: number; open: boolean }
@@ -103,13 +80,6 @@ export type PetEffect =
   | { type: "haptic"; style: HapticStyle }
   | { type: "bubble"; copyId: CopyId; durationMs?: number }
   | { type: "hearts"; count: number };
-
-export type GestureEvent =
-  | { type: "pet-start"; at: number }
-  | { type: "pet-progress"; at: number; elapsed: number }
-  | { type: "pet-complete"; at: number; duration: number }
-  | { type: "pet-end"; at: number; duration: number }
-  | { type: "poke"; at: number };
 
 export type PetStorage = {
   load: () => Promise<{ raw: unknown | null }>;
@@ -144,7 +114,6 @@ export type PetStoreState = {
   micListening: boolean;
   hydrate: () => Promise<void>;
   dispatch: (event: PetEvent) => void;
-  handleGesture: (event: GestureEvent) => void;
   applyAiStatus: (message: StatusMessage, options?: AiApplyOptions) => void;
   setMicListening: (listening: boolean) => void;
   /** 首次用户手势时解锁 Web Audio（自动播放策略）。 */

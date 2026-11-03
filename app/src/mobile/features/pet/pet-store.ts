@@ -19,7 +19,6 @@ import { createTauriPetStorage } from "./tauri-pet-storage";
 import type {
   Bubble,
   CopyId,
-  GestureEvent,
   HeartBurst,
   PetEffect,
   PetEvent,
@@ -53,7 +52,6 @@ const BUBBLE_COOLDOWN_MS = 30_000;
 const BUBBLE_DURATION_MS = 4000;
 const HEART_DURATION_MS = 1200;
 const SAVE_DEBOUNCE_MS = 500;
-const PETTING_COMPLETE_MS = 3000;
 
 function defaultAppVisible(): boolean {
   if (typeof document === "undefined") return true;
@@ -84,7 +82,6 @@ export function createPetStore(deps: PetStoreDeps) {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
   let heartTimer: ReturnType<typeof setTimeout> | null = null;
-  let pettingTimer: ReturnType<typeof setTimeout> | null = null;
   let completedTimer: ReturnType<typeof setTimeout> | null = null;
   let captionTimer: ReturnType<typeof setTimeout> | null = null;
   let writeChain: Promise<void> = Promise.resolve();
@@ -100,12 +97,6 @@ export function createPetStore(deps: PetStoreDeps) {
         saveTimer = null;
         void get().flush();
       }, SAVE_DEBOUNCE_MS);
-    }
-
-    function clearPettingTimer() {
-      if (pettingTimer === null) return;
-      clearTimeout(pettingTimer);
-      pettingTimer = null;
     }
 
     function clearCompletedTimer() {
@@ -338,38 +329,6 @@ export function createPetStore(deps: PetStoreDeps) {
           if (event.type === "VISIBILITY" && event.visible && ai.state === "asking") {
             updateAiCaption(ai, event.now, true);
             deps.sounds?.startAsking();
-          }
-        }
-      },
-
-      handleGesture: (event: GestureEvent) => {
-        switch (event.type) {
-          case "pet-start": {
-            clearPettingTimer();
-            const startedAt = event.at;
-            get().dispatch({ type: "PET_START", now: startedAt });
-            pettingTimer = setTimeout(() => {
-              pettingTimer = null;
-              get().dispatch({
-                type: "PET_PROGRESS",
-                now: startedAt + PETTING_COMPLETE_MS,
-              });
-            }, PETTING_COMPLETE_MS);
-            break;
-          }
-          case "pet-progress":
-          case "pet-complete": {
-            get().dispatch({ type: "PET_PROGRESS", now: event.at });
-            break;
-          }
-          case "pet-end": {
-            clearPettingTimer();
-            get().dispatch({ type: "PET_END", now: event.at });
-            break;
-          }
-          case "poke": {
-            get().dispatch({ type: "POKE", now: event.at });
-            break;
           }
         }
       },

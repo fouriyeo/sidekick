@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { createIdleAiStatus } from "./ai-status";
@@ -14,7 +14,7 @@ function setStageState(options: {
   ai?: "idle" | "working" | "asking" | "completed";
   caption?: "ai_working" | "ai_asking" | "ai_completed" | null;
   reduceMotion?: "system" | "on" | "off";
-  phase?: "idle" | "listening" | "interacting" | "sleeping";
+  phase?: "idle" | "listening" | "sleeping";
 }) {
   const aiState = options.ai ?? "idle";
   const now = Date.now();
@@ -24,7 +24,7 @@ function setStageState(options: {
     bubble:
       options.caption === null || options.caption === undefined
         ? null
-        : { id: 99, copyId: "poke", text: "嗯？" },
+        : { id: 99, copyId: "returning", text: "回来啦。" },
     ai: {
       ...createIdleAiStatus(),
       state: aiState,
@@ -101,7 +101,7 @@ describe("PetStage AI 联动展示", () => {
     const caption = screen.getByText("等你决定");
     expect(caption).toHaveAttribute("aria-hidden", "true");
     expect(caption).toHaveAttribute("data-ai-caption", "ai_asking");
-    expect(screen.queryByText("嗯？")).not.toBeInTheDocument();
+    expect(screen.queryByText("回来啦。")).not.toBeInTheDocument();
   });
 
   it("aria-live 播报四态文案：正在陪你工作/等你决定/完成了一件事", () => {
@@ -134,6 +134,23 @@ describe("PetStage AI 联动展示", () => {
     const { container } = renderStage();
 
     expect(stageSection(container)).toHaveAttribute("data-reduced-motion", "true");
+  });
+
+  it("点击、长按、滑动宠物都没有任何反应", () => {
+    const { container } = renderStage();
+    const pet = container.querySelector("[data-sprite-state]");
+    if (!(pet instanceof HTMLElement)) throw new Error("宠物未渲染");
+
+    const before = usePetStore.getState();
+    fireEvent.pointerDown(pet, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(pet, { pointerId: 1, clientX: 40, clientY: 10 });
+    fireEvent.pointerMove(pet, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(pet, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(pet);
+
+    expect(usePetStore.getState().pet).toBe(before.pet);
+    expect(usePetStore.getState().bubble).toBeNull();
+    expect(usePetStore.getState().heartBurst).toBeNull();
   });
 });
 

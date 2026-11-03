@@ -2,7 +2,7 @@
 doc: engineering/dsh-hook
 title: DSH Hook 技术方案
 status: active
-updated: 2026-11-02
+updated: 2026-11-04
 load: on-demand
 owner: engineering
 related:
@@ -181,7 +181,7 @@ DSH session/event
 - 协议解析：`parseStatusMessage(raw)`；在 `subscribeChat` 中先于 `parseMessage`，避免进入聊天。
 - `ai-status.ts`：`AiState`、`AiStatus`、`reduceAiStatus`、`displayStateOf`。
   - completed：`remainingMs ?? 3000`；到点回 `resume ?? idle`；新状态取消旧定时器；超过 `remainingMs` 的旧 completed 忽略。
-  - asking 持久；working 覆盖 sleep；away/listening/interacting/celebrating/concerned 优先。
+  - asking 持久；working 覆盖 sleep；away/listening/celebrating/concerned 优先。
 - `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
 - `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音。
 - `pet-fallback.tsx` / `pet.module.css`：`data-ai-state`；短爪层 + 道具层；四套 SVG 表情；只 transform/opacity。
@@ -214,7 +214,7 @@ DSH session/event
 | 双 profile | 只选一个；脚本按 profile 自检 |
 | 手机离线 | 桌面继续记录；重连快照；不补播完成 |
 | 手机后台 | 静音；回前台请求快照；过期完成忽略 |
-| 录音/触摸 | 互动优先；录音静音；完成不补播 |
+| 录音 | 录音静音；完成不补播 |
 | 音效被系统静音/音乐焦点 | P0 不保证；文档提示；P1 原生提示音 |
 | 会话列表过长 | 插件/桥截断 50 条；手机内部滚动，超出的不展示 |
 | 清除后无新事件 | 保持隐藏；重启 App 仍隐藏（本地标记） |

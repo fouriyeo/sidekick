@@ -190,7 +190,7 @@ export function applyAiStatus(
 }
 
 /**
- * 舞台最终展示的 AI 姿态。触摸/录音/即时心情反馈会让 AI 状态暂时让位；
+ * 舞台最终展示的 AI 姿态。录音/即时心情反馈会让 AI 状态暂时让位；
  * asking 会盖过睡觉（夜里也完整叫醒），completed/working 同样会叫醒睡觉状态。
  */
 export function displayStateOf(pet: PetPhase | Pick<PetState, "phase">, ai: AiState): AiState {
@@ -199,7 +199,6 @@ export function displayStateOf(pet: PetPhase | Pick<PetState, "phase">, ai: AiSt
   if (
     phase === "away" ||
     phase === "listening" ||
-    phase === "interacting" ||
     phase === "celebrating" ||
     phase === "concerned"
   ) {

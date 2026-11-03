@@ -21,8 +21,8 @@ describe("pet persistence", () => {
       onboarded: false,
       name: "小跟班",
       energy: 100,
-      affinity: 0,
     });
+    expect(save).not.toHaveProperty("affinity");
     expect(state.onboarded).toBe(false);
     expect(state.settings.dimMinutes).toBe(5);
     expect(state.settings.keepAwakeHours).toBe(2);
@@ -36,9 +36,6 @@ describe("pet persistence", () => {
       phase: "idle" as const,
       mood: "sleepy" as const,
       energy: 42,
-      affinity: 12,
-      affinityDate: "2026-10-31",
-      affinityGainedToday: 3,
     };
 
     const save = petSaveFromState(state, NOW);
@@ -69,7 +66,7 @@ describe("pet persistence", () => {
     expect(parsed.save?.onboarded).toBe(true);
   });
 
-  it("ignores the removed posture field and clamps values", () => {
+  it("ignores removed fields and clamps values", () => {
     const parsed = parsePetSave(
       {
         version: 1,
@@ -83,8 +80,7 @@ describe("pet persistence", () => {
     );
 
     expect(parsed.save?.energy).toBe(100);
-    expect(parsed.save?.affinity).toBe(0);
-    expect(parsed.save?.affinityGainedToday).toBe(5);
+    expect(parsed.save).not.toHaveProperty("affinity");
     expect(parsed.save?.settings).not.toHaveProperty("posture");
     expect(parsed.save?.settings.haptics).toBe(false);
     expect(parsed.save?.settings.keepAwake).toBe(true);

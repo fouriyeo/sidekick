@@ -2,7 +2,7 @@
 doc: INDEX
 title: Sidekick 文档总索引
 status: active
-updated: 2026-11-02
+updated: 2026-11-04
 load: always
 children:
   - product/INDEX.md
@@ -58,7 +58,7 @@ docs/
 │  ├─ INDEX.md
 │  ├─ documentation.md          # 文档树、元数据、懒加载协议
 │  ├─ product.md                # PRD / 优先级 / 变更 / 质量门
-│  ├─ ux.md                     # 竖屏、触控、手势、反馈、无障碍
+│  ├─ ux.md                     # 竖屏、反馈、AI 联动、无障碍
 │  ├─ visual.md                 # 夜灯桌宠视觉、令牌、宠物资产、动效
 │  └─ engineering.md            # 平台边界、依赖方向、DoD
 ├─ prd/                         # 功能需求

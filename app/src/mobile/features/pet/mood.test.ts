@@ -4,8 +4,6 @@ import {
   energyAfterElapsed,
   greetingFor,
   isNight,
-  localDateKey,
-  recordAffinity,
   settleEnergy,
   timeOfDay,
 } from "./mood";
@@ -28,10 +26,6 @@ describe("time helpers", () => {
     expect(timeOfDay(at(20))).toBe("evening");
     expect(timeOfDay(at(23))).toBe("night");
   });
-
-  it("formats a local date key", () => {
-    expect(localDateKey(at(9))).toBe("2026-10-31");
-  });
 });
 
 describe("energy", () => {
@@ -52,29 +46,6 @@ describe("energy", () => {
     const state = { ...defaultPetState(now), energy: 100, lastEnergyAt: now - 30 * MINUTE };
     expect(settleEnergy(state, now, "foreground").energy).toBe(99);
     expect(settleEnergy(state, now, "foreground").lastEnergyAt).toBe(now);
-  });
-});
-
-describe("affinity", () => {
-  it("adds at most five points per local day", () => {
-    let state = { ...defaultPetState(at(10)), affinity: 10 };
-    for (let index = 0; index < 7; index += 1) {
-      state = recordAffinity(state, at(10));
-    }
-
-    expect(state.affinity).toBe(15);
-    expect(state.affinityGainedToday).toBe(5);
-  });
-
-  it("resets the daily counter on the next day", () => {
-    const first = {
-      ...defaultPetState(at(10)),
-      affinityDate: "2026-10-30",
-      affinityGainedToday: 5,
-    };
-    const next = recordAffinity(first, at(10));
-    expect(next.affinityDate).toBe("2026-10-31");
-    expect(next.affinityGainedToday).toBe(1);
   });
 });
 

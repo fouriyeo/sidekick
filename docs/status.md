@@ -1,6 +1,6 @@
 # 项目状态
 
-最后更新：2026-11-03
+最后更新：2026-11-04
 
 ## 时间线（2026-10-31）
 
@@ -32,6 +32,7 @@
 26. 模型页 + 用量统计（2026-11-02，更新）：桌面主导航新增「模型」（聊天/剪贴板/AI 联动之后），设置 Sheet 只留自动输入权限与剪贴板；百炼配置只填完整服务地址（无业务空间 ID 字段/不传 `X-DashScope-WorkSpace`，占位符未替换会报错）+ Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；用量改为区间切换（今天无明细/7 天/30 天按天/1 年按月），后端返回最近 365 天 `days`；`asr_usage.json`（0600、按本机时区、最多 400 天、原子写、每次 task-finished 有 usage 就记账）；北京/新加坡价格估算。API Key 改存本地 `asr.json`（0600），不再读写 Keychain，开页/测试/录音都不弹密码。
 27. AI 会话列表 + 竖屏单布局（2026-11-03，代码完成待真机）：`status` 增加 `sessionList`（id/标题/状态/askKind/时间，最多 50 条）；DSH 插件维护标题/完成时间/列表，Rust 桥清洗广播并随快照下发；手机宠物页上方会话列表（收起 1 条/展开 5 条/新 asking 自动展开/本地清除/完成保留）；点 asking 会话发 `focus.request`，桌面 `open -a "DeepSeek Harness"` 切前台（1.5s 限频，只回错误码）。同时删除方向/双姿态，Android 锁竖屏；麦克风改 56px 高宽胶囊，录音状态并入胶囊。
 28. `release/` 固定文件名安装包 + 打包脚本（2026-11-03，D63）：新增 `release/Sidekick-macOS.dmg`（3.8MB，未签名）与 `release/Sidekick-Android.apk`（7MB，release 构建 + 本地 keystore 签名，`apksigner verify` 通过）；新增 `scripts/package-desktop.sh` / `package-android.sh` / `package-release.sh`，每次打包覆盖同名文件、不建版本号目录，产物随提交进 `main`。
+30. 下线宠物触摸互动（2026-11-04，D69）：删除手势识别、点击/戳/摸摸、触摸爱心、亲密度、`interacting` 状态与设置页「无障碍互动」；手机点击、长按、来回抚摸宠物都不再有任何反应，也不写存档。保留命名完成爱心、AI 四态、麦克风反应、睡眠/06:00 醒来、自动变暗；存档 version 1 不变，旧 `affinity*` 字段忽略。
 
 ## 已验证（有实际证据）
 
@@ -93,7 +94,7 @@
 | AI 联动未真机验证 | 本地 DSH 脚本注入、首次重启、四态动作、三音效、杀 DSH/重连待真机回归；P0 只聚合顶层会话，子代理可能提前完成 |
 | AI 联动首次需重启 DSH | profile patch 在启动时加载；desktop profile 默认无 HMR；之后开关只改配置热生效 |
 | AI 联动自由文本提问 | 只认显式提问/审批（ask_user_question/exit_plan_mode/approval/blocked）；模型在回复末尾问一句不算 |
-| 宠物图集只有四态 | 已接 OpenPets schema 2（D57）；睡眠/倾听/摸摸等状态行待美术 |
+| 宠物图集只有四态 | 已接 OpenPets schema 2（D57）；睡眠/倾听等状态行待美术 |
 | 触感依赖系统设置 | App 主动触感走 `performHapticFeedback`，系统「触摸振动」关闭时不震（尊重用户设置，非 bug）；`navigator.vibrate` 因 APK 未声明 `VIBRATE` 被 WebView 忽略，只作浏览器兜底；iOS 暂无触感 |
 | WebView 默认长按触感 | 已在启动时用 `setHapticFeedbackEnabled(false)` 关闭；若未来需要「长按复制消息」，只恢复功能、不要恢复系统触感 |
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退。也不支持 CSS `translate` 属性（Tailwind v4 的 translate 工具类）：麦克风居中、退出提示、宠物保存提示已改用 `inset-x-0`/`mx-auto`；dialog/sheet/tooltip 仍有 translate 类，真机居中待修 |

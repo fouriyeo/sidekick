@@ -2,7 +2,7 @@
 doc: standards/engineering
 title: 工程规范与平台边界
 status: active
-updated: 2026-10-31
+updated: 2026-11-04
 load: on-demand
 ---
 
@@ -94,7 +94,7 @@ app/src/
 
 - Zustand 按平台/功能拆 store；不引第二套状态库。
 - 连接状态唯一事实源；宠物/麦克风只读它，不各自维护 `online`。
-- 宠物存档走 plugin-store adapter（`sidekick-pet.json`）；只存名字、基线心情、精力、亲密度、`onboarded`、时间戳、设置；不存聊天/音频/转写。
+- 宠物存档走 plugin-store adapter（`sidekick-pet.json`）；只存名字、基线心情、精力、`onboarded`、时间戳、设置；不存聊天/音频/转写。
 - localStorage 只存服务器地址等轻量设置，不存宠物数据。
 - 麦克风不持久化音频/转写；最近一次转写只在内存，重启清空。
 - 本地存储必须带版本号；升级时做迁移，损坏时回退默认并提示。

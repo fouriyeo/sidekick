@@ -69,8 +69,8 @@ describe("pet store", () => {
     const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
     await store.getState().hydrate();
 
-    store.getState().dispatch({ type: "POKE", now });
-    expect(store.getState().bubble?.copyId).toBe("poke");
+    store.getState().dispatch({ type: "NAME_SET", now, name: "小满", skipped: false });
+    expect(store.getState().bubble?.copyId).toBe("named");
 
     vi.advanceTimersByTime(4000);
     expect(store.getState().bubble).toBeNull();
@@ -78,44 +78,36 @@ describe("pet store", () => {
 
   it("rate-limits bubbles within thirty seconds", async () => {
     let now = NOW;
-    const storage = createStorage();
+    const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
+    const storage = createStorage(save);
     const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
     await store.getState().hydrate();
 
-    store.getState().dispatch({ type: "POKE", now });
-    vi.advanceTimersByTime(4000);
-    now += 4000;
-    store.getState().dispatch({ type: "POKE", now });
+    store.getState().dispatch({ type: "MIC_START", now });
+    store.getState().dispatch({ type: "MIC_ERROR", now });
+    expect(store.getState().bubble?.copyId).toBe("mic_error");
 
+    vi.advanceTimersByTime(4000);
+    expect(store.getState().bubble).toBeNull();
+
+    now += 4000;
+    store.getState().dispatch({ type: "MIC_START", now });
+    store.getState().dispatch({ type: "MIC_ERROR", now });
     expect(store.getState().bubble).toBeNull();
   });
 
-  it("completes petting from the pet-start timer when the finger stops", async () => {
+  it("shows naming hearts and clears them after the burst", async () => {
     const now = NOW;
     const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
     const storage = createStorage(save);
     const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
     await store.getState().hydrate();
 
-    store.getState().handleGesture({ type: "pet-start", at: now });
-    vi.advanceTimersByTime(3000);
+    store.getState().dispatch({ type: "NAME_SET", now, name: "小满", skipped: false });
+    expect(store.getState().heartBurst?.count).toBe(3);
 
-    expect(store.getState().pet.mood).toBe("happy");
-    expect(store.getState().heartBurst?.count).toBe(6);
-  });
-
-  it("caps heart bursts at six", async () => {
-    let now = NOW;
-    const storage = createStorage();
-    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
-    await store.getState().hydrate();
-
-    store.getState().handleGesture({ type: "pet-start", at: now });
-    now += 3000;
-    store.getState().handleGesture({ type: "pet-complete", at: now, duration: 3000 });
-
-    expect(store.getState().heartBurst?.count).toBe(6);
-    expect(store.getState().pet.mood).toBe("happy");
+    vi.advanceTimersByTime(1200);
+    expect(store.getState().heartBurst).toBeNull();
   });
 
   it("saves a valid name and rejects an invalid one", async () => {

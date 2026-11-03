@@ -46,7 +46,6 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
   const setName = usePetStore((state) => state.setName);
   const updateSettings = usePetStore((state) => state.updateSettings);
   const resetPet = usePetStore((state) => state.resetPet);
-  const handleGesture = usePetStore((state) => state.handleGesture);
 
   const [draftName, setDraftName] = useState(pet.name);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -108,22 +107,6 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
     await resetPet();
     setResetConfirm(false);
     onClose();
-  }
-
-  function accessiblePoke() {
-    onClose();
-    window.setTimeout(() => handleGesture({ type: "poke", at: Date.now() }), 120);
-  }
-
-  function accessiblePet() {
-    onClose();
-    window.setTimeout(() => {
-      handleGesture({ type: "pet-start", at: Date.now() });
-      window.setTimeout(
-        () => handleGesture({ type: "pet-end", at: Date.now(), duration: 3200 }),
-        3200,
-      );
-    }, 120);
   }
 
   return (
@@ -190,28 +173,6 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
               </p>
             )}
           </section>
-
-          <section className="rounded-2xl border border-border bg-card p-4">
-            <h2 className="text-sm font-semibold">无障碍互动</h2>
-            <div className="mt-3 flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 flex-1"
-                onClick={accessiblePet}
-              >
-                摸摸它
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 flex-1"
-                onClick={accessiblePoke}
-              >
-                戳一下
-              </Button>
-            </div>
-          </section>
         </div>
 
         <div className="space-y-4">
@@ -220,7 +181,7 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
             <div className="mt-3 flex items-center justify-between gap-3">
               <div>
                 <Label htmlFor="pet-haptics">震动</Label>
-                <p className="mt-1 text-xs text-muted-foreground">触摸/录音时轻震</p>
+                <p className="mt-1 text-xs text-muted-foreground">录音与 AI 提醒时轻震</p>
               </div>
               <Switch
                 id="pet-haptics"
