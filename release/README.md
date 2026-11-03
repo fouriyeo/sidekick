@@ -19,6 +19,7 @@ scripts/package-android.sh    # 只打安卓端（release + 自动签名）
 
 - **不加版本号**：文件名固定，避免每次多一个 20MB 的新文件；要区分版本看 git 提交记录。
 - **不放 debug APK**：debug 包约 250MB，超过 GitHub 单文件 100MB 上限；这里只放 release 包。
+- **从 debug 包换过来要先卸载**：这个 APK 用 `~/.sidekick` 的 release 密钥签名，和之前 `scripts/build-android.sh` 的 debug 签名不同，覆盖安装会报签名不一致；先 `adb uninstall dev.sidekick.app` 或手动卸载（App 内数据会清空），之后同一密钥的包可以正常覆盖升级。
 - **Android 签名密钥**：`~/.sidekick/android-release.jks` 与 `~/.sidekick/android-signing.properties`（0600，首次运行脚本自动生成），**不要提交或分享**；密钥丢失后新包无法覆盖安装升级（需要先卸载旧版）。
 - **macOS 未签名/未公证**：正式签名待做；Gatekeeper 拦截时右键 → 打开。
 - **Git 说明**：这两个文件提交在 `main`。Git 对每次提交的二进制都会保留历史副本，固定文件名只保证工作区里只有一份，**推一次仓库历史大约 +11MB**（dmg ≈3.8MB + apk ≈7MB）；仓库明显变大时，改走 GitHub Release 或独立 release 分支。
