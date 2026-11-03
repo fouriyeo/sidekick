@@ -2,7 +2,7 @@
 
 当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
 
-服务端把 `chat` / `system` / `status` / `mic.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
+服务端把 `chat` / `system` / `status` / `mic.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；`focus.request` 由桌面处理并回 `focus.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
 ## 连接
 
@@ -41,7 +41,7 @@
 
 ### status
 
-AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给所有已连接客户端；手机只负责表现，不展示任务内容。
+AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话列表广播给所有已连接客户端；手机用聚合四态驱动宠物，用 `sessionList` 渲染会话列表。
 
 ```json
 {
@@ -52,6 +52,17 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给�
   "sessions": 1,
   "resume": null,
   "remainingMs": null,
+  "sessionList": [
+    {
+      "id": "…",
+      "title": "修复登录",
+      "source": "dsh",
+      "state": "working",
+      "askKind": null,
+      "lastEventAt": 1730000000000,
+      "completedAt": null
+    }
+  ],
   "ts": 1730000000000
 }
 ```
@@ -61,9 +72,17 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给�
 - `sessions`：进行中的顶层会话数；只用于桌面调试，手机不展示数字
 - `resume`：仅 `completed` 有值；桌面 3 秒后补发该状态
 - `remainingMs`：仅 `completed` 有值；手机本地兜底倒计时
+- `sessionList`：可选，最多 50 条；旧版桌面不发送，旧版手机忽略
+  - `id`：DSH 会话 id（不透明，≤128）
+  - `title`：会话标题（单行 ≤80 字符；可空）
+  - `source`：会话来源，P0 恒为 `dsh`
+  - `state`：`idle` / `working` / `asking`；**不含 completed**，完成态由 `completedAt` 推导
+  - `askKind`：`approval` / `question` / null
+  - `lastEventAt`：最近有意义事件的桌面时钟 ms
+  - `completedAt`：最近一轮完成的桌面时钟 ms；null 表示没有完成记录
 - 桌面在收到 completed 后 3 秒主动广播 resume 状态；手机也可用 `remainingMs` 本地回退
-- 新客户端连接、手机发 `status.request` 时，桌面立即回当前快照
-- 旧版手机按未知类型忽略，不影响聊天/麦克风
+- 新客户端连接、手机发 `status.request` 时，桌面立即回当前快照（含 `sessionList`）
+- 旧版手机按未知类型/未知字段忽略，不影响聊天/麦克风
 
 ### status.request
 
@@ -72,6 +91,20 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态广播给�
 ```json
 { "type": "status.request" }
 ```
+
+### focus.request / focus.result
+
+手机点「等你决定」的会话时，请求电脑把对应软件切到前台（没开则启动）。桌面只接受 `source = dsh`，应用名硬编码映射，不接受手机传来的应用路径。
+
+```json
+{ "type": "focus.request", "v": 1, "requestId": "f-…", "source": "dsh", "sessionId": "…", "ts": 1730000000000 }
+{ "type": "focus.result", "v": 1, "requestId": "f-…", "source": "dsh", "ok": true, "error": null, "ts": 1730000000001 }
+```
+
+- `requestId`：手机生成，用于把结果对回发起方
+- `ok=false` 时 `error` 只回错误码：`bad_request` / `rate_limited` / `unsupported_source` / `unsupported_platform` / `launch_failed`
+- 桌面全局 1.5s 限频；不自动回答、不发送任何内容
+
 
 ## 麦克风消息（v1，已实现）
 
@@ -149,6 +182,7 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 - 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`（DSH 本地脚本）、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
+- AI 会话列表：`app/src/mobile/features/sessions/`（列表/清除标记）；focus 唤起：`app/src-tauri/src/app_focus.rs`、`desktop_server.rs`、`mobile_client.rs`
 - 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）
 
 ## 规划中的事件（AI 接入阶段）

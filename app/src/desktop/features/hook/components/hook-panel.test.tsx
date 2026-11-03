@@ -208,7 +208,7 @@ describe("HookPanel", () => {
     expect(screen.getByText("最近事件")).toBeInTheDocument();
     expect(screen.getByText("状态怎么映射")).toBeInTheDocument();
     expect(screen.getByText("DSH")).toBeInTheDocument();
-    expect(screen.getByText(/不含提示词、对话内容或文件路径/)).toBeInTheDocument();
+    expect(screen.getByText(/不含提示词、回复、工具参数或文件路径/)).toBeInTheDocument();
     expect(screen.getByText("/Users/test/.dsh/sidekick/config.json")).toBeInTheDocument();
     expect(screen.getByText("后续版本")).toBeInTheDocument();
   });

@@ -8,6 +8,7 @@ import {
   isStatusState,
   type MicStopReason,
   type ServerInfo,
+  type SessionSource,
   type StatusState,
 } from "@/protocol/messages";
 
@@ -163,6 +164,7 @@ const COMMANDS = {
   clipboardClear: "clipboard_clear",
   clipboardSetEnabled: "clipboard_set_enabled",
   sendStatusRequest: "send_status_request",
+  sendFocusRequest: "send_focus_request",
   dshHookStatus: "dsh_hook_status",
   dshHookInstall: "dsh_hook_install",
   dshHookSetEnabled: "dsh_hook_set_enabled",
@@ -385,6 +387,15 @@ export function setClipboardEnabled(enabled: boolean): Promise<ClipboardSnapshot
 /** 手机端请求一次当前 AI 状态快照；桌面端收到后回一条 status（广播）。 */
 export function sendStatusRequest(): Promise<void> {
   return invoke<void>(COMMANDS.sendStatusRequest);
+}
+
+/** 手机端请求电脑把某个会话对应的软件切到前台；结果走 focus.result 事件。 */
+export function sendFocusRequest(
+  source: SessionSource,
+  sessionId: string,
+  requestId: string,
+): Promise<void> {
+  return invoke<void>(COMMANDS.sendFocusRequest, { source, sessionId, requestId });
 }
 
 export function getDshHookStatus(): Promise<DshHookStatus> {

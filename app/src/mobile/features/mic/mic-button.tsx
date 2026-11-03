@@ -11,7 +11,6 @@ import {
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { createHaptics } from "@/mobile/features/pet/haptics";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
-import type { Posture } from "@/mobile/features/pet/types";
 import { useReducedMotion } from "@/mobile/features/pet/use-reduced-motion";
 import type { MicStopReason } from "@/protocol/messages";
 import {
@@ -34,7 +33,6 @@ import { VoiceWaveform } from "./voice-waveform";
 
 type MicButtonProps = {
   active: boolean;
-  posture: Posture;
   onOpenConnection?: () => void;
 };
 
@@ -44,7 +42,7 @@ const WARN_RECORDING_MS = 50_000;
 const CANCEL_ENTER_PX = 48;
 const CANCEL_EXIT_PX = 24;
 
-export function MicButton({ active, posture, onOpenConnection }: MicButtonProps) {
+export function MicButton({ active, onOpenConnection }: MicButtonProps) {
   const connectionStatus = useConnectionStore((state) => state.status);
   const phase = useMicStore((state) => state.phase);
   const result = useMicStore((state) => state.result);
@@ -56,7 +54,6 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
   const hapticsEnabledRef = useRef(hapticsEnabled);
   hapticsEnabledRef.current = hapticsEnabled;
   const haptics = useMemo(() => createHaptics({ enabled: () => hapticsEnabledRef.current }), []);
-  const [layoutPosture, setLayoutPosture] = useState(posture);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [warning, setWarning] = useState(false);
   const [cancelZone, setCancelZone] = useState(false);
@@ -87,10 +84,6 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
 
   const busy = phase === "arming" || phase === "listening" || phase === "processing";
   const connected = connectionStatus === "connected";
-
-  useEffect(() => {
-    if (!busy) setLayoutPosture(posture);
-  }, [busy, posture]);
 
   const showHint = useCallback((text: string) => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current);
@@ -526,15 +519,6 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
   const processingLabel = MIC_COPY.cloudProcessing;
   const recordingEngineLabel = `${MIC_COPY.engineCloud} · ${MIC_COPY.audioUploading}`;
   const processingEngineLabel = MIC_COPY.engineCloud;
-  const statusLabel = processing
-    ? processingLabel
-    : phase === "arming"
-      ? MIC_COPY.arming
-      : listening
-        ? cancelZone
-          ? MIC_COPY.releaseToCancel
-          : `${MIC_COPY.listening} · ${timerText}`
-        : "";
 
   const label = !connected
     ? MIC_COPY.idleDisconnected
@@ -546,34 +530,17 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
 
   return (
     <>
-      <div
-        className={cn(
-          // 居中不用 left-1/2 + -translate-x-1/2：Tailwind v4 的 translate 工具类是
-          // CSS `translate` 属性，真机 WebView 103 不支持，按钮会整体偏右半个宽度。
-          "pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center gap-2",
-          layoutPosture === "docked"
-            ? "bottom-[calc(env(safe-area-inset-bottom)+16px)]"
-            : "bottom-[calc(env(safe-area-inset-bottom)+24px)]",
-        )}
-      >
+      <div className="pointer-events-none absolute inset-x-0 z-30 bottom-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col items-center">
         {/*
-          覆盖层（临时提示 / 结果卡片 / 录音条）与按钮分层：
-          手持模式把这一层设为绝对定位、固定宽度并在按钮上方居中；
-          它不参与外层 flex 宽度计算，所以出现/消失都不会撑宽容器、不会推动按钮。
+          覆盖层（临时提示 / 结果卡片 / 实时文本）固定在胶囊上方：
+          它不参与外层宽度计算，出现/消失都不会推动按钮。
         */}
-        <div
-          className={cn(
-            "flex flex-col items-center gap-2",
-            layoutPosture === "docked"
-              ? undefined
-              : "pointer-events-none absolute right-0 bottom-[104px] left-0 mx-auto w-[min(82vw,360px)]",
-          )}
-        >
+        <div className="pointer-events-none absolute inset-x-0 bottom-[68px] mx-auto flex w-[min(86vw,380px)] flex-col items-center gap-2">
           {message && (
             <span
               role="status"
               aria-live="polite"
-              className="max-w-[78vw] rounded-full border border-pet-border bg-pet-bg px-3 py-1.5 text-center text-xs text-pet-text shadow-sm"
+              className="max-w-[86vw] rounded-full border border-pet-border bg-pet-bg px-3 py-1.5 text-center text-xs text-pet-text shadow-sm"
             >
               {message}
             </span>
@@ -582,8 +549,7 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
           {showResult && (
             <div
               className={cn(
-                "pointer-events-auto rounded-2xl border bg-pet-bg p-3 text-left shadow-lg",
-                layoutPosture === "docked" ? "w-[min(82vw,420px)]" : "w-[min(82vw,360px)]",
+                "pointer-events-auto w-full rounded-2xl border bg-pet-bg p-3 text-left shadow-lg",
                 error ? "border-pet-danger" : "border-pet-border",
               )}
             >
@@ -617,83 +583,16 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
             </div>
           )}
 
-          {layoutPosture === "handheld" && recording && (
-            <div
-              className={cn(
-                "w-[min(82vw,360px)] rounded-2xl border px-4 py-3 shadow-lg",
-                cancelZone
-                  ? "border-pet-coral bg-pet-coral text-white"
-                  : "border-pet-border bg-pet-bg text-pet-text",
-              )}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
-                  <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-current" />
-                  <span className="truncate">{statusLabel}</span>
-                  <span className="shrink-0 rounded-full border border-current px-1.5 py-0.5 text-[10px] font-normal opacity-70">
-                    {recordingEngineLabel}
-                  </span>
-                </span>
-                <span className="shrink-0 text-[11px] opacity-80">
-                  {cancelZone
-                    ? MIC_COPY.releaseToCancel
-                    : warning
-                      ? MIC_COPY.warning
-                      : MIC_COPY.cancelHint}
-                </span>
-              </div>
-              <VoiceWaveform
-                active={listening}
-                getLevel={getLevel}
-                reducedMotion={reducedMotion}
-                className="mt-2"
-              />
-              {partialText ? (
-                <p
-                  aria-live="polite"
-                  className="mt-2 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap opacity-80"
-                >
-                  {partialText}
-                </p>
-              ) : (
-                <p className="mt-2 text-[11px] leading-relaxed opacity-60">
-                  {MIC_COPY.cloudConnecting}
-                </p>
-              )}
-            </div>
-          )}
-
-          {processing && (
-            <div
-              className={cn(
-                "rounded-2xl border border-pet-border bg-pet-bg px-4 py-3 text-left shadow-lg",
-                layoutPosture === "docked" ? "w-[min(82vw,420px)]" : "w-[min(82vw,360px)]",
-              )}
-            >
-              <div className="flex items-center gap-1.5 text-xs font-medium text-pet-text">
-                <Loader2 className="size-3.5 animate-spin" />
-                <span>{processingLabel}</span>
-                <span className="ml-1 rounded-full border border-current px-1.5 py-0.5 text-[10px] font-normal opacity-70">
-                  {processingEngineLabel}
-                </span>
-              </div>
-              {partialText && (
-                <p className="mt-2 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap text-pet-muted">
-                  {partialText}
-                </p>
-              )}
-            </div>
-          )}
-
-          {layoutPosture === "docked" && recording && (
-            <div className="w-[min(82vw,520px)] rounded-2xl border border-pet-border bg-pet-bg px-4 py-2.5 text-left shadow-lg">
-              <div className="flex items-center gap-1.5 text-[10px] text-pet-muted">
-                <span className="rounded-full border border-current px-1.5 py-0.5">
-                  {recordingEngineLabel}
-                </span>
-              </div>
-              <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap text-pet-muted">
-                {partialText || MIC_COPY.cloudConnecting}
+          {partialText && (recording || processing) && (
+            <div className="pointer-events-auto w-full rounded-2xl border border-pet-border bg-pet-bg px-3 py-2 text-left shadow-lg">
+              <span className="rounded-full border border-pet-border px-1.5 py-0.5 text-[10px] text-pet-muted">
+                {recording ? recordingEngineLabel : processingEngineLabel}
+              </span>
+              <p
+                aria-live="polite"
+                className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed break-words whitespace-pre-wrap text-pet-muted"
+              >
+                {partialText}
               </p>
             </div>
           )}
@@ -704,13 +603,9 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
           aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
           aria-pressed={listening}
           className={cn(
-            "pointer-events-auto touch-none select-none rounded-full border shadow-sm transition-transform active:scale-[0.98]",
+            "pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border px-5 text-sm font-medium shadow-sm transition-transform active:scale-[0.98]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-primary",
-            layoutPosture === "docked"
-              ? recording
-                ? "flex h-16 w-[min(82vw,520px)] items-center justify-center gap-3 px-5 text-sm font-medium"
-                : "flex h-14 min-w-[220px] items-center justify-center gap-2 px-6 text-sm font-medium"
-              : "flex size-24 flex-col items-center justify-center gap-1 text-xs",
+            recording ? "w-[min(90vw,420px)]" : "w-[min(86vw,360px)]",
             cancelZone
               ? "border-pet-coral bg-pet-coral text-white"
               : recording
@@ -728,40 +623,36 @@ export function MicButton({ active, posture, onOpenConnection }: MicButtonProps)
           onPointerCancel={onPointerCancel}
         >
           {processing ? (
-            <Loader2 className="size-5 animate-spin" />
-          ) : recording && layoutPosture === "docked" ? (
             <>
-              <span className="size-1.5 animate-pulse rounded-full bg-current" />
-              {layoutPosture === "docked" && (
-                <>
-                  <span className="tabular-nums text-xs">{timerText}</span>
-                  <VoiceWaveform
-                    active={listening}
-                    getLevel={getLevel}
-                    reducedMotion={reducedMotion}
-                    bars={18}
-                    className="min-w-0 flex-1"
-                  />
-                  <span className="shrink-0 text-[11px] opacity-90">
-                    {cancelZone
-                      ? MIC_COPY.releaseToCancel
-                      : warning
-                        ? MIC_COPY.warning
-                        : MIC_COPY.cancelHint}
-                  </span>
-                </>
-              )}
+              <Loader2 className="size-5 animate-spin" />
+              <span>{processingLabel}</span>
+              <span className="rounded-full border border-current px-1.5 py-0.5 text-[10px] font-normal opacity-70">
+                {processingEngineLabel}
+              </span>
+            </>
+          ) : recording ? (
+            <>
+              <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-current" />
+              <span className="shrink-0 text-xs tabular-nums">{timerText}</span>
+              <VoiceWaveform
+                active={listening}
+                getLevel={getLevel}
+                reducedMotion={reducedMotion}
+                bars={14}
+                className="min-w-0 flex-1"
+              />
+              <span className="shrink-0 text-[11px] opacity-90">
+                {cancelZone
+                  ? MIC_COPY.releaseToCancel
+                  : warning
+                    ? MIC_COPY.warning
+                    : MIC_COPY.cancelHint}
+              </span>
             </>
           ) : (
             <>
-              <Mic className={layoutPosture === "docked" ? "size-5" : "size-7"} />
-              {layoutPosture === "docked" ? (
-                <span>{label}</span>
-              ) : (
-                <span>
-                  {recording ? (cancelZone ? MIC_COPY.releaseToCancel : "松手结束") : label}
-                </span>
-              )}
+              <Mic className="size-5" />
+              <span>{label}</span>
             </>
           )}
         </button>

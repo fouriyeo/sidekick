@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateDshState,
   apply,
+  collectExistingSessions,
   createConfigReader,
   createDshHookReducer,
   createHookController,
@@ -18,8 +19,11 @@ import {
   isConfigActive,
   isLoopbackEndpoint,
   isSubagentSession,
+  MAX_SESSION_LIST,
+  MAX_SESSION_TITLE_CHARS,
   name,
   normalizeConfig,
+  normalizeSessionTitle,
   parseConfigText,
   PLUGIN_VERSION,
   profileFromModuleUrl,
@@ -101,8 +105,42 @@ function createControllerHarness(initialConfig = BASE_CONFIG) {
 describe("plugin metadata", () => {
   it("exports the DSH plugin name and a thin apply() entry", () => {
     expect(name).toBe("sidekick-hook");
-    expect(PLUGIN_VERSION).toBe(1);
+    expect(PLUGIN_VERSION).toBe(2);
     expect(typeof apply).toBe("function");
+  });
+
+  it("exports the protocol session-list limits", () => {
+    expect(MAX_SESSION_LIST).toBe(50);
+    expect(MAX_SESSION_TITLE_CHARS).toBe(80);
+  });
+
+  it("never throws when host services are missing or broken", () => {
+    let dispose = null;
+    const ctx = {
+      root: { on: () => () => {} },
+      effect: (fn) => {
+        dispose = fn;
+      },
+      sessions: {
+        list: () => {
+          throw new Error("sessions unavailable");
+        },
+      },
+      sessionTitle: {
+        get: () => {
+          throw new Error("title unavailable");
+        },
+      },
+    };
+    try {
+      expect(() => apply(ctx)).not.toThrow();
+    } finally {
+      try {
+        dispose?.();
+      } catch {
+        // ignore
+      }
+    }
   });
 });
 
@@ -199,6 +237,92 @@ describe("session helpers", () => {
     expect(aggregateDshState([{ state: "working" }, { state: "asking" }])).toBe("asking");
     expect(aggregateDshState(["asking", "working"])).toBe("asking");
     expect(aggregateDshState(new Map([["a", { state: "working" }]]))).toBe("working");
+  });
+
+  it("normalizes titles to one line, at most 80 code points or null", () => {
+    expect(normalizeSessionTitle("  修复\t登录\n问题  ")).toBe("修复 登录 问题");
+    expect(normalizeSessionTitle("a\u0000\u001fb")).toBe("a b");
+    expect(normalizeSessionTitle("   ")).toBeNull();
+    expect(normalizeSessionTitle("")).toBeNull();
+    expect(normalizeSessionTitle(null)).toBeNull();
+    expect(normalizeSessionTitle(42)).toBeNull();
+    expect(
+      Array.from(normalizeSessionTitle("中".repeat(MAX_SESSION_TITLE_CHARS + 20))),
+    ).toHaveLength(MAX_SESSION_TITLE_CHARS);
+  });
+});
+
+describe("collectExistingSessions", () => {
+  const now = () => 5_000;
+
+  it("reads existing top-level sessions and service titles", () => {
+    const sessions = [
+      makeSession("a"),
+      makeSession("b"),
+      makeSession("sub", { origin: "subagent" }),
+      makeSession("depth", { delegationDepth: 1 }),
+    ];
+    const ctx = {
+      sessions: { list: () => sessions },
+      sessionTitle: { get: (session) => ({ title: `标题-${session.header.id}` }) },
+    };
+    const entries = collectExistingSessions(ctx, { now });
+    expect(entries.map((entry) => entry.id)).toEqual(["a", "b"]);
+    expect(entries[0].title).toBe("标题-a");
+    expect(entries.every((entry) => entry.lastEventAt === 5_000)).toBe(true);
+  });
+
+  it("supports ctx.get(), Map/byId lists and plain string titles", () => {
+    const viaGet = {
+      get(name) {
+        if (name === "sessions") {
+          return { list: () => new Map([["x", makeSession("x")]]) };
+        }
+        if (name === "sessionTitle") {
+          return { get: () => "字符串标题" };
+        }
+        return undefined;
+      },
+    };
+    expect(collectExistingSessions(viaGet, { now })).toMatchObject([
+      { id: "x", title: "字符串标题", lastEventAt: 5_000 },
+    ]);
+
+    const byId = { sessions: { list: () => ({ byId: { y: makeSession("y") } }) } };
+    expect(collectExistingSessions(byId, { now }).map((entry) => entry.id)).toEqual(["y"]);
+  });
+
+  it("tolerates missing or throwing host services", () => {
+    expect(collectExistingSessions(null)).toEqual([]);
+    expect(collectExistingSessions({})).toEqual([]);
+    expect(
+      collectExistingSessions({
+        sessions: {
+          list: () => {
+            throw new Error("boom");
+          },
+        },
+      }),
+    ).toEqual([]);
+
+    const noTitles = collectExistingSessions(
+      { sessions: { list: () => [makeSession("a")] } },
+      { now },
+    );
+    expect(noTitles[0].title).toBeNull();
+
+    const brokenTitles = collectExistingSessions(
+      {
+        sessions: { list: () => [makeSession("a")] },
+        sessionTitle: {
+          get: () => {
+            throw new Error("boom");
+          },
+        },
+      },
+      { now },
+    );
+    expect(brokenTitles[0].title).toBeNull();
   });
 });
 
@@ -345,10 +469,10 @@ describe("createDshHookReducer", () => {
   it("starts idle and ignores non-lifecycle events without creating sessions", () => {
     const { reducer } = createReducerHarness();
     const session = makeSession("s1");
-    expect(reducer.snapshot()).toMatchObject({ state: "idle", sessions: 0 });
+    expect(reducer.snapshot()).toMatchObject({ state: "idle", sessions: 0, list: [] });
     expect(reducer.handle(session, makeEvent("assistant/chunk", { chunk: {} }))).toBeNull();
-    expect(reducer.handle(session, makeEvent("session/title", { title: "x" }))).toBeNull();
-    expect(reducer.snapshot()).toMatchObject({ state: "idle", sessions: 0 });
+    expect(reducer.handle(session, makeEvent("request/header", { header: {} }))).toBeNull();
+    expect(reducer.snapshot()).toMatchObject({ state: "idle", sessions: 0, list: [] });
     expect(reducer.handle(null, null)).toBeNull();
     expect(reducer.handle(session, { type: 42 })).toBeNull();
   });
@@ -514,7 +638,9 @@ describe("createDshHookReducer", () => {
         makeEvent("tool/call", { name: "ask_user_question", callId: "sub-ask" }),
       ),
     ).toBeNull();
+    expect(reducer.handle(originSubagent, makeEvent("session/title", { title: "子代理" }))).toBeNull();
     expect(reducer.snapshot()).toMatchObject({ state: "working", sessions: 1 });
+    expect(reducer.snapshot().list.map((entry) => entry.id)).toEqual(["parent"]);
     expect(reducer.disposeSession(originSubagent)).toBeNull();
     expect(reducer.snapshot()).toMatchObject({ state: "working", sessions: 1 });
   });
@@ -556,7 +682,222 @@ describe("createDshHookReducer", () => {
     const { reducer } = createReducerHarness();
     const session = makeSession("s1");
     reducer.handle(session, makeEvent("turn/start"));
-    expect(reducer.disposeSession(session)).toMatchObject({ state: "idle", sessions: 0 });
+    reducer.handle(session, makeEvent("session/title", { title: "要移除的会话" }));
+    expect(reducer.snapshot().list.map((entry) => entry.id)).toEqual(["s1"]);
+    expect(reducer.disposeSession(session)).toMatchObject({ state: "idle", sessions: 0, list: [] });
+  });
+
+  it("tracks titles as one-line, 80-code-point metadata", () => {
+    const { clock, reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+
+    clock.value += 10;
+    let result = reducer.handle(
+      session,
+      makeEvent("session/title", { title: "  修复\t登录\n问题  " }),
+    );
+    expect(result.list).toEqual([
+      {
+        id: "s1",
+        title: "修复 登录 问题",
+        source: "dsh",
+        state: "working",
+        askKind: null,
+        lastEventAt: clock.value,
+        completedAt: null,
+      },
+    ]);
+
+    clock.value += 10;
+    result = reducer.handle(
+      session,
+      makeEvent("session/title", { title: "中".repeat(MAX_SESSION_TITLE_CHARS + 20) }),
+    );
+    expect(Array.from(result.list[0].title)).toHaveLength(MAX_SESSION_TITLE_CHARS);
+
+    // 空标题归 null。
+    result = reducer.handle(session, makeEvent("session/title", { title: " \u0000\t " }));
+    expect(result.list[0].title).toBeNull();
+  });
+
+  it("tracks completedAt and clears it on a new turn or non-completed end", () => {
+    const { clock, reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+
+    clock.value += 100;
+    let result = reducer.handle(session, makeEvent("turn/end", { reason: { kind: "completed" } }));
+    expect(result.list[0]).toMatchObject({
+      id: "s1",
+      state: "idle",
+      completedAt: clock.value,
+      lastEventAt: clock.value,
+      askKind: null,
+    });
+
+    // 新一轮开始清 completedAt。
+    result = reducer.handle(session, makeEvent("turn/start"));
+    expect(result.list[0]).toMatchObject({ state: "working", completedAt: null });
+
+    // 非 completed 的 turn/end 也不保留完成时间。
+    clock.value += 100;
+    result = reducer.handle(session, makeEvent("turn/end", { reason: { kind: "aborted" } }));
+    expect(result.list[0]).toMatchObject({ state: "idle", completedAt: null });
+  });
+
+  it("keeps aggregate state but changes signature when the list changes", () => {
+    const { clock, reducer } = createReducerHarness();
+    const idleSession = makeSession("idle");
+    const working = makeSession("working");
+    reducer.handle(idleSession, makeEvent("session/title", { title: "旧标题" }));
+    reducer.handle(working, makeEvent("turn/start"));
+    const before = reducer.snapshot();
+    expect(before).toMatchObject({ state: "working", sessions: 1 });
+
+    clock.value += 1;
+    const afterTitle = reducer.handle(
+      idleSession,
+      makeEvent("session/title", { title: "新标题" }),
+    );
+    expect(afterTitle).toMatchObject({ state: "working", sessions: 1 });
+    expect(afterTitle.signature).not.toBe(before.signature);
+
+    // 另一个会话完成：聚合态仍是 working，但 completedAt 变化也必须体现。
+    // 不推进时钟，让 lastEventAt/标题保持不变，隔离出 completedAt 的贡献。
+    reducer.handle(idleSession, makeEvent("turn/start"));
+    const completed = reducer.handle(
+      idleSession,
+      makeEvent("turn/end", { reason: { kind: "completed" } }),
+    );
+    expect(completed.state).toBe("working");
+    expect(completed.sessions).toBe(1);
+    expect(completed.signature).not.toBe(afterTitle.signature);
+  });
+
+  it("updates askKind for questions and approvals and clears it with pending state", () => {
+    const { reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+
+    let result = reducer.handle(
+      session,
+      makeEvent("tool/call", { name: "ask_user_question", callId: "q1" }),
+    );
+    expect(result.list[0]).toMatchObject({ state: "asking", askKind: "question" });
+
+    // 同时有审批时 approval 优先。
+    result = reducer.handle(session, makeEvent("approval/asked", { id: "a1" }));
+    expect(result.list[0]).toMatchObject({ state: "asking", askKind: "approval" });
+
+    // 提问工具的 result 只清 question；approval 还在。
+    result = reducer.handle(
+      session,
+      makeEvent("tool/result", { message: { role: "tool", toolCallId: "q1" } }),
+    );
+    expect(result.list[0]).toMatchObject({ state: "asking", askKind: "approval" });
+
+    // 审批决定后回 working，askKind 为 null。
+    result = reducer.handle(session, makeEvent("approval/decided", { id: "a1" }));
+    expect(result.list[0]).toMatchObject({ state: "working", askKind: null });
+
+    // 用户消息清掉所有 pending。
+    reducer.handle(session, makeEvent("approval/asked", { id: "a2" }));
+    result = reducer.handle(session, makeEvent("user/message", { role: "user" }));
+    expect(result.list[0]).toMatchObject({ state: "working", askKind: null });
+  });
+
+  it("does not update lastEventAt on result / decision / user messages", () => {
+    const { clock, reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+    clock.value += 100;
+    reducer.handle(session, makeEvent("tool/call", { name: "ask_user_question", callId: "q1" }));
+    const askAt = clock.value;
+
+    clock.value += 500;
+    let result = reducer.handle(
+      session,
+      makeEvent("tool/result", { message: { role: "tool", toolCallId: "q1" } }),
+    );
+    expect(result.list[0].lastEventAt).toBe(askAt);
+
+    clock.value += 500;
+    reducer.handle(session, makeEvent("approval/asked", { id: "a1" }));
+    const approvalAt = clock.value;
+    clock.value += 500;
+    result = reducer.handle(session, makeEvent("approval/decided", { id: "a1" }));
+    expect(result.list[0].lastEventAt).toBe(approvalAt);
+
+    clock.value += 500;
+    reducer.handle(session, makeEvent("approval/asked", { id: "a2" }));
+    const secondApprovalAt = clock.value;
+    clock.value += 500;
+    result = reducer.handle(session, makeEvent("user/message", { role: "user" }));
+    expect(result.list[0].lastEventAt).toBe(secondApprovalAt);
+  });
+
+  it("caps the session list at 50, keeping asking/working/completed first", () => {
+    const { clock, reducer } = createReducerHarness();
+    const asker = makeSession("asker");
+    reducer.handle(asker, makeEvent("turn/start"));
+    reducer.handle(asker, makeEvent("tool/call", { name: "ask_user_question", callId: "q1" }));
+
+    const worker = makeSession("worker");
+    reducer.handle(worker, makeEvent("turn/start"));
+
+    const done = makeSession("done");
+    reducer.handle(done, makeEvent("turn/start"));
+    reducer.handle(done, makeEvent("turn/end", { reason: { kind: "completed" } }));
+
+    // 之后创建大量更新的 idle 会话，优先级必须保证前三条不被挤掉。
+    const total = MAX_SESSION_LIST + 10;
+    for (let index = 0; index < total; index += 1) {
+      clock.value += 1;
+      reducer.handle(
+        makeSession(`idle-${index}`),
+        makeEvent("session/title", { title: `标题 ${index}` }),
+      );
+    }
+
+    const list = reducer.snapshot().list;
+    expect(list).toHaveLength(MAX_SESSION_LIST);
+    expect(list.slice(0, 3).map((entry) => entry.id)).toEqual(["asker", "worker", "done"]);
+    expect(list.map((entry) => entry.id)).toContain(`idle-${total - 1}`);
+    expect(list.map((entry) => entry.id)).not.toContain("idle-0");
+    expect(list[0]).toMatchObject({ state: "asking", askKind: "question" });
+    expect(list[1]).toMatchObject({ state: "working", askKind: null, completedAt: null });
+    expect(list[2]).toMatchObject({ state: "idle", completedAt: expect.any(Number) });
+  });
+
+  it("adopts pre-existing sessions as idle metadata without clobbering live state", () => {
+    const { clock, reducer } = createReducerHarness();
+    const adopted = reducer.adoptSession(makeSession("existing"), {
+      title: "  已存在\n会话 ",
+      lastEventAt: clock.value,
+    });
+    expect(adopted).toMatchObject({ state: "idle", sessions: 0 });
+    expect(adopted.list).toEqual([
+      {
+        id: "existing",
+        title: "已存在 会话",
+        source: "dsh",
+        state: "idle",
+        askKind: null,
+        lastEventAt: clock.value,
+        completedAt: null,
+      },
+    ]);
+
+    // 已经有事件在手时只补标题，不把 working 覆盖回 idle。
+    reducer.handle(makeSession("existing"), makeEvent("turn/start"));
+    const again = reducer.adoptSession(makeSession("existing"), { title: "新标题" });
+    expect(again).toMatchObject({ state: "working", sessions: 1 });
+    expect(again.list[0].title).toBe("新标题");
+
+    // 子代理不接管。
+    expect(reducer.adoptSession(makeSession("sub", { origin: "subagent" }))).toBeNull();
+    expect(reducer.snapshot().list.map((entry) => entry.id)).toEqual(["existing"]);
   });
 });
 
@@ -643,7 +984,7 @@ describe("createHookController", () => {
     expect(transport.sent.map(({ message }) => message.type)).toEqual(["hello", "state"]);
     expect(transport.sent[0].message).toMatchObject({
       type: "hello",
-      pluginVersion: 1,
+      pluginVersion: 2,
       profile: "desktop",
     });
     expect(transport.sent[0].message).not.toHaveProperty("state");
@@ -716,6 +1057,90 @@ describe("createHookController", () => {
     controller.handleSessionDisposed(session);
     await controller.whenIdle();
     expect(transport.sent.at(-1).message).toMatchObject({ sessions: 0, state: "idle" });
+    controller.stop();
+  });
+
+  it("sends sessionList on state and heartbeat messages", async () => {
+    const { controller, transport } = createControllerHarness();
+    controller.start();
+    await controller.refreshConfig();
+    await controller.whenIdle();
+    const session = makeSession("s1");
+
+    controller.handleSessionEvent(session, makeEvent("turn/start"));
+    await controller.whenIdle();
+    let last = transport.sent.at(-1).message;
+    expect(last.type).toBe("state");
+    expect(last.sessionList).toHaveLength(1);
+    expect(last.sessionList[0]).toMatchObject({ id: "s1", state: "working", source: "dsh" });
+    expect(transport.sent.at(-1).message).toHaveProperty("sessionList");
+
+    // 只改标题（聚合态不变）也要推一条带列表的 state。
+    controller.handleSessionEvent(session, makeEvent("session/title", { title: "修复登录" }));
+    await controller.whenIdle();
+    last = transport.sent.at(-1).message;
+    expect(last).toMatchObject({ type: "state", state: "working", sessions: 1 });
+    expect(last.sessionList[0]).toMatchObject({ id: "s1", title: "修复登录" });
+
+    controller.sendHeartbeat();
+    await controller.whenIdle();
+    last = transport.sent.at(-1).message;
+    expect(last).toMatchObject({ type: "heartbeat", state: "working", sessions: 1 });
+    expect(last.sessionList).toHaveLength(1);
+    expect(last.sessionList[0]).toMatchObject({ id: "s1", title: "修复登录" });
+    controller.stop();
+  });
+
+  it("keeps sessionList on the completed pulse", async () => {
+    const { controller, transport } = createControllerHarness();
+    controller.start();
+    await controller.refreshConfig();
+    await controller.whenIdle();
+    const session = makeSession("s1");
+
+    controller.handleSessionEvent(session, makeEvent("turn/start"));
+    controller.handleSessionEvent(session, makeEvent("session/title", { title: "完成任务" }));
+    controller.handleSessionEvent(session, makeEvent("turn/end", { reason: { kind: "completed" } }));
+    await controller.whenIdle();
+    const last = transport.sent.at(-1).message;
+    expect(last).toMatchObject({ type: "state", state: "completed", resume: "idle" });
+    expect(last.sessionList).toHaveLength(1);
+    expect(last.sessionList[0]).toMatchObject({
+      id: "s1",
+      title: "完成任务",
+      state: "idle",
+      completedAt: expect.any(Number),
+    });
+    controller.stop();
+  });
+
+  it("adopts pre-existing host sessions on start and announces them", async () => {
+    const { controller, transport } = createControllerHarness();
+    controller.start();
+    await controller.refreshConfig();
+    await controller.whenIdle();
+    const before = transport.sent.length;
+
+    const ctx = {
+      sessions: { list: () => [makeSession("old"), makeSession("sub", { origin: "subagent" })] },
+      sessionTitle: { get: (session) => (session.header.id === "old" ? "旧会话" : "子代理") },
+    };
+    expect(controller.adoptExistingSessions(ctx)).toBe(1);
+    await controller.whenIdle();
+    expect(transport.sent.length).toBeGreaterThan(before);
+    const last = transport.sent.at(-1).message;
+    expect(last).toMatchObject({ type: "state", state: "idle" });
+    expect(last.sessionList).toEqual([
+      {
+        id: "old",
+        title: "旧会话",
+        source: "dsh",
+        state: "idle",
+        askKind: null,
+        lastEventAt: 1_000,
+        completedAt: null,
+      },
+    ]);
     controller.stop();
   });
 

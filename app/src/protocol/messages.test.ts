@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   isConnEvent,
+  isFocusResultMessage,
   isStatusMessage,
+  normalizeSessionList,
+  normalizeSessionTitle,
+  parseFocusResult,
   parseMessage,
   parseMicMessage,
   parseStatusMessage,
@@ -108,6 +112,105 @@ describe("status messages", () => {
 
   it("keeps status out of the chat/system parsing path", () => {
     expect(parseMessage(JSON.stringify(base), "phone")).toBeNull();
+  });
+
+  it("parses a session list and drops invalid entries", () => {
+    const parsed = parseStatusMessage(
+      JSON.stringify({
+        ...base,
+        sessionList: [
+          {
+            id: "s-1",
+            title: "  修复\n登录  ",
+            source: "dsh",
+            state: "asking",
+            askKind: "question",
+            lastEventAt: 1730000000000,
+            completedAt: null,
+          },
+          { id: "", title: "x", source: "dsh", state: "idle", lastEventAt: 1 },
+          { id: "s-2", source: "claude", state: "idle", lastEventAt: 1 },
+          { id: "s-3", source: "dsh", state: "busy", lastEventAt: 1 },
+          { id: "s-4", source: "dsh", state: "idle", lastEventAt: -1 },
+          {
+            id: "s-1",
+            title: "duplicate",
+            source: "dsh",
+            state: "working",
+            lastEventAt: 2,
+          },
+        ],
+      }),
+    );
+
+    expect(parsed?.sessionList).toEqual([
+      {
+        id: "s-1",
+        title: "修复 登录",
+        source: "dsh",
+        state: "asking",
+        askKind: "question",
+        lastEventAt: 1730000000000,
+        completedAt: null,
+      },
+    ]);
+  });
+
+  it("treats a missing session list as empty and rejects non-array lists", () => {
+    const parsed = parseStatusMessage(JSON.stringify(base));
+    expect(parsed?.sessionList).toEqual([]);
+    expect(isStatusMessage({ ...base, sessionList: "nope" })).toBe(false);
+  });
+
+  it("normalizes titles to a single line within the byte budget", () => {
+    expect(normalizeSessionTitle("  a\u0000 b \n c  ")).toBe("a b c");
+    expect(normalizeSessionTitle("   ")).toBeNull();
+    expect(normalizeSessionTitle(123)).toBeNull();
+    expect(normalizeSessionTitle("字".repeat(200))?.length).toBe(80);
+  });
+
+  it("caps and deduplicates session lists", () => {
+    const raw = Array.from({ length: 60 }, (_, index) => ({
+      id: `s-${index}`,
+      title: `会话 ${index}`,
+      source: "dsh",
+      state: "working",
+      lastEventAt: index,
+    }));
+    expect(normalizeSessionList(raw)).toHaveLength(50);
+    expect(normalizeSessionList([raw[0], raw[0]])).toHaveLength(1);
+    expect(normalizeSessionList("nope")).toEqual([]);
+  });
+});
+
+describe("focus result", () => {
+  it("parses a desktop focus result", () => {
+    const raw = {
+      type: "focus.result",
+      v: 1,
+      requestId: "f-1",
+      source: "dsh",
+      ok: false,
+      error: "launch_failed",
+      ts: 1,
+    };
+    expect(isFocusResultMessage(raw)).toBe(true);
+    expect(parseFocusResult(JSON.stringify(raw))).toEqual(raw);
+  });
+
+  it("rejects malformed focus results", () => {
+    expect(parseFocusResult("not-json")).toBeNull();
+    expect(isFocusResultMessage({ type: "focus.result", v: 1 })).toBe(false);
+    expect(
+      isFocusResultMessage({
+        type: "focus.result",
+        v: 1,
+        requestId: "f-1",
+        source: "other",
+        ok: true,
+        ts: 1,
+      }),
+    ).toBe(false);
   });
 });
 

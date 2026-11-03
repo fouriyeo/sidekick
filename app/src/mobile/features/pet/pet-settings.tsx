@@ -6,9 +6,8 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Switch } from "@/shared/ui/switch";
 import { usePetStore } from "./pet-store";
-import { POSTURE_LABEL } from "./posture";
 import { PET_SOUND_LABEL, type PetSoundKind, previewPetSound } from "./sound";
-import type { Posture, ReduceMotionSetting } from "./types";
+import type { ReduceMotionSetting } from "./types";
 
 type PetSettingsProps = {
   open: boolean;
@@ -20,8 +19,6 @@ const REDUCE_OPTIONS: Array<{ value: ReduceMotionSetting; label: string }> = [
   { value: "on", label: "开启" },
   { value: "off", label: "关闭" },
 ];
-
-const POSTURES: Posture[] = ["docked", "handheld"];
 
 /** 宠物页无操作后自动变暗的分钟数选项。 */
 const DIM_OPTIONS = [1, 2, 5, 10, 15, 30] as const;
@@ -47,7 +44,6 @@ function validateName(raw: string): string | null {
 export function PetSettings({ open, onClose }: PetSettingsProps) {
   const pet = usePetStore((state) => state.pet);
   const setName = usePetStore((state) => state.setName);
-  const setPosture = usePetStore((state) => state.setPosture);
   const updateSettings = usePetStore((state) => state.updateSettings);
   const resetPet = usePetStore((state) => state.resetPet);
   const handleGesture = usePetStore((state) => state.handleGesture);
@@ -161,7 +157,7 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
         </p>
       )}
 
-      <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pb-4 landscape:grid-cols-2">
+      <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pb-4">
         <div className="space-y-4">
           <section className="rounded-2xl border border-border bg-card p-4">
             <h2 className="text-sm font-semibold">名字</h2>
@@ -193,26 +189,6 @@ export function PetSettings({ open, onClose }: PetSettingsProps) {
                 {nameError}
               </p>
             )}
-          </section>
-
-          <section className="rounded-2xl border border-border bg-card p-4">
-            <h2 className="text-sm font-semibold">姿态</h2>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {POSTURES.map((posture) => (
-                <Button
-                  key={posture}
-                  type="button"
-                  variant={pet.settings.posture === posture ? "default" : "outline"}
-                  className="h-10"
-                  onClick={() => void setPosture(posture)}
-                >
-                  {POSTURE_LABEL[posture]}
-                </Button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              横屏自动支架、竖屏自动手持；可手动覆盖，下次旋转恢复自动。
-            </p>
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-4">

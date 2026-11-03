@@ -156,13 +156,13 @@ describe("pet state machine", () => {
     const reset = reducePet(
       {
         ...named.state,
-        settings: { ...named.state.settings, posture: "handheld" },
+        settings: { ...named.state.settings, haptics: false },
       },
       { type: "RESET", now },
     );
     expect(reset.state.onboarded).toBe(false);
     expect(reset.state.name).toBe("小跟班");
-    expect(reset.state.settings.posture).toBe("handheld");
+    expect(reset.state.settings.haptics).toBe(false);
   });
 
   it("boots first-run, greeting and corrupted states", () => {
@@ -188,11 +188,5 @@ describe("pet state machine", () => {
       corrupted: true,
     });
     expect(corrupted.effects).toContainEqual({ type: "bubble", copyId: "corrupted" });
-  });
-
-  it("persists the manually selected posture", () => {
-    const now = at(12);
-    const result = reducePet(ready(now), { type: "SET_POSTURE", now, posture: "handheld" });
-    expect(result.state.settings.posture).toBe("handheld");
   });
 });

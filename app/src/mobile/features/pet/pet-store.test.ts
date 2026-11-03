@@ -151,12 +151,12 @@ describe("pet store", () => {
     await store.getState().hydrate();
 
     await store.getState().setName("小满");
-    await store.getState().updateSettings({ posture: "handheld" });
+    await store.getState().updateSettings({ haptics: false });
     await store.getState().resetPet();
 
     expect(store.getState().pet.onboarded).toBe(false);
     expect(store.getState().pet.name).toBe("小跟班");
-    expect(store.getState().pet.settings.posture).toBe("handheld");
+    expect(store.getState().pet.settings.haptics).toBe(false);
   });
 
   it("survives a storage load failure", async () => {

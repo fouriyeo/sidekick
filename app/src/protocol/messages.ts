@@ -17,9 +17,37 @@ export type StatusState = "idle" | "working" | "asking" | "completed";
 
 export type StatusSource = "dsh" | "test";
 
+/** 会话来源；P0 只有 DSH，预留后续 Claude Code / Qoder。 */
+export type SessionSource = "dsh";
+
+/** 单个会话的稳定态；completed 由 completedAt 推导，不放进会话状态。 */
+export type SessionState = "idle" | "working" | "asking";
+
+export type AskKind = "approval" | "question";
+
+/** 手机端会话列表用的最小元数据，不含任何对话内容。 */
+export type SessionSummary = {
+  id: string;
+  /** 已清洗的 DSH 会话标题；缺失为 null。 */
+  title: string | null;
+  source: SessionSource;
+  state: SessionState;
+  askKind?: AskKind | null;
+  /** 桌面时钟 ms；只在 turn/ask/title 等有意义事件更新。 */
+  lastEventAt: number;
+  /** 最近一轮 completed 的桌面时钟 ms；null 表示没有完成记录。 */
+  completedAt?: number | null;
+};
+
+/** 协议层会话列表上限；桌面桥与手机都会按这个值截断。 */
+export const MAX_SESSION_LIST = 50;
+/** 会话标题最大字符数（按 Unicode 码点计）。 */
+export const MAX_SESSION_TITLE_CHARS = 80;
+
 /**
  * AI 状态系统消息。桌面端把 AI 的聚合状态广播给所有手机；
  * completed 只持续几秒，桌面会补发 resume 状态，remainingMs 供手机本地兜底。
+ * sessionList 是可选的会话列表，旧客户端会忽略。
  */
 export type StatusMessage = {
   type: "status";
@@ -32,6 +60,29 @@ export type StatusMessage = {
   resume?: StatusState | null;
   /** 仅 completed 有值：桌面计算的剩余展示时长，避免手机时钟偏差。 */
   remainingMs?: number | null;
+  /** 顶层会话列表；旧版桌面不发送，手机按空列表处理。 */
+  sessionList?: SessionSummary[];
+  ts: number;
+};
+
+/** 手机 → 桌面：把某个会话对应的软件切到前台（没开则启动）。 */
+export type FocusRequestMessage = {
+  type: "focus.request";
+  v: 1;
+  requestId: string;
+  source: SessionSource;
+  sessionId: string;
+  ts: number;
+};
+
+/** 桌面 → 手机：focus.request 的处理结果；error 只回错误码。 */
+export type FocusResultMessage = {
+  type: "focus.result";
+  v: 1;
+  requestId: string;
+  source: SessionSource;
+  ok: boolean;
+  error?: string | null;
   ts: number;
 };
 
@@ -174,6 +225,78 @@ export function isStatusState(value: unknown): value is StatusState {
   return value === "idle" || value === "working" || value === "asking" || value === "completed";
 }
 
+export function isSessionState(value: unknown): value is SessionState {
+  return value === "idle" || value === "working" || value === "asking";
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** 单行标题：去控制字符、折叠空白、按码点截断；空标题归为 null。 */
+export function normalizeSessionTitle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const oneLine = value
+    .replace(/[\p{Cc}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!oneLine) return null;
+  return Array.from(oneLine).slice(0, MAX_SESSION_TITLE_CHARS).join("");
+}
+
+/** 宽松解析单条会话；非法项返回 null，由列表过滤掉。 */
+export function normalizeSessionSummary(value: unknown): SessionSummary | null {
+  if (typeof value !== "object" || value === null) return null;
+  const session = value as Record<string, unknown>;
+  if (typeof session.id !== "string") return null;
+  const id = session.id.trim();
+  if (!id || id.length > 128) return null;
+  if (session.source !== "dsh") return null;
+  if (!isSessionState(session.state)) return null;
+  if (!isNonNegativeNumber(session.lastEventAt)) return null;
+  if (
+    session.completedAt !== undefined &&
+    session.completedAt !== null &&
+    !isNonNegativeNumber(session.completedAt)
+  ) {
+    return null;
+  }
+  if (
+    session.askKind !== undefined &&
+    session.askKind !== null &&
+    session.askKind !== "approval" &&
+    session.askKind !== "question"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    title: normalizeSessionTitle(session.title),
+    source: "dsh",
+    state: session.state,
+    askKind:
+      session.askKind === "approval" || session.askKind === "question" ? session.askKind : null,
+    lastEventAt: session.lastEventAt,
+    completedAt: isNonNegativeNumber(session.completedAt) ? session.completedAt : null,
+  };
+}
+
+/** 宽松解析会话列表：丢弃非法项、最多保留 MAX_SESSION_LIST 条。 */
+export function normalizeSessionList(value: unknown): SessionSummary[] {
+  if (!Array.isArray(value)) return [];
+  const list: SessionSummary[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const session = normalizeSessionSummary(item);
+    if (!session || seen.has(session.id)) continue;
+    seen.add(session.id);
+    list.push(session);
+    if (list.length >= MAX_SESSION_LIST) break;
+  }
+  return list;
+}
+
 export function isStatusMessage(value: unknown): value is StatusMessage {
   if (typeof value !== "object" || value === null) return false;
   const message = value as Record<string, unknown>;
@@ -200,6 +323,13 @@ export function isStatusMessage(value: unknown): value is StatusMessage {
   ) {
     return false;
   }
+  if (
+    message.sessionList !== undefined &&
+    message.sessionList !== null &&
+    !Array.isArray(message.sessionList)
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -210,7 +340,33 @@ export function parseStatusMessage(raw: string): StatusMessage | null {
   } catch {
     return null;
   }
-  return isStatusMessage(value) ? value : null;
+  if (!isStatusMessage(value)) return null;
+  return { ...value, sessionList: normalizeSessionList(value.sessionList) };
+}
+
+export function isFocusResultMessage(value: unknown): value is FocusResultMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const message = value as Record<string, unknown>;
+  return (
+    message.type === "focus.result" &&
+    message.v === 1 &&
+    typeof message.requestId === "string" &&
+    message.requestId.length > 0 &&
+    message.source === "dsh" &&
+    typeof message.ok === "boolean" &&
+    (message.error === undefined || message.error === null || typeof message.error === "string") &&
+    typeof message.ts === "number"
+  );
+}
+
+export function parseFocusResult(raw: string): FocusResultMessage | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return isFocusResultMessage(value) ? value : null;
 }
 
 export function isConnEvent(value: unknown): value is ConnEvent {

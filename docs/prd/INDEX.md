@@ -18,7 +18,7 @@ children:
 
 | 功能 | 一句话 | 状态 | 入口 |
 | --- | --- | --- | --- |
-| 情绪宠物 | 横屏手机里的黏土小宠物，纯陪伴 | 代码完成，真机待补 | [pet/INDEX.md](./pet/INDEX.md) |
+| 情绪宠物 | 竖屏手机里的黏土小宠物，纯陪伴 | 代码完成，真机待补 | [pet/INDEX.md](./pet/INDEX.md) |
 | 外设麦克风 | 按住手机说话，电脑本机转文字并输入 | P0 已实现，真机/自动粘贴待回归 | [mic/INDEX.md](./mic/INDEX.md) |
 | AI 联动（DSH） | 桌面开关把 AI 状态推给手机，宠物四态 + 三音效 | 开发中 | [hook/INDEX.md](./hook/INDEX.md) |
 
@@ -38,7 +38,7 @@ INDEX.md（一页摘要 + 阅读地图）
 
 ## 跨功能契约
 
-1. 宠物和麦克风共享手机横屏舞台，但代码分属 `mobile/features/pet` 与 `mobile/features/mic`。
+1. 宠物和麦克风共享手机竖屏舞台，但代码分属 `mobile/features/pet` 与 `mobile/features/mic`。
 2. 麦克风状态优先于宠物情绪；倾听时暂停随机 idle，结束后恢复之前心情。
 3. 宠物不遮挡麦克风按钮、波形、计时、取消区。
 4. 麦克风不依赖宠物渲染成功；宠物降级不影响录音/转写。

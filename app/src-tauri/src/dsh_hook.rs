@@ -38,10 +38,16 @@ pub const COMPLETED_HOLD: Duration = Duration::from_secs(3);
 pub const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 /// 桌面保留的最近事件条数。
 pub const RECENT_LIMIT: usize = 20;
-/// 插件 POST body 上限（4 KB）。
-pub const MAX_BODY_BYTES: usize = 4096;
+/// 插件 POST body 上限（64 KB，需容纳最多 50 条会话摘要）。
+pub const MAX_BODY_BYTES: usize = 65_536;
 /// 单个状态里 sessions 的展示上限，防止异常值撑爆 UI。
 pub const MAX_SESSIONS: u32 = 999;
+/// 广播/快照里会话列表上限（与 TS/Rust/插件一致）。
+pub const MAX_SESSION_LIST: usize = 50;
+/// 会话标题最大字符数，按 Unicode 码点计。
+pub const MAX_SESSION_TITLE_CHARS: usize = 80;
+/// 单个会话 id 的最大字符数。
+pub const MAX_SESSION_ID_CHARS: usize = 128;
 /// 回环端口候选，按顺序挑第一个能绑定的。
 pub const LOOPBACK_PORTS: [u16; 5] = [47815, 47816, 47817, 47818, 47819];
 /// 回环监听地址（绝对不监听 0.0.0.0）。
@@ -95,6 +101,57 @@ pub enum StatusSource {
     Test,
 }
 
+/// 单条会话的稳定态；completed 由 `completed_at` 推导，不进会话状态。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionState {
+    #[default]
+    Idle,
+    Working,
+    Asking,
+}
+
+/// 正在等待用户回答的类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AskKind {
+    Approval,
+    Question,
+}
+
+/// 插件上报的单条会话摘要（camelCase，宽松解析；非法项归一化时丢弃）。
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IncomingSession {
+    pub id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub state: SessionState,
+    #[serde(default)]
+    pub ask_kind: Option<AskKind>,
+    #[serde(default)]
+    pub last_event_at: u64,
+    #[serde(default)]
+    pub completed_at: Option<u64>,
+}
+
+/// 广播/快照里的一条会话摘要（camelCase）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSummary {
+    pub id: String,
+    pub title: Option<String>,
+    /// P0 只有 `dsh`；后续接入其它来源时再扩展。
+    pub source: &'static str,
+    pub state: SessionState,
+    pub ask_kind: Option<AskKind>,
+    pub last_event_at: u64,
+    pub completed_at: Option<u64>,
+}
+
 /// 插件 POST 上来的消息。未知 type / 非法 state 直接反序列化失败。
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -112,6 +169,8 @@ pub enum IncomingHook {
         sessions: u32,
         #[serde(default)]
         resume: Option<StatusState>,
+        #[serde(default, rename = "sessionList")]
+        session_list: Vec<IncomingSession>,
         #[serde(default)]
         ts: Option<u64>,
     },
@@ -121,6 +180,8 @@ pub enum IncomingHook {
         sessions: u32,
         #[serde(default)]
         resume: Option<StatusState>,
+        #[serde(default, rename = "sessionList")]
+        session_list: Vec<IncomingSession>,
         #[serde(default)]
         ts: Option<u64>,
     },
@@ -138,6 +199,8 @@ pub struct StatusMessage {
     pub sessions: u32,
     pub resume: Option<StatusState>,
     pub remaining_ms: Option<u64>,
+    /// 顶层会话列表；空列表也会显式发送（旧手机忽略该字段）。
+    pub session_list: Vec<SessionSummary>,
     pub ts: u64,
 }
 
@@ -148,6 +211,7 @@ impl StatusMessage {
         sessions: u32,
         resume: Option<StatusState>,
         remaining_ms: Option<u64>,
+        session_list: Vec<SessionSummary>,
     ) -> Self {
         Self {
             message_type: "status",
@@ -157,6 +221,7 @@ impl StatusMessage {
             sessions,
             resume,
             remaining_ms,
+            session_list,
             ts: now_ms(),
         }
     }
@@ -220,6 +285,7 @@ struct BridgeInner {
     current: StatusState,
     source: StatusSource,
     sessions: u32,
+    session_list: Vec<SessionSummary>,
     last_event_at: Option<u64>,
     last_heartbeat_at: Option<u64>,
     plugin_version: Option<u64>,
@@ -283,6 +349,7 @@ impl HookBridge {
                 current: StatusState::Idle,
                 source: StatusSource::Dsh,
                 sessions: 0,
+                session_list: Vec::new(),
                 last_event_at: None,
                 last_heartbeat_at: None,
                 plugin_version: None,
@@ -468,11 +535,20 @@ impl HookBridge {
                     inner.last_heartbeat_at = Some(now_ms());
                     inner.plugin_version = Some(plugin_version);
                     if !was_connected {
-                        // 刚上线，等第一条 state 覆盖；先把状态复位为 idle。
+                        // 刚上线：清空旧列表并广播 idle，让手机丢掉上一段会话。
                         inner.current = StatusState::Idle;
                         inner.source = StatusSource::Dsh;
                         inner.sessions = 0;
                         inner.completed = None;
+                        inner.session_list.clear();
+                        message = Some(StatusMessage::new(
+                            StatusSource::Dsh,
+                            StatusState::Idle,
+                            0,
+                            None,
+                            None,
+                            Vec::new(),
+                        ));
                     }
                     emit = true;
                 }
@@ -480,16 +556,18 @@ impl HookBridge {
                     state,
                     sessions,
                     resume,
+                    session_list,
                     ts: _,
                 } => {
                     mark_alive(&mut inner, now);
-                    message = Some(apply_state(
+                    message = Some(apply_incoming_state(
                         &mut inner,
                         state,
                         sessions.min(MAX_SESSIONS),
                         resume,
                         StatusSource::Dsh,
                         now,
+                        normalize_session_list(session_list),
                     ));
                     emit = true;
                 }
@@ -497,23 +575,30 @@ impl HookBridge {
                     state,
                     sessions,
                     resume,
+                    session_list,
                     ts: _,
                 } => {
                     mark_alive(&mut inner, now);
                     let sessions = sessions.min(MAX_SESSIONS);
+                    let session_list = normalize_session_list(session_list);
+                    let list_changed = session_list != inner.session_list;
                     let changed = match &inner.completed {
-                        // completed 展示期内心跳不打断（心跳里的 state 是 resume 态）。
-                        Some(hold) => !state.is_stable() || state != hold.resume,
-                        None => state != inner.current || sessions != inner.sessions,
+                        // completed 展示期内心跳不打断（心跳里的 state 是 resume 态），
+                        // 只有列表/状态真的变了才广播一条 completed + 剩余时间 + 新列表。
+                        Some(hold) => !state.is_stable() || state != hold.resume || list_changed,
+                        None => {
+                            state != inner.current || sessions != inner.sessions || list_changed
+                        }
                     };
                     if changed {
-                        message = Some(apply_state(
+                        message = Some(apply_incoming_state(
                             &mut inner,
                             state,
                             sessions,
                             resume,
                             StatusSource::Dsh,
                             now,
+                            session_list,
                         ));
                         emit = true;
                     }
@@ -547,6 +632,7 @@ impl HookBridge {
                 inner.source = hold.source;
                 inner.last_event_at = Some(now_ms());
                 let sessions = inner.sessions;
+                let session_list = inner.session_list.clone();
                 push_recent(
                     &mut inner,
                     StatusEvent {
@@ -562,6 +648,7 @@ impl HookBridge {
                     sessions,
                     None,
                     None,
+                    session_list,
                 ));
             }
 
@@ -575,6 +662,7 @@ impl HookBridge {
                 inner.current = StatusState::Idle;
                 inner.source = StatusSource::Dsh;
                 inner.sessions = 0;
+                inner.session_list.clear();
                 inner.completed = None;
                 inner.last_event_at = Some(now_ms());
                 push_recent(
@@ -592,6 +680,7 @@ impl HookBridge {
                     0,
                     None,
                     None,
+                    Vec::new(),
                 ));
             }
         }
@@ -619,7 +708,14 @@ impl HookBridge {
             ),
             None => (inner.current, inner.sessions, None, None, inner.source),
         };
-        let message = StatusMessage::new(source, state, sessions, resume, remaining_ms);
+        let message = StatusMessage::new(
+            source,
+            state,
+            sessions,
+            resume,
+            remaining_ms,
+            inner.session_list.clone(),
+        );
         serde_json::to_string(&message).unwrap_or_default()
     }
 
@@ -787,6 +883,7 @@ impl HookBridge {
             inner.current = StatusState::Idle;
             inner.source = StatusSource::Dsh;
             inner.sessions = 0;
+            inner.session_list.clear();
             inner.completed = None;
             inner.last_seen = None;
         } else {
@@ -795,7 +892,14 @@ impl HookBridge {
         drop(_guard);
 
         if !enabled {
-            let message = StatusMessage::new(StatusSource::Dsh, StatusState::Idle, 0, None, None);
+            let message = StatusMessage::new(
+                StatusSource::Dsh,
+                StatusState::Idle,
+                0,
+                None,
+                None,
+                Vec::new(),
+            );
             self.send_status(&message);
         }
         self.emit_status();
@@ -813,6 +917,7 @@ impl HookBridge {
             inner.current = StatusState::Idle;
             inner.source = StatusSource::Dsh;
             inner.sessions = 0;
+            inner.session_list.clear();
             inner.completed = None;
             inner.last_seen = None;
             inner.plugin_version = None;
@@ -827,7 +932,14 @@ impl HookBridge {
             "[dsh-hook] removed profiles={:?} patch={} plugin={} config={}",
             report.profiles, report.removed_patch, report.removed_plugin, report.removed_config
         );
-        let message = StatusMessage::new(StatusSource::Dsh, StatusState::Idle, 0, None, None);
+        let message = StatusMessage::new(
+            StatusSource::Dsh,
+            StatusState::Idle,
+            0,
+            None,
+            None,
+            Vec::new(),
+        );
         self.send_status(&message);
         self.emit_status();
         Ok(())
@@ -848,6 +960,7 @@ impl HookBridge {
                     StatusState::Idle
                 }
             });
+            let session_list = inner.session_list.clone();
             apply_state(
                 &mut inner,
                 state,
@@ -855,6 +968,7 @@ impl HookBridge {
                 resume,
                 StatusSource::Test,
                 Instant::now(),
+                session_list,
             )
         };
         self.send_status(&message);
@@ -883,6 +997,44 @@ fn mark_alive(inner: &mut BridgeInner, now: Instant) {
     inner.last_heartbeat_at = Some(now_ms());
 }
 
+/// 收到 state/heartbeat 时应用状态；completed 展示期内只做「保持 + 刷新列表」，
+/// 不打断 3 秒计时（见 [`apply_incoming_state`]）。
+fn apply_incoming_state(
+    inner: &mut BridgeInner,
+    state: StatusState,
+    sessions: u32,
+    resume: Option<StatusState>,
+    source: StatusSource,
+    now: Instant,
+    session_list: Vec<SessionSummary>,
+) -> StatusMessage {
+    let keep_hold = state.is_stable()
+        && inner
+            .completed
+            .as_ref()
+            .map(|hold| hold.resume == state)
+            .unwrap_or(false);
+    if keep_hold {
+        // completed 保持期内：保留计时，只刷新列表/计数，并广播 completed + remainingMs。
+        inner.sessions = sessions;
+        inner.session_list = session_list;
+        inner.last_event_at = Some(now_ms());
+        let hold = inner.completed.as_ref().unwrap();
+        let remaining_ms = hold.deadline.saturating_duration_since(now).as_millis() as u64;
+        let broadcast_resume = Some(hold.resume);
+        let broadcast_source = hold.source;
+        return StatusMessage::new(
+            broadcast_source,
+            StatusState::Completed,
+            sessions,
+            broadcast_resume,
+            Some(remaining_ms),
+            inner.session_list.clone(),
+        );
+    }
+    apply_state(inner, state, sessions, resume, source, now, session_list)
+}
+
 fn apply_state(
     inner: &mut BridgeInner,
     state: StatusState,
@@ -890,6 +1042,7 @@ fn apply_state(
     resume: Option<StatusState>,
     source: StatusSource,
     now: Instant,
+    session_list: Vec<SessionSummary>,
 ) -> StatusMessage {
     let stable_previous = if inner.current.is_stable() {
         inner.current
@@ -919,6 +1072,7 @@ fn apply_state(
     inner.current = state;
     inner.source = source;
     inner.sessions = sessions;
+    inner.session_list = session_list;
     inner.last_event_at = Some(now_ms());
     push_recent(
         inner,
@@ -929,7 +1083,73 @@ fn apply_state(
             source,
         },
     );
-    StatusMessage::new(source, state, sessions, broadcast_resume, remaining_ms)
+    StatusMessage::new(
+        source,
+        state,
+        sessions,
+        broadcast_resume,
+        remaining_ms,
+        inner.session_list.clone(),
+    )
+}
+
+/// 标题清洗：单行、去控制字符、折叠空白、trim，按 Unicode 码点截断到 80；空 → None。
+pub fn truncate_title(title: Option<&str>) -> Option<String> {
+    let title = title?.trim();
+    if title.is_empty() {
+        return None;
+    }
+    let cleaned: String = title
+        .chars()
+        .map(|ch| if ch.is_control() { ' ' } else { ch })
+        .collect();
+    let collapsed = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        return None;
+    }
+    Some(
+        collapsed
+            .chars()
+            .take(MAX_SESSION_TITLE_CHARS)
+            .collect::<String>(),
+    )
+}
+
+/// 归一化插件上报的会话列表：丢弃非法/重复项、截断标题，最多保留 50 条。
+pub fn normalize_session_list(list: Vec<IncomingSession>) -> Vec<SessionSummary> {
+    let mut seen = std::collections::HashSet::new();
+    let mut normalized = Vec::new();
+    for raw in list {
+        if normalized.len() >= MAX_SESSION_LIST {
+            break;
+        }
+        let id = raw.id.trim().to_string();
+        if id.is_empty() || id.chars().count() > MAX_SESSION_ID_CHARS {
+            continue;
+        }
+        if let Some(source) = raw.source.as_deref()
+            && source != "dsh"
+        {
+            continue;
+        }
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        normalized.push(SessionSummary {
+            id,
+            title: truncate_title(raw.title.as_deref()),
+            source: "dsh",
+            state: raw.state,
+            ask_kind: if raw.state == SessionState::Asking {
+                raw.ask_kind
+            } else {
+                None
+            },
+            last_event_at: raw.last_event_at,
+            completed_at: raw.completed_at,
+        });
+    }
+    normalized
 }
 
 fn push_recent(inner: &mut BridgeInner, event: StatusEvent) {
@@ -1120,20 +1340,51 @@ mod tests {
     }
 
     fn state_message(state: &str, sessions: u32, resume: Option<StatusState>) -> IncomingHook {
+        state_message_with_list(state, sessions, resume, Vec::new())
+    }
+
+    fn state_message_with_list(
+        state: &str,
+        sessions: u32,
+        resume: Option<StatusState>,
+        session_list: Vec<IncomingSession>,
+    ) -> IncomingHook {
         IncomingHook::State {
             state: StatusState::parse(state).unwrap(),
             sessions,
             resume,
+            session_list,
             ts: None,
         }
     }
 
     fn heartbeat(state: StatusState, sessions: u32) -> IncomingHook {
+        heartbeat_with_list(state, sessions, Vec::new())
+    }
+
+    fn heartbeat_with_list(
+        state: StatusState,
+        sessions: u32,
+        session_list: Vec<IncomingSession>,
+    ) -> IncomingHook {
         IncomingHook::Heartbeat {
             state,
             sessions,
             resume: None,
+            session_list,
             ts: None,
+        }
+    }
+
+    fn incoming_session(id: &str, state: SessionState) -> IncomingSession {
+        IncomingSession {
+            id: id.to_string(),
+            title: Some(format!("标题-{id}")),
+            source: Some("dsh".to_string()),
+            state,
+            ask_kind: None,
+            last_event_at: 1_000,
+            completed_at: None,
         }
     }
 
@@ -1174,6 +1425,7 @@ mod tests {
                 state: StatusState::Asking,
                 sessions: 2,
                 resume: None,
+                session_list: Vec::new(),
                 ts: Some(9),
             }
         );
@@ -1188,6 +1440,7 @@ mod tests {
                 state: StatusState::Working,
                 sessions: 1,
                 resume: None,
+                session_list: Vec::new(),
                 ts: Some(10),
             }
         );
@@ -1204,6 +1457,131 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn parses_session_list_with_camel_case_fields() {
+        let parsed = parse_incoming(
+            r#"{"type":"state","state":"asking","sessions":1,"resume":null,
+                 "sessionList":[
+                   {"id":"s1","title":"修复登录","source":"dsh","state":"asking",
+                    "askKind":"question","lastEventAt":1730000000000,"completedAt":null},
+                   {"id":"s2","title":null,"source":"dsh","state":"idle",
+                    "askKind":null,"lastEventAt":1730000000001,"completedAt":1730000000002}
+                 ],"ts":9}"#
+                .as_bytes(),
+        )
+        .unwrap();
+        let IncomingHook::State { session_list, .. } = parsed else {
+            panic!("应为 state 消息");
+        };
+        assert_eq!(session_list.len(), 2);
+        assert_eq!(session_list[0].id, "s1");
+        assert_eq!(session_list[0].title.as_deref(), Some("修复登录"));
+        assert_eq!(session_list[0].ask_kind, Some(AskKind::Question));
+        assert_eq!(session_list[1].completed_at, Some(1_730_000_000_002));
+        assert_eq!(session_list[1].state, SessionState::Idle);
+    }
+
+    #[test]
+    fn normalizes_titles_ids_and_session_list_cap() {
+        assert_eq!(
+            truncate_title(Some("  修复\n登录\t问题  ")),
+            Some("修复 登录 问题".to_string())
+        );
+        assert_eq!(truncate_title(Some("   ")), None);
+        assert_eq!(truncate_title(None), None);
+        let long = "中".repeat(MAX_SESSION_TITLE_CHARS + 20);
+        let truncated = truncate_title(Some(&long)).unwrap();
+        assert_eq!(truncated.chars().count(), MAX_SESSION_TITLE_CHARS);
+
+        // 非法项丢弃、重复 id 去重、标题截断。
+        let mut raw = vec![
+            IncomingSession {
+                id: "   ".to_string(),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                last_event_at: 1,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "dup".to_string(),
+                title: Some("a".to_string()),
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                last_event_at: 1,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "dup".to_string(),
+                title: Some("b".to_string()),
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                last_event_at: 2,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "other-source".to_string(),
+                title: None,
+                source: Some("claude-code".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                last_event_at: 3,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "ask".to_string(),
+                title: Some(long),
+                source: None,
+                state: SessionState::Asking,
+                ask_kind: Some(AskKind::Approval),
+                last_event_at: 4,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "idle-with-ask".to_string(),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Idle,
+                ask_kind: Some(AskKind::Question),
+                last_event_at: 5,
+                completed_at: None,
+            },
+        ];
+        // 再补 60 条合法会话，验证上限 50。
+        for index in 0..60 {
+            raw.push(IncomingSession {
+                id: format!("bulk-{index}"),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                last_event_at: 10 + index,
+                completed_at: None,
+            });
+        }
+        let list = normalize_session_list(raw);
+        assert_eq!(list.len(), MAX_SESSION_LIST);
+        assert_eq!(list[0].id, "dup");
+        assert_eq!(list[0].title.as_deref(), Some("a"));
+        assert!(!list.iter().any(|entry| entry.id == "other-source"));
+        assert!(!list.iter().any(|entry| entry.id == "   "));
+        let ask = list.iter().find(|entry| entry.id == "ask").unwrap();
+        assert_eq!(ask.source, "dsh");
+        assert_eq!(ask.ask_kind, Some(AskKind::Approval));
+        assert_eq!(
+            ask.title.as_ref().unwrap().chars().count(),
+            MAX_SESSION_TITLE_CHARS
+        );
+        let idle = list
+            .iter()
+            .find(|entry| entry.id == "idle-with-ask")
+            .unwrap();
+        assert_eq!(idle.ask_kind, None);
     }
 
     #[test]
@@ -1262,7 +1640,34 @@ mod tests {
         assert_eq!(snapshot["sessions"], 0);
         assert!(snapshot["resume"].is_null());
         assert!(snapshot["remainingMs"].is_null());
+        assert!(snapshot["sessionList"].as_array().unwrap().is_empty());
         assert!(snapshot["ts"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn snapshot_carries_the_latest_session_list() {
+        let (bridge, _temp) = test_bridge();
+        let start = Instant::now();
+        bridge
+            .ingest(
+                state_message_with_list(
+                    "working",
+                    1,
+                    None,
+                    vec![incoming_session("s1", SessionState::Working)],
+                ),
+                start,
+            )
+            .unwrap();
+        let snapshot = value(&bridge.snapshot_json());
+        assert_eq!(snapshot["sessionList"].as_array().unwrap().len(), 1);
+        assert_eq!(snapshot["sessionList"][0]["id"], "s1");
+        assert_eq!(snapshot["sessionList"][0]["title"], "标题-s1");
+        assert_eq!(snapshot["sessionList"][0]["source"], "dsh");
+        assert_eq!(snapshot["sessionList"][0]["state"], "working");
+        assert!(snapshot["sessionList"][0]["askKind"].is_null());
+        assert_eq!(snapshot["sessionList"][0]["lastEventAt"], 1_000);
+        assert!(snapshot["sessionList"][0]["completedAt"].is_null());
     }
 
     #[test]
@@ -1333,13 +1738,20 @@ mod tests {
     }
 
     #[test]
-    fn heartbeat_timeout_marks_disconnected_and_idle() {
+    fn heartbeat_timeout_marks_disconnected_and_idle_and_clears_list() {
         let (bridge, _temp) = test_bridge();
         let start = Instant::now();
 
         assert!(
             bridge
-                .ingest(heartbeat(StatusState::Working, 1), start)
+                .ingest(
+                    heartbeat_with_list(
+                        StatusState::Working,
+                        1,
+                        vec![incoming_session("s1", SessionState::Working)],
+                    ),
+                    start,
+                )
                 .is_some()
         );
         assert!(bridge.inner.lock().unwrap().connected);
@@ -1350,11 +1762,13 @@ mod tests {
         assert_eq!(messages[0].state, StatusState::Idle);
         assert_eq!(messages[0].sessions, 0);
         assert_eq!(messages[0].source, StatusSource::Dsh);
+        assert!(messages[0].session_list.is_empty());
 
         let inner = bridge.inner.lock().unwrap();
         assert!(!inner.connected);
         assert_eq!(inner.current, StatusState::Idle);
         assert_eq!(inner.sessions, 0);
+        assert!(inner.session_list.is_empty());
     }
 
     #[test]
@@ -1388,6 +1802,72 @@ mod tests {
     }
 
     #[test]
+    fn heartbeat_replaces_list_and_broadcasts_when_aggregate_unchanged() {
+        let (bridge, _temp) = test_bridge();
+        let start = Instant::now();
+        bridge
+            .ingest(
+                state_message_with_list(
+                    "working",
+                    1,
+                    None,
+                    vec![incoming_session("a", SessionState::Working)],
+                ),
+                start,
+            )
+            .unwrap();
+        let mut receiver = bridge.tx.subscribe();
+
+        let result = bridge
+            .ingest(
+                heartbeat_with_list(
+                    StatusState::Working,
+                    1,
+                    vec![incoming_session("b", SessionState::Idle)],
+                ),
+                start + Duration::from_secs(5),
+            )
+            .expect("列表变化应广播");
+        assert_eq!(result.state, StatusState::Working);
+        assert_eq!(result.session_list.len(), 1);
+        assert_eq!(result.session_list[0].id, "b");
+        let broadcast = value(&receiver.try_recv().unwrap());
+        assert_eq!(broadcast["state"], "working");
+        assert_eq!(broadcast["sessionList"][0]["id"], "b");
+        assert_eq!(
+            bridge.inner.lock().unwrap().session_list[0].id.as_str(),
+            "b"
+        );
+    }
+
+    #[test]
+    fn state_message_replaces_and_clears_the_list() {
+        let (bridge, _temp) = test_bridge();
+        let start = Instant::now();
+        let with_list = bridge
+            .ingest(
+                state_message_with_list(
+                    "working",
+                    1,
+                    None,
+                    vec![incoming_session("a", SessionState::Working)],
+                ),
+                start,
+            )
+            .unwrap();
+        assert_eq!(with_list.session_list.len(), 1);
+
+        let cleared = bridge
+            .ingest(
+                state_message_with_list("idle", 0, None, Vec::new()),
+                start + Duration::from_secs(1),
+            )
+            .unwrap();
+        assert!(cleared.session_list.is_empty());
+        assert!(bridge.inner.lock().unwrap().session_list.is_empty());
+    }
+
+    #[test]
     fn heartbeat_during_completed_hold_keeps_pulse() {
         let (bridge, _temp) = test_bridge();
         let start = Instant::now();
@@ -1409,6 +1889,59 @@ mod tests {
         let resumed = bridge.tick(start + Duration::from_secs(3));
         assert_eq!(resumed.len(), 1);
         assert_eq!(resumed[0].state, StatusState::Working);
+    }
+
+    #[test]
+    fn heartbeat_list_change_during_completed_hold_keeps_the_timer() {
+        let (bridge, _temp) = test_bridge();
+        let start = Instant::now();
+        bridge.ingest(
+            state_message_with_list(
+                "working",
+                1,
+                None,
+                vec![incoming_session("a", SessionState::Working)],
+            ),
+            start,
+        );
+        bridge
+            .ingest(
+                state_message_with_list(
+                    "completed",
+                    1,
+                    Some(StatusState::Working),
+                    vec![incoming_session("a", SessionState::Idle)],
+                ),
+                start,
+            )
+            .unwrap();
+        let mut receiver = bridge.tx.subscribe();
+
+        // completed 保持期内只改列表：广播 completed + remainingMs + 新列表，不打断 3s 计时。
+        let result = bridge
+            .ingest(
+                heartbeat_with_list(
+                    StatusState::Working,
+                    1,
+                    vec![incoming_session("b", SessionState::Working)],
+                ),
+                start + Duration::from_secs(1),
+            )
+            .expect("completed 保持期内列表变化应广播");
+        assert_eq!(result.state, StatusState::Completed);
+        assert_eq!(result.resume, Some(StatusState::Working));
+        let remaining = result.remaining_ms.unwrap();
+        assert!((1..=3000).contains(&remaining));
+        assert_eq!(result.session_list.len(), 1);
+        assert_eq!(result.session_list[0].id, "b");
+        assert_eq!(bridge.inner.lock().unwrap().current, StatusState::Completed);
+        assert_eq!(value(&receiver.try_recv().unwrap())["state"], "completed");
+
+        // 原 deadline 仍然生效（start + 3s），恢复成 working 并带最新列表。
+        let resumed = bridge.tick(start + Duration::from_secs(3));
+        assert_eq!(resumed.len(), 1);
+        assert_eq!(resumed[0].state, StatusState::Working);
+        assert_eq!(resumed[0].session_list[0].id, "b");
     }
 
     #[test]
@@ -1442,22 +1975,35 @@ mod tests {
     }
 
     #[test]
-    fn hello_marks_connected_without_broadcasting() {
+    fn hello_on_fresh_connection_clears_list_and_broadcasts_idle() {
         let (bridge, _temp) = test_bridge();
         let start = Instant::now();
+        // 模拟桥里残留了一段旧列表 + 掉线状态，插件重连（hello）应清空并广播 idle。
+        {
+            let mut inner = bridge.inner.lock().unwrap();
+            inner.session_list =
+                normalize_session_list(vec![incoming_session("old", SessionState::Working)]);
+            inner.connected = false;
+        }
+        let mut receiver = bridge.tx.subscribe();
         let message = bridge.ingest(
             IncomingHook::Hello {
-                plugin_version: 1,
+                plugin_version: 2,
                 profile: "desktop".to_string(),
                 ts: Some(1),
             },
-            start,
+            start + Duration::from_secs(1),
         );
-        assert!(message.is_none());
+        let message = message.expect("刚上线应广播 idle");
+        assert_eq!(message.state, StatusState::Idle);
+        assert_eq!(message.sessions, 0);
+        assert!(message.session_list.is_empty());
+        assert_eq!(value(&receiver.try_recv().unwrap())["state"], "idle");
         let inner = bridge.inner.lock().unwrap();
         assert!(inner.connected);
-        assert_eq!(inner.plugin_version, Some(1));
+        assert_eq!(inner.plugin_version, Some(2));
         assert_eq!(inner.current, StatusState::Idle);
+        assert!(inner.session_list.is_empty());
     }
 
     #[test]
@@ -1532,6 +2078,17 @@ mod tests {
         bridge
             .install("desktop", "http://127.0.0.1:47815/hook/dsh")
             .unwrap();
+        bridge
+            .ingest(
+                state_message_with_list(
+                    "working",
+                    1,
+                    None,
+                    vec![incoming_session("s1", SessionState::Working)],
+                ),
+                Instant::now(),
+            )
+            .unwrap();
         let mut receiver = bridge.tx.subscribe();
 
         bridge.set_enabled(false).unwrap();
@@ -1540,7 +2097,10 @@ mod tests {
             .unwrap();
         assert!(!config.enabled);
         assert!(!bridge.status().enabled);
-        assert_eq!(value(&receiver.try_recv().unwrap())["state"], "idle");
+        let idle = value(&receiver.try_recv().unwrap());
+        assert_eq!(idle["state"], "idle");
+        assert!(idle["sessionList"].as_array().unwrap().is_empty());
+        assert!(bridge.inner.lock().unwrap().session_list.is_empty());
 
         bridge.set_enabled(true).unwrap();
         assert!(bridge.status().enabled);
@@ -1562,13 +2122,27 @@ mod tests {
         bridge
             .install("desktop", "http://127.0.0.1:47815/hook/dsh")
             .unwrap();
+        bridge
+            .ingest(
+                state_message_with_list(
+                    "working",
+                    1,
+                    None,
+                    vec![incoming_session("s1", SessionState::Working)],
+                ),
+                Instant::now(),
+            )
+            .unwrap();
         let mut receiver = bridge.tx.subscribe();
 
         bridge.remove().unwrap();
         assert!(!bridge.status().installed);
         assert!(!bridge.status().enabled);
         assert!(!bridge.layout().config_path().exists());
-        assert_eq!(value(&receiver.try_recv().unwrap())["state"], "idle");
+        let idle = value(&receiver.try_recv().unwrap());
+        assert_eq!(idle["state"], "idle");
+        assert!(idle["sessionList"].as_array().unwrap().is_empty());
+        assert!(bridge.inner.lock().unwrap().session_list.is_empty());
     }
 
     fn http_post(port: u16, authorization: Option<&str>, body: &[u8]) -> String {

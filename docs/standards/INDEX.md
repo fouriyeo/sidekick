@@ -23,7 +23,7 @@ children:
 | --- | --- | --- |
 | 新增/维护文档，或让 AI 懒加载文档 | [documentation.md](./documentation.md) | M |
 | 写 PRD、排优先级、评审需求、改范围 | [product.md](./product.md) | M |
-| 设计横屏、触控、手势、反馈、错误文案 | [ux.md](./ux.md) | L |
+| 设计竖屏、触控、手势、反馈、错误文案 | [ux.md](./ux.md) | L |
 | 定视觉、配色、字体、宠物资产、动效 | [visual.md](./visual.md) | L |
 | 改前端/平台边界/依赖/测试 | [engineering.md](./engineering.md) | M |
 | 提交/推送代码，写 commit、判断能不能 push | [git.md](./git.md) | S |

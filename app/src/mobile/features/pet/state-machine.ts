@@ -415,16 +415,6 @@ export function reducePet(
       };
     }
 
-    case "SET_POSTURE": {
-      return {
-        state: {
-          ...state,
-          settings: { ...state.settings, posture: event.posture },
-        },
-        effects: [],
-      };
-    }
-
     case "RESET": {
       return {
         state: {

@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import type { Posture } from "@/mobile/features/pet/types";
 import { MicButton } from "./mic-button";
 import { useMicStore } from "./mic-store";
 
@@ -70,72 +69,69 @@ afterEach(() => {
   });
 });
 
-function renderButton(posture: Posture) {
-  render(<MicButton active posture={posture} />);
+function renderButton() {
+  render(<MicButton active />);
   return screen.getByRole("button", { name: /松开结束录音|按住说话/ });
-}
-
-/** 录音条：包含「上滑取消」提示的那张卡片。 */
-function recordingBar(): HTMLElement {
-  const hint = screen.getByText("上滑取消");
-  const bar = hint.closest("div.rounded-2xl");
-  if (!bar) throw new Error("没有找到录音条");
-  return bar as HTMLElement;
 }
 
 function isPositioned(element: Element) {
   return /\b(absolute|fixed)\b/.test(element.className);
 }
 
-/** 覆盖层：按钮的兄弟层（手持绝对定位，支架静态居中）。 */
+/** 覆盖层：按钮的兄弟层，固定在胶囊上方。 */
 function overlayOf(mic: HTMLElement): HTMLElement {
   const container = mic.parentElement as HTMLElement;
   return container.firstElementChild as HTMLElement;
 }
 
-describe("MicButton 手持模式：底部居中按钮 + 上方居中覆盖层", () => {
-  it("按钮容器底部居中，覆盖层绝对定位在按钮上方居中且不撑宽容器", () => {
-    const mic = renderButton("handheld");
-    const bar = recordingBar();
+function setMicIdle() {
+  useMicStore.setState({ phase: "idle", session: null, result: null, error: null });
+}
+
+describe("MicButton 竖屏胶囊", () => {
+  it("空闲是 56px 高的宽胶囊，底部居中且不使用 CSS translate 居中", () => {
+    setMicIdle();
+    const mic = renderButton();
+    const container = mic.parentElement as HTMLElement;
+
+    expect(container.className).toContain("inset-x-0");
+    expect(container.className).toContain("items-center");
+    expect(container.className).toContain("bottom-[calc(env(safe-area-inset-bottom)+16px)]");
+    expect(container.className).not.toMatch(/left-1\/2/);
+    expect(container.className).not.toContain("-translate-x-1/2");
+
+    expect(mic.className).toContain("h-14");
+    expect(mic.className).toContain("w-[min(86vw,360px)]");
+    expect(mic.className).toContain("rounded-full");
+    expect(mic.className).toContain("pointer-events-auto");
+    expect(mic.textContent).toContain("按住说话");
+  });
+
+  it("覆盖层在胶囊上方独立定位，不参与容器宽度", () => {
+    const mic = renderButton();
     const overlay = overlayOf(mic);
     const container = mic.parentElement as HTMLElement;
 
-    // 按钮层：底部居中（inset-x-0 + flex 居中；不用 left-1/2 + -translate-x-1/2，
-    // 因为 Tailwind v4 的 translate 工具类是 CSS translate 属性，真机 WebView 103 不支持）
-    expect(container.className).toContain("inset-x-0");
-    expect(container.className).toContain("items-center");
-    expect(container.className).toContain("bottom-[calc(env(safe-area-inset-bottom)+24px)]");
-    expect(container.className).not.toMatch(/left-1\/2/);
-    expect(container.className).not.toContain("-translate-x-1/2");
-    expect(container.className).not.toMatch(/\bw-\[/);
-    expect(mic.className).toContain("pointer-events-auto");
-
-    // 覆盖层是独立绝对定位层，左右贴边 + mx-auto 居中，不参与容器宽度计算
-    expect(overlay).toBe(bar.parentElement);
-    expect(overlay).not.toBe(container);
+    expect(overlay).not.toBe(mic);
     expect(isPositioned(overlay)).toBe(true);
-    expect(overlay.className).toContain("pointer-events-none");
     expect(overlay.className).toContain("absolute");
-    expect(overlay.className).toContain("bottom-[104px]");
-    expect(overlay.className).toContain("left-0");
-    expect(overlay.className).toContain("right-0");
+    expect(overlay.className).toContain("bottom-[68px]");
+    expect(overlay.className).toContain("inset-x-0");
     expect(overlay.className).toContain("mx-auto");
-    expect(overlay.className).toContain("w-[min(82vw,360px)]");
-    expect(overlay.className).toContain("items-center");
-    expect(overlay.className).not.toContain("-translate-x-1/2");
-    expect(overlay.className).not.toContain("items-end");
+    expect(overlay.className).toContain("w-[min(86vw,380px)]");
+    expect(overlay.className).toContain("pointer-events-none");
 
-    // 按钮所在的定位层里只有按钮一个流内元素
+    // 容器里只有按钮一个流内元素，覆盖层不会撑宽按钮。
     const inFlow = [...container.children].filter((child) => !isPositioned(child));
     expect(inFlow).toEqual([mic]);
   });
 
-  it("手持模式没有任何「取消录音」按钮，取消只靠上滑手势", () => {
-    render(<MicButton active posture="handheld" />);
+  it("没有任何「取消录音」按钮，取消只靠上滑手势", () => {
+    renderButton();
     expect(screen.queryByRole("button", { name: "取消录音" })).toBeNull();
   });
 
-  it("结果卡片出现时同样在按钮上方居中的独立覆盖层", () => {
+  it("结果卡片出现时同样在胶囊上方独立覆盖层", () => {
     useMicStore.setState({
       phase: "delivered",
       result: {
@@ -148,8 +144,7 @@ describe("MicButton 手持模式：底部居中按钮 + 上方居中覆盖层", 
       },
     });
 
-    render(<MicButton active posture="handheld" />);
-    const mic = screen.getByRole("button", { name: /按住说话/ });
+    const mic = renderButton();
     const text = screen.getByText("测试转写文本");
     const card = text.closest("div.rounded-2xl.border");
     expect(card).not.toBeNull();
@@ -157,18 +152,14 @@ describe("MicButton 手持模式：底部居中按钮 + 上方居中覆盖层", 
     const overlay = card?.parentElement as HTMLElement;
     expect(overlay).not.toBe(mic.parentElement);
     expect(isPositioned(overlay)).toBe(true);
-    expect(overlay.className).toContain("left-0");
-    expect(overlay.className).toContain("right-0");
-    expect(overlay.className).toContain("mx-auto");
-    expect(overlay.className).toContain("w-[min(82vw,360px)]");
-    expect((card as HTMLElement).className).toContain("w-[min(82vw,360px)]");
+    expect(overlay.className).toContain("w-[min(86vw,380px)]");
+    expect((card as HTMLElement).className).toContain("w-full");
     expect((card as HTMLElement).className).toContain("pointer-events-auto");
   });
 
-  it("按下开始录音时中震一下，给「现在在录」的即时反馈", async () => {
-    useMicStore.setState({ phase: "idle", session: null, result: null, error: null });
-    render(<MicButton active posture="handheld" />);
-    const mic = screen.getByRole("button", { name: /按住说话/ });
+  it("按下开始录音时中震一下，给「现在在录」的即时反馈", () => {
+    setMicIdle();
+    const mic = renderButton();
 
     fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
 
@@ -176,13 +167,13 @@ describe("MicButton 手持模式：底部居中按钮 + 上方居中覆盖层", 
   });
 
   it("按住上滑 60px 进入「松手取消」珊瑚态，松手回到 idle", async () => {
-    useMicStore.setState({ phase: "idle", session: null, result: null, error: null });
-    render(<MicButton active posture="handheld" />);
-    const mic = screen.getByRole("button", { name: /按住说话/ });
+    setMicIdle();
+    const mic = renderButton();
 
     fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
     await waitFor(() => expect(useMicStore.getState().phase).toBe("listening"));
-    expect(mic.textContent).toContain("松手结束");
+    expect(mic.textContent).toContain("上滑取消");
+    expect(mic.className).toContain("w-[min(90vw,420px)]");
 
     fireEvent.pointerMove(mic, { pointerId: 1, clientX: 196, clientY: 740 });
     await waitFor(() => expect(mic.textContent).toContain("松手取消"));
@@ -195,67 +186,31 @@ describe("MicButton 手持模式：底部居中按钮 + 上方居中覆盖层", 
   });
 });
 
-describe("MicButton 支架模式：保持居中胶囊", () => {
-  it("覆盖层静态居中排列，按钮自己就是宽胶囊", () => {
-    render(<MicButton active posture="docked" />);
-    const mic = screen.getByRole("button", { name: /松开结束录音/ });
-    const container = mic.parentElement as HTMLElement;
-    const overlay = overlayOf(mic);
-
-    expect(overlay).not.toBe(mic);
-    expect(overlay.className).toContain("items-center");
-    expect(isPositioned(overlay)).toBe(false);
-    expect(mic.className).toContain("w-[min(82vw,520px)]");
-    expect(container.className).toContain("inset-x-0");
-    expect(container.className).not.toContain("-translate-x-1/2");
-    // 支架模式没有取消按钮，录音提示在胶囊内部
-    expect(screen.queryByRole("button", { name: "取消录音" })).toBeNull();
-    expect(mic.textContent).toContain("上滑取消");
-  });
-});
-
 describe("MicButton 流式识别回显", () => {
-  it("手持录音卡显示实时文本、百炼来源和上传提示", () => {
+  it("录音时在胶囊上方显示实时文本、百炼来源和上传提示", () => {
     useMicStore.setState({
       phase: "listening",
       session: "session-1",
       partialText: "帮我把这段异步的注释",
       partialRev: 3,
     });
-    render(<MicButton active posture="handheld" />);
+    renderButton();
 
     expect(screen.getByText("帮我把这段异步的注释")).toBeInTheDocument();
     expect(screen.getByText(/百炼 · 音频上传中/)).toBeInTheDocument();
   });
 
-  it("云端收尾时保留最后一段实时文本", () => {
+  it("云端收尾时胶囊内显示进度，并保留最后一段实时文本", () => {
     useMicStore.setState({
       phase: "processing",
       session: "session-1",
       partialText: "帮我把这段异步的注释改成中文",
       partialRev: 4,
     });
-    render(<MicButton active posture="handheld" />);
+    renderButton();
 
     expect(screen.getByText("云端收尾…")).toBeInTheDocument();
-    expect(screen.getByText("百炼")).toBeInTheDocument();
+    expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
     expect(screen.getByText("帮我把这段异步的注释改成中文")).toBeInTheDocument();
-  });
-
-  it("支架模式在胶囊上方显示实时文本，不撑宽胶囊", () => {
-    useMicStore.setState({
-      phase: "listening",
-      session: "session-1",
-      partialText: "支架模式实时文本",
-      partialRev: 2,
-    });
-    render(<MicButton active posture="docked" />);
-
-    const text = screen.getByText("支架模式实时文本");
-    const card = text.closest("div.rounded-2xl");
-    expect(card).not.toBeNull();
-    expect(card?.className).toContain("w-[min(82vw,520px)]");
-    const mic = screen.getByRole("button", { name: /松开结束录音/ });
-    expect(mic.className).toContain("w-[min(82vw,520px)]");
   });
 });

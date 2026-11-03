@@ -215,6 +215,42 @@ pub fn send_status_request(app: tauri::AppHandle) -> Result<(), String> {
     )
 }
 
+/// 手机端请求电脑把某个会话对应的软件切到前台；结果走桌面的 focus.result。
+///
+/// 这里只做基本的非空/长度校验（与协议一致：requestId ≤64、source ≤32、
+/// sessionId ≤128），真正的 source 映射与限频由桌面端负责。
+#[tauri::command]
+pub fn send_focus_request(
+    app: tauri::AppHandle,
+    source: String,
+    session_id: String,
+    request_id: String,
+) -> Result<(), String> {
+    let source = source.trim();
+    let session_id = session_id.trim();
+    let request_id = request_id.trim();
+    if source.is_empty()
+        || session_id.is_empty()
+        || request_id.is_empty()
+        || source.chars().count() > 32
+        || session_id.chars().count() > 128
+        || request_id.chars().count() > 64
+    {
+        return Err("唤起参数无效".to_string());
+    }
+    send_payload(
+        &app,
+        serde_json::json!({
+            "v": 1,
+            "type": "focus.request",
+            "requestId": request_id,
+            "source": source,
+            "sessionId": session_id,
+            "ts": now_ms(),
+        }),
+    )
+}
+
 #[tauri::command]
 pub fn mic_start(
     app: tauri::AppHandle,

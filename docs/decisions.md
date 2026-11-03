@@ -452,3 +452,21 @@
 - 放弃：继续用 Keychain（开发体验差、Windows/Linux 无实现）；把 Key 放 Tauri plugin-store/前端 localStorage（更容易被 WebView/前端代码碰到，且不是 Rust 配置的唯一事实源）；自研加密（密钥仍要落地，收益有限）。
 - 代价：明文 Key 只靠 0600 权限保护，安全性低于 Keychain；旧钥匙串 Key 不自动迁移；用户需注意不要分享 `asr.json` 或包含它的备份。
 - 规范：`app/src-tauri/src/asr_config.rs`、`asr_cloud.rs`、`asr_keychain.rs`、`docs/engineering/asr-cloud-bailian.md`、`asr-model.md`、`AGENTS.md`、`desktop/features/models`。
+
+## D61 · AI 会话列表：会话标题上手机 + 反问一键唤起 DSH（2026-11-03）
+
+- 背景：AI 联动只有聚合四态和「会话数」，用户看不出是哪个会话在工作/完成，也没法在手机上处理反问；原 PRD 明确「只同步状态、不同步标题」。
+- 决策：`status` 增加可选 `sessionList`（id/标题/状态/askKind/lastEventAt/completedAt，最多 50 条）；手机宠物页上方显示可收起会话列表（默认 1 条、展开 5 条滚动、新 asking 自动展开）；完成态保留到手动清除；新增 `focus.request` / `focus.result`，点 asking 会话让电脑 `open -a "DeepSeek Harness"` 切前台（未开则启动），只唤起不自动回答。清除只清手机本地状态记录（`sidekick-sessions.json` 只存 id/时间，7 天 TTL），有新事件自动重现。
+- 原因：一眼分清多会话是刚需；标题是唯一能辨认任务的内容，但隐私代价可控（单行 ≤80 字符、不落盘/不写日志）；focus 只做窗口唤起，避免把「回答 AI」的复杂度和风险提前引入。
+- 放弃：只显示匿名编号（无法辨认）；手机直接回答/审批（需要 ask 载荷、问答 UI、answer 注入，P1）；自动定位到具体会话（DSH 无稳定深链，做不到就降级为切前台）；把完整对话同步到手机（隐私边界）。
+- 代价：新增唯一内容类外发字段（标题）；旧手机/旧桌面需容忍未知字段；focus 依赖 macOS `open -a`，其他平台只回 `unsupported_platform`；局域网 WS 无鉴权时同网段可触发唤起（低风险，随配对鉴权解决）。
+- 规范：`protocol/README.md`、`docs/prd/hook/*`、`docs/engineering/dsh-hook.md`、`app/src/protocol/messages.ts`、`app/src/dsh-hook/sidekick-hook.mjs`、`app/src-tauri/src/dsh_hook.rs`、`app_focus.rs`、`app/src/mobile/features/sessions/`。
+
+## D62 · 手机只做竖屏，删除双姿态；麦克风改宽矮胶囊（2026-11-03）
+
+- 背景：横屏/支架/手持两套布局让宠物页与麦克风各维护一套尺寸，顶部会话列表出现后纵向空间更紧；用户明确表示手机只需竖屏。
+- 决策：删除 `use-orientation` / `posture` / `SET_POSTURE` / 姿态设置与持久化字段；Android Activity 锁定 `screenOrientation="portrait"`；宠物页固定单套竖屏布局。麦克风从 96×96 圆形改为 56px 高、`min(86vw,360px)` 宽胶囊，录音/处理状态并入胶囊，去掉独立录音卡片；覆盖层仍在胶囊上方独立定位。
+- 原因：竖屏可展示内容更多、逻辑更少；宽矮胶囊节省约 40px 纵向空间，给会话列表和宠物让位；录音状态不再额外弹卡片，按住时按钮不跳位。
+- 放弃：保留横屏/平板布局；通过响应式断点兼容横屏；保留 docked/handheld 供未来使用（YAGNI，需要时按 D62 恢复）。
+- 代价：横屏/平板用户看到的是竖屏舞台；旧存档的 `posture` 字段被忽略（不迁移、不报错）；Android 锁竖屏后不能旋转。
+- 规范：`docs/standards/ux.md`、`docs/prd/pet/PRD.md`/`SPEC.md`/`ACCEPTANCE.md`/`INDEX.md`、`docs/product/scope.md`/`users.md`/`INDEX.md`/`metrics.md`、`scripts/patch-android-manifest.mjs`、`app/src/mobile/features/pet/*`、`app/src/mobile/features/mic/mic-button.tsx`、`AGENTS.md`。

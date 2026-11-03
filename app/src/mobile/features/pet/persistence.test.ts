@@ -24,7 +24,6 @@ describe("pet persistence", () => {
       affinity: 0,
     });
     expect(state.onboarded).toBe(false);
-    expect(state.settings.posture).toBe("docked");
     expect(state.settings.dimMinutes).toBe(5);
     expect(state.settings.keepAwakeHours).toBe(2);
   });
@@ -70,7 +69,7 @@ describe("pet persistence", () => {
     expect(parsed.save?.onboarded).toBe(true);
   });
 
-  it("maps auto posture to docked and clamps values", () => {
+  it("ignores the removed posture field and clamps values", () => {
     const parsed = parsePetSave(
       {
         version: 1,
@@ -86,7 +85,7 @@ describe("pet persistence", () => {
     expect(parsed.save?.energy).toBe(100);
     expect(parsed.save?.affinity).toBe(0);
     expect(parsed.save?.affinityGainedToday).toBe(5);
-    expect(parsed.save?.settings.posture).toBe("docked");
+    expect(parsed.save?.settings).not.toHaveProperty("posture");
     expect(parsed.save?.settings.haptics).toBe(false);
     expect(parsed.save?.settings.keepAwake).toBe(true);
     expect(parsed.save?.settings.dimMinutes).toBe(5);

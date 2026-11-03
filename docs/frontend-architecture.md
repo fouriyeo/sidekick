@@ -333,7 +333,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 | --- | --- | --- |
 | 0. 预检 | 真机 WebView 版本、开分支、记录当前包体/启动时间 | 版本 ≥ 111 或已决定降级方案 |
 | 1. 骨架 | React + Vite + Tailwind + shadcn + Biome；两个 entry；连接 + 聊天 1:1 复刻 | 双端连接/收发与现状一致，Rust 未改 |
-| 2. 宠物 | 舞台、情绪状态机、plugin-store 存档、手动双姿态（帧动画图集） | 真机 60fps，聊天仍可用 |
+| 2. 宠物 | 舞台、情绪状态机、plugin-store 存档、单竖屏布局（帧动画图集） | 真机 60fps，聊天仍可用 |
 | 3. 麦克风 | 手机采集 + 桌面转写/输入、协议扩展、权限与降级 | 真机按住说话全链路通过 |
 | 4. 收尾 | 设置/配对 UI、补齐测试、包名 `desktop` → `sidekick`（旧 DOM/`styles.css` 已随 Phase 1 删除） | 无旧代码引用，测试通过 |
 | 5. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |

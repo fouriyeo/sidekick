@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { createIdleAiStatus } from "./ai-status";
 import { PetStage } from "./pet-stage";
 import { usePetStore } from "./pet-store";
@@ -49,7 +50,6 @@ function setStageState(options: {
       settings: {
         ...state.pet.settings,
         reduceMotion: options.reduceMotion ?? "off",
-        posture: "docked",
       },
     },
   }));
@@ -67,6 +67,8 @@ function stageSection(container: HTMLElement): HTMLElement {
 
 beforeEach(() => {
   setStageState({});
+  useSessionStore.getState().clearAll();
+  useSessionStore.setState({ hydrated: true });
 });
 
 afterEach(() => {
@@ -132,5 +134,57 @@ describe("PetStage AI 联动展示", () => {
     const { container } = renderStage();
 
     expect(stageSection(container)).toHaveAttribute("data-reduced-motion", "true");
+  });
+});
+
+describe("PetStage 会话列表", () => {
+  it("没有会话时面板隐藏、宠物不下移", () => {
+    const { container } = renderStage();
+    expect(stageSection(container)).toHaveAttribute("data-session-panel", "hidden");
+    expect(container.querySelector('[style*="--pet-session-shift: 0px"]')).not.toBeNull();
+  });
+
+  it("有会话时默认收起，宠物下移 32px", () => {
+    useSessionStore.setState({
+      raw: [
+        {
+          id: "s-1",
+          title: "修复登录",
+          source: "dsh",
+          state: "working",
+          askKind: null,
+          lastEventAt: Date.now(),
+          completedAt: null,
+        },
+      ],
+    });
+    const { container } = renderStage();
+
+    expect(stageSection(container)).toHaveAttribute("data-session-panel", "collapsed");
+    expect(screen.getByText("修复登录")).toBeInTheDocument();
+    expect(container.querySelector('[style*="--pet-session-shift: 32px"]')).not.toBeNull();
+  });
+
+  it("展开时宠物下移 56px，并让出气泡位置", () => {
+    setStageState({ ai: "asking", caption: "ai_asking" });
+    useSessionStore.setState({
+      expanded: true,
+      raw: [
+        {
+          id: "s-1",
+          title: "修复登录",
+          source: "dsh",
+          state: "working",
+          askKind: null,
+          lastEventAt: Date.now(),
+          completedAt: null,
+        },
+      ],
+    });
+    const { container } = renderStage();
+
+    expect(stageSection(container)).toHaveAttribute("data-session-panel", "expanded");
+    expect(container.querySelector('[style*="--pet-session-shift: 56px"]')).not.toBeNull();
+    expect(screen.queryByText("等你决定")).not.toBeInTheDocument();
   });
 });

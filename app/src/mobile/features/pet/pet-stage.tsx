@@ -5,12 +5,18 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { MicButton } from "@/mobile/features/mic/mic-button";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
+import { SessionPanel } from "@/mobile/features/sessions/session-panel";
+import {
+  visibleSessions as selectVisibleSessions,
+  useSessionStore,
+} from "@/mobile/features/sessions/session-store";
 import { Button } from "@/shared/ui/button";
 import { type AiState, displayStateOf } from "./ai-status";
 import { createGestureRecognizer } from "./gestures";
@@ -20,10 +26,8 @@ import styles from "./pet.module.css";
 import { PetBubble } from "./pet-bubble";
 import { PetHearts } from "./pet-hearts";
 import { usePetStore } from "./pet-store";
-import { postureForOrientation } from "./posture";
 import { SpritePet } from "./sprite-pet";
 import type { GestureEvent, PetState } from "./types";
-import { useOrientation } from "./use-orientation";
 import { useReducedMotion } from "./use-reduced-motion";
 
 type PetStageProps = {
@@ -69,7 +73,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const saveStatus = usePetStore((state) => state.saveStatus);
   const ai = usePetStore((state) => state.ai);
   const aiCaption = usePetStore((state) => state.aiCaption);
-  const setPosture = usePetStore((state) => state.setPosture);
   const setMicListening = usePetStore((state) => state.setMicListening);
   const unlockSound = usePetStore((state) => state.unlockSound);
   const connectionStatus = useConnectionStore((state) => state.status);
@@ -77,17 +80,31 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
     (state) =>
       state.phase === "arming" || state.phase === "listening" || state.phase === "processing",
   );
-  const orientation = useOrientation();
+  const sessionRaw = useSessionStore((state) => state.raw);
+  const sessionCleared = useSessionStore((state) => state.cleared);
+  const sessionExpanded = useSessionStore((state) => state.expanded);
+  const sessionHydrated = useSessionStore((state) => state.hydrated);
+  const sessionRows = useMemo(
+    () => selectVisibleSessions(sessionRaw, sessionCleared),
+    [sessionRaw, sessionCleared],
+  );
+  const panelVisible = active && sessionHydrated && sessionRows.length > 0;
+  const askingKey = useMemo(
+    () =>
+      sessionRows
+        .filter((row) => row.display === "asking")
+        .map((row) => row.id)
+        .join(","),
+    [sessionRows],
+  );
 
   const systemReduced = useReducedMotion();
   const reducedMotion =
     pet.settings.reduceMotion === "on" || (pet.settings.reduceMotion === "system" && systemReduced);
 
-  const [controlsVisible, setControlsVisible] = useState(true);
   const [dimmed, setDimmed] = useState(false);
   const dimMs = Math.max(1, pet.settings.dimMinutes) * 60_000;
   const dimmedRef = useRef(false);
-  const controlTimer = useRef<number | null>(null);
   const dimTimer = useRef<number | null>(null);
   const recognizer = useRef(createGestureRecognizer());
 
@@ -101,33 +118,17 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       dimmedRef.current = true;
       setDimmed(true);
     }, dimMs);
-
-    setControlsVisible(true);
-    if (controlTimer.current !== null) window.clearTimeout(controlTimer.current);
-    if (pet.settings.posture === "docked" && active) {
-      controlTimer.current = window.setTimeout(() => setControlsVisible(false), 5000);
-    }
-  }, [active, dimMs, pet.settings.posture]);
+  }, [dimMs]);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
   useEffect(() => {
-    if (!hydrated) return;
-
-    const next = postureForOrientation(orientation);
-    if (usePetStore.getState().pet.settings.posture !== next) {
-      void setPosture(next);
-    }
-  }, [hydrated, orientation, setPosture]);
-
-  useEffect(() => {
     if (!active) return;
     markActivity();
 
     return () => {
-      if (controlTimer.current !== null) window.clearTimeout(controlTimer.current);
       if (dimTimer.current !== null) window.clearTimeout(dimTimer.current);
     };
   }, [active, markActivity]);
@@ -139,6 +140,11 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   useEffect(() => {
     if (pet.onboarded) markActivity();
   }, [pet.onboarded, markActivity]);
+
+  // 新的「等你决定」会唤醒变暗屏幕/控制栏，避免用户错过反问。
+  useEffect(() => {
+    if (askingKey) markActivity();
+  }, [askingKey, markActivity]);
 
   useEffect(() => {
     if (!active) return;
@@ -212,11 +218,12 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
     emit(recognizer.current.cancel(sampleFromPointer(event)));
   }
 
-  const poseStyle = (
-    pet.settings.posture === "docked"
-      ? { "--pet-x": "14%", "--pet-y": "0%", "--pet-scale": "1" }
-      : { "--pet-x": "0%", "--pet-y": "-12%", "--pet-scale": "0.86" }
-  ) as CSSProperties;
+  const poseStyle = {
+    "--pet-x": "0%",
+    "--pet-y": "-12%",
+    "--pet-scale": "0.86",
+    "--pet-session-shift": panelVisible ? (sessionExpanded ? "56px" : "32px") : "0px",
+  } as CSSProperties;
 
   const night = isNight(Date.now());
   const displayAi = displayStateOf(pet.phase, ai.state);
@@ -237,11 +244,10 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
         reducedMotion && styles.reduceMotion,
       )}
       onContextMenu={(event) => event.preventDefault()}
-      data-orientation={orientation}
-      data-posture={pet.settings.posture}
       data-phase={pet.phase}
       data-ai-state={displayAi}
       data-reduced-motion={reducedMotion ? "true" : "false"}
+      data-session-panel={panelVisible ? (sessionExpanded ? "expanded" : "collapsed") : "hidden"}
     >
       <div className="absolute top-[calc(env(safe-area-inset-top)+16px)] left-[calc(env(safe-area-inset-left)+24px)] z-30">
         <Button
@@ -249,12 +255,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           variant="ghost"
           size="icon-lg"
           aria-label="打开设置"
-          aria-hidden={!controlsVisible || undefined}
-          tabIndex={controlsVisible ? 0 : -1}
-          className={cn(
-            "size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text",
-            !controlsVisible && "pointer-events-none opacity-0",
-          )}
+          className="size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text"
           onClick={onOpenSettings}
         >
           <Settings className="size-5" />
@@ -267,7 +268,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           className={cn(
             "size-2 rounded-full transition-opacity duration-200",
             connectionStatus === "connected" ? "bg-pet-success" : "bg-pet-muted",
-            !controlsVisible && "opacity-0",
           )}
         />
         <Button
@@ -275,28 +275,25 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
           variant="ghost"
           size="icon-lg"
           aria-label="打开聊天"
-          aria-hidden={!controlsVisible || undefined}
-          tabIndex={controlsVisible ? 0 : -1}
-          className={cn(
-            "size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text",
-            !controlsVisible && "pointer-events-none opacity-0",
-          )}
+          className="size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text"
           onClick={onOpenChat}
         >
           <MessageCircle className="size-5" />
         </Button>
       </div>
 
-      <div
-        className={cn(
-          "absolute z-20",
-          pet.settings.posture === "docked"
-            ? "top-[16%] left-[calc(env(safe-area-inset-left)+8%)] w-[48%] landscape:w-[36%]"
-            : "top-[16%] left-[calc(env(safe-area-inset-left)+8%)] w-[42%] landscape:top-[12%] landscape:w-[32%]",
-        )}
-      >
-        <PetBubble bubble={bubble} caption={caption} />
-      </div>
+      <SessionPanel active={active} onInteract={markActivity} />
+
+      {!(panelVisible && sessionExpanded) && (
+        <div
+          className={cn(
+            "absolute z-20 left-[calc(env(safe-area-inset-left)+8%)] w-[42%]",
+            panelVisible ? "top-[calc(env(safe-area-inset-top)+136px)]" : "top-[16%]",
+          )}
+        >
+          <PetBubble bubble={bubble} caption={caption} />
+        </div>
+      )}
 
       <div className={styles.petSlot} style={poseStyle}>
         <div
@@ -322,7 +319,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
         {liveText}
       </div>
 
-      <MicButton active={active} posture={pet.settings.posture} onOpenConnection={onOpenChat} />
+      <MicButton active={active} onOpenConnection={onOpenChat} />
 
       {saveStatus === "error" && (
         <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+16px)] left-0 right-0 z-30 mx-auto w-fit text-xs text-pet-muted">

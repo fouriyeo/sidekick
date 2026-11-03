@@ -14,15 +14,12 @@ export type PetPhase =
   | "sleeping"
   | "away";
 
-export type Posture = "docked" | "handheld";
-
 export type ReduceMotionSetting = "system" | "on" | "off";
 
 export type PetSettings = {
   haptics: boolean;
   sound: boolean;
   reduceMotion: ReduceMotionSetting;
-  posture: Posture;
   /** 宠物页面前台时是否阻止系统熄屏；旧存档里的 "never" 归一化为 true。 */
   keepAwake: boolean;
   /** 宠物页无操作多少分钟后自动变暗（防 OLED 烧屏）；默认 5 分钟。 */
@@ -98,7 +95,6 @@ export type PetEvent =
   | { type: "MIC_SUCCESS"; now: number }
   | { type: "MIC_CANCEL"; now: number }
   | { type: "MIC_ERROR"; now: number }
-  | { type: "SET_POSTURE"; now: number; posture: Posture }
   | { type: "RESET"; now: number };
 
 export type HapticStyle = "light" | "medium" | "success" | "error";
@@ -154,7 +150,6 @@ export type PetStoreState = {
   /** 首次用户手势时解锁 Web Audio（自动播放策略）。 */
   unlockSound: () => void;
   setName: (name: string) => Promise<boolean>;
-  setPosture: (posture: Posture) => Promise<boolean>;
   updateSettings: (patch: Partial<PetSettings>) => Promise<boolean>;
   resetPet: () => Promise<void>;
   flush: () => Promise<void>;

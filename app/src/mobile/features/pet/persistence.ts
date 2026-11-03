@@ -1,11 +1,4 @@
-import type {
-  PetSaveV1,
-  PetSettings,
-  PetState,
-  PetStorage,
-  Posture,
-  ReduceMotionSetting,
-} from "./types";
+import type { PetSaveV1, PetSettings, PetState, PetStorage, ReduceMotionSetting } from "./types";
 
 export const DEFAULT_NAME = "小跟班";
 
@@ -13,7 +6,6 @@ export const DEFAULT_SETTINGS: PetSettings = {
   haptics: true,
   sound: false,
   reduceMotion: "system",
-  posture: "docked",
   keepAwake: true,
   dimMinutes: 5,
   keepAwakeHours: 2,
@@ -154,14 +146,6 @@ function normalizeKeepAwakeHours(value: unknown): number {
   return Math.round(clampNumber(value, KEEP_AWAKE_HOURS_RANGE.min, KEEP_AWAKE_HOURS_RANGE.max));
 }
 
-function normalizePosture(value: unknown): Posture {
-  return value === "handheld" || value === "auto"
-    ? value === "auto"
-      ? "docked"
-      : "handheld"
-    : "docked";
-}
-
 function normalizeSettings(raw: unknown): PetSettings {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_SETTINGS };
   const value = raw as Record<string, unknown>;
@@ -170,7 +154,6 @@ function normalizeSettings(raw: unknown): PetSettings {
     haptics: typeof value.haptics === "boolean" ? value.haptics : DEFAULT_SETTINGS.haptics,
     sound: typeof value.sound === "boolean" ? value.sound : DEFAULT_SETTINGS.sound,
     reduceMotion: normalizeReduceMotion(value.reduceMotion),
-    posture: normalizePosture(value.posture),
     // 旧存档写的是 "never"（当时未接入），统一落到新默认 true：宠物页面默认常亮。
     keepAwake: typeof value.keepAwake === "boolean" ? value.keepAwake : DEFAULT_SETTINGS.keepAwake,
     dimMinutes: normalizeDimMinutes(value.dimMinutes),

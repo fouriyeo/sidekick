@@ -7,8 +7,10 @@
 // - 任何异常都不能抛回 DSH 的会话事件总线。
 //
 // 职责：订阅 DSH 的 session/event、session/disposed，把顶层会话聚合成
-// idle / working / asking / completed 四态，以回环 HTTP POST 推给 Sidekick 桌面端。
-// 配置文件 ~/.dsh/sidekick/config.json 每秒重读一次（按 mtime 缓存），由桌面端写入。
+// idle / working / asking / completed 四态，并附带最多 50 条会话摘要
+// （id/title/state/askKind/lastEventAt/completedAt），以回环 HTTP POST 推给
+// Sidekick 桌面端。配置文件 ~/.dsh/sidekick/config.json 每秒重读一次（按 mtime 缓存），
+// 由桌面端写入。
 
 import { readFile as readFileDefault, stat as statDefault } from "node:fs/promises";
 import { homedir as homedirDefault } from "node:os";
@@ -17,8 +19,8 @@ import { fileURLToPath } from "node:url";
 
 export const name = "sidekick-hook";
 
-/** 与 Rust HookBridge / Sidekick 桌面端约定的插件协议版本。 */
-export const PLUGIN_VERSION = 1;
+/** 与 Rust HookBridge / Sidekick 桌面端约定的插件协议版本。v2 增加 sessionList。 */
+export const PLUGIN_VERSION = 2;
 /** 配置文件格式版本。 */
 export const CONFIG_VERSION = 1;
 
@@ -28,6 +30,10 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
 export const DEFAULT_COMPLETED_THROTTLE_MS = 5000;
 export const DEFAULT_MAX_SESSIONS = 256;
 export const DEFAULT_MAX_QUEUE = 32;
+/** 协议层会话列表上限（与 TS MAX_SESSION_LIST / Rust MAX_SESSION_LIST 一致）。 */
+export const MAX_SESSION_LIST = 50;
+/** 会话标题最大字符数，按 Unicode 码点计（与 TS/Rust 一致）。 */
+export const MAX_SESSION_TITLE_CHARS = 80;
 
 const HANDLED_EVENT_TYPES = new Set([
   "turn/start",
@@ -37,6 +43,7 @@ const HANDLED_EVENT_TYPES = new Set([
   "approval/asked",
   "approval/decided",
   "user/message",
+  "session/title",
 ]);
 
 // Ask 工具识别用 token 集合。工具名先拆成 token 再匹配，避免 review / permission_scan
@@ -220,6 +227,20 @@ export function isSubagentSession(session) {
 }
 
 /**
+ * 会话标题清洗：去控制字符、折叠空白、trim、按 Unicode 码点截断到 80；
+ * 空标题返回 null。与 app/src/protocol/messages.ts 的 normalizeSessionTitle 保持一致。
+ */
+export function normalizeSessionTitle(value) {
+  if (typeof value !== "string") return null;
+  const oneLine = value
+    .replace(/[\u0000-\u001f\u007f]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!oneLine) return null;
+  return Array.from(oneLine).slice(0, MAX_SESSION_TITLE_CHARS).join("");
+}
+
+/**
  * 会话集合聚合成一个稳定状态。
  * 优先级：any asking -> asking；else any working -> working；else idle。
  * 传 Map 时会自动取 values()；也接受任意可迭代对象或记录数组。
@@ -399,18 +420,34 @@ export function createConfigReader(options = {}) {
 // Reducer：把会话事件折叠成每个会话的稳定状态
 // ---------------------------------------------------------------------------
 
-function createSessionRecord(id) {
+function createSessionRecord(id, now) {
   return {
     id,
     state: "idle",
     turnActive: false,
     pendingAsks: new Set(),
     pendingApprovals: new Set(),
+    title: null,
+    completedAt: null,
+    lastEventAt: now,
+    askKind: null,
   };
 }
 
+/** 按剩余 pending 重新推导 askKind（approval 优先）；没有 pending 时为 null。 */
+function refreshAskKind(record) {
+  record.askKind =
+    record.pendingApprovals.size > 0
+      ? "approval"
+      : record.pendingAsks.size > 0
+        ? "question"
+        : null;
+  return record.askKind;
+}
+
 function recomputeRecord(record) {
-  if (record.pendingAsks.size > 0 || record.pendingApprovals.size > 0) {
+  const askKind = refreshAskKind(record);
+  if (askKind !== null) {
     record.state = "asking";
     return;
   }
@@ -427,15 +464,52 @@ function toolCallIdOf(event) {
   return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
 }
 
+/** 列表保留优先级：asking > working > 最近完成 > 只有活动记录的 idle。 */
+function sessionPriority(record) {
+  if (record.state === "asking") return 0;
+  if (record.state === "working") return 1;
+  if (record.completedAt !== null && record.completedAt !== undefined) return 2;
+  return 3;
+}
+
+function sessionEntryOf(record) {
+  return {
+    id: record.id,
+    title: record.title ?? null,
+    source: "dsh",
+    state: record.state,
+    askKind: record.state === "asking" ? (record.askKind ?? null) : null,
+    lastEventAt: Number.isFinite(record.lastEventAt) ? record.lastEventAt : 0,
+    completedAt: record.completedAt ?? null,
+  };
+}
+
+/** 列表摘要参与 signature，保证「聚合态不变但完成/改标题」也会推送。 */
+function listSignature(list) {
+  return list
+    .map((entry) =>
+      [
+        entry.id,
+        entry.state,
+        entry.completedAt ?? "",
+        entry.lastEventAt,
+        entry.title ?? "",
+      ].join("\u0001"),
+    )
+    .join("\u0002");
+}
+
 /**
  * 创建纯 reducer。返回值方法：
- * - handle(session, event)：返回 { state, sessions, signature, pulse } 或 null（忽略）；
+ * - handle(session, event)：返回 { state, sessions, signature, pulse, list } 或 null（忽略）；
  *   pulse 只在“本轮 completed 且允许发脉冲”时为 { resume: "working" | "idle" }。
  * - disposeSession(session)：移除会话，返回新快照或 null。
- * - snapshot()：当前 { state, sessions, signature }。
+ * - adoptSession(session, { title, lastEventAt })：接管启动前已存在的顶层会话。
+ * - snapshot()：当前 { state, sessions, signature, list }。
  *
  * sessions = 进行中的顶层会话数（state 为 working/asking），idle 的存活会话不计入。
- * 测试可注入 now（完成脉冲 5s 节流）、completedThrottleMs、maxSessions。
+ * list = 最多 MAX_SESSION_LIST 条会话摘要（不含 completed 态，完成用 completedAt 推导）。
+ * 测试可注入 now（完成脉冲 5s 节流）、completedThrottleMs、maxSessions、maxSessionList。
  */
 export function createDshHookReducer(options = {}) {
   const now = typeof options.now === "function" ? options.now : Date.now;
@@ -444,6 +518,10 @@ export function createDshHookReducer(options = {}) {
     DEFAULT_COMPLETED_THROTTLE_MS,
   );
   const maxSessions = toPositiveNumber(options.maxSessions, DEFAULT_MAX_SESSIONS);
+  const maxSessionList = Math.max(
+    1,
+    Math.floor(toPositiveNumber(options.maxSessionList, MAX_SESSION_LIST)),
+  );
   const sessions = new Map();
   let lastCompletedAt = Number.NEGATIVE_INFINITY;
 
@@ -456,10 +534,33 @@ export function createDshHookReducer(options = {}) {
     return count;
   }
 
+  function buildSessionList() {
+    const entries = [];
+    for (const record of sessions.values()) {
+      entries.push({ record, entry: sessionEntryOf(record) });
+    }
+    entries.sort((left, right) => {
+      const priority = sessionPriority(left.record) - sessionPriority(right.record);
+      if (priority !== 0) return priority;
+      const leftAt = Math.max(left.entry.lastEventAt, left.entry.completedAt ?? 0);
+      const rightAt = Math.max(right.entry.lastEventAt, right.entry.completedAt ?? 0);
+      if (rightAt !== leftAt) return rightAt - leftAt;
+      return left.entry.id.localeCompare(right.entry.id);
+    });
+    return entries.slice(0, maxSessionList).map(({ entry }) => entry);
+  }
+
   function snapshot() {
     const state = aggregateDshState(sessions.values());
     const count = activeSessionCount();
-    return { state, sessions: count, signature: `${state}:${count}`, pulse: null };
+    const list = buildSessionList();
+    return {
+      state,
+      sessions: count,
+      signature: `${state}:${count}:${listSignature(list)}`,
+      pulse: null,
+      list,
+    };
   }
 
   function evictOverflow(keepId) {
@@ -481,7 +582,7 @@ export function createDshHookReducer(options = {}) {
   function ensureRecord(id) {
     const existing = sessions.get(id);
     if (existing) return existing;
-    const record = createSessionRecord(id);
+    const record = createSessionRecord(id, now());
     sessions.set(id, record);
     evictOverflow(id);
     return record;
@@ -515,6 +616,9 @@ export function createDshHookReducer(options = {}) {
         record.pendingAsks.clear();
         record.pendingApprovals.clear();
         record.state = "working";
+        record.askKind = null;
+        record.completedAt = null;
+        record.lastEventAt = now();
         return snapshot();
       }
       case "tool/call": {
@@ -525,6 +629,8 @@ export function createDshHookReducer(options = {}) {
           const callId = toolCallIdOf(event) ?? `seq:${String(event.seq ?? "")}`;
           record.pendingAsks.add(callId);
           record.state = "asking";
+          refreshAskKind(record);
+          record.lastEventAt = now();
         } else if (record.state !== "asking") {
           record.state = "working";
         }
@@ -549,6 +655,8 @@ export function createDshHookReducer(options = {}) {
         const approvalId = String(data?.id ?? `seq:${String(event.seq ?? "")}`);
         record.pendingApprovals.add(approvalId);
         record.state = "asking";
+        refreshAskKind(record);
+        record.lastEventAt = now();
         return snapshot();
       }
       case "approval/decided": {
@@ -573,22 +681,56 @@ export function createDshHookReducer(options = {}) {
         }
         return snapshot();
       }
+      case "session/title": {
+        const record = ensureRecord(id);
+        if (typeof data?.title === "string") {
+          record.title = normalizeSessionTitle(data.title);
+        }
+        record.lastEventAt = now();
+        return snapshot();
+      }
       case "turn/end": {
         const record = ensureRecord(id);
         record.turnActive = false;
         record.pendingAsks.clear();
         record.pendingApprovals.clear();
+        record.askKind = null;
         const kind = data?.reason?.kind;
         if (kind === "completed") {
           record.state = "idle";
+          record.completedAt = now();
+          record.lastEventAt = now();
           return pulseForCompletedTurn();
         }
+        record.completedAt = null;
         record.state = kind === "blocked" ? "asking" : "idle";
         return snapshot();
       }
       default:
         return null;
     }
+  }
+
+  /**
+   * 接管插件启动前就已存在的顶层会话（快照里保持 idle，不臆测进行中状态）：
+   * 已有关联 record 时不覆盖其状态，只补标题与 lastEventAt。
+   */
+  function adoptSession(session, options = {}) {
+    const id = sessionIdOf(session);
+    if (!id) return null;
+    if (isSubagentSession(session)) return null;
+    let record = sessions.get(id);
+    if (!record) {
+      record = createSessionRecord(id, now());
+      sessions.set(id, record);
+      evictOverflow(id);
+    }
+    if (typeof options.title === "string") {
+      const title = normalizeSessionTitle(options.title);
+      if (title !== null) record.title = title;
+    }
+    if (!Number.isFinite(record.lastEventAt)) record.lastEventAt = now();
+    return snapshot();
   }
 
   function disposeSession(session) {
@@ -598,7 +740,92 @@ export function createDshHookReducer(options = {}) {
     return snapshot();
   }
 
-  return { handle, disposeSession, snapshot };
+  return { handle, disposeSession, adoptSession, snapshot };
+}
+
+// ---------------------------------------------------------------------------
+// 启动接管：从 DSH 宿主服务读取已存在的顶层会话与标题（服务可能不存在）
+// ---------------------------------------------------------------------------
+
+function resolveContextService(ctx, serviceName) {
+  if (!ctx || typeof ctx !== "object") return null;
+  try {
+    const direct = ctx[serviceName];
+    if (direct && typeof direct === "object") return direct;
+  } catch {
+    // 访问属性失败时继续尝试 ctx.get。
+  }
+  try {
+    if (typeof ctx.get === "function") {
+      const viaGet = ctx.get(serviceName);
+      if (viaGet && typeof viaGet === "object") return viaGet;
+    }
+  } catch {
+    // 服务不存在/不可访问：按没有处理。
+  }
+  return null;
+}
+
+/** `ctx.sessions.list()` 的返回值可能是数组、Map、Iterable 或 { byId } 快照。 */
+function serviceListToArray(raw) {
+  if (!raw) return [];
+  try {
+    if (raw instanceof Map) return [...raw.values()];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "object" && typeof raw[Symbol.iterator] === "function") {
+      return [...raw];
+    }
+    if (typeof raw === "object") {
+      if (raw.byId && typeof raw.byId === "object") return Object.values(raw.byId);
+      if (typeof raw.values === "function") return [...raw.values()];
+    }
+  } catch {
+    // 结构异常时按空列表处理。
+  }
+  return [];
+}
+
+/** `ctx.sessionTitle.get(session)` 可能直接返回字符串，也可能返回 { title }。 */
+function titleFromServiceValue(value) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && typeof value.title === "string") return value.title;
+  return null;
+}
+
+/**
+ * 收集启动时已存在的顶层会话（过滤子代理），标题取 sessionTitle 服务值；
+ * 任何服务缺失/抛错都只影响对应字段，不向上抛。
+ */
+export function collectExistingSessions(ctx, options = {}) {
+  const now = typeof options.now === "function" ? options.now : Date.now;
+  const sessionsService = resolveContextService(ctx, "sessions");
+  if (!sessionsService || typeof sessionsService.list !== "function") return [];
+  let raw = null;
+  try {
+    raw = sessionsService.list();
+  } catch {
+    return [];
+  }
+  const titleService = resolveContextService(ctx, "sessionTitle");
+  const result = [];
+  for (const session of serviceListToArray(raw)) {
+    try {
+      const id = sessionIdOf(session);
+      if (!id || isSubagentSession(session)) continue;
+      let title = null;
+      if (titleService && typeof titleService.get === "function") {
+        try {
+          title = normalizeSessionTitle(titleFromServiceValue(titleService.get(session)));
+        } catch {
+          title = null;
+        }
+      }
+      result.push({ session, id, title, lastEventAt: now() });
+    } catch {
+      // 单个会话接管失败不影响其他会话。
+    }
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -740,7 +967,11 @@ export function createHookController(options = {}) {
         return snapshot;
       }
     }
-    return { state: "idle", sessions: 0, signature: "idle:0", pulse: null };
+    return { state: "idle", sessions: 0, signature: "idle:0", pulse: null, list: [] };
+  }
+
+  function listOfSnapshot(snapshot) {
+    return Array.isArray(snapshot?.list) ? snapshot.list : [];
   }
 
   // 串行发送队列：保证 hello -> state -> ... 的顺序，网络挂起时也不会无限堆积。
@@ -787,8 +1018,8 @@ export function createHookController(options = {}) {
     } while (draining || queue.length > 0 || observed !== drainPromise);
   }
 
-  function stateMessage(state, sessions, resume) {
-    const message = { type: "state", state, sessions, ts: now() };
+  function stateMessage(state, sessions, resume, sessionList) {
+    const message = { type: "state", state, sessions, ts: now(), sessionList };
     if (state === "completed") message.resume = resume === "working" ? "working" : "idle";
     return message;
   }
@@ -804,6 +1035,7 @@ export function createHookController(options = {}) {
       state: snapshot.state,
       sessions: snapshot.sessions,
       resume: null,
+      sessionList: listOfSnapshot(snapshot),
       ts: now(),
     };
   }
@@ -812,12 +1044,12 @@ export function createHookController(options = {}) {
     if (!result) return;
     if (result.pulse) {
       lastSignature = result.signature;
-      send(stateMessage("completed", result.sessions, result.pulse.resume));
+      send(stateMessage("completed", result.sessions, result.pulse.resume, listOfSnapshot(result)));
       return;
     }
     if (result.signature !== lastSignature) {
       lastSignature = result.signature;
-      send(stateMessage(result.state, result.sessions, null));
+      send(stateMessage(result.state, result.sessions, null, listOfSnapshot(result)));
     }
   }
 
@@ -844,7 +1076,7 @@ export function createHookController(options = {}) {
       const snapshot = snapshotOfReducer();
       lastSignature = snapshot.signature;
       send(helloMessage());
-      send(stateMessage(snapshot.state, snapshot.sessions, null));
+      send(stateMessage(snapshot.state, snapshot.sessions, null, listOfSnapshot(snapshot)));
     }
     return usable;
   }
@@ -875,6 +1107,36 @@ export function createHookController(options = {}) {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * 启动时接管已经存在的顶层会话：逐个写进 reducer（初始 idle + 服务标题），
+   * 有变化就补发一条带 sessionList 的 state。任何宿主服务异常都不影响 DSH。
+   */
+  function adoptExistingSessions(ctx) {
+    if (stopped) return 0;
+    let adopted = null;
+    let count = 0;
+    try {
+      const entries = collectExistingSessions(ctx, { now });
+      count = entries.length;
+      if (typeof reducer.adoptSession !== "function") return 0;
+      for (const entry of entries) {
+        try {
+          const result = reducer.adoptSession(entry.session, {
+            title: entry.title,
+            lastEventAt: entry.lastEventAt,
+          });
+          if (result) adopted = result;
+        } catch {
+          // 单个会话接管失败继续处理下一个。
+        }
+      }
+    } catch {
+      return 0;
+    }
+    if (adopted) publish(adopted);
+    return count;
   }
 
   function start() {
@@ -932,6 +1194,7 @@ export function createHookController(options = {}) {
     sendHeartbeat,
     handleSessionEvent,
     handleSessionDisposed,
+    adoptExistingSessions,
     snapshot: snapshotOfReducer,
     whenIdle,
   };
@@ -966,6 +1229,13 @@ export function apply(ctx) {
     const profile = profileFromModuleUrl(import.meta.url);
     controller = createHookController({ profile });
     controller.start();
+    // 启动前已存在的会话没有 session/event，只能从宿主服务补一份初始快照；
+    // 服务缺失/异常时静默跳过，绝不能拖垮 DSH。
+    try {
+      controller.adoptExistingSessions(ctx);
+    } catch {
+      // ignore
+    }
     const handleEvent = (session, event) => {
       try {
         controller.handleSessionEvent(session, event);

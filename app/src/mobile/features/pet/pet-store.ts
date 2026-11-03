@@ -28,7 +28,6 @@ import type {
   PetState,
   PetStorage,
   PetStoreState,
-  Posture,
 } from "./types";
 
 /** AI 联动只用到声音播放器的一小部分；测试里可以注入假实现。 */
@@ -423,10 +422,6 @@ export function createPetStore(deps: PetStoreDeps) {
         await get().flush();
 
         return get().saveStatus !== "error";
-      },
-
-      setPosture: async (posture: Posture) => {
-        return get().updateSettings({ posture });
       },
 
       updateSettings: async (patch: Partial<PetSettings>) => {

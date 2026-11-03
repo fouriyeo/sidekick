@@ -31,13 +31,13 @@ children:
 | --- | --- | --- |
 | 产品方向、取舍、优先级 | [product/INDEX.md](./product/INDEX.md) | 该分支 1–2 篇 |
 | 写 / 评审 PRD | [prd/INDEX.md](./prd/INDEX.md) | [standards/product.md](./standards/product.md) |
-| 设计横屏、触控、反馈 | [standards/INDEX.md](./standards/INDEX.md) | [standards/ux.md](./standards/ux.md) |
+| 设计竖屏、触控、反馈 | [standards/INDEX.md](./standards/INDEX.md) | [standards/ux.md](./standards/ux.md) |
 | 视觉、配色、动效、宠物资产 | [standards/INDEX.md](./standards/INDEX.md) | [standards/visual.md](./standards/visual.md) |
 | 实现宠物 | [prd/pet/INDEX.md](./prd/pet/INDEX.md) | PRD / SPEC + [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
 | 实现麦克风 | [prd/mic/INDEX.md](./prd/mic/INDEX.md) | PRD / SPEC + [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) + [engineering/protocol-audio.md](./engineering/protocol-audio.md) + [engineering/asr-model.md](./engineering/asr-model.md) + [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 做桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) | 该篇 |
 | 做自动发现 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) | 该篇 |
-| 做 AI 联动 / DSH hook / 宠物四态 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
+| 做 AI 联动 / DSH hook / 宠物四态 / 会话列表 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
 | 查进度、环境、构建 | 直接读 | [status.md](./status.md) / [setup.md](./setup.md) |
 | 记录重大决策 | 直接读 | [decisions.md](./decisions.md) |
@@ -58,7 +58,7 @@ docs/
 │  ├─ INDEX.md
 │  ├─ documentation.md          # 文档树、元数据、懒加载协议
 │  ├─ product.md                # PRD / 优先级 / 变更 / 质量门
-│  ├─ ux.md                     # 横屏、触控、手势、反馈、无障碍
+│  ├─ ux.md                     # 竖屏、触控、手势、反馈、无障碍
 │  ├─ visual.md                 # 夜灯桌宠视觉、令牌、宠物资产、动效
 │  └─ engineering.md            # 平台边界、依赖方向、DoD
 ├─ prd/                         # 功能需求

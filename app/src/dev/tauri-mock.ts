@@ -324,6 +324,22 @@ export function installTauriMock(): void {
     const requested: MockHookState =
       aiParam === "working" || aiParam === "asking" || aiParam === "completed" ? aiParam : "idle";
     const completed = requested === "completed";
+    const now = Date.now();
+    const sessionList =
+      requested === "idle"
+        ? []
+        : [
+            {
+              id: "mock-session-1",
+              title: "预览会话",
+              source: "dsh",
+              state:
+                requested === "asking" ? "asking" : requested === "working" ? "working" : "idle",
+              askKind: requested === "asking" ? "question" : null,
+              lastEventAt: now,
+              completedAt: completed ? now : null,
+            },
+          ];
     const message = {
       type: "status",
       v: 1,
@@ -332,7 +348,8 @@ export function installTauriMock(): void {
       sessions: requested === "idle" ? 0 : 1,
       resume: completed ? mockAiResume : null,
       remainingMs: completed ? 3000 : null,
-      ts: Date.now(),
+      sessionList,
+      ts: now,
     };
     emit("chat", JSON.stringify(message));
     if (completed) {
@@ -348,6 +365,7 @@ export function installTauriMock(): void {
             sessions: 0,
             resume: null,
             remainingMs: null,
+            sessionList: sessionList.map((session) => ({ ...session, state: "idle" })),
             ts: Date.now(),
           }),
         );
@@ -417,6 +435,24 @@ export function installTauriMock(): void {
       if (command === "mic_frame") return null;
       if (command === "send_status_request") {
         window.setTimeout(emitMockAiStatus, 50);
+        return null;
+      }
+      if (command === "send_focus_request") {
+        const requestId = typeof args?.requestId === "string" ? args.requestId : "";
+        window.setTimeout(() => {
+          emit(
+            "chat",
+            JSON.stringify({
+              type: "focus.result",
+              v: 1,
+              requestId,
+              source: "dsh",
+              ok: true,
+              error: null,
+              ts: Date.now(),
+            }),
+          );
+        }, 300);
         return null;
       }
 

@@ -102,7 +102,7 @@ load: on-demand
 | 层 | 引擎 | 用途 | 约束 |
 | --- | --- | --- | --- |
 | 微动效 | CSS transition | 按钮按下、颜色、透明度、呼吸灯 | 120–180ms；只动 transform/opacity |
-| 界面 | Motion | 姿态切换、气泡、卡片进出 | 240–320ms；spring 或统一 easing |
+| 界面 | Motion | 会话列表展开、宠物下移、气泡、卡片进出 | 240–320ms；spring 或统一 easing |
 | 角色 | 帧动画图集 | 宠物 idle / 工作 / 等待 / 完成（AI 四态）与后续状态行 | 10fps；后台暂停；减少动效冻结首帧；图集失败降级 poster |
 
 - 时长令牌：120 / 180 / 240 / 320ms；缓动统一 `--ease-out-soft` 或 Motion spring。

@@ -49,14 +49,13 @@ load: on-demand
 
 | 事件 | 触发 | 关键属性 | 用途 |
 | --- | --- | --- | --- |
-| `pet_open` | 宠物页进入前台 | `posture`, `mood`, `energy_bucket` | 使用频率、姿态分布 |
+| `pet_open` | 宠物页进入前台 | `mood`, `energy_bucket` | 使用频率 |
 | `pet_name_set` | 首次命名/改名 | `source`（default/custom），不记录名字 | 命名流程完成率 |
 | `pet_interact` | 摸摸/戳一戳结束 | `kind`, `duration_bucket`, `mood_before`, `mood_after` | 互动偏好 |
 | `pet_bubble` | 气泡展示/关闭 | `trigger`, `copy_id`, `dismissed` | 文案效果、打扰度 |
-| `pet_posture` | 姿态切换 | `from`, `to`, `auto` | 自动判断准确率 |
 | `pet_mic_react` | 麦克风状态引发宠物反应 | `state` | 联动是否自然 |
 | `pet_reset` | 重置宠物 | 无 | 重置使用 |
-| `mic_start` | 开始录音 | `posture`, `source`（button/lock） | 使用场景 |
+| `mic_start` | 开始录音 | `source`（button/lock） | 使用场景 |
 | `mic_stop` | 停止录音 | `reason`（release/cancel/timeout/background/disconnect）, `duration_bucket` | 取消原因 |
 | `mic_result` | 转写/输入完成 | `outcome`（inserted/copied/failed）, `latency_ms`, `text_length_bucket` | 成功率、延迟 |
 | `mic_error` | 失败 | `code`（permission_denied/no_connection/asr_failed/target_mismatch/secure_input/insert_failed） | 失败分布 |

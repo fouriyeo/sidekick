@@ -113,7 +113,7 @@ app/src/
 
 - [ ] PRD / SPEC / ACCEPTANCE 已评审，P0 AC 通过。
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 全绿。
-- [ ] 真机验证：Realme 横屏、支架/手持各一遍。
+- [ ] 真机验证：Realme 竖屏、16:9 与 20:9 各一遍。
 - [ ] 无障碍：减少动效、对比度、标签。
 - [ ] 隐私：无音频落盘、无全文日志、录音指示可见。
 - [ ] 性能：60fps、延迟预算达标。

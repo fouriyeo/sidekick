@@ -1,6 +1,8 @@
 use tauri::Manager;
 
 #[cfg(desktop)]
+mod app_focus;
+#[cfg(desktop)]
 mod app_paths;
 #[cfg(desktop)]
 mod asr_cloud;
@@ -136,7 +138,8 @@ pub fn run() {
             mobile_client::mic_start,
             mobile_client::mic_frame,
             mobile_client::mic_stop,
-            mobile_client::send_status_request
+            mobile_client::send_status_request,
+            mobile_client::send_focus_request
         ]);
 
     builder

@@ -242,7 +242,7 @@ export function HookPanel() {
               <p className="text-xs font-medium">还没有写入联动</p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 打开「启用」会先在本机写入配置、同步脚本和一小段 cordis 补丁；不会安装 npm
-                包，也不会读取对话内容。
+                包，只读取会话标题与状态，不读取对话正文。
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 首次写入后需要重启一次 DeepSeek Harness。
@@ -411,7 +411,7 @@ export function HookPanel() {
           </dl>
           <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-            只同步状态、会话数和时间；不含提示词、对话内容或文件路径。桌面端只监听本机回环地址
+            只同步状态、会话标题、数量和事件时间；不含提示词、回复、工具参数或文件路径。桌面端只监听本机回环地址
             127.0.0.1，事件日志只保存在内存。
           </p>
         </details>
@@ -457,7 +457,8 @@ export function HookPanel() {
           <DialogHeader>
             <DialogTitle>写入 AI 联动？</DialogTitle>
             <DialogDescription>
-              Sidekick 会在本机写入三处内容，不会安装 npm 包，也不会读取或上传任何对话内容。
+              Sidekick 会在本机写入三处内容，不会安装 npm
+              包；只读取会话标题与状态，不读取或上传对话正文。
             </DialogDescription>
           </DialogHeader>
           <ul className="flex list-none flex-col gap-2 p-0 text-xs">

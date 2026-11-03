@@ -7,9 +7,15 @@ import { PetSettings } from "@/mobile/features/pet/pet-settings";
 import { PetStage } from "@/mobile/features/pet/pet-stage";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
+import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
-import { parseMessage, parseMicMessage, parseStatusMessage } from "@/protocol/messages";
+import {
+  parseFocusResult,
+  parseMessage,
+  parseMicMessage,
+  parseStatusMessage,
+} from "@/protocol/messages";
 import {
   disableWebviewHaptics,
   exitApp,
@@ -123,6 +129,11 @@ export function MobileApp() {
     void bootstrap();
   }, [bootstrap]);
 
+  // 会话清除标记只存在本机；水合完成前面板不渲染，避免已清除的会话闪一下。
+  useEffect(() => {
+    void useSessionStore.getState().hydrate();
+  }, []);
+
   // App 切后台时暂停自动重连排期，回前台立即重试一次（熄屏期间计时器会被系统冻结）。
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -143,9 +154,17 @@ export function MobileApp() {
 
   useEffect(() => {
     const unsubscribeChat = subscribeChat((raw) => {
+      const focusResult = parseFocusResult(raw);
+      if (focusResult) {
+        useSessionStore.getState().handleFocusResult(focusResult);
+        return;
+      }
+
       // AI 状态要先于聊天解析：它不进入聊天记录，只驱动宠物四态。
       const status = parseStatusMessage(raw);
       if (status) {
+        // 列表与宠物四态分开推进：completed 快照可能过期，但会话列表仍要更新。
+        useSessionStore.getState().apply(status.sessionList ?? []);
         usePetStore.getState().applyAiStatus(status, {
           now: Date.now(),
           micListening: micListeningNow(),
@@ -169,7 +188,12 @@ export function MobileApp() {
     });
     const unsubscribeConn = subscribeConn((event) => {
       setOnline(event.online);
-      if (event.online) requestStatusIfConnected();
+      if (event.online) {
+        requestStatusIfConnected();
+      } else {
+        // 断线时立刻收起会话列表，避免展示已经过期的「工作中/等你决定」。
+        useSessionStore.getState().clearAll();
+      }
     });
 
     return () => {

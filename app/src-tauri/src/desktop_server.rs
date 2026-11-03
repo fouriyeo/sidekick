@@ -17,6 +17,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio_util::io::ReaderStream;
 
+use crate::app_focus::{self, FocusLimiter, FocusRequest};
 use crate::asr_cloud::AsrCloudState;
 use crate::asr_pricing::{self, Pricing};
 use crate::asr_usage::UsageStore;
@@ -49,6 +50,8 @@ struct AppState {
     hook: Arc<HookBridge>,
     asr_cloud: Arc<AsrCloudState>,
     usage: Arc<UsageStore>,
+    /// 「一键唤起电脑」的全局 1.5s 限频。
+    focus_limiter: Arc<FocusLimiter>,
 }
 
 struct ActiveMic {
@@ -190,6 +193,20 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 Message::Text(text) => {
                     let text = text.to_string();
                     if let Some(kind) = message_type(&text) {
+                        // focus.request 最先识别：它不进聊天广播，也不打印会话内容。
+                        if kind == "focus.request" {
+                            if let Some(request) = begin_focus_request(
+                                &recv_state.tx,
+                                &recv_state.focus_limiter,
+                                &text,
+                            ) {
+                                let focus_state = recv_state.clone();
+                                tokio::spawn(async move {
+                                    finish_focus_request(focus_state, request).await;
+                                });
+                            }
+                            continue;
+                        }
                         if kind.starts_with("mic.") {
                             handle_mic_text(&recv_state, client_id, &text);
                             continue;
@@ -231,6 +248,67 @@ fn message_type(text: &str) -> Option<String> {
         .get("type")
         .and_then(Value::as_str)
         .map(str::to_string)
+}
+
+/// 校验并受理一条 focus.request：非法请求回 bad_request，限频回 rate_limited，
+/// 通过则返回待执行请求（真正的 `open` 在 [`finish_focus_request`] 里异步做）。
+fn begin_focus_request(
+    tx: &broadcast::Sender<String>,
+    limiter: &FocusLimiter,
+    text: &str,
+) -> Option<FocusRequest> {
+    let value: Value = match serde_json::from_str(text) {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+    // requestId 非法时无法回包关联，直接丢弃（不打印任何会话内容）。
+    let Some(request_id) = app_focus::request_id_of(&value) else {
+        eprintln!("[focus] 丢弃 requestId 非法的请求");
+        return None;
+    };
+    let request = match app_focus::parse_focus_request(&value) {
+        Ok(request) => request,
+        Err(code) => {
+            let _ = tx.send(
+                app_focus::focus_result_json(&request_id, "dsh", false, Some(code), now_ms())
+                    .to_string(),
+            );
+            return None;
+        }
+    };
+    if !limiter.try_acquire(Instant::now()) {
+        let _ = tx.send(
+            app_focus::focus_result_json(
+                &request.request_id,
+                &request.source,
+                false,
+                Some("rate_limited"),
+                now_ms(),
+            )
+            .to_string(),
+        );
+        return None;
+    }
+    Some(request)
+}
+
+/// 在阻塞线程里执行 `open -a`，再把 focus.result 广播给所有客户端。
+async fn finish_focus_request(state: AppState, request: FocusRequest) {
+    let source = request.source.clone();
+    let launched = tokio::task::spawn_blocking(move || app_focus::activate(&source)).await;
+    let (ok, error) = match launched {
+        Ok(Ok(())) => (true, None),
+        Ok(Err(code)) => (false, Some(code)),
+        // 阻塞任务 panic/取消：按启动失败处理，手机可以重试。
+        Err(_) => (false, Some("launch_failed")),
+    };
+    if let Some(code) = error {
+        eprintln!("[focus] activate failed: {code}");
+    }
+    send_json(
+        &state,
+        app_focus::focus_result_json(&request.request_id, &request.source, ok, error, now_ms()),
+    );
 }
 
 fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
@@ -569,6 +647,7 @@ pub async fn start(
         hook,
         asr_cloud,
         usage,
+        focus_limiter: Arc::new(FocusLimiter::new()),
     };
     let app = Router::new()
         .route("/", get(mobile_page))
@@ -615,4 +694,126 @@ pub async fn start(
         "[server] 所有候选端口都绑定失败（{:?}），无法启动服务",
         discovery::SERVICE_PORTS
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn focus_channel() -> broadcast::Sender<String> {
+        let (tx, _rx) = broadcast::channel(8);
+        tx
+    }
+
+    fn focus_request_json(request_id: &str, source: &str, session_id: &str) -> String {
+        serde_json::json!({
+            "type": "focus.request",
+            "v": 1,
+            "requestId": request_id,
+            "source": source,
+            "sessionId": session_id,
+            "ts": 1,
+        })
+        .to_string()
+    }
+
+    fn next_result(receiver: &mut broadcast::Receiver<String>) -> Value {
+        serde_json::from_str(&receiver.try_recv().expect("应有 focus.result 广播")).unwrap()
+    }
+
+    #[test]
+    fn focus_request_validates_fields_without_launching() {
+        let tx = focus_channel();
+        let limiter = FocusLimiter::new();
+        let mut receiver = tx.subscribe();
+
+        // 非 JSON / 缺 requestId：无法关联回包，直接丢弃。
+        assert!(begin_focus_request(&tx, &limiter, "not-json").is_none());
+        assert!(receiver.try_recv().is_err());
+        assert!(begin_focus_request(&tx, &limiter, r#"{"type":"focus.request","v":1}"#).is_none());
+        assert!(receiver.try_recv().is_err());
+
+        // sessionId 超长：回 bad_request（带 requestId/source，不启动 App）。
+        let long_session = "x".repeat(app_focus::MAX_SESSION_ID_CHARS + 1);
+        assert!(
+            begin_focus_request(
+                &tx,
+                &limiter,
+                &focus_request_json("f-1", "dsh", &long_session)
+            )
+            .is_none()
+        );
+        let result = next_result(&mut receiver);
+        assert_eq!(result["type"], "focus.result");
+        assert_eq!(result["v"], 1);
+        assert_eq!(result["requestId"], "f-1");
+        assert_eq!(result["source"], "dsh");
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["error"], "bad_request");
+        assert!(result["ts"].as_u64().unwrap() > 0);
+
+        // 协议版本不对也是 bad_request。
+        let wrong_version = serde_json::json!({
+            "type": "focus.request",
+            "v": 2,
+            "requestId": "f-2",
+            "source": "dsh",
+            "sessionId": "s-1",
+            "ts": 1,
+        })
+        .to_string();
+        assert!(begin_focus_request(&tx, &limiter, &wrong_version).is_none());
+        let result = next_result(&mut receiver);
+        assert_eq!(result["requestId"], "f-2");
+        assert_eq!(result["error"], "bad_request");
+
+        // 合法请求：校验通过并返回待执行请求（不会真的 open）。
+        let request = begin_focus_request(
+            &tx,
+            &limiter,
+            &focus_request_json("f-3", "dsh", "session-1"),
+        )
+        .expect("合法请求应受理");
+        assert_eq!(request.request_id, "f-3");
+        assert_eq!(request.source, "dsh");
+        assert_eq!(request.session_id, "session-1");
+    }
+
+    #[test]
+    fn focus_requests_are_rate_limited_globally() {
+        let tx = focus_channel();
+        let limiter = FocusLimiter::new();
+        let mut receiver = tx.subscribe();
+
+        assert!(
+            begin_focus_request(&tx, &limiter, &focus_request_json("f-1", "dsh", "s-1")).is_some()
+        );
+        // 1.5s 内第二次：回 rate_limited，不再执行。
+        assert!(
+            begin_focus_request(&tx, &limiter, &focus_request_json("f-2", "dsh", "s-2")).is_none()
+        );
+        let result = next_result(&mut receiver);
+        assert_eq!(result["requestId"], "f-2");
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["error"], "rate_limited");
+    }
+
+    #[test]
+    fn unknown_sources_are_accepted_here_and_rejected_by_activate() {
+        // 长度合法但未知的 source 由 app_focus::activate 回 unsupported_source，
+        // 这里只做字段校验，不应提前变成 bad_request。
+        let tx = focus_channel();
+        let limiter = FocusLimiter::new();
+        let request = begin_focus_request(
+            &tx,
+            &limiter,
+            &focus_request_json("f-1", "claude-code", "s-1"),
+        )
+        .expect("已知长度合法的 source 应受理");
+        assert_eq!(request.source, "claude-code");
+        assert_eq!(
+            app_focus::activate_with(&request.source, &|_| Ok(())),
+            Err("unsupported_source")
+        );
+    }
 }

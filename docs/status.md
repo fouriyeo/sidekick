@@ -1,6 +1,6 @@
 # 项目状态
 
-最后更新：2026-11-02
+最后更新：2026-11-03
 
 ## 时间线（2026-10-31）
 
@@ -30,6 +30,7 @@
 24. AI 联动（DSH hook）开发：产品/体验/验收文档落地（`docs/prd/hook`）；桌面「AI 联动」页、本地 DSH 脚本注入、Rust 回环桥、`status` 协议、手机四态动作与三音效；首次开启需重启 DSH 一次，之后热开关（2026-11-02，开发中）。
 25. 百炼云端唯一（2026-11-02）：下线本机 whisper（`asr_models.rs`、`whisper-rs`、cmake/libclang 前提、模型下载/选择/删除命令、`models_dir`）；`AsrSettings` 只剩 `{version, consentCloud, apiKey, keyPresent, keyHint, bailian}`，旧 `engine/fallbackToLocal` 忽略；未配置/未同意/无 Key 直接 `mic.error`，不再回退本机；协议移除 `engine/model/fallback`，保留 `usage`。
 26. 模型页 + 用量统计（2026-11-02，更新）：桌面主导航新增「模型」（聊天/剪贴板/AI 联动之后），设置 Sheet 只留自动输入权限与剪贴板；百炼配置只填完整服务地址（无业务空间 ID 字段/不传 `X-DashScope-WorkSpace`，占位符未替换会报错）+ Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；用量改为区间切换（今天无明细/7 天/30 天按天/1 年按月），后端返回最近 365 天 `days`；`asr_usage.json`（0600、按本机时区、最多 400 天、原子写、每次 task-finished 有 usage 就记账）；北京/新加坡价格估算。API Key 改存本地 `asr.json`（0600），不再读写 Keychain，开页/测试/录音都不弹密码。
+27. AI 会话列表 + 竖屏单布局（2026-11-03，代码完成待真机）：`status` 增加 `sessionList`（id/标题/状态/askKind/时间，最多 50 条）；DSH 插件维护标题/完成时间/列表，Rust 桥清洗广播并随快照下发；手机宠物页上方会话列表（收起 1 条/展开 5 条/新 asking 自动展开/本地清除/完成保留）；点 asking 会话发 `focus.request`，桌面 `open -a "DeepSeek Harness"` 切前台（1.5s 限频，只回错误码）。同时删除方向/双姿态，Android 锁竖屏；麦克风改 56px 高宽胶囊，录音状态并入胶囊。
 
 ## 已验证（有实际证据）
 
@@ -65,7 +66,7 @@
 - **触感/时长可配已通过质量门（2026-11-02）**：`haptic` / `disable_webview_haptics`（`app/src-tauri/src/haptics.rs`，decorView `performHapticFeedback` + WebView `setHapticFeedbackEnabled(false)`）通过 `cargo check --target aarch64-linux-android`；前端 `haptics.ts` 收敛为唯一入口、麦克风按下中震、宠物页禁用长按选中；`dimMinutes`（默认 5）与 `keepAwakeHours`（默认 2，0 = 不限）落地并含旧存档迁移；`useKeepAwake(active, maxDurationMs)` 到点释放。`pnpm typecheck / lint / test（174 tests / 28 files）` 全绿；真机触感/变暗/常亮到点待验收。
 - **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
 - **AI 联动代码质量门（2026-11-02）**：`pnpm typecheck / lint / test（291 tests / 36 files）/ build` 全绿；`cargo test --lib` 71 passed（新增 dsh_hook 23 + install 24）；脚本 `node --check` + `vitest run src/dsh-hook` 32 passed；`node scripts/check-docs.mjs` 0 warning、`check-boundaries` 通过。浏览器 mock DOM 核对四态 `data-ai-state`、文案、asking 6s 降速、completed 3s 回 idle、桌面 AI 联动页首次/已连接态。**未做真实 DSH 插件加载/重启**，也未写真实 `~/.dsh`；需要在用户方便时重启 DSH 验收。
-- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、百炼真实账号、本地 Key 迁移、真机流式/60s、用量区间切换/跨天/金额对账。
+- **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、竖屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、会话列表/清除/focus 真机、百炼真实账号、本地 Key 迁移、真机流式/60s、用量区间切换/跨天/金额对账。
 
 ## 已知问题 / 技术债
 
@@ -107,13 +108,14 @@
 
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
 - [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与扩展状态行待补。
-- [ ] **宠物真机回归（剩余）**：横屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行；竖屏/设置/存档已通过（2026-10-31）。
+- [ ] **宠物真机回归（剩余）**：竖屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行；设置/存档已通过（2026-10-31）。
 - [x] **外设麦克风 spike**：WebView 采集、whisper.cpp 本机转写、剪贴板/粘贴降级已跑通。
 - [x] **外设麦克风 P0 代码**：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层；待真机与辅助功能实测。
 - [x] **桌面剪贴板 P1**：文本历史、搜索、置顶、隐私过滤、本地持久化。
 - [x] **断连自动重连**：退避重试 + 静默重新发现 + 前后台暂停/恢复；聊天页常显重连状态与手动入口（2026-11-01）。
 - [ ] **麦克风收尾**：勾选 macOS 辅助功能后验证自动粘贴；真机 60 秒/断连/密码框矩阵；模型准确率测试集。
-- [ ] **AI 联动（DSH hook）**：桌面 AI 联动页 + 本地脚本注入 + 手机四态/三音效；代码开发中，待真机/隐私验收（2026-11-02）。
+- [ ] **AI 联动（DSH hook）**：桌面 AI 联动页 + 本地脚本注入 + 手机四态/三音效 + 会话列表/清除/反问唤起；代码完成，待真机/隐私验收（2026-11-03）。
+- [ ] **会话列表真机回归**：两会话区分、自动展开、清除重现、focus 切前台/启动/失败提示、断连清空、旧插件兼容（2026-11-03）。
 - [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
 - [ ] **Release 打包**：Android 签名 APK（预计 10–20MB）+ 桌面 .app/.dmg。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
@@ -133,8 +135,9 @@
 - [ ] 手机发消息 → 桌面日志 `[ws] recv`
 - [ ] 桌面发消息 → 手机收到，气泡在左侧
 - [ ] 手机发消息 → 手机气泡在右侧
-- [ ] 宠物横屏 16:9/20:9、支架/手持与 3 分钟 60fps（竖屏/设置/存档已通过）
+- [ ] 宠物竖屏 16:9/20:9、麦克风胶囊与 3 分钟 60fps（设置/存档已通过）
 - [ ] 宠物杀进程重启后名字/设置/存档恢复
 - [ ] 宠物 3 分钟 60fps、无 >50ms 长任务
 - [ ] 麦克风：权限拒绝/辅助功能未开/窗口切换/密码框/上滑取消的降级路径
 - [ ] AI 联动：桌面安装/重启/连接；四态动作远看可区分；三音效默认关/录音静音；杀 DSH 15s 内静态；隐私审计通过
+- [ ] 会话列表：收起 1 条/展开 5 条滚动；新 asking 自动展开；点 asking 唤起 DSH；清除后新事件重现；断连清空
