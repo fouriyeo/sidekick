@@ -12,7 +12,7 @@ pub struct FrontApp {
 }
 
 impl FrontApp {
-    fn same_as(&self, other: &Self) -> bool {
+    pub(crate) fn same_as(&self, other: &Self) -> bool {
         match (&self.bundle_id, &other.bundle_id) {
             (Some(left), Some(right)) => left == right,
             _ => matches!((&self.name, &other.name), (Some(left), Some(right)) if left == right),
@@ -81,7 +81,7 @@ fn extract_quoted(text: &str, marker: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
-fn secure_input_enabled() -> bool {
+pub(crate) fn secure_input_enabled() -> bool {
     #[cfg(target_os = "macos")]
     {
         unsafe { IsSecureEventInputEnabled() }
@@ -103,7 +103,11 @@ pub fn accessibility_trusted() -> bool {
     }
 }
 
-fn paste_cmd_v() -> bool {
+/// 合成一次「按下 + 抬起」；`command` 为 true 时同时按住 Command。
+///
+/// 自动粘贴（⌘V）与结果卡片的手动按键（Return / ⌘A+Delete）共用这一条底层路径；
+/// 非 macOS 返回 false，由调用方降级成错误码。
+pub fn post_key(keycode: u16, command: bool) -> bool {
     #[cfg(target_os = "macos")]
     {
         use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
@@ -112,25 +116,34 @@ fn paste_cmd_v() -> bool {
         let Ok(source) = CGEventSource::new(CGEventSourceStateID::HIDSystemState) else {
             return false;
         };
-        let Ok(down) = CGEvent::new_keyboard_event(source.clone(), 9, true) else {
+        let Ok(down) = CGEvent::new_keyboard_event(source.clone(), keycode, true) else {
             return false;
         };
-        down.set_flags(CGEventFlags::CGEventFlagCommand);
+        if command {
+            down.set_flags(CGEventFlags::CGEventFlagCommand);
+        }
         down.post(CGEventTapLocation::HID);
 
         std::thread::sleep(Duration::from_millis(12));
 
-        let Ok(up) = CGEvent::new_keyboard_event(source, 9, false) else {
+        let Ok(up) = CGEvent::new_keyboard_event(source, keycode, false) else {
             return false;
         };
-        up.set_flags(CGEventFlags::CGEventFlagCommand);
+        if command {
+            up.set_flags(CGEventFlags::CGEventFlagCommand);
+        }
         up.post(CGEventTapLocation::HID);
         true
     }
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = (keycode, command);
         false
     }
+}
+
+fn paste_cmd_v() -> bool {
+    post_key(9, true)
 }
 
 /// 把已经拿到的文本落到目标应用：写剪贴板 + 安全校验 + 可选 Cmd+V。

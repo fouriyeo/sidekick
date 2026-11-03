@@ -19,6 +19,8 @@ mod bailian_asr;
 #[cfg(desktop)]
 mod clipboard_manager;
 #[cfg(desktop)]
+mod desktop_keys;
+#[cfg(desktop)]
 mod desktop_mic;
 #[cfg(desktop)]
 mod desktop_server;
@@ -139,7 +141,8 @@ pub fn run() {
             mobile_client::mic_frame,
             mobile_client::mic_stop,
             mobile_client::send_status_request,
-            mobile_client::send_focus_request
+            mobile_client::send_focus_request,
+            mobile_client::send_key_request
         ]);
 
     builder

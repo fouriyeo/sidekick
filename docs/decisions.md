@@ -480,6 +480,20 @@
 - 代价：Git 按提交保存二进制，**固定文件名不会减小历史体积**——每推一次仓库仍约 +11MB，历史持续增长；后续可迁 GitHub Release 或独立 release 分支（需改推送流程/force push）。
 - 规范：`release/README.md`、`scripts/package-*.sh`、`AGENTS.md` §4/§5/§8/§9、`docs/standards/git.md` §2/§3、`docs/setup.md`。
 
+## D68 · 结果卡片手动「回车 / 清空」：保留不自动发送，但不用放下手机（2026-11-04）
+
+- 背景：语音输入把文字落进电脑光标处后，用户仍要放下手机、换键盘/鼠标去按回车发送或清空输入框；既然手机已经是电脑的外设，这个切换不合理。产品铁律是「绝不自动回车/发送」，所以不能改成自动发送。
+- 决策：在「已输入」结果卡片里加两个用户主动点按的按钮：
+  - 「回车」＝桌面合成 Return（keycode 36），一次点按一次；
+  - 「清空」＝桌面合成 `⌘A`（keycode 0 + Command）+ 40ms + `Delete`（keycode 51），第一次点按只做二次确认（3 秒失效），第二次才发送；
+  - 只在 `mic.result.outcome == "inserted"` 时出现，沿用卡片 10 秒收起；新增协议 `key.request` / `key.result`（增量，不改任何 `mic.*` 字段）；
+  - 安全闸门：只作用于最近一次插入时记录的前台应用（owner + mic session），焦点变化/密码框/辅助功能未授权/非 macOS 一律拒绝并只回错误码；插入后 30 秒内有效、成功一次即作废、桌面 500ms 限频；
+  - 不记录文本、应用名、按键序列；日志只有 action/outcome/布尔闸门。
+- 原因：保留「不自动发送」的安全承诺，把「换设备」这一步变成一次点按；用最近插入目标 + 时效 + 一次性把误发风险压到最低；结果卡片是用户刚完成输入时唯一明确的上下文，比常驻按键栏更不容易误触。
+- 放弃：自动回车/自动提交（违反铁律、不可控）；逐字退格本次字数（光标不在末尾会误删、CJK/emoji 计数不稳）；⌘Z 撤销（终端等 App 语义不一致，用户已选择「清空整个输入框」）；常驻键栏或不限时（会把按键发给任意当前前台窗口，风险最高）；把按键塞进 `mic.result`（语义混杂、旧客户端无法忽略单个字段带来的行为差异）。
+- 代价：只支持 macOS 桌面；终端等非标准输入框的 `⌘A+Delete` 可能不生效或只选中，绝不因此回退成回车；按钮可用窗口只有卡片 10 秒；开发二进制重编译后辅助功能可能需重新勾选。
+- 规范：`protocol/README.md`、`docs/engineering/protocol-audio.md` §3.8、`docs/engineering/audio-pipeline.md` §7.3、`docs/prd/mic/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`app/src-tauri/src/desktop_keys.rs`、`desktop_server.rs`、`desktop_mic.rs`、`mobile_client.rs`、`app/src/protocol/messages.ts`、`app/src/mobile/features/mic/*`、`app/src/desktop/features/mic-receiver/*`、`AGENTS.md`。
+
 ## D69 · 下线宠物触摸互动：点击/抚摸不再有任何反应（2026-11-04，取代 D30）
 
 - 背景：用户反馈现在给手机宠物加点击效果太早，这个逻辑之前没考虑清楚；期望点击宠物时「没任何反应，就当没点过」，回到原本只做陪伴与 AI 状态展示的形态。

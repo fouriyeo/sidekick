@@ -25,6 +25,7 @@
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
 - ✅ **宠物 P0 代码已完成**（2026-10-31；2026-11-02 改为帧动画图集；2026-11-04 下线触摸互动）：OpenPets schema 2 图集（WebP 764KB + poster）+ 状态候选链 + 解码/降级；状态机/plugin-store 存档、单竖屏布局、命名/设置、宠物主界面 + 聊天入口不变；触摸互动（点击/长按/抚摸、爱心、亲密度、interacting、设置页无障碍互动）已删除，点击宠物无任何反应；真机 60fps 与存档跨重启待补，扩展状态行（睡眠/倾听）待美术。
 - ✅ **麦克风（百炼云端唯一）**（2026-11-02）：手机 WebView 流式 PCM16 → `mic.*` + `SK01` 二进制帧 → 桌面直连百炼 WS（run-task/finish-task、二进制 PCM）→ `mic.partial` 50ms 流式回显 → `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制。本机 whisper/模型下载已下线，失败直接报错、不回退。
+- ✅ **结果卡片手动「回车 / 清空」**（2026-11-04）：语音输入成功后，「已输入」卡片出现两个按钮——「回车」合成 Return，「清空」合成 `⌘A`+`Delete`（两次确认）；新增 `key.request`/`key.result` 协议，只作用于最近一次插入的目标窗口（30 秒时效、成功即作废、500ms 限频、密码框/未授权/非 macOS 拒绝），仍**不自动发送**。
 - ✅ **模型页 + 用量统计**（2026-11-02）：桌面主导航新增「模型」（AI 联动之后），上半部分配置百炼（完整地址/本地 `asr.json` 0600 保存 API Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；无业务空间 ID 字段），下半部分区间切换（今天/近 7 天/近 1 个月/近 1 年；今天无明细、7/30 按天、1 年按月）+ 金额/Token/会话/时长（人民币微元，北京/新加坡价格估算）；`asr_usage.json` 0600、按天、最多 400 天；`asr_usage_stats()` 返回 365 天 `days`。
 - ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多 100 条；本地 `0600` JSON。
 - 🚧 **AI 联动（DSH hook）开发中**（2026-11-02；2026-11-03 加会话列表）：桌面「AI 联动」页 + 本地 `sidekick-hook.mjs` 注入 DSH profile + Rust 回环桥 + `status` 协议（含 `sessionList`）+ 手机四态动作/三音效 + 宠物页会话列表/本地清除/反问一键唤起 DSH；产品规则 `docs/prd/hook/`，技术方案 `docs/engineering/dsh-hook.md`；首次开启需重启 DSH 一次，之后热开关。
@@ -70,6 +71,7 @@
 | Tauri 命令 | `connect_server({addr})` | 连接 `ws://<addr>/ws`；`addr` 可只写 `IP:端口`（缺省 47810）；重复调用先断开旧连接，4s 超时 |
 | Tauri 命令 | `send_chat({text})` | 发送 `{"type":"chat","from":"phone",...}` |
 | Tauri 命令 | `send_focus_request({source,sessionId,requestId})` | 发送 `focus.request`；结果走 `chat` 事件里的 `focus.result` |
+| Tauri 命令 | `send_key_request({action,session,requestId})` | 发送 `key.request`（`enter`/`clear`）；结果走 `chat` 事件里的 `key.result`，只允许用户主动点按 |
 | Tauri 命令 | `set_keep_screen_on({enabled})` | 宠物页前台屏幕常亮：Android JNI 加/清 `FLAG_KEEP_SCREEN_ON`；iOS 暂为空实现 |
 | Tauri 事件 | `conn` / `chat` | `conn: {online, url}`；`chat: <JSON 字符串>`（含 status/sessionList/focus.result/mic.*/chat） |
 
@@ -92,6 +94,7 @@ sidekick/
 │  ├─ src/shared/       # ui / lib（tauri.ts）/ styles
 │  ├─ src/dev/          # 仅开发环境 Tauri mock（浏览器验证）
 │  ├─ src-tauri/src/lib.rs        # 桌面 axum 服务 + 手机 WS 客户端（cfg 分流；动态端口/连接串行化）
+│  ├─ src-tauri/src/desktop_keys.rs # 结果卡片手动 Enter/⌘A+Delete（安全闸门/目标注册表）
 │  ├─ src-tauri/src/discovery.rs  # UDP 局域网发现（探测/回包/响应器/扫描）
 │  ├─ src-tauri/mobile/index.html # 手机浏览器落地页（含下载按钮）
 │  ├─ src-tauri/tauri.conf.json   # 产品名 Sidekick / identifier dev.sidekick.app
@@ -203,6 +206,7 @@ sidekick/
 - **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume/sessionList`（id、标题、状态、askKind、lastEventAt、completedAt），**不要加提示词/回复/工具参数/路径/cwd/模型名**。标题是唯一内容类外发字段：单行 ≤80 字符、不写日志、不落盘；`sessionList` 最多 50 条，旧客户端忽略。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
 - **手机会话列表**：`sessionList` 随 `status` 广播（最多 50 条，标题 ≤80 字符）；手机 `session-store` 用本地清除标记过滤（`lastEventAt <= cleared.through` 隐藏），标记存 `sidekick-sessions.json` 只含 id/at/through（7 天 TTL、最多 200 条），有新事件自动解除。首次快照/重连不自动展开，只有新的 asking 会话才展开；完成态保留到清除或下一轮。点 asking 会话发 `focus.request`，桌面 `app_focus.rs` 只做 `open -a "DeepSeek Harness"`（1.5s 限频，错误只回错误码），**不接受手机传来的应用路径**。改 `sessionList` 字段要同步 `protocol/README.md`、Rust 桥与手机解析三处。
 - **麦克风胶囊**：单竖屏布局下麦克风是 56px 高、`min(86vw,360px)` 宽胶囊；录音/处理状态在胶囊内，实时文本/结果卡片在胶囊上方独立绝对定位（`bottom-[68px]`），出现/消失不推动按钮。不要再加左下取消按钮，取消只保留上滑手势；不要用 `left-1/2 -translate-x-1/2` 居中（WebView 103 不支持 CSS translate）。
+- **结果卡片手动按键**：`key.request` 只接受「最近一次 `mic.result(inserted)`」的目标（owner+mic session），30 秒过期、成功一次即作废、桌面 500ms 限频；按键前重新核对前台应用、密码框、辅助功能，任一不符只回错误码、不按键。「清空」是 `⌘A`+`Delete`（两次确认），不是 ⌘Z；终端等非标准输入框可能不生效，**绝不能因此回退成回车**。日志不打文本/应用名/按键序列；结果卡片只在 `outcome=inserted` 时显示按钮。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 
 ## 9. 协作约定
@@ -221,7 +225,7 @@ sidekick/
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
 2. 情绪宠物 P0：代码已完成（帧动画图集 + poster 降级、单竖屏布局、plugin-store 存档）；真机 60fps/存档跨重启、扩展状态行（睡眠/倾听）待补。
-3. ✅ 外设麦克风（百炼云端唯一）：二进制协议、云端流式、`mic.partial`、手机 UI、桌面浮层已完成；下一步 macOS 辅助功能自动粘贴与真机 60 秒/断连/密码框矩阵。
+3. ✅ 外设麦克风（百炼云端唯一）：二进制协议、云端流式、`mic.partial`、手机 UI、桌面浮层已完成；结果卡片手动回车/清空已完成（2026-11-04）；下一步 macOS 辅助功能自动粘贴与真机 60 秒/断连/密码框/按键焦点矩阵。
 4. ✅ 模型页 + 用量统计：百炼配置（无业务空间 ID）、本地 Key 元数据、区间切换（今天/7/30/365，1 年按月）、清空统计已完成（2026-11-02）；下一步真实账号/本地 Key 迁移/金额对账与真机验收。
 5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
 6. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效 + 会话列表/清除/反问唤起；代码开发中，待真机/隐私验收（2026-11-03）。

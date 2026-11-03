@@ -1,5 +1,14 @@
 import { cn } from "cn";
-import { AlertCircle, Check, Copy, Loader2, Mic, ShieldAlert } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  CornerDownLeft,
+  Eraser,
+  Loader2,
+  Mic,
+  ShieldAlert,
+} from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -48,6 +57,10 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
   const result = useMicStore((state) => state.result);
   const error = useMicStore((state) => state.error);
   const partialText = useMicStore((state) => state.partialText);
+  const keyPending = useMicStore((state) => state.keyPending);
+  const keyArmedClear = useMicStore((state) => state.keyArmedClear);
+  const keyNotice = useMicStore((state) => state.keyNotice);
+  const keyError = useMicStore((state) => state.keyError);
 
   const reducedMotion = useReducedMotion();
   const hapticsEnabled = usePetStore((state) => state.pet.settings.haptics);
@@ -508,6 +521,14 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
       .catch(() => undefined);
   }, [result]);
 
+  const handleKeyAction = useCallback(
+    (action: "enter" | "clear") => {
+      haptics.light();
+      useMicStore.getState().requestKey(action);
+    },
+    [haptics],
+  );
+
   const getLevel = useCallback(() => sessionRef.current?.getLevel() ?? 0, []);
   const recording = phase === "arming" || phase === "listening";
   const listening = phase === "listening";
@@ -578,6 +599,58 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
                     {copyDone ? <Check className="size-3" /> : <Copy className="size-3" />}
                     {copyDone ? MIC_COPY.copiedAction : MIC_COPY.copy}
                   </button>
+                </div>
+              )}
+
+              {/*
+                只有真正插入成功才有可操作目标；「清空」会删掉整个输入框，
+                因此点两次才发送。按钮高 44px，符合触控目标规范。
+              */}
+              {result?.outcome === "inserted" && (
+                <div className="mt-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      aria-label="在电脑上按回车"
+                      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-pet-primary text-xs font-medium text-pet-primary-foreground disabled:opacity-50"
+                      disabled={keyPending !== null || keyNotice !== null || !connected}
+                      onClick={() => handleKeyAction("enter")}
+                    >
+                      <CornerDownLeft className="size-4" />
+                      {keyPending === "enter" ? MIC_COPY.keyWorking : MIC_COPY.keyEnter}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={keyArmedClear ? "再点一次清空电脑输入框" : "清空电脑输入框"}
+                      className={cn(
+                        "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border text-xs font-medium disabled:opacity-50",
+                        keyArmedClear
+                          ? "border-pet-coral bg-pet-coral text-white"
+                          : "border-pet-border bg-secondary text-pet-text",
+                      )}
+                      disabled={keyPending !== null || keyNotice !== null || !connected}
+                      onClick={() => handleKeyAction("clear")}
+                    >
+                      <Eraser className="size-4" />
+                      {keyPending === "clear"
+                        ? MIC_COPY.keyWorking
+                        : keyArmedClear
+                          ? MIC_COPY.keyClearConfirm
+                          : MIC_COPY.keyClear}
+                    </button>
+                  </div>
+                  {(keyError || keyNotice) && (
+                    <p
+                      role="status"
+                      aria-live="polite"
+                      className={cn(
+                        "mt-1.5 text-[11px] leading-relaxed",
+                        keyError ? "text-pet-danger" : "text-pet-success",
+                      )}
+                    >
+                      {keyError ?? keyNotice}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

@@ -251,6 +251,41 @@ pub fn send_focus_request(
     )
 }
 
+/// 手机结果卡片的「回车 / 清空」：请求桌面在最近一次输入的目标应用里按一次键。
+///
+/// 只做参数非空/长度/枚举校验（session ≤128、requestId ≤64）；目标窗口、30 秒时效、
+/// 限频与安全闸门全部由桌面端负责，手机无法指定应用或按键序列。
+#[tauri::command]
+pub fn send_key_request(
+    app: tauri::AppHandle,
+    session: String,
+    action: String,
+    request_id: String,
+) -> Result<(), String> {
+    let session = session.trim();
+    let action = action.trim();
+    let request_id = request_id.trim();
+    if session.is_empty()
+        || request_id.is_empty()
+        || !matches!(action, "enter" | "clear")
+        || session.chars().count() > 128
+        || request_id.chars().count() > 64
+    {
+        return Err("按键参数无效".to_string());
+    }
+    send_payload(
+        &app,
+        serde_json::json!({
+            "v": 1,
+            "type": "key.request",
+            "requestId": request_id,
+            "session": session,
+            "action": action,
+            "ts": now_ms(),
+        }),
+    )
+}
+
 #[tauri::command]
 pub fn mic_start(
     app: tauri::AppHandle,

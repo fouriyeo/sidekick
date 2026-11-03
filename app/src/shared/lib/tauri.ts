@@ -6,6 +6,7 @@ import {
   type ConnEvent,
   isConnEvent,
   isStatusState,
+  type KeyAction,
   type MicStopReason,
   type ServerInfo,
   type SessionSource,
@@ -146,6 +147,7 @@ const COMMANDS = {
   micStart: "mic_start",
   micFrame: "mic_frame",
   micStop: "mic_stop",
+  sendKeyRequest: "send_key_request",
   accessibilityInfo: "accessibility_info",
   accessibilityOpenSettings: "accessibility_open_settings",
   accessibilityRequest: "accessibility_request",
@@ -396,6 +398,19 @@ export function sendFocusRequest(
   requestId: string,
 ): Promise<void> {
   return invoke<void>(COMMANDS.sendFocusRequest, { source, sessionId, requestId });
+}
+
+/**
+ * 手机端请求在最近一次输入的目标应用里按一次键；结果走 key.result 事件。
+ *
+ * 只由用户主动点按触发：`enter` 合成 Return，`clear` 合成 ⌘A + Delete。
+ */
+export function sendKeyRequest(
+  action: KeyAction,
+  session: string,
+  requestId: string,
+): Promise<void> {
+  return invoke<void>(COMMANDS.sendKeyRequest, { action, session, requestId });
 }
 
 export function getDshHookStatus(): Promise<DshHookStatus> {

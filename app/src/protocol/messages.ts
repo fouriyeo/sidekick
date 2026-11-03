@@ -198,6 +198,36 @@ export type MicMessage =
   | MicStateMessage
   | MicErrorMessage;
 
+/**
+ * 结果卡片上的手动按键动作：`enter` = 在电脑上按一次 Return，
+ * `clear` = 在电脑上按 ⌘A + Delete 清空输入框。
+ *
+ * 只由用户主动点按触发，绝不自动发送（见 docs/prd/mic/PRD.md 铁律）。
+ */
+export type KeyAction = "enter" | "clear";
+
+/** 手机 → 桌面：请求在最近一次插入文本的目标应用里按一次键。 */
+export type KeyRequestMessage = {
+  v: 1;
+  type: "key.request";
+  requestId: string;
+  /** 最近一次 mic.result(outcome=inserted) 的会话 id，用于对回目标窗口。 */
+  session: string;
+  action: KeyAction;
+  ts: number;
+};
+
+/** 桌面 → 手机/UI：按键结果；error 只回错误码，不含文本/应用名。 */
+export type KeyResultMessage = {
+  v: 1;
+  type: "key.result";
+  requestId: string;
+  action: KeyAction;
+  ok: boolean;
+  error?: string | null;
+  ts: number;
+};
+
 export type ParsedMessage = {
   kind: "me" | "them" | "system";
   text: string;
@@ -367,6 +397,35 @@ export function parseFocusResult(raw: string): FocusResultMessage | null {
     return null;
   }
   return isFocusResultMessage(value) ? value : null;
+}
+
+export function isKeyAction(value: unknown): value is KeyAction {
+  return value === "enter" || value === "clear";
+}
+
+export function isKeyResultMessage(value: unknown): value is KeyResultMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const message = value as Record<string, unknown>;
+  return (
+    message.type === "key.result" &&
+    message.v === 1 &&
+    typeof message.requestId === "string" &&
+    message.requestId.length > 0 &&
+    isKeyAction(message.action) &&
+    typeof message.ok === "boolean" &&
+    (message.error === undefined || message.error === null || typeof message.error === "string") &&
+    typeof message.ts === "number"
+  );
+}
+
+export function parseKeyResult(raw: string): KeyResultMessage | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return isKeyResultMessage(value) ? value : null;
 }
 
 export function isConnEvent(value: unknown): value is ConnEvent {

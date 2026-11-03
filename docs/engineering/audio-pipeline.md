@@ -2,7 +2,7 @@
 doc: engineering/audio-pipeline
 title: 麦克风音频链路方案
 status: active
-updated: 2026-11-02
+updated: 2026-11-04
 load: on-demand
 owner: engineering
 ---
@@ -42,6 +42,8 @@ owner: engineering
   → mic.stop(release/timeout) → finish-task → task-finished
   → 记 usage → 最终文本一次性落字（剪贴板 + Cmd+V / 仅复制）
   → mic.result 回传手机 + 桌面浮层
+  → 用户在结果卡片点「回车/清空」→ key.request → 校验目标窗口/密码框/辅助功能
+  → core-graphics 合成 Return 或 ⌘A+Delete → key.result 回传手机 + 桌面浮层
 ```
 
 关键点：
@@ -106,12 +108,21 @@ owner: engineering
 - 首选：辅助功能权限 + `arboard` 写剪贴板 + `core-graphics` 合成 `Cmd+V`（keycode 9 + Command）。
 - 备选：仅复制，用户手动粘贴。
 - 不直接改目标控件值（兼容性差、可能破坏撤销）。
-- **绝不发送 Return/Enter**；不调用任何“提交/发送”快捷键。
+- **绝不自动发送 Return/Enter**；不调用任何“提交/发送”快捷键。只有用户在手机结果卡片主动点按「回车」时，才在最近一次插入的目标窗口里合成一次 Return（见 7.4）。
 - 输入后系统撤销（⌘Z）应能撤回该段文本；不做自建撤销栈。
 - 权限被拒/未授权：不阻塞录音与转写，只降级。
 - 设置页提供“请求权限 / 打开系统设置 / 在 Finder 中显示当前程序 / 重新检测”。
 
-### 7.3 安全边界
+### 7.3 手动按键（回车 / 清空）
+
+- 入口：手机「已输入」结果卡片上的两个按钮；**只在 `outcome=inserted` 时出现**，仅复制/失败不显示。
+- 「回车」：一次点按合成 Return（keycode 36）；「清空」：`⌘A` + 40ms + `Delete`，需点两次确认（第一次变「再点一次」，3 秒失效）。
+- 安全闸门与自动粘贴一致并更严格：目标应用必须仍是插入时记录的前台应用；密码/安全输入拒绝；辅助功能未授权拒绝；非 macOS 不支持。
+- 时效：插入后 30 秒内有效，成功一次即作废；全局 500ms 限频；只认发起该麦克风会话的连接。
+- 错误只回错误码（`no_target` / `session_mismatch` / `target_mismatch` / `secure_input` / `accessibility_off` / `send_failed` / `rate_limited` / `unsupported_platform`），手机显示中文原因；不发送文本、不记录应用名。
+- 「清空」对终端等非标准输入框可能不生效或只选中不删除；以 macOS 标准输入框为准，绝不因此回退成发送回车。
+
+### 7.4 安全边界
 
 - 不读取剪贴板历史；只写入本次转写。
 - 不记录目标应用名称到日志；只记类别。
@@ -204,6 +215,7 @@ owner: engineering
 - 协议：`mic.start` / `mic.ready` / `mic.stop` / `mic.partial` / `mic.result` / `mic.state` / `mic.error` + `SK01` PCM16 二进制帧；服务端单会话缓冲，音频不广播、不落盘。
 - 识别：只走百炼 `qwen-audio-3.1-asr-flash-streaming`；`asr.json` + Keychain + `asr_cloud_*`；失败不回退本机。
 - 用量：`asr_usage.json` 按本机日期汇总；`asr_usage_stats/clear`；金额按北京/新加坡价格估算。
-- 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不发送回车。
+- 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不自动发送回车。
+- 手动按键：结果卡片「回车/清空」→ `key.request` → `desktop_keys` 安全闸门 → Return / ⌘A+Delete；30 秒时效、成功即作废、500ms 限频（2026-11-04）。
 - 桌面：主导航「模型」页（AI 联动之后）配置百炼 + 查看用量；应用内语音浮层；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
-- 待验证：真实百炼账号/Keychain 授权/真机流式与失败路径、用量统计准确性、辅助功能自动粘贴、60 秒/断连、30 句准确率。
+- 待验证：真实百炼账号/Keychain 授权/真机流式与失败路径、用量统计准确性、辅助功能自动粘贴、60 秒/断连、30 句准确率、结果卡片回车/清空的真机与焦点切换矩阵。

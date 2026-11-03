@@ -130,22 +130,24 @@ pub fn focus_result_json(
     })
 }
 
-/// 全局 1.5s 限频（允许注入 clock 以便单测）。
-pub struct FocusLimiter {
+/// 通用间隔限流器：`focus.request` 用 1.5s，`key.request` 用 500ms。
+/// 允许注入 clock 以便单测。
+pub struct IntervalLimiter {
     interval: Duration,
     last: Mutex<Option<Instant>>,
 }
 
-impl FocusLimiter {
-    pub fn new() -> Self {
-        Self::with_interval(FOCUS_MIN_INTERVAL)
-    }
-
+impl IntervalLimiter {
     pub fn with_interval(interval: Duration) -> Self {
         Self {
             interval,
             last: Mutex::new(None),
         }
+    }
+
+    /// focus.request 的默认间隔。
+    pub fn focus() -> Self {
+        Self::with_interval(FOCUS_MIN_INTERVAL)
     }
 
     /// 获得一次执行机会；距上次成功不足 `interval` 时返回 false。
@@ -161,11 +163,14 @@ impl FocusLimiter {
     }
 }
 
-impl Default for FocusLimiter {
+impl Default for IntervalLimiter {
     fn default() -> Self {
-        Self::new()
+        Self::focus()
     }
 }
+
+/// 兼容旧名字：focus.request 的限流器就是通用间隔限流器。
+pub type FocusLimiter = IntervalLimiter;
 
 #[cfg(test)]
 mod tests {

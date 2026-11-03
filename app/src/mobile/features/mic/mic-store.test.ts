@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
+import { sendKeyRequest } from "@/shared/lib/tauri";
 import { useMicStore } from "./mic-store";
+
+vi.mock("@/shared/lib/tauri", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/lib/tauri")>()),
+  sendKeyRequest: vi.fn(async () => undefined),
+}));
 
 const SESSION = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
@@ -222,5 +229,161 @@ describe("mic store ready message", () => {
       ts: 5,
     });
     expect(useMicStore.getState().partialText).toBe("当前会话文本");
+  });
+});
+
+describe("mic store 结果卡片按键", () => {
+  const sendKey = vi.mocked(sendKeyRequest);
+
+  function insertedDelivered() {
+    useConnectionStore.setState({ status: "connected" });
+    useMicStore.getState().begin(SESSION);
+    useMicStore.getState().markProcessing();
+    useMicStore.getState().handleResult(result({ outcome: "inserted", reason: null }));
+  }
+
+  function lastRequestId(): string {
+    const call = sendKey.mock.calls[sendKey.mock.calls.length - 1];
+    expect(call).toBeDefined();
+    return call?.[2] ?? "";
+  }
+
+  beforeEach(() => {
+    sendKey.mockClear();
+    useConnectionStore.setState({ status: "connected" });
+  });
+
+  it("回车：一次点击发一次协议，成功提示后收起卡片", () => {
+    insertedDelivered();
+
+    useMicStore.getState().requestKey("enter");
+    expect(sendKey).toHaveBeenCalledTimes(1);
+    const [action, session] = sendKey.mock.calls[0];
+    expect(action).toBe("enter");
+    expect(session).toBe(SESSION);
+    const requestId = lastRequestId();
+    expect(requestId).toMatch(/^k-/);
+    expect(useMicStore.getState().keyPending).toBe("enter");
+
+    // 等待回包期间重复点击不会再发。
+    useMicStore.getState().requestKey("enter");
+    expect(sendKey).toHaveBeenCalledTimes(1);
+
+    useMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId,
+      action: "enter",
+      ok: true,
+      error: null,
+      ts: 2,
+    });
+    expect(useMicStore.getState().keyPending).toBeNull();
+    expect(useMicStore.getState().keyNotice).toBe("已按回车");
+
+    vi.advanceTimersByTime(1400);
+    expect(useMicStore.getState().phase).toBe("idle");
+    expect(useMicStore.getState().keyNotice).toBeNull();
+  });
+
+  it("清空：第一次只做二次确认，第二次才发协议", () => {
+    insertedDelivered();
+
+    useMicStore.getState().requestKey("clear");
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(useMicStore.getState().keyArmedClear).toBe(true);
+
+    useMicStore.getState().requestKey("clear");
+    expect(sendKey).toHaveBeenCalledTimes(1);
+    expect(sendKey.mock.calls[0][0]).toBe("clear");
+    expect(useMicStore.getState().keyArmedClear).toBe(false);
+
+    const requestId = lastRequestId();
+    useMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId,
+      action: "clear",
+      ok: true,
+      error: null,
+      ts: 2,
+    });
+    expect(useMicStore.getState().keyNotice).toBe("已清空输入框");
+  });
+
+  it("清空的二次确认 3 秒后自动失效", () => {
+    insertedDelivered();
+    useMicStore.getState().requestKey("clear");
+    expect(useMicStore.getState().keyArmedClear).toBe(true);
+
+    vi.advanceTimersByTime(3000);
+    expect(useMicStore.getState().keyArmedClear).toBe(false);
+    expect(sendKey).not.toHaveBeenCalled();
+  });
+
+  it("失败时给中文提示，卡片继续留着", () => {
+    insertedDelivered();
+    useMicStore.getState().requestKey("enter");
+    const requestId = lastRequestId();
+
+    useMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId,
+      action: "enter",
+      ok: false,
+      error: "target_mismatch",
+      ts: 2,
+    });
+    expect(useMicStore.getState().keyPending).toBeNull();
+    expect(useMicStore.getState().keyError).toBe("电脑焦点不在刚才的窗口，没按。");
+    expect(useMicStore.getState().phase).toBe("delivered");
+    expect(useMicStore.getState().result).not.toBeNull();
+
+    vi.advanceTimersByTime(10_000);
+    expect(useMicStore.getState().phase).toBe("idle");
+  });
+
+  it("4 秒没回包时提示没回应，卡片不消失", () => {
+    insertedDelivered();
+    useMicStore.getState().requestKey("enter");
+
+    vi.advanceTimersByTime(4000);
+    expect(useMicStore.getState().keyPending).toBeNull();
+    expect(useMicStore.getState().keyError).toBe("电脑端没回应，再试一次。");
+    expect(useMicStore.getState().phase).toBe("delivered");
+  });
+
+  it("忽略别的 requestId，断连/非插入结果不发请求", () => {
+    insertedDelivered();
+    useMicStore.getState().requestKey("enter");
+    useMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId: "k-unknown",
+      action: "enter",
+      ok: true,
+      error: null,
+      ts: 2,
+    });
+    expect(useMicStore.getState().keyPending).toBe("enter");
+    expect(useMicStore.getState().keyNotice).toBeNull();
+
+    // 断连时不发，直接提示。
+    useMicStore.getState().reset();
+    insertedDelivered();
+    useConnectionStore.setState({ status: "error" });
+    useMicStore.getState().requestKey("enter");
+    expect(sendKey).toHaveBeenCalledTimes(1);
+    expect(useMicStore.getState().keyError).toContain("连接断了");
+
+    // 仅复制的卡片没有可操作目标。
+    useMicStore.getState().reset();
+    useConnectionStore.setState({ status: "connected" });
+    useMicStore.getState().begin(SESSION);
+    useMicStore.getState().handleResult(result());
+    useMicStore.getState().requestKey("enter");
+    expect(sendKey).toHaveBeenCalledTimes(1);
+    expect(useMicStore.getState().keyPending).toBeNull();
   });
 });

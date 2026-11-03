@@ -1,7 +1,12 @@
 import { formatDuration } from "@/shared/lib/format";
-import { MIC_STATUS_COPY, micErrorText, micReasonText } from "@/shared/lib/mic-status-copy";
+import {
+  keyActionErrorText,
+  MIC_STATUS_COPY,
+  micErrorText,
+  micReasonText,
+} from "@/shared/lib/mic-status-copy";
 
-export { formatDuration, micErrorText, micReasonText };
+export { formatDuration, keyActionErrorText, micErrorText, micReasonText };
 
 export const MIC_COPY = {
   ...MIC_STATUS_COPY,

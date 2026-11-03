@@ -2,7 +2,7 @@
 doc: engineering/protocol-audio
 title: 音频协议
 status: active
-updated: 2026-11-02
+updated: 2026-11-04
 load: on-demand
 owner: engineering
 ---
@@ -10,7 +10,7 @@ owner: engineering
 # 音频协议（v1，已实现）
 
 > 现状：协议 v0 的 `chat` / `system` 不变；2026-10-31 实现麦克风会话与二进制帧；2026-11-02 改为百炼云端唯一，增加 `mic.partial` 与 `mic.result.usage`，移除 `engine/model/fallback`。
-> 实现：`app/src-tauri/src/mic_protocol.rs`、`desktop_server.rs`、`mobile_client.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`；前端类型见 `app/src/protocol/messages.ts` 与 `audio-frame.ts`。
+> 实现：`app/src-tauri/src/mic_protocol.rs`、`desktop_server.rs`、`mobile_client.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`；结果卡片手动按键见 `desktop_keys.rs`；前端类型见 `app/src/protocol/messages.ts` 与 `audio-frame.ts`。
 
 ## 1. 目标
 
@@ -34,6 +34,8 @@ owner: engineering
 | 桌面 → 桌面 UI | `asr.final` | JSON | 预留，未实现 |
 | 桌面 → 手机/UI | `asr.error` | JSON | 预留，未实现 |
 | 桌面 → 手机 | `mic.error` | JSON | 配置/会话错误 |
+| 手机 → 桌面 | `key.request` | JSON | 结果卡片手动按键（Return / ⌘A+Delete） |
+| 桌面 → 手机/UI | `key.result` | JSON | 按键结果 + 错误码 |
 
 - 语音识别只走百炼云端；协议不再有 `engine`/`model`/`fallback` 字段。
 - `mic.partial` 于 2026-11-02 实现；`asr.final`/`asr.error` 仍是预留名称，当前不发送。
@@ -166,6 +168,22 @@ owner: engineering
 - `asr.final` 只发给桌面 UI 做可选预览；默认不在手机显示全文。
 - 错误 `message` 只给内部/日志，不给用户；用户文案由 UI 层映射。
 
+### 3.8 key.request / key.result（结果卡片手动按键）
+
+语音输入成功后，结果卡片上有「回车」「清空」两个按钮；点按时手机请求桌面在**最近一次插入文本的目标应用**里合成按键。它复用麦克风会话 id，但不是 `mic.*` 的子类型。
+
+```json
+{ "v": 1, "type": "key.request", "requestId": "k-…", "session": "mic-session-uuid", "action": "enter", "ts": 1730000000000 }
+{ "v": 1, "type": "key.result", "requestId": "k-…", "action": "enter", "ok": true, "error": null, "ts": 1730000000001 }
+```
+
+- `action`：`enter` = Return（keycode 36）；`clear` = `⌘A`（keycode 0 + Command）后 40ms 再 `Delete`（keycode 51），清空整个输入框。
+- 只在 `mic.result(outcome=inserted)` 后记录目标；只复制/失败不记录，也不显示按钮。
+- 安全闸门（顺序固定）：目标应用与插入时不同 → `target_mismatch`；密码/安全输入 → `secure_input`；辅助功能未授权 → `accessibility_off`；合成失败 → `send_failed`。
+- 30 秒时效（结果卡片 10 秒，留网络/点击余量）；成功一次即作废；全局 500ms 限频；owner/session 不符回 `session_mismatch`，无记录/已过期回 `no_target`。
+- 非 macOS 回 `unsupported_platform`；旧版桌面把 `key.request` 当普通文本广播，新/旧手机解析为未知类型后忽略。
+- 不发送任何文本；日志只有 action/outcome/reason 与 `same_app/secure/trusted` 布尔值，不含应用名。
+
 ## 4. 二进制音频帧
 
 ### 4.1 帧格式（P0 PCM16）
@@ -197,6 +215,7 @@ offset  size  field
 - 桌面服务维护一个 active `ActiveMic { owner, session, pcm, frames, pricing, cloud, ... }`，见 `desktop_server.rs`。
 - 二进制帧只按 session 追加到该会话缓冲；**不进入广播通道**；未知 session/非 owner 直接丢弃。
 - 会话开始时读 `asr.json` + Keychain；未配置直接 `mic.error`，不建立会话。
+- 插入成功后桌面把 `(owner, session, 前台应用, 时间)` 记到 `KeyRegistry`；`key.request` 在未进入聊天广播前被拦截，校验后放到阻塞线程合成按键，结果广播为 `key.result`。
 - 音频帧同时进入内存缓冲并转发给百炼会话（`bailian_asr::CloudHandle`）。
 - `mic.partial` 由云端会话通过同一文本广播通道发出，手机与桌面 UI 都按 session/rev 过滤。
 - `mic.start` / `mic.ready` / `mic.stop` / `mic.state` / `mic.result` / `mic.error` 仍走现有文本广播，调试客户端可见；P0 仅单手机，配对/多客户端隔离在 P1。
@@ -227,6 +246,7 @@ idle
 - 新客户端在 `mic.start` 前不发送二进制帧；旧服务端会忽略二进制，手机收到 `mic.error` 或超时。
 - 2026-11-02 移除了 `mic.ready.engine/model`、`mic.partial.engine`、`mic.result.engine/model/fallback`；双端同版本升级，旧客户端多收字段会忽略，新客户端不依赖这些字段。
 - `mic.result.usage` 保留，字段不变。
+- 2026-11-04 新增 `key.request` / `key.result`（增量，旧端忽略）；不修改任何 `mic.*` 字段。
 - 版本字段 `v:1`；破坏性改动升 `v:2`，双端同时升级。
 - `protocol/messages.ts` 用 discriminated union；Rust 用 `serde(tag = "type")`，未知类型不崩溃。
 
@@ -237,6 +257,7 @@ idle
 - 限制帧大小、会话数（每客户端 1 个）、录音时长；防止内存耗尽。
 - 不记录音频 payload；日志只记 session 前缀、序列号范围、字节数、tokens。
 - 云端 Key 只存桌面 Keychain；`asr.json` / `asr_usage.json` 不含 Key；手机不接触 Key；未同意不上传。
+- 手动按键不自动执行：只接受结果卡片点按、只作用于最近一次插入的同一前台应用，30 秒过期且成功即作废；密码框/未授权/焦点变化一律拒绝并只回错误码。
 - P1 加配对/长期密钥/加密后，再考虑跨网络。
 
 ## 9. 实现映射（当前代码）
@@ -249,11 +270,12 @@ idle
 | `app/src-tauri/src/bailian_asr.rs` | 百炼 WS 会话、run-task/finish-task、句子组装、partial 节流 |
 | `app/src-tauri/src/asr_usage.rs`、`asr_pricing.rs` | 用量汇总、365 天 `days`、价格/金额 |
 | `app/src-tauri/src/mic_protocol.rs` | 消息/帧解析、session UUID、`MicStopReason` |
-| `app/src-tauri/src/desktop_mic.rs`、`transcript.rs` | 文本插入、截断/空白归一 |
-| `app/src-tauri/src/mobile_client.rs` | `Outbound::Text/Binary`、`mic_start/mic_frame/mic_stop` |
+| `app/src-tauri/src/desktop_mic.rs`、`transcript.rs` | 文本插入、截断/空白归一、`post_key` 按键合成 |
+| `app/src-tauri/src/desktop_keys.rs` | 按键动作解析/计划/安全闸门/目标注册表、`key.result` |
+| `app/src-tauri/src/mobile_client.rs` | `Outbound::Text/Binary`、`mic_start/mic_frame/mic_stop/send_key_request` |
 | 桌面 `desktop/features/models` | 模型页：百炼配置 + 用量统计 |
 | 桌面 `desktop/features/mic-receiver` | 应用内语音状态浮层 |
-| 手机 `mobile/features/mic` | 录音、波形、手势、权限、结果卡片 |
+| 手机 `mobile/features/mic` | 录音、波形、手势、权限、结果卡片、回车/清空按钮 |
 | `app/src/protocol/messages.ts`、`audio-frame.ts` | 前端类型与帧测试工具 |
 
 ## 10. 测试向量

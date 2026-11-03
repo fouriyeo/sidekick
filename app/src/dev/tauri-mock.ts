@@ -456,6 +456,28 @@ export function installTauriMock(): void {
         return null;
       }
 
+      if (command === "send_key_request") {
+        const requestId = typeof args?.requestId === "string" ? args.requestId : "";
+        const action = args?.action === "clear" ? "clear" : "enter";
+        // 浏览器验收失败态：?role=mobile&keyError=target_mismatch
+        const forcedError = params.get("keyError");
+        window.setTimeout(() => {
+          emit(
+            "chat",
+            JSON.stringify({
+              type: "key.result",
+              v: 1,
+              requestId,
+              action,
+              ok: !forcedError,
+              error: forcedError ?? null,
+              ts: Date.now(),
+            }),
+          );
+        }, 120);
+        return null;
+      }
+
       if (command === "accessibility_info") {
         return {
           trusted: params.get("access") === "1",

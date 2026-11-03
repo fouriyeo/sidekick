@@ -12,6 +12,7 @@ import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import {
   parseFocusResult,
+  parseKeyResult,
   parseMessage,
   parseMicMessage,
   parseStatusMessage,
@@ -157,6 +158,13 @@ export function MobileApp() {
       const focusResult = parseFocusResult(raw);
       if (focusResult) {
         useSessionStore.getState().handleFocusResult(focusResult);
+        return;
+      }
+
+      // 结果卡片「回车/清空」的回包：只驱动卡片提示，不进聊天记录。
+      const keyResult = parseKeyResult(raw);
+      if (keyResult) {
+        useMicStore.getState().handleKeyResult(keyResult);
         return;
       }
 

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { sendKeyRequest } from "@/shared/lib/tauri";
 import { MicButton } from "./mic-button";
 import { useMicStore } from "./mic-store";
 
@@ -22,6 +23,7 @@ vi.mock("@/shared/lib/tauri", async (importOriginal) => ({
   sendMicStart: vi.fn(async () => null),
   sendMicStop: vi.fn(async () => null),
   sendMicFrame: vi.fn(async () => null),
+  sendKeyRequest: vi.fn(async () => null),
 }));
 
 vi.mock("./voice-recorder", async (importOriginal) => ({
@@ -212,5 +214,103 @@ describe("MicButton 流式识别回显", () => {
     expect(screen.getByText("云端收尾…")).toBeInTheDocument();
     expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
     expect(screen.getByText("帮我把这段异步的注释改成中文")).toBeInTheDocument();
+  });
+});
+
+describe("MicButton 结果卡片按键", () => {
+  const sendKey = vi.mocked(sendKeyRequest);
+
+  function insertedCard() {
+    useConnectionStore.setState({ status: "connected" });
+    useMicStore.setState({
+      phase: "delivered",
+      session: "session-1",
+      result: {
+        outcome: "inserted",
+        reason: null,
+        text: "测试转写文本",
+        truncated: false,
+        message: "已输入",
+        at: Date.now(),
+      },
+      error: null,
+      partialText: "",
+      partialRev: 0,
+      keyPending: null,
+      keyArmedClear: false,
+      keyNotice: null,
+      keyError: null,
+      keyRequestId: null,
+    });
+  }
+
+  beforeEach(() => {
+    sendKey.mockClear();
+    insertedCard();
+  });
+
+  it("已输入的卡片出现「回车」「清空」两个 44px 按钮", () => {
+    renderButton();
+
+    const enter = screen.getByRole("button", { name: "在电脑上按回车" });
+    const clear = screen.getByRole("button", { name: "清空电脑输入框" });
+    expect(enter.className).toContain("h-11");
+    expect(clear.className).toContain("h-11");
+    expect(enter.textContent).toContain("回车");
+    expect(clear.textContent).toContain("清空");
+  });
+
+  it("仅复制/失败的卡片不出现按键按钮", () => {
+    useMicStore.setState({
+      phase: "delivered",
+      result: {
+        outcome: "copied",
+        reason: "accessibility_off",
+        text: "测试转写文本",
+        truncated: false,
+        message: "已复制到电脑",
+        at: Date.now(),
+      },
+    });
+    renderButton();
+    expect(screen.queryByRole("button", { name: "在电脑上按回车" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "清空电脑输入框" })).toBeNull();
+  });
+
+  it("点回车直接发送", () => {
+    renderButton();
+
+    fireEvent.click(screen.getByRole("button", { name: "在电脑上按回车" }));
+    expect(sendKey).toHaveBeenCalledTimes(1);
+    expect(sendKey.mock.calls[0][0]).toBe("enter");
+  });
+
+  it("点清空第一次只做二次确认，按钮改成「再点一次」", () => {
+    renderButton();
+
+    fireEvent.click(screen.getByRole("button", { name: "清空电脑输入框" }));
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(screen.getByText("再点一次")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再点一次清空电脑输入框" })).toBeInTheDocument();
+  });
+
+  it("等待回包或已有提示时两个按钮都禁用", () => {
+    useMicStore.setState({ keyPending: "enter" });
+    renderButton();
+    expect(screen.getByRole("button", { name: "在电脑上按回车" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "清空电脑输入框" })).toBeDisabled();
+  });
+
+  it("成功提示与失败提示都在卡片里可见", () => {
+    useMicStore.setState({ keyNotice: "已按回车" });
+    renderButton();
+    expect(screen.getByText("已按回车")).toBeInTheDocument();
+  });
+
+  it("失败时显示中文原因，按钮保留", () => {
+    useMicStore.setState({ keyError: "电脑焦点不在刚才的窗口，没按。" });
+    renderButton();
+    expect(screen.getByText("电脑焦点不在刚才的窗口，没按。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "在电脑上按回车" })).toBeInTheDocument();
   });
 });

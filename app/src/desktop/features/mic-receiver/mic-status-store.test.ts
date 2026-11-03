@@ -188,3 +188,45 @@ describe("desktop mic streaming fields", () => {
     expect(useDesktopMicStore.getState().visible).toBe(false);
   });
 });
+
+describe("desktop mic key feedback", () => {
+  it("shows enter/clear success and error messages, then hides", () => {
+    useDesktopMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId: "k-1",
+      action: "enter",
+      ok: true,
+      error: null,
+      ts: 1,
+    });
+    expect(useDesktopMicStore.getState().visible).toBe(true);
+    expect(useDesktopMicStore.getState().message).toBe("已按回车");
+
+    vi.advanceTimersByTime(2000);
+    expect(useDesktopMicStore.getState().visible).toBe(false);
+
+    useDesktopMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId: "k-2",
+      action: "clear",
+      ok: true,
+      error: null,
+      ts: 2,
+    });
+    expect(useDesktopMicStore.getState().message).toBe("已清空输入框");
+
+    useDesktopMicStore.getState().handleKeyResult({
+      v: 1,
+      type: "key.result",
+      requestId: "k-3",
+      action: "enter",
+      ok: false,
+      error: "target_mismatch",
+      ts: 3,
+    });
+    expect(useDesktopMicStore.getState().message).toBe("电脑焦点不在刚才的窗口，没按。");
+    expect(useDesktopMicStore.getState().phase).toBe("error");
+  });
+});

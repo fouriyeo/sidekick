@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDesktopMicStore } from "@/desktop/features/mic-receiver/mic-status-store";
-import { parseMessage, parseMicMessage, type ServerInfo } from "@/protocol/messages";
+import {
+  parseKeyResult,
+  parseMessage,
+  parseMicMessage,
+  type ServerInfo,
+} from "@/protocol/messages";
 import { getServerInfo, normalizeError } from "@/shared/lib/tauri";
 import { useChatStore } from "./features/chat/chat-store";
 import type { DesktopConnectionStatus } from "./lib/connection-status";
@@ -50,6 +55,12 @@ export function useDesktopConnection(): DesktopConnection {
         },
         onMessage: (raw) => {
           if (!isCurrent()) return;
+
+          const keyResult = parseKeyResult(raw);
+          if (keyResult) {
+            useDesktopMicStore.getState().handleKeyResult(keyResult);
+            return;
+          }
 
           const micMessage = parseMicMessage(raw);
           if (micMessage) {

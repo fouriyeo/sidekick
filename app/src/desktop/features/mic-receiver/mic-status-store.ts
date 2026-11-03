@@ -1,6 +1,11 @@
 import { create } from "zustand";
-import type { MicMessage } from "@/protocol/messages";
-import { MIC_STATUS_COPY, micErrorText, micReasonText } from "@/shared/lib/mic-status-copy";
+import type { KeyResultMessage, MicMessage } from "@/protocol/messages";
+import {
+  keyActionErrorText,
+  MIC_STATUS_COPY,
+  micErrorText,
+  micReasonText,
+} from "@/shared/lib/mic-status-copy";
 
 export type DesktopMicPhase = "idle" | "listening" | "processing" | "delivered" | "error";
 
@@ -15,6 +20,8 @@ type DesktopMicState = {
   /** 已接受的中间结果版本号；用于丢弃重复/乱序消息。 */
   partialRev: number;
   handleMessage: (message: MicMessage) => void;
+  /** 结果卡片的手动按键回包：桌面浮层也显示「已按回车 / 已清空输入框」。 */
+  handleKeyResult: (message: KeyResultMessage) => void;
   reset: () => void;
 };
 
@@ -147,6 +154,38 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
         });
       }, 5000);
     }
+  },
+
+  handleKeyResult: (message) => {
+    clearHideTimer();
+    const text = message.ok
+      ? message.action === "enter"
+        ? MIC_STATUS_COPY.keyEnterSent
+        : MIC_STATUS_COPY.keyClearSent
+      : keyActionErrorText(message.error);
+
+    set({
+      phase: message.ok ? "delivered" : "error",
+      session: get().session,
+      startedAt: null,
+      message: text,
+      visible: true,
+      ...EMPTY_PARTIAL,
+    });
+
+    hideTimer = window.setTimeout(
+      () => {
+        hideTimer = null;
+        set({
+          visible: false,
+          phase: "idle",
+          session: null,
+          message: "",
+          ...EMPTY_PARTIAL,
+        });
+      },
+      message.ok ? 2000 : 5000,
+    );
   },
 
   reset: () => {

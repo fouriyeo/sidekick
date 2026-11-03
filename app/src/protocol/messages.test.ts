@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   isConnEvent,
   isFocusResultMessage,
+  isKeyResultMessage,
   isStatusMessage,
   normalizeSessionList,
   normalizeSessionTitle,
   parseFocusResult,
+  parseKeyResult,
   parseMessage,
   parseMicMessage,
   parseStatusMessage,
@@ -288,5 +290,32 @@ describe("parseMicMessage", () => {
     expect(
       parseMicMessage(JSON.stringify({ v: 1, type: "mic.state", session, state: "unknown" })),
     ).toBeNull();
+  });
+});
+
+describe("key.result", () => {
+  const base = { v: 1, type: "key.result", requestId: "k-1", action: "enter", ok: true, ts: 1 };
+
+  it("parses successful and failed key results", () => {
+    expect(parseKeyResult(JSON.stringify(base))).toMatchObject({
+      type: "key.result",
+      action: "enter",
+      ok: true,
+    });
+    expect(
+      parseKeyResult(
+        JSON.stringify({ ...base, action: "clear", ok: false, error: "target_mismatch" }),
+      ),
+    ).toMatchObject({ action: "clear", ok: false, error: "target_mismatch" });
+    expect(isKeyResultMessage(base)).toBe(true);
+    expect(isKeyResultMessage({ ...base, error: null })).toBe(true);
+  });
+
+  it("rejects unknown actions, missing ids and malformed payloads", () => {
+    expect(parseKeyResult("not-json")).toBeNull();
+    expect(parseKeyResult(JSON.stringify({ ...base, action: "submit" }))).toBeNull();
+    expect(parseKeyResult(JSON.stringify({ ...base, requestId: "" }))).toBeNull();
+    expect(parseKeyResult(JSON.stringify({ ...base, ok: "yes" }))).toBeNull();
+    expect(parseKeyResult(JSON.stringify({ ...base, v: 2 }))).toBeNull();
   });
 });

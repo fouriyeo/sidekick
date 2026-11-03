@@ -17,12 +17,13 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio_util::io::ReaderStream;
 
-use crate::app_focus::{self, FocusLimiter, FocusRequest};
+use crate::app_focus::{self, FocusLimiter, FocusRequest, IntervalLimiter};
 use crate::asr_cloud::AsrCloudState;
 use crate::asr_pricing::{self, Pricing};
 use crate::asr_usage::UsageStore;
 use crate::bailian_asr::{self, CloudHandle};
 use crate::clipboard_manager::ClipboardManager;
+use crate::desktop_keys::{self, KeyAction, KeyRegistry};
 use crate::desktop_mic::{self, FrontApp};
 use crate::discovery;
 use crate::dsh_hook::HookBridge;
@@ -52,6 +53,10 @@ struct AppState {
     usage: Arc<UsageStore>,
     /// 「一键唤起电脑」的全局 1.5s 限频。
     focus_limiter: Arc<FocusLimiter>,
+    /// 结果卡片手动按键：最近一次「插入成功」的目标窗口。
+    keys: Arc<KeyRegistry>,
+    /// 结果卡片手动按键的 500ms 限频。
+    key_limiter: Arc<IntervalLimiter>,
 }
 
 struct ActiveMic {
@@ -193,7 +198,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 Message::Text(text) => {
                     let text = text.to_string();
                     if let Some(kind) = message_type(&text) {
-                        // focus.request 最先识别：它不进聊天广播，也不打印会话内容。
+                        // 控制类消息最先识别：它们不进聊天广播，也不打印会话内容。
+                        if kind == "key.request" {
+                            // 结果卡片的手动按键：不进聊天广播，也不打印任何内容。
+                            handle_key_request(&recv_state, client_id, &text);
+                            continue;
+                        }
                         if kind == "focus.request" {
                             if let Some(request) = begin_focus_request(
                                 &recv_state.tx,
@@ -309,6 +319,160 @@ async fn finish_focus_request(state: AppState, request: FocusRequest) {
         &state,
         app_focus::focus_result_json(&request.request_id, &request.source, ok, error, now_ms()),
     );
+}
+
+/// 通过校验、等待执行的按键请求。
+struct PendingKey {
+    request_id: String,
+    action: KeyAction,
+    session: String,
+    expected_app: FrontApp,
+}
+
+fn reply_key_error(
+    tx: &broadcast::Sender<String>,
+    request_id: &str,
+    action: KeyAction,
+    code: &str,
+) {
+    let _ = tx.send(
+        desktop_keys::key_result_json(request_id, action, false, Some(code), now_ms()).to_string(),
+    );
+}
+
+/// 回包里的 action：解析不到就用 enter 占位（只影响错误回包字段）。
+fn action_hint(value: &Value) -> KeyAction {
+    value
+        .get("action")
+        .and_then(Value::as_str)
+        .and_then(KeyAction::parse)
+        .unwrap_or(KeyAction::Enter)
+}
+
+/// 校验并受理一条 key.request：非法请求回 bad_request，限频回 rate_limited，
+/// 没有可操作目标回 no_target / session_mismatch；通过则返回待执行请求。
+///
+/// 真正的按键合成在 [`handle_key_request`] 的阻塞线程里做，单测只覆盖到这里。
+fn begin_key_request(
+    tx: &broadcast::Sender<String>,
+    limiter: &IntervalLimiter,
+    registry: &KeyRegistry,
+    client_id: u64,
+    text: &str,
+) -> Option<PendingKey> {
+    let value: Value = match serde_json::from_str(text) {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+    // requestId 非法时无法回包关联，直接丢弃（不打印任何内容）。
+    let Some(request_id) = app_focus::request_id_of(&value) else {
+        eprintln!("[key] 丢弃 requestId 非法的请求");
+        return None;
+    };
+    // 出错时 action 只用于回包字段，取不到就按 enter 占位。
+    let action_hint = action_hint(&value);
+
+    let request = match desktop_keys::parse_key_request(&value) {
+        Ok(request) => request,
+        Err(code) => {
+            reply_key_error(tx, &request_id, action_hint, code);
+            return None;
+        }
+    };
+    if !limiter.try_acquire(Instant::now()) {
+        reply_key_error(tx, &request.request_id, request.action, "rate_limited");
+        return None;
+    }
+    let expected_app = match registry.authorize(client_id, &request.session, Instant::now()) {
+        Ok(app) => app,
+        Err(code) => {
+            reply_key_error(tx, &request.request_id, request.action, code);
+            return None;
+        }
+    };
+    Some(PendingKey {
+        request_id: request.request_id,
+        action: request.action,
+        session: request.session,
+        expected_app,
+    })
+}
+
+/// 在阻塞线程里合成按键，再把 key.result 广播给所有客户端。
+fn handle_key_request(state: &AppState, client_id: u64, text: &str) {
+    if !desktop_keys::supported() {
+        // 目前只有 macOS 桌面支持合成按键；仍要用 requestId 回包。
+        if let Ok(value) = serde_json::from_str::<Value>(text) {
+            if let Some(request_id) = app_focus::request_id_of(&value) {
+                reply_key_error(
+                    &state.tx,
+                    &request_id,
+                    action_hint(&value),
+                    "unsupported_platform",
+                );
+            }
+        }
+        return;
+    }
+
+    let Some(pending) =
+        begin_key_request(&state.tx, &state.key_limiter, &state.keys, client_id, text)
+    else {
+        return;
+    };
+
+    let tx = state.tx.clone();
+    let registry = state.keys.clone();
+    tokio::task::spawn_blocking(move || {
+        let PendingKey {
+            request_id,
+            action,
+            session,
+            expected_app,
+        } = pending;
+        let gates = desktop_keys::KeyGates {
+            current_app: desktop_mic::front_app(),
+            secure_input: desktop_mic::secure_input_enabled(),
+            accessibility: desktop_mic::accessibility_trusted(),
+        };
+        let same_app = gates
+            .current_app
+            .as_ref()
+            .is_some_and(|current| expected_app.same_as(current));
+        let result = desktop_keys::execute(action, &expected_app, &gates, &|strokes| {
+            desktop_keys::post_sequence(strokes)
+        });
+
+        match &result {
+            Ok(()) => {
+                // 成功一次即作废，避免重复事件/重复回车。
+                registry.consume(client_id, &session);
+                println!(
+                    "[key] action={} outcome=ok same_app={same_app}",
+                    action.as_str()
+                );
+            }
+            Err(code) => {
+                eprintln!(
+                    "[key] action={} outcome={code} same_app={same_app} secure={} trusted={}",
+                    action.as_str(),
+                    gates.secure_input,
+                    gates.accessibility
+                );
+            }
+        }
+
+        let _ = tx.send(
+            desktop_keys::key_result_json(
+                &request_id,
+                action,
+                result.is_ok(),
+                result.err(),
+                now_ms(),
+            )
+            .to_string(),
+        );
+    });
 }
 
 fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
@@ -455,6 +619,7 @@ impl SessionOutcome {
 }
 
 async fn finish_session(state: AppState, active: ActiveMic) {
+    let owner = active.owner;
     let session = active.session.clone();
     let started = Instant::now();
     let expected = active.front_app;
@@ -476,13 +641,22 @@ async fn finish_session(state: AppState, active: ActiveMic) {
                     transcript.truncated,
                     expected.as_ref(),
                 ) {
-                    Ok(insert) => SessionOutcome {
-                        outcome: insert.outcome,
-                        reason: insert.reason,
-                        text: Some(insert.text),
-                        truncated: insert.truncated,
-                        usage: transcript.usage,
-                    },
+                    Ok(insert) => {
+                        // 只有真正插入成功才有可操作目标；结果卡片上的「回车/清空」
+                        // 会校验 owner、会话与 30 秒时效，再核对前台应用。
+                        if insert.outcome == "inserted" {
+                            if let Some(app) = expected.clone() {
+                                state.keys.record(owner, &session, app, Instant::now());
+                            }
+                        }
+                        SessionOutcome {
+                            outcome: insert.outcome,
+                            reason: insert.reason,
+                            text: Some(insert.text),
+                            truncated: insert.truncated,
+                            usage: transcript.usage,
+                        }
+                    }
                     Err(failure) => {
                         eprintln!(
                             "[mic] insert failed: {} ({})",
@@ -575,6 +749,9 @@ fn handle_audio_frame(state: &AppState, client_id: u64, data: &[u8]) {
 }
 
 fn cleanup_session(state: &AppState, client_id: u64) {
+    // 断开后不再允许该连接触发按键，避免目标记录过期后仍被复用。
+    state.keys.clear_owner(client_id);
+
     let active = {
         let mut mic = state.mic.lock().unwrap();
         match mic.as_ref() {
@@ -647,7 +824,11 @@ pub async fn start(
         hook,
         asr_cloud,
         usage,
-        focus_limiter: Arc::new(FocusLimiter::new()),
+        focus_limiter: Arc::new(FocusLimiter::focus()),
+        keys: Arc::new(KeyRegistry::new()),
+        key_limiter: Arc::new(IntervalLimiter::with_interval(
+            desktop_keys::KEY_MIN_INTERVAL,
+        )),
     };
     let app = Router::new()
         .route("/", get(mobile_page))
@@ -724,7 +905,7 @@ mod tests {
     #[test]
     fn focus_request_validates_fields_without_launching() {
         let tx = focus_channel();
-        let limiter = FocusLimiter::new();
+        let limiter = FocusLimiter::focus();
         let mut receiver = tx.subscribe();
 
         // 非 JSON / 缺 requestId：无法关联回包，直接丢弃。
@@ -782,7 +963,7 @@ mod tests {
     #[test]
     fn focus_requests_are_rate_limited_globally() {
         let tx = focus_channel();
-        let limiter = FocusLimiter::new();
+        let limiter = FocusLimiter::focus();
         let mut receiver = tx.subscribe();
 
         assert!(
@@ -803,7 +984,7 @@ mod tests {
         // 长度合法但未知的 source 由 app_focus::activate 回 unsupported_source，
         // 这里只做字段校验，不应提前变成 bad_request。
         let tx = focus_channel();
-        let limiter = FocusLimiter::new();
+        let limiter = FocusLimiter::focus();
         let request = begin_focus_request(
             &tx,
             &limiter,
@@ -815,5 +996,174 @@ mod tests {
             app_focus::activate_with(&request.source, &|_| Ok(())),
             Err("unsupported_source")
         );
+    }
+
+    fn key_request_json(request_id: &str, session: &str, action: &str) -> String {
+        serde_json::json!({
+            "type": "key.request",
+            "v": 1,
+            "requestId": request_id,
+            "session": session,
+            "action": action,
+            "ts": 1,
+        })
+        .to_string()
+    }
+
+    fn key_limiter() -> IntervalLimiter {
+        IntervalLimiter::with_interval(desktop_keys::KEY_MIN_INTERVAL)
+    }
+
+    fn target_app() -> FrontApp {
+        FrontApp {
+            bundle_id: Some("com.other".to_string()),
+            name: Some("Other".to_string()),
+        }
+    }
+
+    fn key_registry(owner: u64, session: &str) -> KeyRegistry {
+        let registry = KeyRegistry::new();
+        registry.record(owner, session, target_app(), Instant::now());
+        registry
+    }
+
+    #[test]
+    fn key_request_requires_a_recent_insert_target() {
+        let tx = focus_channel();
+        let registry = KeyRegistry::new();
+        let mut receiver = tx.subscribe();
+
+        assert!(
+            begin_key_request(
+                &tx,
+                &key_limiter(),
+                &registry,
+                7,
+                &key_request_json("k-1", "session-1", "enter")
+            )
+            .is_none()
+        );
+        let result = next_result(&mut receiver);
+        assert_eq!(result["type"], "key.result");
+        assert_eq!(result["v"], 1);
+        assert_eq!(result["requestId"], "k-1");
+        assert_eq!(result["action"], "enter");
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["error"], "no_target");
+        assert!(result["ts"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn key_request_rejects_other_clients_sessions_and_bad_actions() {
+        let tx = focus_channel();
+        let registry = key_registry(7, "session-1");
+        let mut receiver = tx.subscribe();
+
+        // 别的连接（owner 不符）。
+        assert!(
+            begin_key_request(
+                &tx,
+                &key_limiter(),
+                &registry,
+                8,
+                &key_request_json("k-1", "session-1", "enter")
+            )
+            .is_none()
+        );
+        assert_eq!(next_result(&mut receiver)["error"], "session_mismatch");
+
+        // 会话不符。
+        assert!(
+            begin_key_request(
+                &tx,
+                &key_limiter(),
+                &registry,
+                7,
+                &key_request_json("k-2", "session-2", "clear")
+            )
+            .is_none()
+        );
+        assert_eq!(next_result(&mut receiver)["error"], "session_mismatch");
+
+        // action 非法：bad_request，不查 registry。
+        assert!(
+            begin_key_request(
+                &tx,
+                &key_limiter(),
+                &registry,
+                7,
+                &key_request_json("k-3", "session-1", "submit")
+            )
+            .is_none()
+        );
+        let result = next_result(&mut receiver);
+        assert_eq!(result["requestId"], "k-3");
+        assert_eq!(result["error"], "bad_request");
+
+        // 合法请求：返回待执行请求，目标应用就是插入时记录的那个。
+        let pending = begin_key_request(
+            &tx,
+            &key_limiter(),
+            &registry,
+            7,
+            &key_request_json("k-4", "session-1", "clear"),
+        )
+        .expect("合法请求应受理");
+        assert_eq!(pending.request_id, "k-4");
+        assert_eq!(pending.action, KeyAction::Clear);
+        assert_eq!(pending.session, "session-1");
+        assert_eq!(pending.expected_app, target_app());
+    }
+
+    #[test]
+    fn key_requests_are_rate_limited() {
+        let tx = focus_channel();
+        let limiter = key_limiter();
+        let registry = key_registry(7, "session-1");
+        let mut receiver = tx.subscribe();
+
+        assert!(
+            begin_key_request(
+                &tx,
+                &limiter,
+                &registry,
+                7,
+                &key_request_json("k-1", "session-1", "enter")
+            )
+            .is_some()
+        );
+        assert!(
+            begin_key_request(
+                &tx,
+                &limiter,
+                &registry,
+                7,
+                &key_request_json("k-2", "session-1", "enter")
+            )
+            .is_none()
+        );
+        let result = next_result(&mut receiver);
+        assert_eq!(result["requestId"], "k-2");
+        assert_eq!(result["error"], "rate_limited");
+    }
+
+    #[test]
+    fn key_request_without_request_id_is_dropped_silently() {
+        let tx = focus_channel();
+        let registry = KeyRegistry::new();
+        let mut receiver = tx.subscribe();
+
+        assert!(begin_key_request(&tx, &key_limiter(), &registry, 7, "not-json").is_none());
+        assert!(
+            begin_key_request(
+                &tx,
+                &key_limiter(),
+                &registry,
+                7,
+                r#"{"type":"key.request","v":1}"#
+            )
+            .is_none()
+        );
+        assert!(receiver.try_recv().is_err());
     }
 }

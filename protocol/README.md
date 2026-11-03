@@ -2,7 +2,7 @@
 
 当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
 
-服务端把 `chat` / `system` / `status` / `mic.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；`focus.request` 由桌面处理并回 `focus.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
+服务端把 `chat` / `system` / `status` / `mic.*` / `key.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；`focus.request` 由桌面处理并回 `focus.result`；`key.request` 由桌面校验后合成按键并回 `key.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
 ## 连接
 
@@ -105,6 +105,21 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 - `ok=false` 时 `error` 只回错误码：`bad_request` / `rate_limited` / `unsupported_source` / `unsupported_platform` / `launch_failed`
 - 桌面全局 1.5s 限频；不自动回答、不发送任何内容
 
+### key.request / key.result
+
+语音输入的结果卡片上，用户主动点「回车」或「清空」时，请求电脑在**最近一次插入文本的目标应用**里合成一次按键。**不自动发送**：只有用户点按才发生。
+
+```json
+{ "type": "key.request", "v": 1, "requestId": "k-…", "session": "mic-session-uuid", "action": "enter", "ts": 1730000000000 }
+{ "type": "key.result", "v": 1, "requestId": "k-…", "action": "enter", "ok": true, "error": null, "ts": 1730000000001 }
+```
+
+- `action`：`enter`（Return）或 `clear`（`⌘A` + `Delete` 清空整个输入框）；其它值回 `bad_request`
+- `session`：必须是最近一次 `mic.result(outcome=inserted)` 的会话，且只认发起该会话的连接
+- 安全闸门：目标应用必须是插入时记录的前台应用（否则 `target_mismatch`）、不能是密码/安全输入框（`secure_input`）、桌面辅助功能必须已授权（`accessibility_off`）；非 macOS 回 `unsupported_platform`
+- 时效与限频：最近一次插入后 30 秒内有效；成功一次即作废；桌面全局 500ms 限频
+- `ok=false` 时 `error` 只回错误码：`bad_request` / `no_target` / `session_mismatch` / `target_mismatch` / `secure_input` / `accessibility_off` / `send_failed` / `rate_limited` / `unsupported_platform`
+- 结果不含文本、应用名与按键序列；旧版桌面会把 `key.request` 当普通文本广播，解析方按未知类型忽略
 
 ## 麦克风消息（v1，已实现）
 
@@ -168,7 +183,7 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 
 - 音频帧绝不广播；服务端按 session 追加到内存缓冲。
 - 单会话；重复 `mic.start` 返回 `mic.error(session_busy)`。
-- `mic.result` 含结果原因和文本；文本只给手机结果卡片，不写日志。
+- `mic.result` 含结果原因和文本；文本只给手机结果卡片，不写日志。结果卡片上的「回车/清空」走 `key.request`（见上文），不是 `mic.*` 的子类型。
 - 语音识别只由桌面直连百炼，手机不接触 API Key；失败直接报错，不回退本机。
 - `mic.result.usage` 记入 `asr_usage.json`，模型页区间切换展示今天/7/30/365；`asr_usage_stats()` 返回最近 365 天 `days`。
 - 详细字段、超时与测试向量见协议文档。
@@ -179,6 +194,7 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 - 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）；麦克风状态浮层 `desktop/features/mic-receiver`
 - 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
 - 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`
+- 结果卡片手动按键：`app/src-tauri/src/desktop_keys.rs`（安全闸门/按键计划/目标注册表）、`desktop_server.rs`、`mobile_client.rs`、`app/src/mobile/features/mic/mic-store.ts`
 - 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`（DSH 本地脚本）、`app/src/mobile/features/pet/ai-status.ts`（手机四态）

@@ -24,7 +24,44 @@ export const MIC_STATUS_COPY = {
   cloudTaskFailed: "百炼识别失败，再说一次试试。",
   cloudInternal: "云端会话异常结束，请重启 Sidekick 再试。",
   cloudKeyUnavailable: "读取不到电脑上保存的密钥，去电脑「模型」页重新保存。",
+  keyEnter: "回车",
+  keyClear: "清空",
+  keyClearConfirm: "再点一次",
+  keyWorking: "正在按…",
+  keyEnterSent: "已按回车",
+  keyClearSent: "已清空输入框",
+  keyNoTarget: "没有可操作的输入，先按住说话。",
+  keyTargetMismatch: "电脑焦点不在刚才的窗口，没按。",
+  keySecureInput: "电脑当前是密码框，没按。",
+  keyAccessibilityOff: "电脑辅助功能没开，按不了。去电脑设置开启。",
+  keySendFailed: "按键没发出去，再试一次。",
+  keyRateLimited: "按太快了，等一下。",
+  keyNoResponse: "电脑端没回应，再试一次。",
 } as const;
+
+export function keyActionErrorText(code: string | null | undefined): string {
+  switch (code) {
+    case "no_target":
+      return MIC_STATUS_COPY.keyNoTarget;
+    case "session_mismatch":
+      return MIC_STATUS_COPY.sessionError;
+    case "target_mismatch":
+      return MIC_STATUS_COPY.keyTargetMismatch;
+    case "secure_input":
+      return MIC_STATUS_COPY.keySecureInput;
+    case "accessibility_off":
+      return MIC_STATUS_COPY.keyAccessibilityOff;
+    case "rate_limited":
+      return MIC_STATUS_COPY.keyRateLimited;
+    case "unsupported_platform":
+      return MIC_STATUS_COPY.keySendFailed;
+    case "send_failed":
+    case "bad_request":
+      return MIC_STATUS_COPY.keySendFailed;
+    default:
+      return MIC_STATUS_COPY.keyNoResponse;
+  }
+}
 
 export function micReasonText(outcome: string, reason?: string | null): string {
   if (outcome === "inserted") return MIC_STATUS_COPY.inserted;
