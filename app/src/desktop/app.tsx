@@ -29,7 +29,7 @@ function initialView(): DesktopView {
 }
 
 export function DesktopApp() {
-  const { status, info, error, sendText, retry } = useDesktopConnection();
+  const { status, info, error, sendText, cancelMic, retry } = useDesktopConnection();
   const [view, setView] = useState<DesktopView>(initialView);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -88,7 +88,7 @@ export function DesktopApp() {
       </section>
 
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <MicStatusOverlay />
+      <MicStatusOverlay onCancel={cancelMic} />
     </main>
   );
 }

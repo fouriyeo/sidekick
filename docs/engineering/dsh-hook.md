@@ -151,7 +151,7 @@ DSH session/event
 }
 ```
 
-`sessionList`：最多 50 条；`state` 不含 completed，完成态由 `completedAt` 推导；旧客户端忽略。
+`sessionList`：最多 50 条；`state` 不含 completed，完成态由 `completedAt` 推导；旧客户端忽略。已归档会话不会出现在列表里（桌面桥按 DSH `workspace.json` 过滤，见 §6），归档的 asking/working 也不再计入聚合态。
 
 - 桌面是 completed 的权威计时器：收到 completed 后广播（带 `remainingMs`），3 秒后广播 resume 状态。
 - 手机用 `remainingMs` 本地兜底；新状态会取消旧定时器。
@@ -174,6 +174,7 @@ DSH session/event
 - 单实例前提：桌面端由 `tauri-plugin-single-instance` 保证一台机器只有一个进程（D60）。多开时后启动实例会把 endpoint 改成自己的回环端口，它退出后 hook 上报全部打空，存活实例一直 idle；排查时先看 `lsof -nP -iTCP:47815-47819` 与 `config.json` 的 endpoint 是否指向活着的进程。
 - 快照补发：新 WS 连接直发 `snapshot_json()`；手机上线/回前台发 `status.request`，服务端广播快照。手机重启不会丢状态。
 - 列表：`BridgeInner.session_list` 随 state/heartbeat 替换；heartbeat 列表变化也要广播；hello/超时/关闭/移除清空。
+- 归档过滤：读 `<DSH_HOME>/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存；文件缺失/非法按空集合），从 `sessionList` 去掉归档会话，并按可见列表重算聚合态/`sessions`；这样用户在 DSH 里归档的会话不会在手机上「突然蹦出来」，也不需要改插件或重启 DSH。
 - 命令：`dsh_hook_status/install/set_enabled/remove/test`；移动端注册 `send_status_request` 与 `send_focus_request`。
 
 ## 7. 手机端
@@ -217,6 +218,8 @@ DSH session/event
 | 录音 | 录音静音；完成不补播 |
 | 音效被系统静音/音乐焦点 | P0 不保证；文档提示；P1 原生提示音 |
 | 会话列表过长 | 插件/桥截断 50 条；手机内部滚动，超出的不展示 |
+| 会话已归档 | 桌面桥按 `workspace.json` 过滤后不下发；聚合态按可见会话重算，必要时回落 idle |
+| 归档文件读不到 | 按未归档处理（列表可能多一条，不影响其它功能） |
 | 清除后无新事件 | 保持隐藏；重启 App 仍隐藏（本地标记） |
 | focus 时手机离线 | 手机侧直接提示，不上报 |
 | DSH 未安装/限频/非 macOS | 分别回 `launch_failed` / `rate_limited` / `unsupported_platform`，手机显示对应文案 |

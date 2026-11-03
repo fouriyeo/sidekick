@@ -61,6 +61,7 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
   const keyArmedClear = useMicStore((state) => state.keyArmedClear);
   const keyNotice = useMicStore((state) => state.keyNotice);
   const keyError = useMicStore((state) => state.keyError);
+  const cancelNonce = useMicStore((state) => state.cancelNonce);
 
   const reducedMotion = useReducedMotion();
   const hapticsEnabled = usePetStore((state) => state.pet.settings.haptics);
@@ -94,8 +95,13 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
   const hintTimerRef = useRef<number | null>(null);
   const copyTimerRef = useRef<number | null>(null);
   const finishingRef = useRef(false);
+  /** 正在异步启动（sendMicStart/getUserMedia）中；期间拒绝任何新的按下。 */
+  const startingRef = useRef(false);
+  /** 单调递增的会话生命周期；旧异步结果 token 不匹配时不得回写 store。 */
+  const lifecycleRef = useRef(0);
+  /** 已处理到的服务端取消次数，避免组件挂载时重放旧提示。 */
+  const seenCancelNonceRef = useRef(cancelNonce);
 
-  const busy = phase === "arming" || phase === "listening" || phase === "processing";
   const connected = connectionStatus === "connected";
 
   const showHint = useCallback((text: string) => {
@@ -125,6 +131,7 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
   const cancelRecording = useCallback(
     async (reason: MicStopReason, hint = "") => {
       heldRef.current = false;
+      lifecycleRef.current += 1;
       clearTick();
       releasePointer();
       setCancelZone(false);
@@ -155,6 +162,7 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
   const abortLocalCapture = useCallback(
     async (notifyServer: boolean) => {
       heldRef.current = false;
+      lifecycleRef.current += 1;
       clearTick();
       releasePointer();
       setCancelZone(false);
@@ -180,6 +188,8 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
       if (finishingRef.current) return;
       finishingRef.current = true;
       heldRef.current = false;
+      lifecycleRef.current += 1;
+      const token = lifecycleRef.current;
       clearTick();
       releasePointer();
       setCancelZone(false);
@@ -199,6 +209,8 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
 
       try {
         const recording = await session.stop();
+        // 收尾期间被电脑端取消/断连/新会话取代：不要再用旧结果写 store。
+        if (lifecycleRef.current !== token) return;
         if (recording.durationMs < MIN_RECORDING_MS) {
           if (startSentRef.current) {
             void sendMicStop(sessionId, "cancel").catch(() => undefined);
@@ -238,7 +250,19 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
 
   const startRecording = useCallback(
     async (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (busy || !active) return;
+      const livePhase = useMicStore.getState().phase;
+      if (
+        !active ||
+        startingRef.current ||
+        finishingRef.current ||
+        pointerIdRef.current !== null ||
+        heldRef.current ||
+        livePhase === "arming" ||
+        livePhase === "listening" ||
+        livePhase === "processing"
+      ) {
+        return;
+      }
       if (!connected) {
         showHint("先连接电脑，再按住说话。");
         onOpenConnection?.();
@@ -255,6 +279,10 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
 
       // 按下即开始录音：中震一下，给「现在在录」的即时确认（UX 规范 §7）。
       haptics.medium();
+
+      startingRef.current = true;
+      const token = lifecycleRef.current + 1;
+      lifecycleRef.current = token;
 
       event.currentTarget.setPointerCapture?.(event.pointerId);
       pointerIdRef.current = event.pointerId;
@@ -275,20 +303,29 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
 
       try {
         await sendMicStart(sessionId, 16_000, 128);
-        startSentRef.current = true;
       } catch {
+        startingRef.current = false;
         heldRef.current = false;
         sessionIdRef.current = null;
-        useMicStore.getState().fail(MIC_COPY.disconnected, "disconnect");
+        releasePointer();
+        if (useMicStore.getState().session === sessionId) {
+          useMicStore.getState().fail(MIC_COPY.disconnected, "disconnect");
+        }
         return;
       }
+      startSentRef.current = true;
 
-      if (!heldRef.current) {
-        void sendMicStop(sessionId, "cancel").catch(() => undefined);
-        startSentRef.current = false;
+      // 启动期间手指已抬起 / 被后台、断连、电脑端取消接管：不进入录音。
+      if (lifecycleRef.current !== token || !heldRef.current) {
+        startingRef.current = false;
         sessionIdRef.current = null;
-        const phase = useMicStore.getState().phase;
-        if (phase === "arming" || phase === "listening") useMicStore.getState().cancel();
+        startSentRef.current = false;
+        releasePointer();
+        void sendMicStop(sessionId, "cancel").catch(() => undefined);
+        if (useMicStore.getState().session === sessionId) {
+          const current = useMicStore.getState().phase;
+          if (current === "arming" || current === "listening") useMicStore.getState().cancel();
+        }
         return;
       }
 
@@ -311,16 +348,22 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
           },
         });
 
-        if (!heldRef.current) {
-          void sendMicStop(sessionId, "cancel").catch(() => undefined);
-          startSentRef.current = false;
-          await session.cancel();
+        // getUserMedia 期间松手/取消：本地会话直接丢掉，不提交、不录音。
+        if (lifecycleRef.current !== token || !heldRef.current) {
+          startingRef.current = false;
           sessionIdRef.current = null;
-          const phase = useMicStore.getState().phase;
-          if (phase === "arming" || phase === "listening") useMicStore.getState().cancel();
+          startSentRef.current = false;
+          releasePointer();
+          await session.cancel();
+          void sendMicStop(sessionId, "cancel").catch(() => undefined);
+          if (useMicStore.getState().session === sessionId) {
+            const current = useMicStore.getState().phase;
+            if (current === "arming" || current === "listening") useMicStore.getState().cancel();
+          }
           return;
         }
 
+        startingRef.current = false;
         sessionRef.current = session;
         useMicStore.getState().markListening();
         tickRef.current = window.setInterval(() => {
@@ -336,11 +379,20 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
           }
         }, 250);
       } catch (cause) {
+        startingRef.current = false;
         heldRef.current = false;
-        void sendMicStop(sessionId, "cancel").catch(() => undefined);
-        startSentRef.current = false;
-        sessionIdRef.current = null;
         sessionRef.current = null;
+        sessionIdRef.current = null;
+        startSentRef.current = false;
+        releasePointer();
+        void sendMicStop(sessionId, "cancel").catch(() => undefined);
+
+        // 松手/取消已经接管了这次启动：不再弹权限/失败，只保证 store 回到 idle。
+        if (lifecycleRef.current !== token) {
+          if (useMicStore.getState().session === sessionId) useMicStore.getState().cancel();
+          return;
+        }
+
         useMicStore.getState().cancel();
 
         const denied =
@@ -361,31 +413,57 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
     },
     [
       active,
-      busy,
-      cancelRecording,
       connected,
-      finishRecording,
       haptics,
       onOpenConnection,
       permissionDenied,
       primerDone,
+      cancelRecording,
+      finishRecording,
+      releasePointer,
       showHint,
     ],
+  );
+
+  const endPointer = useCallback(
+    (pointerId: number, event?: ReactPointerEvent<HTMLButtonElement>) => {
+      if (pointerIdRef.current !== pointerId) return;
+      releasePointer(event);
+
+      if (cancelZoneRef.current) {
+        void cancelRecording("cancel", MIC_COPY.cancelled);
+        return;
+      }
+
+      if (heldRef.current) {
+        void finishRecording("release");
+      } else {
+        setElapsedMs(0);
+      }
+    },
+    [cancelRecording, finishRecording, releasePointer],
   );
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
-      if (phase === "processing") return;
+      if (useMicStore.getState().phase === "processing") return;
+      if (
+        pointerIdRef.current !== null ||
+        startingRef.current ||
+        finishingRef.current ||
+        heldRef.current
+      ) {
+        return;
+      }
       void startRecording(event);
     },
-    [phase, startRecording],
+    [startRecording],
   );
 
   const onPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (pointerIdRef.current !== event.pointerId || !heldRef.current) return;
-      if (phase !== "listening" && phase !== "arming") return;
 
       const delta = startYRef.current - event.clientY;
       if (!cancelZoneRef.current && delta >= CANCEL_ENTER_PX) {
@@ -397,26 +475,14 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
         setCancelZone(false);
       }
     },
-    [haptics, phase],
+    [haptics],
   );
 
   const onPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (pointerIdRef.current !== event.pointerId) return;
-      releasePointer(event);
-
-      if (cancelZoneRef.current) {
-        void cancelRecording("cancel", MIC_COPY.cancelled);
-        return;
-      }
-
-      if (phase === "listening" || phase === "arming") {
-        void finishRecording("release");
-      } else if (phase === "idle" && !heldRef.current) {
-        setElapsedMs(0);
-      }
+      endPointer(event.pointerId, event);
     },
-    [cancelRecording, finishRecording, phase, releasePointer],
+    [endPointer],
   );
 
   const onPointerCancel = useCallback(
@@ -426,6 +492,34 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
     },
     [cancelRecording],
   );
+
+  // 兜底：pointer capture 失效/抬起事件没回到按钮时，window 上也能结束录音。
+  useEffect(() => {
+    const onWindowPointerUp = (event: PointerEvent) => {
+      endPointer(event.pointerId);
+    };
+    const onWindowPointerCancel = (event: PointerEvent) => {
+      if (pointerIdRef.current !== event.pointerId) return;
+      void cancelRecording("cancel");
+    };
+
+    window.addEventListener("pointerup", onWindowPointerUp);
+    window.addEventListener("pointercancel", onWindowPointerCancel);
+    return () => {
+      window.removeEventListener("pointerup", onWindowPointerUp);
+      window.removeEventListener("pointercancel", onWindowPointerCancel);
+    };
+  }, [cancelRecording, endPointer]);
+
+  // 电脑端权威取消（人工/看门狗）：不校验 session，直接停本地采集并提示。
+  useEffect(() => {
+    if (cancelNonce === seenCancelNonceRef.current) return;
+    seenCancelNonceRef.current = cancelNonce;
+    void abortLocalCapture(false);
+    const notice = useMicStore.getState().cancelNotice;
+    if (notice) showHint(notice);
+    haptics.light();
+  }, [abortLocalCapture, cancelNonce, haptics, showHint]);
 
   useEffect(() => {
     if (
@@ -438,26 +532,32 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
 
   useEffect(() => {
     const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && (phase === "arming" || phase === "listening")) {
+      const current = useMicStore.getState().phase;
+      if (
+        document.visibilityState === "hidden" &&
+        (current === "arming" || current === "listening")
+      ) {
         void cancelRecording("background", MIC_COPY.background);
       }
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [cancelRecording, phase]);
+  }, [cancelRecording]);
 
   useEffect(() => {
-    if (connectionStatus !== "connected" && (phase === "arming" || phase === "listening")) {
+    const current = useMicStore.getState().phase;
+    if (connectionStatus !== "connected" && (current === "arming" || current === "listening")) {
       void cancelRecording("disconnect", MIC_COPY.disconnected);
     }
-  }, [cancelRecording, connectionStatus, phase]);
+  }, [cancelRecording, connectionStatus]);
 
   useEffect(() => {
-    if (!active && (phase === "arming" || phase === "listening")) {
+    const current = useMicStore.getState().phase;
+    if (!active && (current === "arming" || current === "listening")) {
       void cancelRecording("background", MIC_COPY.background);
     }
-  }, [active, cancelRecording, phase]);
+  }, [active, cancelRecording]);
 
   useEffect(() => {
     return () => {

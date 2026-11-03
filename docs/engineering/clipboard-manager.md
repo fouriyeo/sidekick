@@ -62,7 +62,7 @@ owner: engineering
 }
 ```
 
-- 路径：`~/Library/Application Support/Sidekick/clipboard.json`。
+- 路径：`~/.sidekick/clipboard.json`（旧版在 `~/Library/Application Support/Sidekick/`，首次启动自动复制一次）。
 - 写入：`.tmp` + rename 原子替换；Unix 权限 `0600`。
 - 最大 100 条；新内容淘汰最旧的未置顶项；全部置顶时淘汰最旧置顶项。
 - UI 头部显示 `当前条数 / 100 条`，底部说明淘汰规则，让「只保留最近 100 条」可见。

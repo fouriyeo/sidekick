@@ -63,6 +63,44 @@ describe("desktop mic status store", () => {
 
     expect(useDesktopMicStore.getState().phase).toBe("listening");
   });
+
+  it("clears the listening overlay on host cancellation", () => {
+    useDesktopMicStore
+      .getState()
+      .handleMessage({ v: 1, type: "mic.ready", session: SESSION, ts: 1 });
+    useDesktopMicStore.getState().handleMessage({
+      v: 1,
+      type: "mic.cancel",
+      session: SESSION,
+      reason: "desktop",
+      ts: 2,
+    });
+
+    const state = useDesktopMicStore.getState();
+    expect(state.phase).toBe("idle");
+    expect(state.session).toBeNull();
+    expect(state.message).toBe("已取消");
+    expect(state.visible).toBe(true);
+
+    vi.advanceTimersByTime(1800);
+    expect(useDesktopMicStore.getState().visible).toBe(false);
+  });
+
+  it("explains a watchdog cancellation", () => {
+    useDesktopMicStore
+      .getState()
+      .handleMessage({ v: 1, type: "mic.ready", session: SESSION, ts: 1 });
+    useDesktopMicStore.getState().handleMessage({
+      v: 1,
+      type: "mic.cancel",
+      session: SESSION,
+      reason: "timeout",
+      ts: 2,
+    });
+
+    expect(useDesktopMicStore.getState().phase).toBe("idle");
+    expect(useDesktopMicStore.getState().message).toBe("录音超时，已自动停止。");
+  });
 });
 
 describe("desktop mic streaming fields", () => {

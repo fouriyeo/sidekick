@@ -90,7 +90,7 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
           phase: "idle",
           session: null,
           startedAt: null,
-          message: "已取消",
+          message: MIC_STATUS_COPY.cancelledShort,
           visible: true,
           ...EMPTY_PARTIAL,
         });
@@ -99,6 +99,33 @@ export const useDesktopMicStore = create<DesktopMicState>((set, get) => ({
           set({ visible: false, message: "" });
         }, 1500);
       }
+      return;
+    }
+
+    if (message.type === "mic.cancel") {
+      // 桌面端权威取消（人工/看门狗）：清掉浮层，并显示具体原因。
+      clearHideTimer();
+      set({
+        phase: "idle",
+        session: null,
+        startedAt: null,
+        message:
+          message.reason === "timeout"
+            ? MIC_STATUS_COPY.recordingTimeout
+            : MIC_STATUS_COPY.cancelledShort,
+        visible: true,
+        ...EMPTY_PARTIAL,
+      });
+      hideTimer = window.setTimeout(() => {
+        hideTimer = null;
+        set({
+          visible: false,
+          phase: "idle",
+          session: null,
+          message: "",
+          ...EMPTY_PARTIAL,
+        });
+      }, 1800);
       return;
     }
 

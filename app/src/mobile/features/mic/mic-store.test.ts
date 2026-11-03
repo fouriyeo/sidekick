@@ -101,6 +101,46 @@ describe("mic store", () => {
     expect(useMicStore.getState().session).toBeNull();
     expect(dispatch).toHaveBeenCalledWith({ type: "MIC_CANCEL", now: expect.any(Number) });
   });
+
+  it("host cancel forces idle even when the local session differs", () => {
+    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
+    useMicStore.getState().begin(SESSION);
+    const nonce = useMicStore.getState().cancelNonce;
+
+    // 桌面 active 会话与手机本地记录不一致（旧版本竞态）：取消仍必须生效。
+    useMicStore.getState().handleCancel({
+      v: 1,
+      type: "mic.cancel",
+      session: "another-session",
+      reason: "desktop",
+      ts: 1,
+    });
+
+    const state = useMicStore.getState();
+    expect(state.phase).toBe("idle");
+    expect(state.session).toBeNull();
+    expect(state.cancelNonce).toBe(nonce + 1);
+    expect(state.cancelNotice).toBe("电脑端已取消录音。");
+    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_CANCEL", now: expect.any(Number) });
+  });
+
+  it("explains watchdog cancellation without double pet feedback", () => {
+    useMicStore.getState().reset();
+    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
+    const nonce = useMicStore.getState().cancelNonce;
+
+    useMicStore.getState().handleCancel({
+      v: 1,
+      type: "mic.cancel",
+      session: SESSION,
+      reason: "timeout",
+      ts: 1,
+    });
+
+    expect(useMicStore.getState().cancelNotice).toBe("录音超时，已自动停止。");
+    expect(useMicStore.getState().cancelNonce).toBe(nonce + 1);
+    expect(dispatch).not.toHaveBeenCalledWith({ type: "MIC_CANCEL", now: expect.any(Number) });
+  });
 });
 
 describe("mic store streaming fields", () => {

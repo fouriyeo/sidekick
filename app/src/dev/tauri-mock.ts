@@ -164,7 +164,7 @@ export function installTauriMock(): void {
 
   const clipboard = {
     enabled: true,
-    path: "/Mock/Application Support/Sidekick/clipboard.json",
+    path: "/Mock/.sidekick/clipboard.json",
     maxItems: 100,
     items: [
       {

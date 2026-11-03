@@ -480,6 +480,24 @@
 - 代价：Git 按提交保存二进制，**固定文件名不会减小历史体积**——每推一次仓库仍约 +11MB，历史持续增长；后续可迁 GitHub Release 或独立 release 分支（需改推送流程/force push）。
 - 规范：`release/README.md`、`scripts/package-*.sh`、`AGENTS.md` §4/§5/§8/§9、`docs/standards/git.md` §2/§3、`docs/setup.md`。
 
+## D64 · 归档会话不下发手机；旧钥匙串 Key 启动时自动迁移（2026-11-03）
+
+- 背景：手机上「创建发布打包文件夹」早就归档了却突然出现在会话列表里——DSH 重启时 `sessions.list()` 会把归档会话也恢复出来，插件启动接管全部顶层会话（`lastEventAt` 被记为启动时刻），于是归档会话以「空闲·刚刚」混进 `sessionList`。另一条反馈是「明明配置过百炼 API Key，录音却提示云端没配置」：`asr.json` 是升级前写的，只有 `keyPresent`/`keyHint` 元数据，真正的 Key 还在旧钥匙串里，而 D61 改成只读 `asr.json` 后不会自动迁移。
+- 决策：会话列表在桌面 Rust 桥过滤——读 `<DSH_HOME>/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存，文件缺失/非法按空集合），从 `sessionList` 去掉归档会话，并按可见列表重算聚合态与 `sessions`（归档的 asking/working 不再让宠物卡在「等你决定/工作中」）。插件保持只上报原始列表，改过滤逻辑不需要重启 DSH。Key 迁移**不做**：曾尝试启动时读旧钥匙串自动迁移，但开发版重编译后签名变化，macOS 弹出系统登录密码框，用户明确拒绝（`asr_keychain.rs` 已回退为只删不读）；旧 Key 只在模型页重新粘贴一次，之后仍然只读写本地 `asr.json`。
+- 原因：归档是 DSH 的本地状态，手机列表只是展示层，在桥里过滤能立刻生效且不扩大插件接口；`workspace.json` 是 DSH 自己的持久化文件，结构稳定、只读不写。Key 的问题根因是旧版把 Key 放钥匙串、新版只读本地 JSON；自动迁移的代价（系统密码弹窗）大于收益，重新粘贴一次更符合「只读本地文件」的承诺。
+- 放弃：让插件过滤（要改插件并重启 DSH 才生效，且插件与本机存储耦合）；手机端保存归档黑名单（跨设备/多手机不一致，还要额外同步）；继续要求用户重新粘贴 Key（用户已经配置过，属于回归缺陷）；把 Key 存进 Keychain 或 Tauri store（D61 已决定不用）。
+- 代价：桌面桥多依赖一个 DSH 内部文件路径（`DSH_HOME` 或 `$HOME/.dsh`）；DSH 改存储格式时过滤会失效（降级为列表多一条，不影响其它功能）。升级用户需要重新粘贴一次 Key；`asr.json` 里遗留的 `keyPresent`/`keyHint` 元数据只会被当作未配置，不会误导状态。
+- 规范：`app/src-tauri/src/dsh_hook.rs`、`dsh_hook_install.rs`、`asr_cloud.rs`、`asr_keychain.rs`、`docs/engineering/dsh-hook.md` §5/§6/§9、`docs/engineering/asr-cloud-bailian.md`、`AGENTS.md` §8。
+
+## D65 · 本机数据目录改为可见的 `~/.sidekick/`，旧目录一次性复制（2026-11-03）
+
+- 背景：用户明确要求「本地为这个软件创建一个 `.sidekick` 文件夹存一些必要的设置之类的数据」，不希望配置/历史藏在 `~/Library/Application Support/Sidekick`；同时确认桌面端不应再出现任何钥匙串/系统密码弹窗。
+- 决策：`app_paths::data_dir()` 在 macOS 返回 `~/.sidekick`；启动时若发现旧目录 `~/Library/Application Support/Sidekick` 且新目录没有迁移标记，则把 `asr.json` / `clipboard.json` / `asr_usage.json` 各复制一次到新目录（不删除旧文件、不覆盖新文件），写 `.migrated-from-app-support` 标记后不再重复；旧 `models/` 不迁移、不再读取。`SIDEKICK_DATA_DIR` 仍保留给测试与特殊部署。
+- 原因：可见目录便于用户自己备份/检查/删除，符合「设置存本地 JSON」的承诺；一次性复制让升级用户无感，旧目录保留可回退；标记避免用户清空历史后被旧数据复活。
+- 放弃：继续用 `~/Library/Application Support`（用户明确不喜欢）；直接删旧目录/移动文件（不可逆，升级/回退风险）；把安卓签名 keystore 一起挪走（打包脚本仍用 `~/.sidekick/android-release.jks`，保持不动）。
+- 代价：数据目录从 macOS 惯例变成隐藏家目录；两份文件在迁移后同时存在（旧的不再更新）；`~/.sidekick/` 同时承载 keystore，文档要提醒别整目录删除。
+- 规范：`app/src-tauri/src/app_paths.rs`、`docs/setup.md`、`docs/status.md`、`docs/engineering/asr-cloud-bailian.md`、`clipboard-manager.md`、`asr-model.md`、`AGENTS.md` §8。
+
 ## D68 · 结果卡片手动「回车 / 清空」：保留不自动发送，但不用放下手机（2026-11-04）
 
 - 背景：语音输入把文字落进电脑光标处后，用户仍要放下手机、换键盘/鼠标去按回车发送或清空输入框；既然手机已经是电脑的外设，这个切换不合理。产品铁律是「绝不自动回车/发送」，所以不能改成自动发送。
@@ -502,3 +520,16 @@
 - 放弃：只删点击、保留抚摸（用户已确认全部删除）；保留 dormant 代码待以后恢复（会留下死类型/死测试/文档歧义）；升存档版本或写迁移（旧字段可直接忽略，`version: 1` 不变）；继续保留设置页无障碍替代按钮（入口已无对应行为）。
 - 代价：少了一个情感反馈入口；夜间睡眠不能再靠触摸唤醒，改为 06:00 `TICK` 自动醒/回前台重算；点击宠物不会重置自动变暗计时（变暗遮罩仍可点亮屏幕）；回退到旧版本时旧解析器会把缺失的 `affinity` 记为损坏并回退，但名字/精力/设置仍可恢复。
 - 规范：`app/src/mobile/features/pet/{types,persistence,mood,state-machine,pet-store,pet-stage,pet-settings,sprite-state-map,ai-status,copy}.ts(x)`、`docs/prd/pet/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/product/{principles,scope,users,metrics}.md`、`docs/standards/{ux,visual,engineering}.md`、`docs/engineering/{pet-runtime,quality,dsh-hook}.md`、`docs/prd/hook/{PRD,SPEC,ACCEPTANCE}.md`、`AGENTS.md` §2/§8/§10。
+
+## D70 · 麦克风会话串行化 + 桌面权威取消 + 服务端看门狗（2026-11-04）
+
+- 背景：用户真机连续点按/连按「按住说话」后，电脑端一直停在「正在听」，且电脑端没有任何中断入口。排查发现手机端 `startRecording` 只用渲染期 `busy/phase` 做守卫，`sendMicStart`/`getUserMedia` 期间没有 in-flight 保护，共享的 `sessionIdRef/heldRef/startSentRef` 会被并发的 start 互相覆盖；松手早于启动完成时 `onPointerUp` 也可能按旧 `phase` 判空，于是「手指已抬起但还在录」。最终手机 store 的 session 与桌面 `ActiveMic.session` 不一致，松手发出的 `mic.stop` 被 `session_mismatch` 拒绝，桌面 active 会话没人收尾；服务端没有看门狗，也没有人工取消路径。
+- 决策：
+  - 手机端手势与启动串行化：`startingRef` 保证一次只有一个 in-flight start；`lifecycleRef` token 让旧异步结果不得回写 store；`onPointerUp/onPointerMove` 以 ref 判定而非渲染期 phase；window 级 `pointerup/pointercancel` 兜底；松手/取消/后台/断连都会让启动中的会话发一次 `mic.stop(cancel)` 并清理本地采集。
+  - 服务端：同一客户端重复 `mic.start` 以最新会话为准（旧会话 abort + `mic.state(cancelled)`），异端仍 `session_busy`；每个会话起 `maxMs + 3_000ms` 看门狗，到点若仍是该 session 的 active 就 abort 云端并广播 `mic.state(cancelled)` + `mic.cancel(reason=timeout)`；`mic.stop` 保持 owner+session 严格匹配，避免旧 stop 误杀新会话。
+  - 协议新增 `mic.cancel`：桌面 UI 发请求（只带 `v/type/session/ts`），服务端校验后广播权威版本（带 `reason=desktop|timeout`）；手机收到后**不校验本地 session**，强制停采集并提示「电脑端已取消录音。」/「录音超时，已自动停止。」；旧手机忽略该类型但仍会收到 `mic.state(cancelled)`。
+  - 桌面浮层「倾听中」右侧常显「取消录音」按钮；点击经本机回环 WS 发 `mic.cancel`，不转写、不插入、不写剪贴板；本机服务未连上时浮层内提示重试。
+- 原因：根因是手机端并发会话 + 服务端没有权威收尾；只修手机仍会在旧版本/异常路径下卡住，只加看门狗又要等 60 秒且无法人工止损。三件事一起做：手机尽量不产生并发、服务端保证任何状态都能被清理、电脑端给用户一个立即中断的入口。
+- 放弃：只加服务端看门狗（最坏要等 63 秒，用户仍无法主动取消）；只修手机端（旧 APK/异常路径仍会卡住，且电脑端没有控制权）；在手机端加独立取消按钮（与「按住说话」手势冲突，D62 已明确不设）；桌面用独立的系统级快捷键/托盘取消（本轮 P0 只做应用内浮层，always-on-top/全局快捷键 P1）；取消进入 `processing` 后的云端收尾（该阶段有 9 秒自身超时，本轮不扩展）。
+- 代价：新增一个协议类型与两处解析；同一客户端重复 start 从 `session_busy` 改为替换，旧会话音频丢弃（异常客户端才会触发）；看门狗比手机 60 秒上限晚 3 秒，最坏多等 3 秒；`mic.cancel` 在局域网无鉴权 MVP 下任何已连接客户端都能发（与现有协议一致，配对鉴权后收紧）。
+- 规范：`protocol/README.md`、`docs/engineering/protocol-audio.md`、`audio-pipeline.md`、`asr-cloud-bailian.md`、`docs/prd/mic/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/standards/ux.md`、`app/src-tauri/src/desktop_server.rs`、`app/src/protocol/messages.ts`、`app/src/mobile/features/mic/{mic-button,mic-store,mic-copy}.ts(x)`、`app/src/desktop/features/mic-receiver/*`、`app/src/desktop/use-desktop-connection.ts`、`app/src/shared/lib/mic-status-copy.ts`、`AGENTS.md`。

@@ -44,6 +44,15 @@ owner: engineering
   → mic.result 回传手机 + 桌面浮层
   → 用户在结果卡片点「回车/清空」→ key.request → 校验目标窗口/密码框/辅助功能
   → core-graphics 合成 Return 或 ⌘A+Delete → key.result 回传手机 + 桌面浮层
+
+异常兜底（两条都不转写、不插入）：
+  桌面浮层点「取消录音」
+    → 本机 WS mic.cancel → 服务端 take active + abort 百炼
+    → 广播 mic.state(cancelled) + mic.cancel(reason=desktop)
+    → 手机停本地采集并提示「电脑端已取消录音。」
+  maxMs + 3s 没收到 mic.stop（手机卡死/停止消息丢失）
+    → 服务端看门狗 abort 百炼
+    → 广播 mic.state(cancelled) + mic.cancel(reason=timeout)
 ```
 
 关键点：
@@ -52,6 +61,8 @@ owner: engineering
 - 桌面服务不把音频广播给其它客户端；按 session 路由，且只在内存中。
 - 音频只在内存；转写完成/失败/取消后立即丢弃；不写临时 WAV。
 - 控制消息仍是 JSON；手机停止/取消有明确 `reason`，取消类不转写。
+- 电脑端始终可以中断：浮层「取消录音」发 `mic.cancel`；服务端还有 `maxMs + 3s` 看门狗，保证不会出现「桌面一直显示正在听但没有任何收尾」。
+- 手机端一次只允许一个启动中的会话（ref + lifecycle token）；松手早于 `mic.start`/`getUserMedia` 返回时不会进入录音，桌面最多看到一个已取消的会话。
 - 云端唯一：连接/鉴权/收尾失败直接报错，不切换引擎、不回退本机。
 
 ## 3. 采集方案
@@ -77,9 +88,11 @@ owner: engineering
 - 使用现有 WS 通道，二进制帧；控制消息仍用 JSON。
 - 协议细节见 [protocol-audio.md](./protocol-audio.md)；编码器/解析器在 `mic_protocol.rs`，手机 Rust 维护当前 session 与序列号。
 - 桌面按 session 追加到内存缓冲；音频帧**绝不广播**。
-- 同一时间只允许一个 active session；重复 start 返回 `mic.error(session_busy)`。
+- 同一时间只允许一个 active session：同端重复 `mic.start` 以最新会话为准（旧会话中止）；异端仍返回 `mic.error(session_busy)`。
+- `mic.stop` 必须 owner + session 匹配；不匹配只回错误，不清理 active，避免旧会话迟到的 stop 误杀新会话。
 - 断线/取消/后台：立即丢弃缓冲并 abort 云端，不后台重连补发。
 - 65 秒或 2.2MB 缓冲上限，超过丢弃；单帧上限 64KB。
+- 每个会话一个 `maxMs + 3_000ms` 看门狗；到点仍是该 session 的 active 就 abort 云端并广播 `mic.cancel(reason=timeout)`。
 
 ## 6. 云端转写
 
@@ -158,6 +171,7 @@ owner: engineering
 | 辅助功能未授权 | 只复制 | “已复制；要自动输入请授权。” |
 | 目标窗口变化 | 只复制 | “你切到了别的窗口，文字已复制。” |
 | 密码框 | 只复制 | “当前是密码框，已复制。” |
+| 手机停止消息丢失/浮层卡住 | 看门狗 `maxMs+3s` 或电脑端「取消录音」→ abort 云端、停手机采集 | “录音超时，已自动停止。”/“电脑端已取消录音。” |
 | 目标无输入框 | 只复制 | “没找到输入框，已复制。” |
 | 文本超长 | 截断到 2000 字 | “太长了，先输入前 2000 字。” |
 
@@ -212,7 +226,8 @@ owner: engineering
 ## 15. 实现状态（2026-11-02）
 
 - 采集：WebView `getUserMedia` + `AudioContext(16000)` + `ScriptProcessor(2048)`；Realme/WebView 103 可用；Android 权限已配置。手机 UI 含波形、计时、上滑取消、50/60 秒、后台取消、权限说明。
-- 协议：`mic.start` / `mic.ready` / `mic.stop` / `mic.partial` / `mic.result` / `mic.state` / `mic.error` + `SK01` PCM16 二进制帧；服务端单会话缓冲，音频不广播、不落盘。
+- 协议：`mic.start` / `mic.ready` / `mic.stop` / `mic.partial` / `mic.result` / `mic.state` / `mic.error` / `mic.cancel` + `SK01` PCM16 二进制帧；服务端单会话缓冲，音频不广播、不落盘。
+- 中断兜底（2026-11-04）：桌面浮层「取消录音」+ 服务端 `maxMs+3s` 看门狗；手机端手势/启动串行化（lifecycle token + ref 判定），快速连按/启动中松手不会残留会话。
 - 识别：只走百炼 `qwen-audio-3.1-asr-flash-streaming`；`asr.json` + Keychain + `asr_cloud_*`；失败不回退本机。
 - 用量：`asr_usage.json` 按本机日期汇总；`asr_usage_stats/clear`；金额按北京/新加坡价格估算。
 - 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不自动发送回车。

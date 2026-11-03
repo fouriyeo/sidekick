@@ -807,13 +807,22 @@ export function collectExistingSessions(ctx, options = {}) {
     return [];
   }
   const titleService = resolveContextService(ctx, "sessionTitle");
+  // 投影注册表回放的是完整日志，恢复的会话即使没有新的 session/title 事件也能读到标题。
+  const projectionService = resolveContextService(ctx, "sessionProjections");
   const result = [];
   for (const session of serviceListToArray(raw)) {
     try {
       const id = sessionIdOf(session);
       if (!id || isSubagentSession(session)) continue;
       let title = null;
-      if (titleService && typeof titleService.get === "function") {
+      if (projectionService && typeof projectionService.stateOf === "function") {
+        try {
+          title = normalizeSessionTitle(projectionService.stateOf(session, "title"));
+        } catch {
+          title = null;
+        }
+      }
+      if (title === null && titleService && typeof titleService.get === "function") {
         try {
           title = normalizeSessionTitle(titleFromServiceValue(titleService.get(session)));
         } catch {
@@ -1236,6 +1245,23 @@ export function apply(ctx) {
     } catch {
       // ignore
     }
+    // 宿主服务可能在插件 apply() 之后才挂载；稍后补两次标题/会话，拿到就推送。
+    const retryTimers = [];
+    for (const delay of [500, 2000]) {
+      try {
+        const timer = setTimeout(() => {
+          try {
+            controller?.adoptExistingSessions(ctx);
+          } catch {
+            // ignore
+          }
+        }, delay);
+        timer?.unref?.();
+        retryTimers.push(timer);
+      } catch {
+        // setTimeout 不可用时跳过。
+      }
+    }
     const handleEvent = (session, event) => {
       try {
         controller.handleSessionEvent(session, event);
@@ -1254,6 +1280,14 @@ export function apply(ctx) {
     offDisposed = source.on("session/disposed", handleDisposed, { global: true });
 
     const dispose = () => {
+      for (const timer of retryTimers) {
+        try {
+          clearTimeout(timer);
+        } catch {
+          // ignore
+        }
+      }
+      retryTimers.length = 0;
       try {
         if (typeof offEvent === "function") offEvent();
       } catch {

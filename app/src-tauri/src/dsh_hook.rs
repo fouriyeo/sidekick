@@ -10,9 +10,10 @@
 //! - [`HEARTBEAT_TIMEOUT`] 没收到任何上报就视为掉线，广播 idle 让宠物复位；
 //! - 新 WS 连接先直发一次快照，手机 `status.request` 也会补发快照。
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::io::Read;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -48,6 +49,8 @@ pub const MAX_SESSION_LIST: usize = 50;
 pub const MAX_SESSION_TITLE_CHARS: usize = 80;
 /// 单个会话 id 的最大字符数。
 pub const MAX_SESSION_ID_CHARS: usize = 128;
+/// DSH workspace 归档列表的缓存时长（归档/取消归档最多延迟这么久生效）。
+pub const ARCHIVED_CACHE_TTL: Duration = Duration::from_secs(2);
 /// 回环端口候选，按顺序挑第一个能绑定的。
 pub const LOOPBACK_PORTS: [u16; 5] = [47815, 47816, 47817, 47818, 47819];
 /// 回环监听地址（绝对不监听 0.0.0.0）。
@@ -279,6 +282,13 @@ struct CompletedHold {
     source: StatusSource,
 }
 
+/// 归档会话 id 的缓存：`workspace.json` 按 mtime/时间片读取，避免每条消息都读盘。
+#[derive(Default)]
+struct ArchivedCache {
+    checked_at: Option<Instant>,
+    ids: HashSet<String>,
+}
+
 struct BridgeInner {
     enabled: bool,
     connected: bool,
@@ -308,6 +318,8 @@ pub struct HookBridge {
     config_write_lock: Mutex<()>,
     /// 运行中 profile 检测缓存：(检测时间, 结果)。
     running_cache: Mutex<Option<(Instant, Option<String>)>>,
+    /// 已归档会话 id 缓存（过滤手机端会话列表用）。
+    archived_cache: Mutex<ArchivedCache>,
 }
 
 impl HookBridge {
@@ -362,6 +374,7 @@ impl HookBridge {
             endpoint_ready: Notify::new(),
             config_write_lock: Mutex::new(()),
             running_cache: Mutex::new(None),
+            archived_cache: Mutex::new(ArchivedCache::default()),
         })
     }
 
@@ -388,6 +401,19 @@ impl HookBridge {
 
     pub fn sender(&self) -> broadcast::Sender<String> {
         self.tx.clone()
+    }
+
+    /// 读 DSH `workspace.json` 里的归档会话 id（带缓存）；读不到按空集合处理。
+    fn archived_session_ids(&self) -> HashSet<String> {
+        let mut cache = self.archived_cache.lock().unwrap();
+        if let Some(checked) = cache.checked_at
+            && checked.elapsed() < ARCHIVED_CACHE_TTL
+        {
+            return cache.ids.clone();
+        }
+        cache.ids = read_archived_session_ids(&self.layout.workspace_path());
+        cache.checked_at = Some(Instant::now());
+        cache.ids.clone()
     }
 
     pub fn endpoint(&self) -> Option<String> {
@@ -520,6 +546,8 @@ impl HookBridge {
     pub fn ingest(&self, incoming: IncomingHook, now: Instant) -> Option<StatusMessage> {
         let mut message = None;
         let mut emit = false;
+        // 先读归档集合（磁盘缓存），避免在持有 inner 锁时读盘。
+        let archived = self.archived_session_ids();
 
         {
             let mut inner = self.inner.lock().unwrap();
@@ -560,14 +588,22 @@ impl HookBridge {
                     ts: _,
                 } => {
                     mark_alive(&mut inner, now);
+                    let (session_list, removed_active) =
+                        filter_archived_sessions(normalize_session_list(session_list), &archived);
+                    let (state, sessions) = reconcile_visible_state(
+                        state,
+                        sessions.min(MAX_SESSIONS),
+                        removed_active,
+                        &session_list,
+                    );
                     message = Some(apply_incoming_state(
                         &mut inner,
                         state,
-                        sessions.min(MAX_SESSIONS),
+                        sessions,
                         resume,
                         StatusSource::Dsh,
                         now,
-                        normalize_session_list(session_list),
+                        session_list,
                     ));
                     emit = true;
                 }
@@ -579,8 +615,14 @@ impl HookBridge {
                     ts: _,
                 } => {
                     mark_alive(&mut inner, now);
-                    let sessions = sessions.min(MAX_SESSIONS);
-                    let session_list = normalize_session_list(session_list);
+                    let (session_list, removed_active) =
+                        filter_archived_sessions(normalize_session_list(session_list), &archived);
+                    let (state, sessions) = reconcile_visible_state(
+                        state,
+                        sessions.min(MAX_SESSIONS),
+                        removed_active,
+                        &session_list,
+                    );
                     let list_changed = session_list != inner.session_list;
                     let changed = match &inner.completed {
                         // completed 展示期内心跳不打断（心跳里的 state 是 resume 态），
@@ -1150,6 +1192,80 @@ pub fn normalize_session_list(list: Vec<IncomingSession>) -> Vec<SessionSummary>
         });
     }
     normalized
+}
+
+/// 读 `workspace.json` 的 `global.archivedSessionIds`；文件缺失/结构异常按空集合处理。
+pub fn read_archived_session_ids(path: &Path) -> HashSet<String> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return HashSet::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return HashSet::new();
+    };
+    value
+        .pointer("/global/archivedSessionIds")
+        .and_then(|ids| ids.as_array())
+        .map(|ids| {
+            ids.iter()
+                .filter_map(|id| id.as_str())
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 去掉已归档会话，返回（过滤后的列表，被去掉的进行中会话数）。
+/// 进行中会话数用来同步修正插件的 `sessions` 计数。
+pub fn filter_archived_sessions(
+    list: Vec<SessionSummary>,
+    archived: &HashSet<String>,
+) -> (Vec<SessionSummary>, u32) {
+    let mut removed_active = 0;
+    let filtered = list
+        .into_iter()
+        .filter(|item| {
+            if archived.contains(&item.id) {
+                if matches!(item.state, SessionState::Working | SessionState::Asking) {
+                    removed_active += 1;
+                }
+                return false;
+            }
+            true
+        })
+        .collect();
+    (filtered, removed_active)
+}
+
+/// 按可见列表修正聚合态/进行中会话数：归档会话被去掉后，不能让宠物一直停在 asking/working。
+pub fn reconcile_visible_state(
+    state: StatusState,
+    sessions: u32,
+    removed_active: u32,
+    visible: &[SessionSummary],
+) -> (StatusState, u32) {
+    if state == StatusState::Completed {
+        return (state, sessions);
+    }
+    let sessions = sessions.saturating_sub(removed_active);
+    let visible_asking = visible
+        .iter()
+        .any(|item| item.state == SessionState::Asking);
+    let visible_working = visible
+        .iter()
+        .any(|item| item.state == SessionState::Working);
+    if visible_asking {
+        return (StatusState::Asking, sessions);
+    }
+    if visible_working {
+        return (StatusState::Working, sessions);
+    }
+    if sessions == 0 {
+        return (StatusState::Idle, 0);
+    }
+    // 会话数比列表多（50 条上限截断）：看不到的会话可能还在进行中，保守保留原状态。
+    (state, sessions)
 }
 
 fn push_recent(inner: &mut BridgeInner, event: StatusEvent) {
@@ -2241,5 +2357,87 @@ mod tests {
         let status = bridge.status();
         assert!(status.error.is_some());
         assert!(!status.installed);
+    }
+
+    #[test]
+    fn reads_archived_session_ids_from_workspace_file() {
+        let (bridge, _tmp) = test_bridge();
+        let path = bridge.layout().workspace_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"global":{"archivedSessionIds":["session-a"," session-b ",""]},"tables":{}}"#,
+        )
+        .unwrap();
+        let ids = read_archived_session_ids(&path);
+        assert!(ids.contains("session-a"));
+        assert!(ids.contains("session-b"));
+        assert_eq!(ids.len(), 2);
+
+        std::fs::write(&path, "not json").unwrap();
+        assert!(read_archived_session_ids(&path).is_empty());
+        assert!(read_archived_session_ids(Path::new("/nonexistent/workspace.json")).is_empty());
+    }
+
+    #[test]
+    fn filters_archived_sessions_and_counts_removed_active() {
+        let list = normalize_session_list(vec![
+            incoming_session("session-live", SessionState::Working),
+            incoming_session("session-archived", SessionState::Asking),
+            incoming_session("session-idle", SessionState::Idle),
+        ]);
+        let archived = HashSet::from(["session-archived".to_string()]);
+        let (filtered, removed_active) = filter_archived_sessions(list, &archived);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(removed_active, 1);
+        assert!(filtered.iter().all(|item| item.id != "session-archived"));
+    }
+
+    #[test]
+    fn reconcile_visible_state_ignores_archived_only_activity() {
+        let visible =
+            normalize_session_list(vec![incoming_session("session-live", SessionState::Idle)]);
+        // 唯一 asking 的会话被归档：没有可见进行中会话 → idle。
+        assert_eq!(
+            reconcile_visible_state(StatusState::Asking, 1, 1, &visible),
+            (StatusState::Idle, 0)
+        );
+        // completed 脉冲保持原样。
+        assert_eq!(
+            reconcile_visible_state(StatusState::Completed, 2, 1, &visible),
+            (StatusState::Completed, 2)
+        );
+        // 列表被 50 条上限截断时保守保留 working。
+        assert_eq!(
+            reconcile_visible_state(StatusState::Working, 60, 0, &visible),
+            (StatusState::Working, 60)
+        );
+    }
+
+    #[test]
+    fn bridge_ingest_drops_archived_sessions_and_downgrades_state() {
+        let (bridge, _tmp) = test_bridge();
+        let path = bridge.layout().workspace_path();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"global":{"archivedSessionIds":["session-archived"]}}"#,
+        )
+        .unwrap();
+
+        let message = bridge
+            .ingest(
+                state_message_with_list(
+                    "asking",
+                    1,
+                    None,
+                    vec![incoming_session("session-archived", SessionState::Asking)],
+                ),
+                Instant::now(),
+            )
+            .expect("broadcast message");
+        assert!(message.session_list.is_empty());
+        assert_eq!(message.state, StatusState::Idle);
+        assert_eq!(message.sessions, 0);
     }
 }

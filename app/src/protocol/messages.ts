@@ -189,6 +189,23 @@ export type MicErrorMessage = {
   ts: number;
 };
 
+export type MicCancelReason = "desktop" | "timeout";
+
+/**
+ * 桌面 → 手机/UI：桌面端权威取消当前录音会话。
+ *
+ * 人工点「取消录音」时 reason=desktop；服务端看门狗（手机停止消息丢失/卡死）
+ * 触发时 reason=timeout。手机收到后必须停止本地采集，即使本地记录的 session
+ * 与消息里的不一致——该消息的语义是「当前不应该再有录音」。
+ */
+export type MicCancelMessage = {
+  v: 1;
+  type: "mic.cancel";
+  session: string;
+  reason?: MicCancelReason;
+  ts: number;
+};
+
 export type MicMessage =
   | MicStartMessage
   | MicReadyMessage
@@ -196,7 +213,8 @@ export type MicMessage =
   | MicPartialMessage
   | MicResultMessage
   | MicStateMessage
-  | MicErrorMessage;
+  | MicErrorMessage
+  | MicCancelMessage;
 
 /**
  * 结果卡片上的手动按键动作：`enter` = 在电脑上按一次 Return，
@@ -515,6 +533,15 @@ export function isMicErrorMessage(value: unknown): value is MicErrorMessage {
   );
 }
 
+export function isMicCancelMessage(value: unknown): value is MicCancelMessage {
+  if (!isMicBase(value)) return false;
+  const message = value as Record<string, unknown>;
+  return (
+    message.type === "mic.cancel" &&
+    (message.reason === undefined || message.reason === "desktop" || message.reason === "timeout")
+  );
+}
+
 export function parseMicMessage(raw: string): MicMessage | null {
   let value: unknown;
   try {
@@ -528,7 +555,8 @@ export function parseMicMessage(raw: string): MicMessage | null {
     isMicResultMessage(value) ||
     isMicStateMessage(value) ||
     isMicErrorMessage(value) ||
-    isMicReadyMessage(value)
+    isMicReadyMessage(value) ||
+    isMicCancelMessage(value)
   ) {
     return value;
   }

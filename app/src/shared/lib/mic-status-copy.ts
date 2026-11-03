@@ -37,6 +37,16 @@ export const MIC_STATUS_COPY = {
   keySendFailed: "按键没发出去，再试一次。",
   keyRateLimited: "按太快了，等一下。",
   keyNoResponse: "电脑端没回应，再试一次。",
+  /** 桌面浮层/手机提示：电脑端人工取消了这次录音。 */
+  cancelledByDesktop: "电脑端已取消录音。",
+  /** 服务端看门狗兜底：手机停止消息丢失/卡死，录音已被自动中止。 */
+  recordingTimeout: "录音超时，已自动停止。",
+  /** 桌面浮层「取消录音」按钮与等待态。 */
+  cancelMic: "取消录音",
+  cancelMicPending: "取消中…",
+  cancelMicFailed: "电脑端服务没连上，稍后再试。",
+  /** 桌面浮层取消后的短状态。 */
+  cancelledShort: "已取消",
 } as const;
 
 export function keyActionErrorText(code: string | null | undefined): string {

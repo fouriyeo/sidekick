@@ -292,6 +292,28 @@ describe("collectExistingSessions", () => {
     expect(collectExistingSessions(byId, { now }).map((entry) => entry.id)).toEqual(["y"]);
   });
 
+  it("prefers the title projection for restored sessions", () => {
+    const ctx = {
+      sessions: { list: () => [makeSession("a")] },
+      sessionProjections: {
+        stateOf: (session, key) => (key === "title" ? `投影标题-${session.header.id}` : null),
+      },
+      sessionTitle: { get: () => ({ title: "服务标题" }) },
+    };
+    expect(collectExistingSessions(ctx, { now })).toMatchObject([
+      { id: "a", title: "投影标题-a" },
+    ]);
+  });
+
+  it("falls back to sessionTitle when the projection has no title", () => {
+    const ctx = {
+      sessions: { list: () => [makeSession("a")] },
+      sessionProjections: { stateOf: () => null },
+      sessionTitle: { get: () => "服务标题" },
+    };
+    expect(collectExistingSessions(ctx, { now })).toMatchObject([{ id: "a", title: "服务标题" }]);
+  });
+
   it("tolerates missing or throwing host services", () => {
     expect(collectExistingSessions(null)).toEqual([]);
     expect(collectExistingSessions({})).toEqual([]);

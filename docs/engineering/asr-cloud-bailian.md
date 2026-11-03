@@ -2,7 +2,7 @@
 doc: engineering/asr-cloud-bailian
 title: 百炼云端流式语音识别方案
 status: active
-updated: 2026-11-02
+updated: 2026-11-04
 load: on-demand
 owner: engineering
 ---
@@ -84,12 +84,14 @@ idle
            → task-finished → 记用量 → insert → delivered
            → 失败/超时/空 → mic.result(failed) → error
  → cancel/background/disconnect/mic_lost → cancelled（丢弃、abort 云端）
+ → 桌面人工取消 / maxMs+3s 看门狗 → cancelled（abort 云端、不 finish-task、不插入）
 ```
 
 - `mic.start` 时 `session_config()` 失败：直接回 `mic.error`，不建立 `ActiveMic`。
 - 收尾失败：`mic.result(outcome=failed, reason=cloud_*)`；不插入。
 - 最终文本为空：`empty_transcript`；仍记录 usage（百炼已计费）。
 - 取消类 `mic.stop`：直接 abort 云端，不发送 `finish-task`、不插入。
+- 桌面浮层「取消录音」与服务端看门狗（`maxMs + 3s`）走 `mic.cancel`：取走 active、abort 云端、广播 `mic.state(cancelled)` + `mic.cancel`；手机收到后停本地采集，不会出现正式的 `mic.result`，也不会写 usage。
 
 ## 5. 百炼 WebSocket 协议映射
 
@@ -155,7 +157,7 @@ idle
 
 ### 6.1 配置文件
 
-`~/Library/Application Support/Sidekick/asr.json`，`0600`，临时文件 + rename 原子写：
+`~/.sidekick/asr.json`，`0600`，临时文件 + rename 原子写：
 
 ```json
 {
@@ -184,7 +186,7 @@ idle
 
 ### 6.2 本地 Key 存储
 - Key 存在 `asr.json` 的 `apiKey` 字段（`0600`）；启动、状态、测试、录音都只读这个文件，**不访问 Keychain**，所以不会再弹系统密码。
-- 旧版本 Keychain 条目不再读取；升级后模型页显示未保存，需要重新粘贴一次 Key。清除 Key 时会顺手尝试删除旧钥匙串条目。
+- 升级前存在 Keychain 的 Key 不会自动迁移（读旧条目会弹 macOS 登录密码），需要在模型页重新粘贴一次；清除 Key 时会顺手尝试删除旧钥匙串条目。
 - 代价：明文 Key 只靠文件权限保护，安全性低于 Keychain；跨平台直接可用（Windows/Linux 无 Keychain 实现也能用）。
 
 ### 6.3 地址解析
@@ -218,7 +220,7 @@ idle
 
 ## 9. 用量与费用统计
 
-- 文件：`~/Library/Application Support/Sidekick/asr_usage.json`，`0600`，原子写；只存每日汇总，不存文本/Key/音频。
+- 文件：`~/.sidekick/asr_usage.json`，`0600`，原子写；只存每日汇总，不存文本/Key/音频。
 - 每次 `task-finished` 拿到 `usage` 后**先记账**，再插入；即使插入失败/空结果也计费。`total_tokens` 取 `total_tokens` 与 `input+output` 的较大值；全零且无时长则跳过。
 - 按本机时区（`chrono::Local`）切天；最多保留 400 天，超出删最旧。
 - `UsageStats`：`today` / `last7Days` / `last30Days` / `last365Days` 汇总 + `days`（最近 365 天，今天起倒序，缺失补 0）+ `priceNote`。

@@ -40,12 +40,14 @@ owner: engineering
 ## 3. 文件与目录
 
 ```text
-~/Library/Application Support/Sidekick/
-├─ asr.json          # 百炼配置/同意/keyPresent/keyHint；0600；不含 Key
+~/.sidekick/
+├─ asr.json          # 百炼配置/同意/Key/keyPresent/keyHint；0600
 ├─ asr_usage.json    # 每日用量汇总；0600；最多 400 天
 ├─ clipboard.json    # 剪贴板历史
-└─ models/           # 旧本机模型残留（不再读取，可删）
+└─ .migrated-from-app-support   # 迁移标记（旧目录只复制一次）
 ```
+
+旧版目录 `~/Library/Application Support/Sidekick/` 里的同名 JSON 会在首次启动时复制过来（旧文件保留，不删除）；旧 `models/` 不迁移、不再读取。
 
 `asr.json` 结构（无 `workspaceId`、无 `engine`/`fallbackToLocal`）：
 

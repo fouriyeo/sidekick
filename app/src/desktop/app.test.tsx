@@ -28,6 +28,7 @@ vi.mock("./use-desktop-connection", () => ({
     info: null,
     error: null,
     sendText: vi.fn(),
+    cancelMic: vi.fn(),
     retry: vi.fn(),
   }),
 }));

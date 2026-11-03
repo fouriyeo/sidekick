@@ -55,9 +55,18 @@ pub struct AsrCloudState {
 }
 
 impl AsrCloudState {
+    /// 生产构造：只读 `asr.json`（0600），**不访问 Keychain**。
+    /// 开发版每次重编译签名都会变，读旧钥匙串条目会弹系统授权/登录密码；
+    /// 旧 Key 的恢复方式只有模型页重新粘贴。
     pub fn new() -> Self {
+        let settings = asr_config::load();
+        // 升级前的老文件只有 keyPresent/keyHint、没有 apiKey：加载时已按未配置处理，
+        // 顺手把磁盘上的旧元数据清掉，避免「看着像已保存」的误导。
+        if asr_config::legacy_key_metadata_present() {
+            let _ = asr_config::save(&settings);
+        }
         Self {
-            settings: Mutex::new(asr_config::load()),
+            settings: Mutex::new(settings),
         }
     }
 

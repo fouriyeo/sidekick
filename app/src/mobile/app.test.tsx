@@ -514,6 +514,23 @@ describe("MobileApp", () => {
     expect(tauri.haptic).not.toHaveBeenCalled();
   });
 
+  it("接收 mic.cancel 后强制停掉手机录音（不校验本地 session）", async () => {
+    await renderApp();
+    act(() => {
+      useMicStore.setState({ phase: "listening", session: "local-session" });
+    });
+
+    act(() => {
+      tauri.chatHandler?.(
+        '{"v":1,"type":"mic.cancel","session":"desktop-session","reason":"desktop","ts":1}',
+      );
+    });
+
+    expect(useMicStore.getState().phase).toBe("idle");
+    expect(useMicStore.getState().session).toBeNull();
+    expect(useMicStore.getState().cancelNotice).toBe("电脑端已取消录音。");
+  });
+
   it("连接成功和回到前台时请求 AI 状态快照", async () => {
     await renderApp();
 

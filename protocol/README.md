@@ -131,8 +131,8 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 | 桌面 → 手机 | `mic.ready` | JSON |
 | 手机 → 桌面 | PCM16 分片 | Binary（`SK01`） |
 | 手机 → 桌面 | `mic.stop` | JSON |
-| 桌面 → 手机/UI | `mic.partial` | JSON |
-| 桌面 → 手机/UI | `mic.result` / `mic.state` / `mic.error` | JSON |
+| 桌面 UI → 服务端 | `mic.cancel` | JSON |
+| 桌面 → 手机/UI | `mic.cancel` / `mic.partial` / `mic.result` / `mic.state` / `mic.error` | JSON |
 
 `mic.start` 示例：
 
@@ -151,6 +151,16 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 ```
 
 `mic.stop` 的 `reason`：`release` / `cancel` / `timeout` / `background` / `disconnect` / `mic_lost`；只有 `release` / `timeout` 会转写。
+
+`mic.cancel`（桌面 → 手机/UI，权威中止）：桌面浮层的人工「取消录音」与服务端看门狗都发这条。`reason=desktop` 表示用户主动取消，`reason=timeout` 表示 `maxMs + 3s` 内没收到 `mic.stop`（手机卡死/停止消息丢失）。手机收到后必须停掉本地采集，**即使本地记录的 session 与消息里的不一致**；旧手机忽略该类型但仍会收到 `mic.state(cancelled)`。
+
+```json
+{ "v": 1, "type": "mic.cancel", "session": "0f8fad5b-…", "reason": "desktop", "ts": 1730000000000 }
+```
+
+- 桌面 UI 发 `mic.cancel` 时只需带 `v/type/session/ts`；服务端校验并广播权威版本（带 `reason`），不会把请求原样广播。
+- 服务端看门狗按每个 `mic.start` 的 `maxMs + 3_000ms` 计时，只中止 session 仍匹配的 active 会话，避免误杀新会话。
+- 取消不建转写、不发 `finish-task`、不插入、不写用量。
 
 `mic.result` 可选带 `usage`（`inputTokens` / `outputTokens` / `totalTokens` / `audioDurationMs`）。语音识别只走百炼云端，`mic.ready`/`mic.partial`/`mic.result` 不再有 `engine`/`model`/`fallback` 字段（2026-11-02 双端同版本升级）。
 
@@ -182,7 +192,8 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 规则：
 
 - 音频帧绝不广播；服务端按 session 追加到内存缓冲。
-- 单会话；重复 `mic.start` 返回 `mic.error(session_busy)`。
+- 单会话：同一客户端重复 `mic.start` 以**最新会话**为准（旧会话中止并广播 `mic.state(cancelled)`）；另一个客户端正在录音时返回 `mic.error(session_busy)`，不抢会话。
+- `mic.stop` 必须 owner + session 匹配才生效；不匹配回 `mic.error(session_mismatch)`，不清理 active（避免旧会话迟到的 stop 误杀新会话）。没有 active 且 reason=cancel 时补发一条 `mic.state(cancelled)` 清理陈旧浮层。
 - `mic.result` 含结果原因和文本；文本只给手机结果卡片，不写日志。结果卡片上的「回车/清空」走 `key.request`（见上文），不是 `mic.*` 的子类型。
 - 语音识别只由桌面直连百炼，手机不接触 API Key；失败直接报错，不回退本机。
 - `mic.result.usage` 记入 `asr_usage.json`，模型页区间切换展示今天/7/30/365；`asr_usage_stats()` 返回最近 365 天 `days`。

@@ -34,6 +34,8 @@
 28. `release/` 固定文件名安装包 + 打包脚本（2026-11-03，D63）：新增 `release/Sidekick-macOS.dmg`（3.8MB，未签名）与 `release/Sidekick-Android.apk`（7MB，release 构建 + 本地 keystore 签名，`apksigner verify` 通过）；新增 `scripts/package-desktop.sh` / `package-android.sh` / `package-release.sh`，每次打包覆盖同名文件、不建版本号目录，产物随提交进 `main`。
 29. 结果卡片手动「回车 / 清空」（2026-11-04，D68）：语音输入成功后，手机「已输入」卡片新增两个用户主动点按的按钮——「回车」合成 Return（keycode 36），「清空」合成 `⌘A`+`Delete`（两次确认，第一次变「再点一次」）；新增 `key.request` / `key.result` 协议与桌面 `desktop_keys.rs` 安全闸门（目标窗口=插入时前台应用、密码框/辅助功能/非 macOS 拒绝、30 秒时效、成功即作废、500ms 限频），日志不含文本/应用名；桌面浮层同步提示。仍保持「绝不自动回车/发送」。
 30. 下线宠物触摸互动（2026-11-04，D69）：删除手势识别、点击/戳/摸摸、触摸爱心、亲密度、`interacting` 状态与设置页「无障碍互动」；手机点击、长按、来回抚摸宠物都不再有任何反应，也不写存档。保留命名完成爱心、AI 四态、麦克风反应、睡眠/06:00 醒来、自动变暗；存档 version 1 不变，旧 `affinity*` 字段忽略。
+31. 麦克风会话稳定性 + 电脑端中断（2026-11-04，D70）：修复手机快速连按/启动中松手导致电脑端永久「正在听」——手机端启动串行化（`startingRef` + `lifecycleRef` token + ref 判手势 + window pointerup 兜底），松手/取消一定结束；服务端同端重复 start 以最新会话为准、每个会话 `maxMs+3s` 看门狗、`mic.stop` 严格 owner+session；新增 `mic.cancel` 协议，桌面浮层「倾听中」右侧常显「取消录音」，点击 1 秒内两端 idle，不转写/不插入/不写剪贴板；手机提示「电脑端已取消录音。」，看门狗提示「录音超时，已自动停止。」。
+
 
 ## 已验证（有实际证据）
 
@@ -58,7 +60,7 @@
 - 自动化测试：`pnpm typecheck/lint/test/build` 全绿（103 前端用例）；`cargo test` 10 passed；`check-boundaries`、`check-docs` 通过。
 - 麦克风 spike：真机 5 秒长按生成约 143KB WAV，桌面收到并 whisper 转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 正确；自动粘贴因辅助功能权限返回 copied。
 - 麦克风 P0 后端：Python WS 客户端按正式二进制协议发送 3.9 秒中文，服务端返回 `mic.result(copied, accessibility_off)`；whisper-rs base 在模型预热后延迟约 0.2–0.3s；剪贴板 UTF-8 内容正确。
-- 剪贴板：复制文本后 `~/Library/Application Support/Sidekick/clipboard.json` 在 1 秒内出现，权限 `600`；带 `org.nspasteboard.ConcealedType` 的内容未记录；语音转写从 2026-11-01 起经 `write_text_and_record` 以 `kind=voice` 入库（此前版本不入库）。
+- 剪贴板：复制文本后 `~/.sidekick/clipboard.json` 在 1 秒内出现，权限 `600`；带 `org.nspasteboard.ConcealedType` 的内容未记录；语音转写从 2026-11-01 起经 `write_text_and_record` 以 `kind=voice` 入库（此前版本不入库）。
 - 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test`（128 tests）/ `pnpm build` 通过；`cargo test --lib` 20 tests 通过。
 - **断连自动重连已验证（2026-11-01，Realme 真机）**：22:47:54 杀掉桌面进程，手机 22:47:54.504 检测到 `[mobile] 连接已断开`；随后按退避自动重试（发现 0 台 → 退回上次地址 → 连接被拒），重试时间点 22:47:57 / 22:48:00.6 / 22:48:06.3 / 22:48:15.9 / 22:48:33.5（每次 = 退避 + 1.5s 扫描窗口）；桌面 22:49:05 恢复后下一轮自动发现 1 台并 `[mobile] connected`，无需任何手动操作。
 - **端口变化自动重连已验证（2026-11-01，Realme 真机）**：占住 47810 后桌面回退到 47811，手机断连自动重试时发现回包 `port=47811` 并 `[mobile] connected to ws://…:47811/ws`；聊天页显示「已连接」与新端口。
@@ -87,7 +89,7 @@
 | 云端麦克风未完成项 | 真机 60 秒/断连、密码框/窗口切换完整矩阵、辅助功能实测、真实百炼账号/本地 Key、用量统计跨天/金额对账；回车/清空真机（终端等非标准输入框）与焦点切换矩阵 |
 | 百炼云端未真机验收 | 403 已单独映射 `cloud_forbidden`、保存失败已回滚 Key；真实账号/本地 Key/流式 partial/60s 仍待验；默认旧域名是否支持该模型需用真实 Key 验证 |
 | 云端依赖公网/额度 | 断网/限流/额度不足直接失败（无本机回退）；音频仅在用户显式同意后上传 |
-| 旧 models 目录 | `~/Library/Application Support/Sidekick/models/` 可能仍有旧文件，不参与运行，可手动删除 |
+| 旧 models 目录 | `~/Library/Application Support/Sidekick/models/` 可能仍有旧文件，不迁移、不参与运行，可手动删除 |
 | 用量为估算 | 金额按北京/新加坡公开价估算，未对账百炼账单；`priceNote` 已说明 |
 | 本地 Key 明文 | API Key 存 `asr.json`（0600），只靠文件权限保护；不要分享/提交该文件；旧钥匙串 Key 需重新粘贴一次 |
 | 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
@@ -117,6 +119,7 @@
 - [x] **桌面剪贴板 P1**：文本历史、搜索、置顶、隐私过滤、本地持久化。
 - [x] **断连自动重连**：退避重试 + 静默重新发现 + 前后台暂停/恢复；聊天页常显重连状态与手动入口（2026-11-01）。
 - [ ] **麦克风收尾**：勾选 macOS 辅助功能后验证自动粘贴；真机 60 秒/断连/密码框矩阵；模型准确率测试集；结果卡片回车/清空真机验收（2026-11-04 代码完成）。
+- [ ] **麦克风中断真机验收**：快速连点/连按、启动中松手、电脑浮层「取消录音」、看门狗超时（2026-11-04 代码完成，见 MIC-AC-40..44）。
 - [ ] **AI 联动（DSH hook）**：桌面 AI 联动页 + 本地脚本注入 + 手机四态/三音效 + 会话列表/清除/反问唤起；代码完成，待真机/隐私验收（2026-11-03）。
 - [ ] **会话列表真机回归**：两会话区分、自动展开、清除重现、focus 切前台/启动/失败提示、断连清空、旧插件兼容（2026-11-03）。
 - [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。

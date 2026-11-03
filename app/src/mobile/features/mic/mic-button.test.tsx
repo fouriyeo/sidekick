@@ -1,9 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import { sendKeyRequest } from "@/shared/lib/tauri";
+import { sendKeyRequest, sendMicStart, sendMicStop } from "@/shared/lib/tauri";
 import { MicButton } from "./mic-button";
 import { useMicStore } from "./mic-store";
+import { startVoiceRecording, type VoiceSession } from "./voice-recorder";
 
 // 让 pointerdown/pointermove 带 clientY（jsdom 没有 PointerEvent，用 MouseEvent 顶替）
 beforeAll(() => {
@@ -57,6 +58,9 @@ beforeEach(() => {
   resetStores();
   tauri.haptic.mockReset();
   tauri.haptic.mockResolvedValue(undefined);
+  vi.mocked(sendMicStart).mockClear();
+  vi.mocked(sendMicStop).mockClear();
+  vi.mocked(startVoiceRecording).mockClear();
 });
 
 afterEach(() => {
@@ -312,5 +316,127 @@ describe("MicButton 结果卡片按键", () => {
     renderButton();
     expect(screen.getByText("电脑焦点不在刚才的窗口，没按。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "在电脑上按回车" })).toBeInTheDocument();
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function fakeVoiceSession() {
+  const cancel = vi.fn(async () => undefined);
+  const stop = vi.fn(async () => ({ durationMs: 1_200 }));
+  const session: VoiceSession = {
+    sessionId: "session-test",
+    stop,
+    cancel,
+    getLevel: () => 0,
+    getElapsedMs: () => 0,
+  };
+  return { session, cancel, stop };
+}
+
+describe("MicButton 会话串行化与快速松手", () => {
+  it("连续两次 pointerdown 只建立一个会话", async () => {
+    setMicIdle();
+    const startGate = deferred<void>();
+    vi.mocked(sendMicStart).mockImplementationOnce(() => startGate.promise);
+    const { session } = fakeVoiceSession();
+    vi.mocked(startVoiceRecording).mockResolvedValueOnce(session);
+
+    const mic = renderButton();
+    fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+    fireEvent.pointerDown(mic, { pointerId: 2, clientX: 196, clientY: 800 });
+
+    expect(sendMicStart).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      startGate.resolve();
+      await startGate.promise;
+    });
+    await waitFor(() => expect(useMicStore.getState().phase).toBe("listening"));
+
+    fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+    await waitFor(() => expect(vi.mocked(sendMicStop)).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(sendMicStop)).toHaveBeenCalledWith("session-test", "release");
+  });
+
+  it("start 还没返回就松手：不进入录音，并补发 cancel stop", async () => {
+    setMicIdle();
+    const startGate = deferred<void>();
+    vi.mocked(sendMicStart).mockImplementationOnce(() => startGate.promise);
+
+    const mic = renderButton();
+    fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+    fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+
+    expect(useMicStore.getState().phase).toBe("idle");
+    expect(startVoiceRecording).not.toHaveBeenCalled();
+
+    await act(async () => {
+      startGate.resolve();
+      await startGate.promise;
+    });
+
+    await waitFor(() =>
+      expect(vi.mocked(sendMicStop)).toHaveBeenCalledWith("session-test", "cancel"),
+    );
+    expect(startVoiceRecording).not.toHaveBeenCalled();
+    expect(useMicStore.getState().phase).toBe("idle");
+  });
+
+  it("getUserMedia 期间松手：本地会话取消，不提交为 listening", async () => {
+    setMicIdle();
+    const voiceGate = deferred<VoiceSession>();
+    vi.mocked(startVoiceRecording).mockImplementationOnce(() => voiceGate.promise);
+    const { session, cancel } = fakeVoiceSession();
+
+    const mic = renderButton();
+    fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+    await waitFor(() => expect(startVoiceRecording).toHaveBeenCalledTimes(1));
+
+    fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+
+    await act(async () => {
+      voiceGate.resolve(session);
+      await voiceGate.promise;
+    });
+
+    await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+    expect(useMicStore.getState().phase).toBe("idle");
+    await waitFor(() =>
+      expect(vi.mocked(sendMicStop)).toHaveBeenCalledWith("session-test", "cancel"),
+    );
+  });
+
+  it("电脑端权威取消：停本地采集、提示原因、不补发 stop", async () => {
+    setMicIdle();
+    const { session, cancel } = fakeVoiceSession();
+    vi.mocked(startVoiceRecording).mockResolvedValueOnce(session);
+
+    const mic = renderButton();
+    fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+    await waitFor(() => expect(useMicStore.getState().phase).toBe("listening"));
+
+    act(() => {
+      useMicStore.getState().handleCancel({
+        v: 1,
+        type: "mic.cancel",
+        session: "another-session",
+        reason: "desktop",
+        ts: 1,
+      });
+    });
+
+    await waitFor(() => expect(cancel).toHaveBeenCalled());
+    expect(useMicStore.getState().phase).toBe("idle");
+    expect(screen.getByText("电脑端已取消录音。")).toBeInTheDocument();
+    expect(vi.mocked(sendMicStop)).not.toHaveBeenCalled();
   });
 });

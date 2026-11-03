@@ -66,6 +66,12 @@ impl Layout {
         self.home.join("sidekick").join("config.json")
     }
 
+    /// DSH 的 workspace 持久化文件（`<dsh home>/storages/workspace.json`）。
+    /// 归档会话 id 在 `global.archivedSessionIds` 里，用来把归档会话从列表里去掉。
+    pub fn workspace_path(&self) -> PathBuf {
+        self.home.join("storages").join("workspace.json")
+    }
+
     pub fn profiles_dir(&self) -> PathBuf {
         self.home.join("profiles")
     }

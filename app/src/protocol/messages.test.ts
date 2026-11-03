@@ -281,6 +281,28 @@ describe("parseMicMessage", () => {
     ).toMatchObject({ type: "mic.ready", session });
   });
 
+  it("parses host cancellation with desktop/timeout reasons", () => {
+    expect(
+      parseMicMessage(
+        JSON.stringify({ v: 1, type: "mic.cancel", session, reason: "desktop", ts: 1 }),
+      ),
+    ).toMatchObject({ type: "mic.cancel", session, reason: "desktop" });
+
+    expect(
+      parseMicMessage(
+        JSON.stringify({ v: 1, type: "mic.cancel", session, reason: "timeout", ts: 2 }),
+      ),
+    ).toMatchObject({ type: "mic.cancel", reason: "timeout" });
+
+    // reason 可省略（请求/旧版本兼容），但未知 reason 必须丢弃。
+    expect(
+      parseMicMessage(JSON.stringify({ v: 1, type: "mic.cancel", session, ts: 3 })),
+    ).toMatchObject({ type: "mic.cancel" });
+    expect(
+      parseMicMessage(JSON.stringify({ v: 1, type: "mic.cancel", session, reason: "user", ts: 4 })),
+    ).toBeNull();
+  });
+
   it("rejects invalid or unrelated messages", () => {
     expect(parseMicMessage("not-json")).toBeNull();
     expect(parseMicMessage('{"type":"chat","from":"phone","text":"hi","ts":1}')).toBeNull();

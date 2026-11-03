@@ -187,6 +187,7 @@ export function MobileApp() {
         else if (micMessage.type === "mic.ready") store.handleReady(micMessage);
         else if (micMessage.type === "mic.partial") store.handlePartial(micMessage);
         else if (micMessage.type === "mic.state") store.handleState(micMessage);
+        else if (micMessage.type === "mic.cancel") store.handleCancel(micMessage);
         else if (micMessage.type === "mic.error") store.handleError(micMessage);
         return;
       }

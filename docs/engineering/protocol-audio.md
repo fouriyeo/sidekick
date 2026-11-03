@@ -28,6 +28,8 @@ owner: engineering
 | 桌面 → 手机 | `mic.ready` | JSON | 会话已就绪 |
 | 手机 → 桌面 | 音频帧 | Binary | PCM/Opus 分片 |
 | 手机 → 桌面 | `mic.stop` | JSON | 停止/取消/超时 |
+| 桌面 UI → 服务端 | `mic.cancel` | JSON | 人工取消当前 active 会话 |
+| 桌面 → 手机/UI | `mic.cancel` | JSON | 权威中止（人工/看门狗），手机必须停采集 |
 | 桌面 → 手机/UI | `mic.partial` | JSON | 流式中间结果 |
 | 桌面 → 手机 | `mic.result` | JSON | 输入/复制/失败结果 + usage |
 | 桌面 → 桌面 UI | `mic.state` | JSON | 浮窗状态 |
@@ -61,6 +63,7 @@ owner: engineering
 规则：
 
 - `session` 为 UUID v4，手机生成；同一时间只允许一个 active session。
+- 同一客户端重复 `mic.start` 以最新会话为准：旧会话 abort、广播 `mic.state(cancelled)`，再接受新会话；另一个客户端正在录音时回 `mic.error(session_busy)`。
 - `codec` P0 只支持 `pcm16`；`opus` 预留。
 - 桌面校验配置/Key；未同意、地址/模型无效或无 Key → `mic.error(cloud_not_configured|cloud_key_unavailable)`，不进入会话。
 - `mic.start` 前手机不得发送二进制帧。
@@ -96,6 +99,7 @@ owner: engineering
 - `mic_lost`：被其它应用占用，丢弃。
 
 桌面收到 `cancel/background/disconnect/mic_lost` 时删除缓冲并 abort 云端，不转写；`release/timeout` 才进入收尾。
+`mic.stop` 只在 owner + session 都匹配时生效；不匹配回 `mic.error(session_mismatch)`，不清 active（避免旧会话迟到的 stop 误杀新会话）；若当前没有 active 且 `reason=cancel`，补发一条该 session 的 `mic.state(cancelled)` 清理陈旧浮层。
 
 ### 3.4 mic.result（桌面 → 手机）
 
@@ -184,6 +188,18 @@ owner: engineering
 - 非 macOS 回 `unsupported_platform`；旧版桌面把 `key.request` 当普通文本广播，新/旧手机解析为未知类型后忽略。
 - 不发送任何文本；日志只有 action/outcome/reason 与 `same_app/secure/trusted` 布尔值，不含应用名。
 
+### 3.9 mic.cancel（桌面 UI → 服务端 → 手机/UI）
+
+```json
+{ "v": 1, "type": "mic.cancel", "session": "...", "reason": "desktop", "ts": 1730000000000 }
+```
+
+- 桌面 UI 发请求时只带 `v/type/session/ts`；服务端拦截后不广播原消息，而是校验并广播权威版本（带 `reason`）。
+- `reason=desktop`：用户在桌面浮层点「取消录音」；`reason=timeout`：服务端看门狗在 `maxMs + 3_000ms` 内没等到 `mic.stop`，判定手机卡死/停止消息丢失。
+- 服务端收到取消请求时取当前 active（不限制 owner，取消是安全方向）；没有 active 也回一次 `mic.state(cancelled)` + `mic.cancel`，让两端陈旧浮层自愈。
+- 手机收到后必须停本地采集、丢弃音频；**不校验本地会话 id**（旧版本竞态下本地 id 可能与桌面 active 不一致）。旧手机忽略 `mic.cancel`，但仍会收到 `mic.state(cancelled)`，同 session 时也会停止。
+- 取消不建转写、不发 `finish-task`、不插入、不写用量；结果卡片不会出现。
+
 ## 4. 二进制音频帧
 
 ### 4.1 帧格式（P0 PCM16）
@@ -218,8 +234,10 @@ offset  size  field
 - 插入成功后桌面把 `(owner, session, 前台应用, 时间)` 记到 `KeyRegistry`；`key.request` 在未进入聊天广播前被拦截，校验后放到阻塞线程合成按键，结果广播为 `key.result`。
 - 音频帧同时进入内存缓冲并转发给百炼会话（`bailian_asr::CloudHandle`）。
 - `mic.partial` 由云端会话通过同一文本广播通道发出，手机与桌面 UI 都按 session/rev 过滤。
-- `mic.start` / `mic.ready` / `mic.stop` / `mic.state` / `mic.result` / `mic.error` 仍走现有文本广播，调试客户端可见；P0 仅单手机，配对/多客户端隔离在 P1。
-- 同一时间只允许一个 active session；重复 `mic.start` 回 `mic.error(session_busy)`。
+- `mic.start` / `mic.ready` / `mic.stop` / `mic.state` / `mic.result` / `mic.error` / `mic.cancel` 仍走现有文本广播，调试客户端可见；P0 仅单手机，配对/多客户端隔离在 P1。
+- 同一时间只允许一个 active session：同端重复 `mic.start` 以最新会话为准；异端仍回 `mic.error(session_busy)`。
+- 每个 `mic.start` 起一个 `maxMs + 3_000ms` 看门狗；到点若该 session 仍是 active，`cloud.abort()` 后广播 `mic.state(cancelled)` + `mic.cancel(reason=timeout)`。
+- `mic.cancel` 请求取走任意 active；人工取消与看门狗都只走这一条路径，避免出现「桌面显示正在听但没有任何收尾」。
 - 缓冲上限 65 秒 / 2.2MB；超过丢弃。
 
 ## 6. 会话状态机
@@ -236,7 +254,7 @@ idle
 超时：
 
 - P0 手机在 `mic.start` 后立即开始发帧，不阻塞等待 `mic.ready`；`ready` 用于协议完整性/桌面状态。
-- `listening` 60 秒上限由手机端计时并停；桌面 65 秒兜底丢弃。
+- `listening` 60 秒上限由手机端计时并停；桌面另有 `maxMs + 3s` 看门狗兜底取消（默认 63 秒），并立即广播 `mic.cancel(reason=timeout)`。
 - 连接 5s、`task-started` 3s、`finish-task` 8s；失败直接 `mic.result(failed)`，不回退。
 - `arming 2s` 超时与 `mic.ready` 握手仍为 P1。
 
@@ -247,6 +265,7 @@ idle
 - 2026-11-02 移除了 `mic.ready.engine/model`、`mic.partial.engine`、`mic.result.engine/model/fallback`；双端同版本升级，旧客户端多收字段会忽略，新客户端不依赖这些字段。
 - `mic.result.usage` 保留，字段不变。
 - 2026-11-04 新增 `key.request` / `key.result`（增量，旧端忽略）；不修改任何 `mic.*` 字段。
+- 2026-11-04 新增 `mic.cancel`（增量，旧手机忽略但会收到 `mic.state(cancelled)`）；同一客户端重复 `mic.start` 由 `session_busy` 改为「以最新会话为准」，异端行为不变。
 - 版本字段 `v:1`；破坏性改动升 `v:2`，双端同时升级。
 - `protocol/messages.ts` 用 discriminated union；Rust 用 `serde(tag = "type")`，未知类型不崩溃。
 

@@ -486,7 +486,27 @@ fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
     match kind {
         "mic.start" => handle_mic_start(state, client_id, &value),
         "mic.stop" => handle_mic_stop(state, client_id, &value),
+        "mic.cancel" => handle_mic_cancel(state, &value),
         _ => {}
+    }
+}
+
+/// 同端重复 `mic.start` 时的处理策略。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartAction {
+    /// 当前没有 active 会话，直接接受。
+    Accept,
+    /// 同一个客户端重新开始：以最新会话为准，旧会话中止。
+    Replace,
+    /// 另一个客户端正在录音：返回 session_busy，不抢会话。
+    Busy,
+}
+
+fn resolve_mic_start(active_owner: Option<u64>, client_id: u64) -> StartAction {
+    match active_owner {
+        None => StartAction::Accept,
+        Some(owner) if owner == client_id => StartAction::Replace,
+        Some(_) => StartAction::Busy,
     }
 }
 
@@ -512,13 +532,26 @@ fn handle_mic_start(state: &AppState, client_id: u64, value: &Value) {
     let cloud = bailian_asr::spawn(config, message.session.clone(), state.tx.clone());
     let front_app = desktop_mic::front_app();
 
-    {
+    let replaced = {
         let mut mic = state.mic.lock().unwrap();
-        if mic.is_some() {
+        let action = resolve_mic_start(mic.as_ref().map(|active| active.owner), client_id);
+        if action == StartAction::Busy {
+            drop(mic);
             cloud.abort();
             send_json(state, mic_error(Some(&message.session), "session_busy"));
             return;
         }
+
+        let old = if action == StartAction::Replace {
+            mic.take()
+        } else {
+            None
+        };
+        let old_session = old.as_ref().map(|active| active.session.clone());
+        if let Some(old) = old {
+            old.cloud.abort();
+        }
+
         *mic = Some(ActiveMic {
             owner: client_id,
             session: message.session.clone(),
@@ -530,7 +563,20 @@ fn handle_mic_start(state: &AppState, client_id: u64, value: &Value) {
             pricing,
             cloud,
         });
+        old_session
+    };
+
+    if let Some(old_session) = replaced {
+        println!(
+            "[mic] replaced stale session old={} new={}",
+            short_session(&old_session),
+            short_session(&message.session)
+        );
+        send_json(state, mic_state(&old_session, "cancelled"));
     }
+
+    // 看门狗：正常路径手机会在 60 秒前发 stop；这里兜底「手机卡死/停止消息丢失」。
+    spawn_mic_watchdog(state, message.session.clone(), message.max_ms);
 
     println!(
         "[mic] start session={} engine=bailian model={model}",
@@ -574,6 +620,10 @@ fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
     };
 
     let Some(active) = active else {
+        // 取消是安全方向：没有 active 时也广播一次 cancelled，清掉可能残留的浮层。
+        if reason == MicStopReason::Cancel {
+            send_json(state, mic_state(session, "cancelled"));
+        }
         return;
     };
 
@@ -596,6 +646,60 @@ fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
         active.cloud.abort();
         send_json(state, mic_state(&active.session, "cancelled"));
     }
+}
+
+/// 人工取消当前录音：不限制 owner（桌面 UI 是另一个回环客户端），
+/// 也允许 session 已过期时兜底清理——取消是安全方向。
+fn handle_mic_cancel(state: &AppState, value: &Value) {
+    let requested = value.get("session").and_then(Value::as_str).unwrap_or("");
+
+    if let Some(active) = take_active(state, None) {
+        println!(
+            "[mic] host cancel session={}",
+            short_session(&active.session)
+        );
+        active.cloud.abort();
+        send_json(state, mic_state(&active.session, "cancelled"));
+        send_json(state, mic_cancel(&active.session, "desktop"));
+        return;
+    }
+
+    if requested.is_empty() {
+        return;
+    }
+
+    // 没有 active 也回一次：让可能卡住的桌面浮层/手机本地采集自愈。
+    send_json(state, mic_state(requested, "cancelled"));
+    send_json(state, mic_cancel(requested, "desktop"));
+}
+
+/// 取当前 active 会话；`expected` 非空时只在 session 匹配时取走。
+fn take_active(state: &AppState, expected: Option<&str>) -> Option<ActiveMic> {
+    let mut mic = state.mic.lock().unwrap();
+    let matches = mic
+        .as_ref()
+        .map(|active| expected.is_none_or(|session| active.session == session))
+        .unwrap_or(false);
+    if matches { mic.take() } else { None }
+}
+
+/// 看门狗：`maxMs + 3s` 内没等到 stop 就中止会话并广播权威取消。
+fn spawn_mic_watchdog(state: &AppState, session: String, max_ms: u32) {
+    let state = state.clone();
+    let delay = Duration::from_millis(u64::from(max_ms) + 3_000);
+    tokio::spawn(async move {
+        tokio::time::sleep(delay).await;
+        let Some(active) = take_active(&state, Some(&session)) else {
+            return;
+        };
+        println!(
+            "[mic] watchdog cancel session={}",
+            short_session(&active.session)
+        );
+        active.cloud.abort();
+        send_json(&state, mic_state(&active.session, "cancelled"));
+        send_json(&state, mic_cancel(&active.session, "timeout"));
+    });
 }
 
 struct SessionOutcome {
@@ -790,6 +894,17 @@ fn mic_error(session: Option<&str>, code: &str) -> Value {
         "type": "mic.error",
         "session": session,
         "code": code,
+        "ts": now_ms(),
+    })
+}
+
+/// 桌面端权威取消：手机/UI 收到后停止采集并清空录音状态。
+fn mic_cancel(session: &str, reason: &str) -> Value {
+    json!({
+        "v": 1,
+        "type": "mic.cancel",
+        "session": session,
+        "reason": reason,
         "ts": now_ms(),
     })
 }
@@ -1165,5 +1280,26 @@ mod tests {
             .is_none()
         );
         assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn mic_start_replaces_same_owner_and_rejects_other_clients() {
+        // 同端重复 start 属于客户端异常（快速连按/旧版本竞态）：以最新会话为准，
+        // 不能永远回 session_busy，否则手机 stop 会一直对不上桌面 active 会话。
+        assert_eq!(resolve_mic_start(None, 7), StartAction::Accept);
+        assert_eq!(resolve_mic_start(Some(7), 7), StartAction::Replace);
+        // 另一个客户端（另一台手机/网页）不抢当前会话。
+        assert_eq!(resolve_mic_start(Some(7), 8), StartAction::Busy);
+        assert_eq!(resolve_mic_start(Some(8), 7), StartAction::Busy);
+    }
+
+    #[test]
+    fn mic_cancel_payload_carries_session_and_reason() {
+        let payload = mic_cancel("session-1", "timeout");
+        assert_eq!(payload["v"], 1);
+        assert_eq!(payload["type"], "mic.cancel");
+        assert_eq!(payload["session"], "session-1");
+        assert_eq!(payload["reason"], "timeout");
+        assert!(payload["ts"].as_u64().unwrap() > 0);
     }
 }

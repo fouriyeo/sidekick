@@ -200,6 +200,27 @@ pub fn load() -> AsrSettings {
     }
 }
 
+/// 旧版 `asr.json` 的识别：只有 `keyPresent: true` / `keyHint` 元数据，没有真正的 `apiKey`。
+/// 这种文件是 D61 之前写的（Key 在旧 Keychain 里），加载时按未配置处理并清理元数据。
+pub fn legacy_key_metadata_present() -> bool {
+    let Ok(text) = fs::read_to_string(config_path()) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    let flagged = value
+        .get("keyPresent")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let has_key = value
+        .get("apiKey")
+        .and_then(serde_json::Value::as_str)
+        .map(|key| !key.trim().is_empty())
+        .unwrap_or(false);
+    flagged && !has_key
+}
+
 pub fn save(settings: &AsrSettings) -> Result<(), String> {
     let path = config_path();
     app_paths::ensure_parent(&path).map_err(|error| format!("创建配置目录失败: {error}"))?;

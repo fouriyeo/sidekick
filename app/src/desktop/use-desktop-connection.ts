@@ -18,6 +18,8 @@ export type DesktopConnection = {
   info: ServerInfo | null;
   error: string | null;
   sendText: (text: string) => boolean;
+  /** 桌面浮层「取消录音」：请求服务端中止当前麦克风会话。 */
+  cancelMic: (session: string) => boolean;
   retry: () => void;
 };
 
@@ -118,9 +120,26 @@ export function useDesktopConnection(): DesktopConnection {
     [append],
   );
 
+  const cancelMic = useCallback((session: string) => {
+    const trimmed = session.trim();
+    if (!trimmed) return false;
+
+    const socket = socketRef.current;
+    if (!socket) return false;
+
+    return socket.send(
+      JSON.stringify({
+        v: 1,
+        type: "mic.cancel",
+        session: trimmed,
+        ts: Date.now(),
+      }),
+    );
+  }, []);
+
   const retry = useCallback(() => {
     void connect();
   }, [connect]);
 
-  return { status, info, error, sendText, retry };
+  return { status, info, error, sendText, cancelMic, retry };
 }

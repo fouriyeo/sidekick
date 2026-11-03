@@ -4,6 +4,7 @@ import { usePetStore } from "@/mobile/features/pet/pet-store";
 import type {
   KeyAction,
   KeyResultMessage,
+  MicCancelMessage,
   MicErrorMessage,
   MicPartialMessage,
   MicReadyMessage,
@@ -45,6 +46,10 @@ type MicState = {
   keyError: string | null;
   /** 正在等待回包的 requestId，用于丢弃过期/别的会话的结果。 */
   keyRequestId: string | null;
+  /** 服务端权威取消次数；MicButton 用它强制停掉本地采集。 */
+  cancelNonce: number;
+  /** 服务端取消后的短提示（电脑端取消 / 超时自动停止）。 */
+  cancelNotice: string | null;
   begin: (session: string) => void;
   markListening: () => void;
   markProcessing: () => void;
@@ -53,6 +58,8 @@ type MicState = {
   handleResult: (message: MicResultMessage) => void;
   handleState: (message: MicStateMessage) => void;
   handleError: (message: MicErrorMessage) => void;
+  /** 桌面端权威取消：不校验 session，必须停掉本地采集。 */
+  handleCancel: (message: MicCancelMessage) => void;
   fail: (message: string, code?: string) => void;
   cancel: () => void;
   reset: () => void;
@@ -162,6 +169,8 @@ export const useMicStore = create<MicState>((set, get) => ({
   result: null,
   error: null,
   failureCount: 0,
+  cancelNonce: 0,
+  cancelNotice: null,
   ...EMPTY_PARTIAL,
   ...EMPTY_KEY,
 
@@ -172,6 +181,7 @@ export const useMicStore = create<MicState>((set, get) => ({
       session,
       result: null,
       error: null,
+      cancelNotice: null,
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     });
@@ -262,6 +272,25 @@ export const useMicStore = create<MicState>((set, get) => ({
     get().fail(micErrorText(message.code), message.code);
   },
 
+  handleCancel: (message) => {
+    const wasActive =
+      get().phase === "arming" || get().phase === "listening" || get().session !== null;
+    clearTimers();
+    set((state) => ({
+      phase: "idle",
+      session: null,
+      result: null,
+      error: null,
+      cancelNotice:
+        message.reason === "timeout" ? MIC_COPY.recordingTimeout : MIC_COPY.cancelledByDesktop,
+      // 不校验 session：即使本地记录的会话与桌面 active 不一致，也必须停采集。
+      cancelNonce: state.cancelNonce + 1,
+      ...EMPTY_PARTIAL,
+      ...EMPTY_KEY,
+    }));
+    if (wasActive) petDispatch("MIC_CANCEL");
+  },
+
   fail: (message, code) => {
     clearTimers();
     const failureCount = get().failureCount + 1;
@@ -294,6 +323,7 @@ export const useMicStore = create<MicState>((set, get) => ({
       session: null,
       result: null,
       error: null,
+      cancelNotice: null,
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     });
@@ -307,6 +337,7 @@ export const useMicStore = create<MicState>((set, get) => ({
       session: null,
       result: null,
       error: null,
+      cancelNotice: null,
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     });
