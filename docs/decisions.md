@@ -587,3 +587,17 @@
 - 代价：App 多一次相机权限授权（只在用户主动点扫码时才申请）；包体 +43KB gzip 且懒加载；相机预览的帧率与弱光识别率必须真机验收；后续配对鉴权若给二维码加 token，解析逻辑需扩展（当前已忽略 query，不会直接坏）。
 - 规范：`app/src/mobile/features/connect/{scan-payload.ts,scan-camera.ts,components/scan-view.tsx}`、`connection-bar.tsx`、`app/src/mobile/{app.tsx,ui-store.ts}`、`app/src-tauri/src/lib.rs`、`scripts/patch-android-manifest.mjs`、`AGENTS.md`、`docs/setup.md`。
 - 真机验收（2026-11-04，荣耀 BKQ-AN10 / Android 17）暴露并修掉三个问题：① **首次打开扫码页必失败**——`video` 首次挂载时还没完成布局（0×0），`play()` 被拒，界面报「相机打不开」，第二次打开才正常；改为先等元素拿到非零尺寸再 `play()`，失败等一帧重试，`getUserMedia` 遇 `NotReadableError`/`AbortError` 也短暂等待重试（权限被拒不重试，避免反复弹框）。② **扫码页按返回会连带关掉聊天页**（一路退到宠物页）——根页面原先依赖 `pushBackHandler` 栈消费，实测扫码页的 handler 没生效；改为根页面的返回处理直接读 `scanOpen` 状态优先关闭扫码页，不再依赖注册时序，`ScanView` 里那段重复 handler 删除，并补了 App 层回归测试。③ 构建脚本的 pnpm shim 原本用 `mktemp` 随机目录，被 gradle 的 configuration cache 记住后，脚本退出目录即删除，下次复用缓存就找不到 pnpm 直接构建失败；改为固定路径 `app/.pnpm-shim`（已 gitignore）。核心链路复验：首次打开即有画面、对准二维码自动连接、按返回回到聊天页。
+
+## D75 · 桌面端启动提示辅助功能授权（2026-11-04）
+
+- 背景：辅助功能没开时，自动粘贴会退化成「只复制」，结果卡片也不会出现「回车 / 清空」——但原因完全不可见。相关开关藏在「设置 → 辅助功能」卡片里，用户要先知道去那儿才不会以为是功能坏了。2026-11-04 真机（桌面 realsense）复现：用户已在系统设置里打开 Sidekick 的辅助功能开关，功能仍不生效。
+- 决策：
+  - **启动即提示**：新增 `AccessibilityHint`，桌面端启动时查 `accessibility_info()`，未授权就在内容区顶部常驻一条提示（`role="status"`，不是模态弹窗），带「去开启 / 稍后」。
+  - **一键到开关页**：点「去开启」调 `accessibility_request()`（`application_is_trusted_with_prompt`），让系统把本程序登记进「辅助功能」列表并弹原生提示；用户确认后由 macOS 自己跳页。**不再自己拼 `x-apple.systempreferences:` URL 跳转**——实测旧格式落到「通用」页、新格式在 macOS 15 上无反应，系统自己跳才可靠。
+  - **授权后自动收起**：监听 `window.focus` 重新查状态，切回窗口时已授权就不渲染，不需要重启 App。
+  - **手机端同步指引**：`copiedAccessibility` 文案改成「已复制；电脑没开辅助功能，在电脑上点「去开启」就能自动输入。」，把用户引到电脑端的新入口。
+- 原因：TCC 是系统安全边界，**没有任何公开 API 能编程授予辅助功能**（能绕过就是漏洞）。所以目标不是「自动授权」，而是把操作压到最少并让原因可见。
+- 放弃：自拼 URL 深链（见上，不可靠）；自动点系统设置 UI（需要辅助功能权限，鸡生蛋）；`tccutil reset` 自动化（只能删不能授权）。
+- 代价：常驻一条提示条；「稍后」只对本次会话生效，下次启动仍会提醒（未授权状态下提醒是合理的）。
+- **已知限制（未解决）**：App 是 ad-hoc 签名（`Identifier=desktop-<hash>`、`TeamIdentifier=not set`），TCC 按 CDHash 记账，**每次重新打包桌面端旧授权就对新二进制失效**，表现为「系统设置里开关明明开着，功能仍然只复制」。排查确认：`codesign -dvv /Applications/Sidekick.app` 的 `CDHash` 与上次打包不同即是此因；`tccutil reset Accessibility dev.sidekick.app` 清掉旧条目后重新授权可以恢复。根治需要固定签名证书（让 TCC 按证书 + bundle id 记账而不是按内容哈希），或正式开发者签名 + 公证。
+- 规范：`app/src/desktop/features/settings/components/accessibility-hint.tsx`、`app/src/desktop/app.tsx`、`app/src/shared/lib/mic-status-copy.ts`。

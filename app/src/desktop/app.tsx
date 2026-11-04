@@ -5,6 +5,7 @@ import { ConnectionPanel } from "@/desktop/features/connect/components/connectio
 import { HookPanel } from "@/desktop/features/hook/components/hook-panel";
 import { MicStatusOverlay } from "@/desktop/features/mic-receiver/mic-status-overlay";
 import { ModelsPanel } from "@/desktop/features/models/models-panel";
+import { AccessibilityHint } from "@/desktop/features/settings/components/accessibility-hint";
 import { SettingsSheet } from "@/desktop/features/settings/components/settings-sheet";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import { ChatPanel } from "./features/chat/components/chat-panel";
@@ -52,6 +53,7 @@ export function DesktopApp() {
       />
 
       <section className="flex min-h-0 min-w-0 flex-col gap-6">
+        <AccessibilityHint />
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <nav
             aria-label="桌面视图"

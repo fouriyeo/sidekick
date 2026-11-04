@@ -7,7 +7,7 @@ export const MIC_STATUS_COPY = {
   insertFailed: "电脑端没能输入，再试一次？",
   empty: "没听清，靠近一点再说一次。",
   checkSettings: "检查一下连接和麦克风权限。",
-  copiedAccessibility: "已复制；在电脑设置里开启辅助功能可自动输入。",
+  copiedAccessibility: "已复制；电脑没开辅助功能，在电脑上点「去开启」就能自动输入。",
   copiedTargetChanged: "窗口变了，已复制到电脑。",
   copiedSecureInput: "当前是密码框，已复制。",
   copiedFallback: "已复制到电脑。",
