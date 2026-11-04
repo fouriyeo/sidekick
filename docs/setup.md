@@ -108,6 +108,13 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 ```
 
 生成的 Gradle 配置使用 `compileSdk = 37`，对应 SDK 包名 `platforms;android-37.0`。
+生成后必须跑一次补丁脚本，写入麦克风与局域网权限、请求局域网运行时授权、锁定竖屏：
+
+```sh
+node scripts/patch-android-manifest.mjs
+```
+
+`scripts/build-android.sh` 与 `scripts/package-android.sh` 已自动调用；直接跑 `pnpm tauri android build` 前别忘了。从 Android 16（API 36）起 App 访问局域网要 `ACCESS_LOCAL_NETWORK` 运行时授权，缺失时自动发现恒为 0 台、手动连接报超时（D72）。
 
 ## 故障排查
 
@@ -120,6 +127,7 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 | 服务端口被占用 | 日志会显示候选端口依次失败、最终监听的真实端口；桌面窗口显示的地址即为真实端口，无需手改 |
 | `adb pair` 报 `protocol fault` | 配对端口/码已失效；重开配对弹窗，用弹窗里的端口与最新码 |
 | `more than one device/emulator` | 断开 mDNS transport：`adb disconnect <服务名>` |
+| Android 16+ 手机连不上 / 自动发现 0 台，但手机 shell 里 `curl` 能通 | 缺 `ACCESS_LOCAL_NETWORK` 运行时权限：`adb shell appops get dev.sidekick.app ACCESS_LOCAL_NETWORK` 若为 `Uid mode: ignore` 即被拒；重跑 `scripts/build-android.sh` 装新包，并在 App 首次启动的系统弹窗里允许本地网络。`adb reverse tcp:47810 tcp:47810` 后连 `127.0.0.1:47810` 能通，可反证是权限而非网络（D72） |
 | Gradle 报缺少 android-37 / build-tools | `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"` |
 | APK 很大 | debug 版正常（含调试符号）；release 需签名，体积预计 10–20MB |
 | 首次构建很慢 | Gradle 首次下载依赖；`~/.gradle` 缓存后会明显加快 |

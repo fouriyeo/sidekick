@@ -37,6 +37,7 @@
 31. 麦克风会话稳定性 + 电脑端中断（2026-11-04，D70）：修复手机快速连按/启动中松手导致电脑端永久「正在听」——手机端启动串行化（`startingRef` + `lifecycleRef` token + ref 判手势 + window pointerup 兜底），松手/取消一定结束；服务端同端重复 start 以最新会话为准、每个会话 `maxMs+3s` 看门狗、`mic.stop` 严格 owner+session；新增 `mic.cancel` 协议，桌面浮层「倾听中」右侧常显「取消录音」，点击 1 秒内两端 idle，不转写/不插入/不写剪贴板；手机提示「电脑端已取消录音。」，看门狗提示「录音超时，已自动停止。」。
 32. 视觉系统方向 B「深潜声呐」+ 双主题（2026-11-04，D71）：`tokens.css` 重写为双主题深海语义色板（deep sea 自发光 / sea glass 海面雾光，全部 hex，默认深色）；新增主题运行时（`sidekick:theme`、`system|light|dark`、`index.html` 防闪脚本、`shared/lib/theme.ts` 的 `initTheme/useTheme/setThemePreference`、`data-theme` + `.dark` 双写、系统变化与 `storage` 监听、Sonner 跟随）与设置页「外观」三选一；桌面壳/连接声呐点/导航/聊天/剪贴板/AI 联动/模型/设置换皮，手机舞台保持深海并加 6.4s 背景声呐环；宠物复用现有 OpenPets 图集，不重绘/染色；`design-lab/` 评审稿收口；visual/ux/frontend-architecture/decisions/AGENTS 文档同步。
 
+33. 修复 Android 16+ 连不上电脑（2026-11-04，D72）：真机换成 Android 17 / SDK 37 后 App 一直「未连接」，手动连接报「连接超时」。根因是 `targetSdk >= 36` 时访问局域网需要 `ACCESS_LOCAL_NETWORK` 运行时权限且系统默认拒绝，把 UDP 广播与 TCP 连接一并拦在进程内（`appops` 显示 `Uid mode: ignore`，shell 的 `curl` 却能连通，极易误判成防火墙/企业网）。补丁脚本现在声明该权限并在 `MainActivity.kt` 请求授权；同时修掉构建脚本写死的 JDK/NDK 路径与 pnpm 版本校验。真机验证：授权后局域网直连成功、重启 8 秒内自动重连；但该办公网仍抑制 UDP 广播，自动发现依旧为 0 台，只能手动填地址。
 
 ## 已验证（有实际证据）
 
@@ -93,6 +94,7 @@
 | 旧 models 目录 | `~/Library/Application Support/Sidekick/models/` 可能仍有旧文件，不迁移、不参与运行，可手动删除 |
 | 用量为估算 | 金额按北京/新加坡公开价估算，未对账百炼账单；`priceNote` 已说明 |
 | 本地 Key 明文 | API Key 存 `asr.json`（0600），只靠文件权限保护；不要分享/提交该文件；旧钥匙串 Key 需重新粘贴一次 |
+| 企业网抑制 UDP 广播 | `example-corp` 这类企业 WiFi 不转发终端间的 UDP 广播（2026-11-04 实测：`47820` 监听器 0 包到达）。自动发现因此恒为 0 台，只能手动输入 `IP:端口`；地址会被记住并用于自动重连，但电脑 IP 变化后需重填。与 `ACCESS_LOCAL_NETWORK` 权限是两个独立问题，修权限不会让广播恢复 |
 | 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | AI 联动未真机验证 | 本地 DSH 脚本注入、首次重启、四态动作、三音效、杀 DSH/重连待真机回归；P0 只聚合顶层会话，子代理可能提前完成 |

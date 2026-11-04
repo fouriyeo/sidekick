@@ -549,3 +549,14 @@
 - 放弃：只做深色（用户明确要浅色）；把深色直接反色当浅色（浅色需重新设计光源与表面）；为浅色主题重绘浅底鲸鱼/加描边（资产与授权成本高）；把鲸蓝写进 `--accent`（破坏 shadcn 语义）；把 `--border` 整体提到 3:1（仪器感变工程图）；继续用 `oklch`/`color-mix` 定义令牌（真机不支持）。
 - 代价：两套主题每个新组件都要双主题验收，对比度与视觉层级维护成本约翻倍；浅色主题下宠物舞台仍是深色舷窗，页面与舞台有有意的明度断层；`design-lab/` 评审稿删除后不可恢复（只留结论与令牌）；以后改色值必须同时更新两套并重跑对比度检查。
 - 规范：`app/index.html`、`app/src/shared/styles/{tokens.css,globals.css}`、`app/src/shared/lib/{theme.ts,local-storage.ts}`、`app/src/shared/ui/{theme-options.tsx,signal-dot.tsx,sonner.tsx}`、`app/src/desktop/features/settings/components/settings-sheet.tsx`、`app/src/mobile/features/pet/pet-settings.tsx`、`docs/standards/{visual,ux}.md`、`docs/frontend-architecture.md` §6、`docs/status.md`、`AGENTS.md` §2/§3/§8/§10。
+
+## D72 · 补上 Android 16+ 的局域网访问权限（2026-11-04）
+
+- 背景：真机换成荣耀 BKQ-AN10（Android 17 / SDK 37）后手机连不上电脑——宠物页一直「未连接」，聊天页显示「没找到电脑」，手动连接报「连接超时，确认电脑端已打开」。同一台手机在 shell 里 `curl http://<电脑IP>:47810/` 返回 200、WebSocket 升级拿到 101 并收到服务端推送，说明网络与服务端都正常；桌面端在 App 重启后也收不到任何 UDP 探测包。
+- 根因：Android 16（API 36）起访问局域网设备需要 `android.permission.ACCESS_LOCAL_NETWORK`（dangerous 运行时权限），`targetSdk >= 36` 的应用默认被拒。`adb shell appops get dev.sidekick.app ACCESS_LOCAL_NETWORK` 返回 `Uid mode: ignore`，且 `rejectTime` 随每次连接尝试更新：系统把 App 的 UDP 广播与 TCP 连接一并拦掉，在 Rust 侧表现为 `CONNECT_TIMEOUT`（4 秒）超时，而 shell 进程（curl）不受该限制，因此极易误判成防火墙或企业网客户端隔离。
+- 决策：`scripts/patch-android-manifest.mjs` 在声明麦克风权限与竖屏方向之外，追加声明 `android.permission.ACCESS_LOCAL_NETWORK`，并向 `MainActivity.kt` 注入 `requestLocalNetworkAccess()`——`SDK_INT >= 36` 且未授权时请求该权限，Android 15 及更早版本直接返回。同时修掉构建脚本里写死的 JDK / NDK 路径（分别改为 `java_home -v 21` 探测与取 SDK 下最新 NDK），并用 corepack 的 pnpm shim 兜住 `beforeBuildCommand` 触发的 `packageManager` 版本校验。
+- 原因：这是系统新规导致的确定性失败，与网络环境无关；只依赖「手动输入地址」同样无效——手动连接也会被拦，必须声明并请求权限。
+- 放弃：只声明不请求（dangerous 权限不请求等于拒绝）；下调 `targetSdk` 绕过（会放弃 Android 16+ 的其它必要行为）；用 `adb reverse` 把连接改到 localhost（依赖调试通道，只在排障时用于验证根因，不是产品形态）。
+- 代价：Android 16+ 首次启动多一次系统权限弹窗，拒绝后局域网功能不可用且界面仍只提示「连接超时」；`gen/` 不入库，每次 `pnpm tauri android init` 后必须重新执行补丁脚本（构建脚本已自动调用）。
+- 规范：`scripts/patch-android-manifest.mjs`、`scripts/build-android.sh`、`scripts/package-android.sh`、`AGENTS.md` §8、`docs/setup.md`。
+- 验证（2026-11-04 真机，荣耀 BKQ-AN10 / Android 17）：装新包后首次启动弹出本地网络授权，允许后 `appops` 变为 `granted=true`；App 手动填 `IP:端口` 走真实局域网 IP 建立连接（服务端 `lsof` 可见 `30.166.162.215:47810->手机IP` 的 ESTABLISHED），不再是 4 秒超时；杀掉重启后 8 秒内用记住的地址自动重连成功。**但同一台手机在该办公网上仍然发不出 UDP 广播**（`47820` 监听器 0 包到达，与权限无关），所以自动发现依旧为 0 台、只能靠手动地址兜底——这两个问题是独立的，修权限不会让广播恢复。
