@@ -11,6 +11,7 @@ import {
   parseMessage,
   parseMicMessage,
   parseStatusMessage,
+  parseSystemClients,
 } from "./messages";
 
 describe("parseMessage", () => {
@@ -360,5 +361,30 @@ describe("key.result", () => {
     expect(parseKeyResult(JSON.stringify({ ...base, requestId: "" }))).toBeNull();
     expect(parseKeyResult(JSON.stringify({ ...base, ok: "yes" }))).toBeNull();
     expect(parseKeyResult(JSON.stringify({ ...base, v: 2 }))).toBeNull();
+  });
+});
+
+describe("system clients", () => {
+  it("parses optional clients count without touching text", () => {
+    expect(
+      parseSystemClients('{"type":"system","text":"客户端已连接，当前 2 个","clients":2}'),
+    ).toBe(2);
+    expect(parseSystemClients('{"type":"system","text":"客户端断开，当前 0 个","clients":0}')).toBe(
+      0,
+    );
+  });
+
+  it("returns null for old servers or malformed counts", () => {
+    expect(parseSystemClients('{"type":"system","text":"客户端已连接"}')).toBeNull();
+    expect(parseSystemClients('{"type":"system","text":"x","clients":-1}')).toBeNull();
+    expect(parseSystemClients('{"type":"system","text":"x","clients":1.5}')).toBeNull();
+    expect(parseSystemClients('{"type":"chat","from":"desktop","text":"x","ts":1}')).toBeNull();
+    expect(parseSystemClients("not-json")).toBeNull();
+  });
+
+  it("still maps system messages to chat text", () => {
+    expect(
+      parseMessage('{"type":"system","text":"客户端已连接，当前 2 个","clients":2}', "desktop"),
+    ).toEqual({ kind: "system", text: "客户端已连接，当前 2 个" });
   });
 });

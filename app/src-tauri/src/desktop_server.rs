@@ -292,7 +292,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
     let _ = state
         .tx
-        .send(system_message(format!("客户端已连接，当前 {count} 个")));
+        .send(system_message_with_clients(
+            format!("客户端已连接，当前 {count} 个"),
+            count,
+        ));
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(text) = rx.recv().await {
@@ -360,7 +363,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     println!("[ws] client disconnected ({count} online)");
     let _ = state
         .tx
-        .send(system_message(format!("客户端断开，当前 {count} 个")));
+        .send(system_message_with_clients(
+            format!("客户端断开，当前 {count} 个"),
+            count,
+        ));
 }
 
 fn message_type(text: &str) -> Option<String> {
@@ -1028,6 +1034,11 @@ fn system_message(text: String) -> String {
     serde_json::json!({ "type": "system", "text": text }).to_string()
 }
 
+/// 连接/断开用：附带在线客户端数（可选字段，旧客户端忽略）。
+fn system_message_with_clients(text: String, clients: usize) -> String {
+    serde_json::json!({ "type": "system", "text": text, "clients": clients }).to_string()
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1462,5 +1473,20 @@ mod tests {
         assert_eq!(payload["session"], "session-1");
         assert_eq!(payload["reason"], "timeout");
         assert!(payload["ts"].as_u64().unwrap() > 0);
+    }
+}
+
+#[cfg(test)]
+mod clients_message_tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn client_count_system_message_has_structured_clients() {
+        let raw = system_message_with_clients("客户端已连接，当前 2 个".to_string(), 2);
+        let value: Value = serde_json::from_str(&raw).expect("应是合法 JSON");
+        assert_eq!(value["type"], "system");
+        assert_eq!(value["text"], "客户端已连接，当前 2 个");
+        assert_eq!(value["clients"], 2);
     }
 }

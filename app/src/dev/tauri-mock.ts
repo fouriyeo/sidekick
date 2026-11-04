@@ -702,6 +702,17 @@ export function installTauriMock(): void {
     value: internals,
   });
 
+  // Tauri 运行时会把事件插件的反注册函数挂在这里；浏览器 mock 需要补上，
+  // 否则组件卸载时 @tauri-apps/api 的 unlisten 会读 undefined。
+  Object.defineProperty(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
+    configurable: true,
+    value: {
+      unregisterListener() {
+        /* mock 事件按 event 名清理，plugin:event|unlisten 已处理 */
+      },
+    },
+  });
+
   // 浏览器里没有硬件返回键：开发时按 Esc 模拟 Android 返回键。
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;

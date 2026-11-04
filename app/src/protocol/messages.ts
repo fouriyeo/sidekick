@@ -10,6 +10,11 @@ export type ChatMessage = {
 export type SystemMessage = {
   type: "system";
   text: string;
+  /**
+   * 当前在线客户端数（可选，只增字段）。桌面服务端在连接/断开时广播；
+   * 旧客户端忽略，旧服务端不发送。含桌面本机窗口与网页预览客户端。
+   */
+  clients?: number;
 };
 
 /** AI 联动状态：宠物四态的协议层名称（idle 对应产品里的「静态」）。 */
@@ -292,7 +297,14 @@ export function isChatMessage(value: unknown): value is ChatMessage {
 export function isSystemMessage(value: unknown): value is SystemMessage {
   if (typeof value !== "object" || value === null) return false;
   const message = value as Record<string, unknown>;
-  return message.type === "system" && typeof message.text === "string";
+  return (
+    message.type === "system" &&
+    typeof message.text === "string" &&
+    (message.clients === undefined ||
+      (typeof message.clients === "number" &&
+        Number.isInteger(message.clients) &&
+        message.clients >= 0))
+  );
 }
 
 export function isStatusState(value: unknown): value is StatusState {
@@ -472,6 +484,21 @@ export function parseKeyResult(raw: string): KeyResultMessage | null {
     return null;
   }
   return isKeyResultMessage(value) ? value : null;
+}
+
+/**
+ * 解析系统消息里的在线客户端数；没有该字段（旧服务端）或非法值返回 null。
+ * 只做数值解析，不读取/展示任何内容。
+ */
+export function parseSystemClients(raw: string): number | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isSystemMessage(value) || value.clients === undefined) return null;
+  return value.clients;
 }
 
 export function isConnEvent(value: unknown): value is ConnEvent {
