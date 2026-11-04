@@ -189,6 +189,15 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               <li>电脑端 Sidekick 已打开</li>
               <li>允许防火墙接收 Sidekick 的连接</li>
             </ul>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 h-11 w-full rounded-[10px] text-xs"
+              onClick={() => setManualOpen(true)}
+            >
+              手动输入电脑地址
+            </Button>
           </div>
         ) : null}
 
@@ -267,6 +276,7 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
+              autoFocus
               className="h-11 flex-1 rounded-[12px] font-mono text-[15px]"
             />
             <Button type="submit" size="lg" className="h-11 rounded-[12px] px-4">

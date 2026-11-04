@@ -355,6 +355,19 @@ describe("MobileApp", () => {
     expect(useConnectionStore.getState().status).toBe("connecting");
   });
 
+  it("空状态里点「手动输入电脑地址」直接展开地址输入框", async () => {
+    tauri.discoverServers.mockResolvedValue([]);
+    await renderApp();
+    openChat();
+
+    expect(await screen.findByText("没找到电脑")).toBeInTheDocument();
+    expect(screen.queryByLabelText("电脑地址")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "手动输入电脑地址" }));
+
+    expect(screen.getByLabelText("电脑地址")).toBeInTheDocument();
+  });
+
   it("searches when the chat opens before any search has finished", async () => {
     await renderApp();
     const callsBefore = tauri.discoverServers.mock.calls.length;
