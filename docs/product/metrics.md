@@ -2,7 +2,7 @@
 doc: product/metrics
 title: 指标与埋点
 status: active
-updated: 2026-11-04
+updated: 2026-11-05
 load: on-demand
 ---
 
@@ -49,9 +49,7 @@ load: on-demand
 | 事件 | 触发 | 关键属性 | 用途 |
 | --- | --- | --- | --- |
 | `pet_open` | 宠物页进入前台 | `mood`, `energy_bucket` | 使用频率 |
-| `pet_name_set` | 首次命名/改名 | `source`（default/custom），不记录名字 | 命名流程完成率 |
 | `pet_bubble` | 气泡展示/关闭 | `trigger`, `copy_id`, `dismissed` | 文案效果、打扰度 |
-| `pet_mic_react` | 麦克风状态引发宠物反应 | `state` | 联动是否自然 |
 | `pet_reset` | 重置宠物 | 无 | 重置使用 |
 | `mic_start` | 开始录音 | `source`（button/lock） | 使用场景 |
 | `mic_stop` | 停止录音 | `reason`（release/cancel/timeout/background/disconnect）, `duration_bucket` | 取消原因 |
@@ -62,7 +60,7 @@ load: on-demand
 
 ## 5. 隐私与保留
 
-- 不记录原始音频、完整转写文本、宠物名字、剪贴板内容、目标应用名称。
+- 不记录原始音频、完整转写文本、剪贴板内容、目标应用名称。
 - 目标应用只记类别（editor/terminal/browser/unknown），不记具体应用。
 - 事件默认仅存本机，保留 30 天；设置页提供“清除本地统计”。
 - 导出/上报必须显式征得同意；本期默认不上报。

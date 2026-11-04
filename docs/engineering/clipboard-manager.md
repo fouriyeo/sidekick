@@ -2,7 +2,7 @@
 doc: engineering/clipboard-manager
 title: 桌面剪贴板管理
 status: active
-updated: 2026-11-02
+updated: 2026-11-05
 load: on-demand
 owner: engineering
 ---
@@ -82,7 +82,7 @@ owner: engineering
 | `clipboard_set_enabled(enabled)` | 暂停/继续记录 |
 
 - 每次变更广播 `clipboard-changed` 快照；桌面 UI 订阅后刷新。
-- 桌面右侧「聊天 / 剪贴板」切换；剪贴板页含搜索、暂停、清空、条目预览与操作。
+- 桌面「内容」页（剪贴板唯一归属，D79）：含搜索、暂停、清空、条目预览与操作。
 - 列表只截两行；每条右侧「查看详情（眼睛）」打开弹层，展示完整文本（可滚动、可选中）、来源类型、字数/行数与最近使用时间，并支持复制、置顶、删除。
 - 设置页显示记录开关、条数、清空入口和隐私说明。
 
@@ -108,5 +108,5 @@ owner: engineering
 ## 7. 已知限制
 
 - 仅在桌面应用运行时监听；应用退出期间不记录。
-- 没有全局快捷键，需要打开 Sidekick 窗口切到剪贴板页。
+- 没有全局快捷键，需要打开 Sidekick 窗口切到「内容」页。
 - 不保存图片/文件；终端里的多行文本会按原样保存。

@@ -1,7 +1,7 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统改为「深海声呐」双主题（D71），同日 D76 改为默认跟随系统、宠物舞台随主题；主题运行时见 §6。
-> 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-05 按 D79 完成「指挥舱 A」两端壳（桌面 5 视图 / 手机 3 档；608 tests 全绿，真机待回归），主题运行时见 §6。
+> 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)；壳与导航规则见 [prd/shell/](./prd/shell/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
 > 依赖准入与许可证细则见 [dependency-policy.md](./dependency-policy.md)。
@@ -9,7 +9,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示，聊天降级为辅助视图。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)。
+- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-05 起按 D79 采用「指挥舱 A」壳：桌面 5 视图（总览/会话/内容/系统/设置）、手机 3 档（宠物/动态/更多），聊天降级为「系统 › 消息」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -41,29 +41,40 @@ app/
 ├─ src/
 │  ├─ main.tsx                # app_role → 动态 import 对应 entry
 │  ├─ entries/
-│  │  ├─ desktop.tsx          # 桌面壳：窗口布局、侧栏、聊天
-│  │  └─ mobile.tsx           # 手机壳：安全区、底部输入、宠物全屏
-│  ├─ desktop/                # 桌面专属（固定窗口布局）
+│  │  ├─ desktop.tsx          # 挂载桌面指挥舱壳（`desktop/app.tsx`）
+│  │  └─ mobile.tsx           # 挂载手机 3 档壳（`mobile/app.tsx`）
+│  ├─ desktop/                # 桌面专属（指挥舱壳，固定窗口布局）
+│  │  ├─ app.tsx              # 桌面根：外壳 + 视图切换 + 全局层（辅助功能条/麦克风浮层）
+│  │  ├─ shell/               # icon-rail / global-status-bar / page-header / page-shell / page-chips / card / system-segments
+│  │  ├─ pages/               # overview / sessions / content / system / settings 五个一级页
+│  │  ├─ features/            # 各页 Section（不自带页头）：connection / chat / clipboard / hook / models / settings / mic-receiver
+│  │  ├─ lib/                 # desktop-nav、status/clients/activity/voice store、activity-events、ws-client
+│  │  └─ components/          # 跨页小组件（EmptyState 等）
+│  ├─ mobile/                 # 手机专属（只做竖屏）
+│  │  ├─ app.tsx              # 手机根：3 档壳 + 二级页 + 返回栈
+│  │  ├─ shell/               # page / page-header / pet-top-bar / tab-bar
 │  │  ├─ features/
-│  │  │  ├─ connect/          # 服务地址、二维码、连接状态
-│  │  │  ├─ chat/             # 消息列表、输入、系统消息
-│  │  │  ├─ clipboard/        # 剪贴板历史：搜索、复制、置顶、清空
-│  │  │  ├─ mic-receiver/     # 麦克风状态浮层、结果提示
-│  │  │  ├─ models/           # 模型页：百炼配置 + 用量统计
-│  │  │  └─ settings/         # 自动输入权限、剪贴板开关
-│  │  └─ components/
-│  ├─ mobile/                 # 手机专属（不强制横竖屏）
-│  │  ├─ features/
-│  │  │  ├─ connect/          # 地址输入、连接状态
-│  │  │  ├─ pet/              # 宠物舞台、图集播放、状态映射
-│  │  │  ├─ mic/              # 按住说话、波形、权限、结果
-│  │  │  └─ settings/         # 设置、配对、关于
-│  │  └─ components/
+│  │  │  ├─ pet/              # 首屏：气泡、舞台、现在行、最近 1 条、pet-name
+│  │  │  ├─ stream/           # 动态：会话列表 + 最近发生（activity-store 内存）
+│  │  │  ├─ asking/           # 等你决定页
+│  │  │  ├─ first-use/        # 首用清单（4 步；本地只验前两步）
+│  │  │  ├─ sessions/         # 会话行渲染、清除标记与 D78 工具动作
+│  │  │  ├─ mic/              # 按住说话、胶囊、权限、结果
+│  │  │  ├─ connect/          # 连接页、扫码、重连（connection-view）
+│  │  │  ├─ chat/             # 消息页（通道调试）
+│  │  │  └─ settings/         # 更多：设置整页（页面化）
+│  │  ├─ ui-store.ts          # MobileView 枚举 + scanOpen + offlineReturnView
+│  │  └─ styles/
 │  ├─ shared/
-│  │  ├─ ui/                  # shadcn 复制组件（button/dialog/sheet/...）
+│  │  ├─ ui/                  # shadcn 复制组件 + signal-bars / status-chip / theme-options
 │  │  ├─ lib/
 │  │  │  ├─ tauri.ts          # invoke/listen 唯一出口
 │  │  │  ├─ theme.ts          # 主题偏好：initTheme/useTheme/setThemePreference
+│  │  │  ├─ status.ts         # AI 四态文案/优先级（两端共用）
+│  │  │  ├─ sessions.ts       # 会话行派生（D78 工具动作白名单）
+│  │  │  ├─ activity.ts       # 最近发生的类型与派生
+│  │  │  ├─ activity-store.ts # 内存 store 工厂（cap 20，不落盘）
+│  │  │  ├─ mic-status-copy.ts # 麦克风状态文案（两端共用）
 │  │  │  ├─ local-storage.ts  # 安全 localStorage 读写（含 sidekick:theme）
 │  │  │  ├─ utils.ts          # cn() 等
 │  │  │  └─ format.ts         # Intl 等纯函数
@@ -158,6 +169,10 @@ UI 事件
 - 桌面 UI 直接连本机 `ws://127.0.0.1:<server_info.port>/ws`（端口由服务端动态分配）；手机走 Rust 传输，并先用 `discover_servers` 发现电脑。这个差异保留，未来换 BLE 只改 Rust/`tauri.ts`，UI 不变。
 - 连接状态收敛为一个状态机：`disconnected → connecting → connected → error`；所有界面读同一个 store，不各自维护 `online` 布尔值。
 - 事件订阅在 entry 挂载时注册一次，卸载时取消；不要在每次渲染里 `listen`。
+- 协议增量（D79）：`system` 消息增加可选 `clients`（当前在线客户端数，含桌面本机窗口与网页预览），桌面 `desktop-clients-store` 展示 `max(0, clients - 1)` 台设备；旧服务端不发送、旧客户端忽略。`status.sessionList` 的 `tool` 仍按 D78 双端白名单，展示文案集中在 `shared/lib/sessions.ts`。
+- 桌面本地动作：会话页 / 总览的「在 DSH 打开」走本地 WS 发 `focus.request` 并读 `focus.result`，不新增协议、不接受手机传来的应用路径。
+- 数据 store 只存协议真实字段：AI 状态 / 会话列表 / 在线数 / 最近发生都来自事件；「最近发生」仅内存（cap 20），重启清空，不落盘。
+- **浏览器 dev mock 没有本地 WS**：`?role=desktop` 下「在 DSH 打开」（本地 WS 发 `focus.request`）不会生效，必须在 `pnpm tauri dev` / 真机验证；dev mock 已补 `__TAURI_EVENT_PLUGIN_INTERNALS__` 供新增订阅使用。
 
 ## 6. 样式规范
 
@@ -187,7 +202,7 @@ UI 事件
    - `applyTheme` 负责双写 `data-theme` + `.dark` + `color-scheme`，三者不能只改一个。
 3. 跟随系统与多窗口同步：偏好为 `system` 时监听 `matchMedia("(prefers-color-scheme: light)")` 的 `change`；任意窗口改偏好通过 `storage` 事件同步到其它窗口。
 4. Sonner 跟随主题：`shared/ui/sonner.tsx` 用 `useTheme().resolved` 作为 `<Sonner theme={...}>`，不写死 dark。
-5. 设置入口：桌面设置 Sheet 与手机宠物设置共用 `shared/ui/theme-options.tsx`（跟随系统 / 浅色 / 深色，`aria-pressed`）；默认跟随系统，宠物舞台的 `--pet-*` 也一起跟随（D76）。
+5. 设置入口：桌面「设置 → 外观」与手机「更多 → 外观」共用 `shared/ui/theme-options.tsx`（跟随系统 / 浅色 / 深色，`aria-pressed`）；默认跟随系统，宠物舞台的 `--pet-*` 也一起跟随（D76）。
 
 **令牌示例**
 
@@ -321,14 +336,19 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 
 ## 9. 状态管理
 
-- Zustand 5；按 feature 拆 store：`useConnectionStore`、`useChatStore`、`usePetStore`、`useSettingsStore`、`useUiStore`。
+- Zustand 5；按 feature 拆 store：`useConnectionStore`、`useChatStore`、`usePetStore`、`useSettingsStore`、`useUiStore`（桌面另有 `desktop/lib/*-store`）。
 - store 只存“真状态”，派生值用 selector 计算；不存重复数据。
 - 连接状态是唯一事实源；聊天/宠物界面只读它，不各自维护 `online`。
 - 本地持久化：服务器地址用 localStorage；宠物存档用 plugin-store（adapter 隔离）；聊天记录暂不落盘。
 - 不引全局事件总线；Tauri 事件在 `shared/lib/tauri.ts` 里转成 store action。
 - 组件局部 UI 状态（展开/收起、输入草稿）留在组件内，不进全局 store。
-- 视图切换用 `useUiStore` 的 `view`（`chat | pet`）与 `settingsOpen`，不进 URL、不引路由。
-- Android 返回键统一从 `shared/lib/tauri.ts` 的 `subscribeBackButton` 进入（App 启动注册一次）；设置页、聊天页往 `mobile/system-back.ts` 的返回栈压处理函数，根页面兜底「再按一次退出」（2 秒窗口，之后调 `exitApp`）。规则见 [standards/ux.md](./standards/ux.md) §4.1。
+**壳与视图（D79）**
+
+- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | sessions | content | system | settings`、`SystemSection = connection | voice | hook | chat`、导航项与 ⌘1–⌘5；壳只维护「当前视图 + 系统分段」，不进 URL、不引路由。
+- 手机：`mobile/ui-store.ts` 的 `MobileView = pet | stream | settings | chat | asking | offline` + `scanOpen`；根页面按 view 渲染 3 档与二级页，返回栈在 `mobile/system-back.ts`。
+- 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopActivityStore`（最近事件）、`useDesktopVoiceStore`（最近一次语音）、`desktop-activity-events.ts`（事件→最近发生）；手机 `useMobileActivityStore`（动态页「最近发生」，cap 20）、`session-store`（清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）。
+- `status` 解析集中在数据 store；D78 的工具动作文案由 `shared/lib/sessions.ts` 统一派生，桌面与手机共用，不各写一套映射。
+- Android 返回键统一从 `shared/lib/tauri.ts` 的 `subscribeBackButton` 进入（App 启动注册一次）；「更多」页往 `mobile/system-back.ts` 的返回栈压处理函数，其它二级页由 `MobileApp` 按视图层级处理，根页面兜底「再按一次退出」（2 秒窗口，之后调 `exitApp`）。规则见 [standards/ux.md](./standards/ux.md) §4.1。
 
 ## 10. 质量与测试
 
@@ -385,7 +405,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 ## 13. 迁移计划
 
-当前进度（2026-10-31）：Phase 1 已完成。React 双 entry、桌面/手机连接与聊天 1:1 迁移、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；旧 `main.ts` / `styles.css` 已删除，真机双向收发通过。宠物 P0 已实现（OpenPets schema 2 帧动画图集 + poster 降级；真机部分未验证）。
+当前进度（2026-11-05）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动已落地。2026-11-05 按 D79 完成「指挥舱 A」：桌面 5 视图壳（状态条 / 导航 / 页头 / 总览 / 会话 / 系统 4 段 / 设置 / 麦克风浮层 / 辅助功能提示条）与手机 3 档壳（顶部条 / 宠物 / 动态 / 更多 / 二级页 / 首用清单 / 返回层级）；共享底座（`shared/lib/status.ts`、`shared/lib/sessions.ts`、`shared/ui/signal-bars.tsx`、`status-chip.tsx`）与协议可选 `clients` 字段先行落地；全仓 608 tests / tsc / lint 全绿，浏览器 QA 15 屏无 console error，真机待回归。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
@@ -407,6 +427,9 @@ adb shell dumpsys package com.android.webview | grep versionName
 - [ ] 桌面 `pnpm tauri dev` 正常启动，`[server] listening` 出现
 - [ ] 安卓 `scripts/build-android.sh && scripts/install-android.sh` 成功
 - [ ] 手机打开 App 自动发现并连接电脑，状态为「已连接」；无发现时可手动输入地址兜底
+- [ ] 桌面指挥舱壳：默认总览、状态条三段可点、⌘1–⌘5、辅助功能提示条外壳级、麦克风浮层全局
+- [ ] 手机 3 档壳：默认宠物、顶部条三段可点、底部 3 档切换、二级页返回层级正确、录音中禁切页
+- [ ] 状态语言两端同词（连接 7 / AI 4 / 麦克风 9），琥珀只给「等你决定」，会话工作行显示 D78 工具动作
 - [ ] 双向聊天与现状一致，气泡方向正确
 - [ ] 构建产物中两个 entry 分 chunk，运行时只加载对应角色的一份
 - [ ] 宠物情绪状态切换与 [pet PRD](./prd/pet/PRD.md) 一致；协议 status 接入后另测

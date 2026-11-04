@@ -2,7 +2,7 @@
 doc: engineering/dsh-hook
 title: DSH Hook 技术方案
 status: active
-updated: 2026-11-04
+updated: 2026-11-05
 load: on-demand
 owner: engineering
 related:
@@ -39,10 +39,11 @@ DSH session/event
 | `app/src-tauri/src/mobile_client.rs` | `send_status_request` 命令 |
 | `app/src/protocol/messages.ts` | `StatusMessage` / `isStatusMessage` / `parseStatusMessage` |
 | `app/src/shared/lib/tauri.ts` | `dsh_hook_*` / `send_status_request` 命令与 `dsh-hook-status` 事件 |
-| `app/src/desktop/features/hook/` | 桌面 AI 联动页与 store |
+| `app/src/desktop/features/hook/` | 桌面系统 › 联动段与 store |
 | `app/src/mobile/features/pet/ai-status.ts` | 手机 AI 状态、完成定时器、优先级 |
 | `app/src/mobile/features/sessions/session-store.ts` | 会话列表、排序、清除标记、focus 结果 |
-| `app/src/mobile/features/sessions/session-panel.tsx` | 宠物页上方会话面板（收起 1 条 / 展开 5 条） |
+| `app/src/mobile/features/sessions/session-row.tsx` | 手机会话行（状态/工具动作/清除标记，宠物页与动态页共用） |
+| `app/src/mobile/features/stream/stream-page.tsx` | 手机「动态」页：会话列表（固定最多 5 行）+ 最近发生 |
 | `app/src/mobile/features/sessions/session-storage.ts` | 本地清除标记（`sidekick-sessions.json`，只存 id + 时间） |
 | `app/src-tauri/src/app_focus.rs` | 手机 focus 请求 → 激活/启动 DSH（macOS `open -a`） |
 | `app/src/mobile/features/pet/sound.ts` | Web Audio 三音效 |
@@ -85,7 +86,7 @@ DSH session/event
 
 - 文件：`sidekick-hook.mjs`；纯 ESM，无外部 import。
 - 导出：`export const name = "sidekick-hook"`、`export function apply(ctx)`。
-- 协议版本：`PLUGIN_VERSION = 3`（v2 增加 `sessionList`，v3 增加会话当前工具类别）；随 `hello` / `state` 上报，桌面 AI 联动页的「插件 v3」由该值动态渲染，页面代码不用改。
+- 协议版本：`PLUGIN_VERSION = 3`（v2 增加 `sessionList`，v3 增加会话当前工具类别）；随 `hello` / `state` 上报，桌面系统 › 联动页的「插件 v3」由该值动态渲染，页面代码不用改。
 - 监听：`const root = ctx.root ?? ctx; root.on("session/event", handler, { global: true })`、`root.on("session/disposed", ...)`；`ctx.effect` 负责清理 interval/listener。
 - 配置：`<DSH_HOME>/sidekick/config.json`，每秒读一次（缓存 mtime）：
   ```json
@@ -191,14 +192,14 @@ DSH session/event
 - 协议解析：`parseStatusMessage(raw)`；在 `subscribeChat` 中先于 `parseMessage`，避免进入聊天。
 - `ai-status.ts`：`AiState`、`AiStatus`、`reduceAiStatus`、`displayStateOf`。
   - completed：`remainingMs ?? 3000`；到点回 `resume ?? idle`；新状态取消旧定时器；超过 `remainingMs` 的旧 completed 忽略。
-  - asking 持久；working 覆盖 sleep；away/celebrating（命名庆祝）优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
+  - asking 持久；working 覆盖 sleep；away 优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
 - `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
 - `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音。
 - `pet-fallback.tsx` / `pet.module.css`：`data-ai-state`；短爪层 + 道具层；四套 SVG 表情；只 transform/opacity。
 - `pet-status-caption.tsx`：气泡位；working 5s、asking 持续、completed 3s；AI 状态优先。
 - `app.tsx`：上线/回前台 `sendStatusRequest()`；状态不追加到聊天。
 - 旧存档 schema 不变；AI 状态只存内存。
-- 会话面板：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；首次快照不自动展开，新 asking 才展开。工作中行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。
+- 会话列表：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；完整列表在「动态」页固定最多 5 行（无展开/收起、无自动展开），宠物页只显示最近 1 条（asking 优先，点按直接 focus）。工作中行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。
 - 清除标记存 `sidekick-sessions.json`（只存 id/at/through，7 天 TTL、最多 200 条），不存标题/列表；有更新事件自动解除。
 - focus：手机生成 requestId 发 `focus.request`，3s 超时提示；`focus.result` 只处理匹配 requestId 的结果。
 
@@ -240,7 +241,7 @@ DSH session/event
 - Rust：`cargo test --lib`（status 解析/token/body/timer/patch/端口/profile/工具白名单折叠）。
 - 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流、工具类别归一）。
 - 协议：`pnpm exec vitest run src/protocol`。
-- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/面板/工作行工具动作）。
+- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/动态页列表/最近 1 条/工作行工具动作）。
 - 桌面：`pnpm exec vitest run src/desktop/features/hook`。
 - 全量：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`；`cargo test`；`node scripts/check-docs.mjs`；`node scripts/check-boundaries.mjs`。
 - 真机：安装/重启/四态/声音/杀 DSH/重连/录音/夜间/减少动效。

@@ -2,7 +2,7 @@
 doc: engineering/pet-runtime
 title: 宠物运行时方案
 status: draft
-updated: 2026-11-04
+updated: 2026-11-05
 load: on-demand
 owner: engineering
 ---
@@ -27,14 +27,12 @@ app/src/mobile/features/pet/
 ├─ persistence.ts         # 存档 schema、迁移与 PetStorage 接口
 ├─ tauri-pet-storage.ts   # plugin-store adapter
 ├─ pet-store.ts           # Zustand store 与副作用
-├─ copy.ts                # 文案库（copy_id）
-├─ posture.ts             # 方向→姿态映射与手动覆盖
-├─ use-orientation.ts     # matchMedia 方向检测 + resize 兜底
-├─ pet-settings.tsx       # 设置页（姿态/震动/减少动效/常亮/变暗/重置）
+├─ copy.ts                # 文案库（copy_id，无用户自定义名字）
+├─ pet-settings.tsx       # 设置页（反馈/外观/显示/重置/关于）
 ├─ haptics.ts             # 触感语义 → 原生 haptic 命令（浏览器回退 navigator.vibrate）
 ├─ use-keep-awake.ts      # 宠物页常亮（含最长时长与到点释放）
 ├─ pet-bubble.tsx         # 气泡
-└─ pet-hearts.tsx         # 爱心粒子
+└─ pet-status-caption.tsx # AI 状态文案卡
 ```
 
 - 只允许 `mobile/entries` 引用；桌面不 import。
@@ -57,13 +55,12 @@ app/src/mobile/features/pet/
 
 ### 3.1 应用状态
 
-`idle` / `celebrating` / `sleeping` / `away`。
-转移规则见 [SPEC](../prd/pet/SPEC.md#3-状态机)；实现集中在 `state-machine.ts`，UI 不写条件分支。点击/抚摸宠物不产生事件（D69）；麦克风不产生宠物事件（D77）。
+`idle` / `sleeping` / `away`。
+转移规则见 [SPEC](../prd/pet/SPEC.md#3-状态机)；实现集中在 `state-machine.ts`，UI 不写条件分支。点击/抚摸宠物不产生事件（D69）；麦克风不产生宠物事件（D77）；首次命名/`celebrating` 已下线（2026-11-05）。
 
 ```ts
 type PetEvent =
   | { type: "BOOT"; now: number; save: PetSaveV1 | null; corrupted?: boolean }
-  | { type: "NAME_SET"; now: number; name: string; skipped: boolean }
   | { type: "TICK"; now: number }
   | { type: "VISIBILITY"; now: number; visible: boolean }
   | { type: "OVERLAY"; now: number; open: boolean }
@@ -72,8 +69,8 @@ type PetEvent =
 function reducePet(state: PetState, event: PetEvent): { state: PetState; effects: PetEffect[] };
 ```
 
-- 副作用（震动/气泡/爱心/存档）由 `effects` 描述，执行层统一处理。
-- `phaseUntil` 到点由 `pet-store.ts` 的 `schedulePhaseExpiry` 补发一次 TICK（`phaseUntil - now + 16ms`），命名庆祝按 1.5 秒正常结束；不再依赖宠物页 30 秒一次的兜底 tick，否则会停在庆祝/末帧几十秒。
+- 副作用（触感/气泡/存档）由 `effects` 描述，执行层统一处理；首次命名/爱心/`phaseUntil`/`schedulePhaseExpiry` 已随命名功能删除（2026-11-05）。
+- 首次 BOOT 置 `onboarded=true` 并落盘；首次见面只发 `first_meet` 气泡（「你来了。我是小跟班。」），不再有命名弹窗或 `NAME_SET`。
 - 麦克风联动已下线（D77）：没有 `MIC_*` 事件、`listening`/`concerned` 姿态与成功/失败触感；录音时只通过 `micListening` 门禁静音 AI 音效/触感，宠物本身不变。
 - **AI 联动四态不新增 `PetPhase`**：静态=idle，工作中/等你决定/完成由 `mobile/features/pet/ai-status.ts` 的独立内存 store 驱动；`displayStateOf` 只决定最终展示姿态，AI 状态不落盘。优先级与动作见 [hook SPEC](../prd/hook/SPEC.md) §2。
 
@@ -84,7 +81,6 @@ App 不硬编码四个状态名：`sprite-state-map.ts` 给出**候选链**，`S
 | 场景（phase / AI） | 候选链（从左到右） |
 | --- | --- |
 | sleeping | `sleeping` → `idle`（AI 非静态时跟随 AI） |
-| celebrating（命名庆祝） | `celebrate` → `done` → `idle` |
 | away | `away` → `idle` |
 | AI working | `working` → `idle` |
 | AI asking | `attention` → `idle` |
@@ -100,11 +96,11 @@ App 不硬编码四个状态名：`sprite-state-map.ts` 给出**候选链**，`S
 ## 4. 心情与精力
 
 ```ts
-type Mood = "content" | "happy" | "curious" | "sleepy";
+type Mood = "content" | "curious" | "sleepy";
 ```
 
 - 精力：初值 100、clamp 0–100；前台每 30 分钟 -1，后台每 2 小时 -1，睡眠每小时 +5。
-- 心情：只持久化基线（content/sleepy）；happy/curious 为瞬态，不落盘；启动按时段/精力重算基线。happy 来自命名完成，curious 来自首次见面。麦克风联动已下线（D77），不再有 listening/proud/concerned。
+- 心情：只持久化基线（content/sleepy）；curious 为瞬态，不落盘；启动按时段/精力重算基线。curious 来自首次见面；`happy` 随命名流程下线删除（2026-11-05）。麦克风联动已下线（D77），不再有 listening/proud/concerned。
 - 低精力 `[假设]`：energy<30 哈欠增加、<15 sleepy；`energy_bucket` 取 0–25/26–50/51–75/76–100。
 - 没有负面状态与惩罚（麦克风失败关心已随 D77 下线）；不使用真实时间戳做“奖励结算”，只做衰减/恢复，避免时区/改时间刷值。
 - 所有数值隐藏；UI 不显示进度条/等级。
@@ -116,8 +112,7 @@ type BaselineMood = "content" | "sleepy";
 
 type PetSaveV1 = {
   version: 1;
-  onboarded: boolean;
-  name: string;
+  onboarded: boolean;             // 是否已见过面；首次 BOOT 置 true
   mood: BaselineMood;             // 只存基线，瞬态不落盘
   energy: number;                 // 0–100，初值 100
   lastSeenAt: number;
@@ -125,10 +120,11 @@ type PetSaveV1 = {
   lastEnergyAt: number;
   settings: {
     haptics: boolean;
-    sound: boolean;               // 字段保留，暂未接入
+    sound: boolean;               // 字段保留，默认关
     reduceMotion: "system" | "on" | "off";
-    posture: "docked" | "handheld";
-    keepAwake: "never";           // 字段保留，暂未接入
+    keepAwake: boolean;
+    dimMinutes: number;           // 1–60，默认 5
+    keepAwakeHours: number;       // 0–24，0 = 不限，默认 2
   };
 };
 ```
@@ -136,9 +132,9 @@ type PetSaveV1 = {
 - 存储：`@tauri-apps/plugin-store@2.5.0` + `tauri-plugin-store = "2.5.0"`（支持 Android），文件 `sidekick-pet.json`；不再提供 localStorage 二选一。
 - `PetStorage` adapter：`load() / save(save) / clear()`；feature 只依赖接口，plugin-store 类型不泄漏到状态机/UI。
 - 写入：值变化后防抖 500ms；App 进入后台立即写；启动读取。
-- 版本迁移：`version` 不匹配时逐级迁移；未知版本回退默认。
-- 损坏：try/catch 解析失败 → 默认值 + 尽量保留名字；不阻塞 UI。
-- `reset()` 清宠物数据（含 `onboarded`），保留 settings。
+- 版本迁移：`version` 不匹配时回退默认；版本号仍为 1。旧存档的 `name` 字段忽略、不迁移，其他字段照常恢复（2026-11-05 首次命名下线）。
+- 损坏：try/catch 解析失败 → 默认值；不阻塞 UI。
+- `reset()` 清宠物数据（含 `onboarded`），保留 settings；下次启动重新首次见面。
 - 不存：聊天、音频、转写、目标应用、剪贴板；localStorage 只存服务器地址。
 - 卸载会丢失：关于页说明；P1 考虑导出/备份。
 
@@ -148,7 +144,7 @@ type PetSaveV1 = {
 - 睡眠倒计时只累计前台（宠物页可见且未打开设置/聊天覆盖层）；夜间 5 分钟无互动入睡；06:00 后 `TICK` 自动醒，回前台按跨夜规则重算（不能靠触摸唤醒）。
 - 回来问候：`now - lastSeenAt > 6h`；>3 天用特殊文案；每次前台最多一次；与睡眠冲突时睡眠优先。
 - 后台跨夜离开 ≥5 分钟回前台直接 `sleeping`，不弹问候；覆盖层关闭后恢复计时，不重新问候。
-- 姿态：`use-orientation.ts` 监听 `(orientation: portrait)` 与 resize/orientationchange；横屏 docked、竖屏 handheld；设置手动覆盖，下一次方向变化恢复自动。
+- 姿态/方向：单竖屏布局（D62），不再有方向监听与 docked/handheld 姿态；Android Activity 锁 `portrait`。
 - 精力结算按 `lastEnergyAt` 分段累计（前台 -1/30min、后台 -1/2h、睡眠 +5/h），clamp 0–100；启动补算但不超过阈值。
 - 系统时间回拨/时区变化：只重算时段；不补发问候；精力不补发衰减。
 - 测试用可注入 `now`，不直接读 `Date.now()` 散落各处。
@@ -156,22 +152,21 @@ type PetSaveV1 = {
 ## 7. 事件与副作用
 
 ```text
-BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / RESET
+BOOT / TICK / VISIBILITY / OVERLAY / RESET
   → reducePet / dispatch(event)
-  → 副作用：震动 + 气泡 + 爱心 + 存档（画图层由 phase/AI 驱动）
+  → 副作用：震动 + 气泡 + 存档（画图层由 phase/AI 驱动）
 ```
 
 - 宠物舞台不挂 pointer 处理器；点击、长按、来回抚摸不产生 `PetEvent`（D69），因此没有手势阈值/冷却/热区。
 - 麦克风不产生 `PetEvent`（D77）；录音时只由 `micListening` 门禁静音 AI 音效/触感，宠物姿态/气泡不变。
 - 震动/声音通过 adapter；测试时 mock。
 - 气泡受频率限制，`copy_id` + 触发原因，方便统计关闭率。
-- 瞬态状态由 `schedulePhaseExpiry` 定时补发 TICK 收尾（见 §3.1），不依赖 30 秒兜底 tick。
-- 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；聊天页/后台/卸载时释放。原生不支持或 JNI 失败时静默降级，不做用户可见报错。
+- 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；非宠物页/后台/卸载时释放（D79：设置改为「更多」整页）。原生不支持或 JNI 失败时静默降级，不做用户可见报错。
 
 ## 8. 性能
 
 - 目标：真机 60fps；单帧主线程 <16ms；长任务 <50ms。
-- 图集单帧 256px、10fps 播放，主线程只做背景位置更新；粒子最多 6 个。
+- 图集单帧 256px、10fps 播放，主线程只做背景位置更新；无粒子层。
 - 不在动画中改 width/height/filter/box-shadow；只 transform/opacity。
 - 舞台不可见时暂停；低电量降频；减少动效去随机 idle。
 - 内存：宠物页常驻 ≤150MB `[待基线]`；图集解码约 16.8MB，卸载时释放。
@@ -179,8 +174,8 @@ BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / RESET
 
 ## 9. 测试
 
-- 单元：状态转移（含覆盖层/后台/命名庆祝到点）、精力边界、时段/问候、plugin-store 迁移/损坏、点击宠物不产生事件、录音不产生事件。
-- 组件：四态行/候选链回落、done 循环（3 秒内约 1.875 轮、无末帧定格）、减少动效冻结、气泡频率、设置保存、解码失败降级。
+- 单元：状态转移（含覆盖层/后台/睡眠/醒来）、精力边界、时段/问候、plugin-store 迁移/损坏、旧存档带 `name` 忽略并恢复其他字段、首启无弹窗/无权限请求、点击宠物不产生事件、录音不产生事件。
+- 组件：四态行/候选链回落、done 循环（3 秒内约 1.875 轮、无末帧定格）、减少动效冻结、气泡频率、设置章节与保存、解码失败降级。
 - 集成：录音中宠物无变化（D77）；后台/回前台；低电量。
 - 真机：Realme 16:9/20:9、手动态、60fps、掉电、锁屏恢复。
 - Mock：震动、时间、PetStorage adapter、Image 解码。
@@ -205,6 +200,6 @@ BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / RESET
 - [ ] `persistence.ts` + `tauri-pet-storage.ts`（plugin-store adapter）+ 迁移/损坏测试。
 - [ ] `pet-stage.tsx` / `sprite-pet.tsx` / `sprite-manifest.ts` / `sprite-state-map.ts` / `sprite-player.ts`。
 - [ ] 图集 manifest（一列一帧、≤32 帧、多状态行）与资产清单。
-- [ ] 文案库 `copy.ts`。
+- [x] 文案库 `copy.ts`（固定显示名，无用户自定义名字）。
 - [ ] 真机性能报告 + plugin-store 读写验证。
 - [ ] 文档：SPEC 状态表与本文输入表同步。

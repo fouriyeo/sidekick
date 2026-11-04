@@ -2,7 +2,7 @@
 doc: INDEX
 title: Sidekick 文档总索引
 status: active
-updated: 2026-11-04
+updated: 2026-11-05
 load: always
 children:
   - product/INDEX.md
@@ -38,6 +38,7 @@ children:
 | 做桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) | 该篇 |
 | 做自动发现 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) | 该篇 |
 | 做 AI 联动 / DSH hook / 宠物四态 / 会话列表 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
+| 改应用外壳 / 导航 / 状态词 / 首用清单 | [prd/shell/INDEX.md](./prd/shell/INDEX.md) | PRD / SPEC / AC |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
 | 查进度、环境、构建 | 直接读 | [status.md](./status.md) / [setup.md](./setup.md) |
 | 记录重大决策 | 直接读 | [decisions.md](./decisions.md) |
@@ -63,21 +64,10 @@ docs/
 │  └─ engineering.md            # 平台边界、依赖方向、DoD
 ├─ prd/                         # 功能需求
 │  ├─ INDEX.md
-│  ├─ pet/
-│  │  ├─ INDEX.md               # 一页摘要 + 阅读地图
-│  │  ├─ PRD.md                 # 产品级：做什么、规则、优先级
-│  │  ├─ SPEC.md                # 体验级：布局、状态机、文案
-│  │  └─ ACCEPTANCE.md          # 测试级：Given-When-Then
-│  ├─ mic/
-│     ├─ INDEX.md
-│     ├─ PRD.md
-│     ├─ SPEC.md
-│     └─ ACCEPTANCE.md
-│  └─ hook/
-│     ├─ INDEX.md               # AI 联动（DSH）一页摘要
-│     ├─ PRD.md                 # 产品规则、范围、隐私
-│     ├─ SPEC.md                # 桌面页、四态动作、声音
-│     └─ ACCEPTANCE.md          # 安装/状态/声音/隐私验收
+│  ├─ pet/                      # INDEX + PRD / SPEC / ACCEPTANCE
+│  ├─ mic/                      # INDEX + PRD / SPEC / ACCEPTANCE
+│  ├─ hook/                     # INDEX + PRD / SPEC / ACCEPTANCE（AI 联动）
+│  └─ shell/                    # INDEX + PRD / SPEC / ACCEPTANCE（指挥舱外壳）
 ├─ engineering/                 # 技术方案
 │  ├─ INDEX.md
 │  ├─ audio-pipeline.md         # 采集 → 传输 → 转写 → 输入
@@ -99,12 +89,13 @@ docs/
 
 > 文档体量、读法与叶子行数上限见 [standards/documentation.md](./standards/documentation.md)。
 
-## 4. 当前阶段（2026-11-02）
+## 4. 当前阶段（2026-11-05）
 
-- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风（百炼云端唯一）代码、模型页 + 用量统计、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感（2026-11-02；真实账号/真机/金额对账待补）。
-- 进行中：**AI 联动（DSH hook）**——桌面 AI 联动页、本地脚本注入、手机四态动作/声音；产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
-- 麦克风：只走百炼云端，未配置直接报错；自动粘贴依赖 macOS 辅助功能；真机/密码框矩阵继续回归。
-- 未开始：手机回答 AI 提问、Claude Code / Qoder hook、release 打包、配对鉴权、iOS。
+- 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风（百炼云端唯一）代码、模型页 + 用量统计、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感、双主题（D71/D76）。
+- 已完成：首次命名/改名下线（2026-11-05）；D69/D77/D78 继续有效。
+- 已完成（代码，待真机回归）：**指挥舱 A 重设计**（D79，2026-11-05）——桌面 5 视图 + 手机 3 档 + 状态语言 + 首用清单；产品规则见 [prd/shell](./prd/shell/INDEX.md)，结构见 [frontend-architecture.md](./frontend-architecture.md)。
+- 进行中：**AI 联动（DSH hook）**——产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
+- 未开始：手机回答 AI 提问、Claude Code / Qoder hook、配对鉴权、iOS。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 
 ## 5. 事实的唯一归属
@@ -125,6 +116,7 @@ docs/
 | 重大决策 | [decisions.md](./decisions.md) |
 | 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
 | AI 联动（DSH）产品规则 | [prd/hook/PRD.md](./prd/hook/PRD.md) |
+| 应用外壳：导航 / 页面归属 / 状态词 / 首用清单 | [prd/shell/INDEX.md](./prd/shell/INDEX.md) |
 | AI 四态动作/声音/桌面页 | [prd/hook/SPEC.md](./prd/hook/SPEC.md) |
 | DSH 脚本/桥/安装/协议 | [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
 | 当前进度 | [status.md](./status.md) |

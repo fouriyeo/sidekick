@@ -2,7 +2,7 @@
 doc: standards/visual
 title: 视觉与动效规范
 status: active
-updated: 2026-11-04
+updated: 2026-11-05
 load: on-demand
 ---
 
@@ -159,7 +159,7 @@ hex 与 `tokens.css` 一致；对比度按 WCAG 2.1 计算（正文 ≥ 4.5:1，
 - 时长令牌：`--dur-1 120ms` / `--dur-2 180ms` / `--dur-3 240ms` / `--dur-4 320ms`；缓动统一 `--motion-ease-out-soft`（`cubic-bezier(.22,1,.36,1)`）。
 - **声呐环**：只剩桌面「已连接」状态点的 5.6s 极慢同心环（`.sonar-dot-ring`，细描边、低亮度，已落地）；手机宠物舞台的背景环已删除（D77，舞台不再绘制声呐环）。环只动 `transform`/`opacity`，不发光、不叠 `filter`；是背景装饰，不参与宠物帧选择，也不包住鲸鱼本体。
 - 呼吸光点 3.2s：已连接但空闲时一个 8px 光点极慢呼吸，不闪不转。
-- 按钮/状态反馈 ≤ 100ms；开心/命名庆祝 ≤ 2 秒（命名庆祝 1.5 秒）；已无失败关心短态（D77）。
+- 按钮/状态反馈 ≤ 100ms；宠物瞬态庆祝已随首次命名下线（2026-11-05）；已无失败关心短态（D77）。
 - `prefers-reduced-motion: reduce`：冻结声呐环与波形，去掉随机 idle/弹跳/粒子，保留状态切换的即时反馈（120ms 交叉淡入）和按钮反馈；宠物冻结第 0 帧。
 - 后台/窗口失焦暂停：`useMotionPause` 监听 `visibilitychange` + window `blur/focus`，写 `<html data-motion-paused>`，CSS 动画 `animation-play-state: paused`；帧动画播放器也在后台/覆盖层暂停，回前台恢复。
 - AI 四态必须在轮廓、速度、道具、主色上明显不同；减少动效也要保留四套不同静态轮廓。详见 [prd/hook/SPEC](../prd/hook/SPEC.md) §2。

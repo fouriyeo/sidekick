@@ -2,7 +2,7 @@
 doc: engineering/audio-pipeline
 title: 麦克风音频链路方案
 status: active
-updated: 2026-11-04
+updated: 2026-11-05
 load: on-demand
 owner: engineering
 ---
@@ -232,5 +232,5 @@ owner: engineering
 - 用量：`asr_usage.json` 按本机日期汇总；`asr_usage_stats/clear`；金额按北京/新加坡价格估算。
 - 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不自动发送回车。
 - 手动按键：结果卡片「回车/清空」→ `key.request` → `desktop_keys` 安全闸门 → Return / ⌘A+Delete；30 秒时效、成功即作废、500ms 限频（2026-11-04）。
-- 桌面：主导航「模型」页（AI 联动之后）配置百炼 + 查看用量；应用内语音浮层；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
+- 桌面：「系统 › 语音」（模型页）配置百炼 + 查看用量；应用内语音浮层；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
 - 待验证：真实百炼账号/Keychain 授权/真机流式与失败路径、用量统计准确性、辅助功能自动粘贴、60 秒/断连、30 句准确率、结果卡片回车/清空的真机与焦点切换矩阵。

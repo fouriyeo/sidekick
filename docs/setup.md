@@ -122,7 +122,7 @@ node scripts/patch-android-manifest.mjs
 | --- | --- |
 | App 打开全黑 | 常见是 CSS 把 `body` 设成 `display:none`（见 AGENTS.md 第 8 节）；用 CDP 检查 `getComputedStyle(document.body).display` 与元素尺寸 |
 | 手机连不上电脑 | 是否同一 Wi-Fi；macOS 防火墙是否允许传入（TCP 服务端口 + UDP 47820）；服务端口是否监听；电脑 IP 是否变化 |
-| 手机找不到电脑（自动发现失败） | 先确认**电脑端 Sidekick 正在运行**（窗口关了 App 就退出、服务也停，手机日志会是 `发现 0 台电脑` + `Connection refused`）；再看手机与电脑是否同一 Wi-Fi/网段、路由器是否禁止广播/开启 AP 隔离；macOS 防火墙是否允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。兜底：手机 App → 聊天页（右上角气泡）→「手动输入电脑地址」填桌面窗口显示的 `IP:端口`（App 找不到电脑时，空状态卡片里也有这个按钮）。 |
+| 手机找不到电脑（自动发现失败） | 先确认**电脑端 Sidekick 正在运行**（窗口关了 App 就退出、服务也停，手机日志会是 `发现 0 台电脑` + `Connection refused`）；再看手机与电脑是否同一 Wi-Fi/网段、路由器是否禁止广播/开启 AP 隔离；macOS 防火墙是否允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。兜底：手机 App → 顶部连接状态 →「连接页」→「手动输入地址」填桌面窗口显示的 `IP:端口`（扫码也可用；自动发现失败时连接页空状态里也有入口）。 |
 | 扫码下载不了 App | 二维码打开的是 `http://<电脑 IP>:<端口>/` 落地页，点「下载 App」才下载 `/download/apk`；手机要和电脑同一局域网。桌面端优先下发 `release/Sidekick-Android.apk`（release 签名约 7MB），没有时才回退嵌入副本/debug 包 |
 | 服务端口被占用 | 日志会显示候选端口依次失败、最终监听的真实端口；桌面窗口显示的地址即为真实端口，无需手改 |
 | `adb pair` 报 `protocol fault` | 配对端口/码已失效；重开配对弹窗，用弹窗里的端口与最新码 |
@@ -133,14 +133,14 @@ node scripts/patch-android-manifest.mjs
 | APK 很大 | debug 版正常（含调试符号）；release 需签名，体积预计 10–20MB |
 | 首次构建很慢 | Gradle 首次下载依赖；`~/.gradle` 缓存后会明显加快 |
 
-## 百炼云端识别（模型页）/ 自动粘贴 / 剪贴板
+## 百炼云端识别（系统 › 语音）/ 自动粘贴 / 内容（剪贴板）
 
 - 语音识别只走百炼云端：在阿里云百炼控制台创建 **API Key**（`sk-...`）；Key 存本机 `asr.json`（0600），不写日志、不上传；安全性低于系统钥匙串。
 - 服务地址：北京 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；新加坡 `wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`。业务空间直接填完整 URL（把 `{WorkspaceId}` 换成真实 ID 后粘贴），没有单独的业务空间 ID 字段。
-- 桌面主导航「模型」（AI 联动之后）：填完整服务地址/API Key/模型（默认 `qwen-audio-3.1-asr-flash-streaming`），按需调语言/场景/静音断句/热词；勾选隐私同意 →「测试连接」→「保存」。不再需要钥匙串授权。
+- 桌面「系统 › 语音」（D79 前称「模型」页）：填完整服务地址/API Key/模型（默认 `qwen-audio-3.1-asr-flash-streaming`），按需调语言/场景/静音断句/热词；勾选隐私同意 →「测试连接」→「保存」。不再需要钥匙串授权。
 - Key 保存到 `asr.json`（0600）；旧版本钥匙串里的 Key 需重新粘贴一次，之后不再弹密码。
 - 本机数据目录：`~/.sidekick/`（`asr.json` / `asr_usage.json` / `clipboard.json`，均 `0600`）。首次启动会把旧 `~/Library/Application Support/Sidekick/` 里的同名 JSON 复制一次过来（旧文件保留，不删除）。
-- 用量统计：`~/.sidekick/asr_usage.json`（`0600`），按本机日期汇总；模型页用区间切换看今天/近 7 天/近 1 个月/近 1 年金额/Token（今天无明细，1 年按月）；「清空统计」只重置该文件，不影响配置/Key。
+- 用量统计：`~/.sidekick/asr_usage.json`（`0600`），按本机日期汇总；该页用区间切换看今天/近 7 天/近 1 个月/近 1 年金额/Token（今天无明细，1 年按月）；「清空统计」只重置该文件，不影响配置/Key。
 - 旧本机模型目录 `~/Library/Application Support/Sidekick/models/` 不会迁移、不参与运行，可手动删除；`whisper-rs`/cmake/libclang 不再是构建前提。
 - 自动粘贴需要在「系统设置 → 隐私与安全性 → 辅助功能」勾选当前 `desktop`（开发）或 `Sidekick.app`（正式）。设置页可请求权限、打开系统设置、在 Finder 中定位、重新检测。重新编译开发二进制后可能需要重新勾选。
 - 剪贴板历史在 `~/.sidekick/clipboard.json`，权限 `600`；可在桌面「剪贴板」页暂停/清空。
