@@ -21,6 +21,7 @@
     "@tauri-apps/plugin-store": "2.5.0",
     "class-variance-authority": "0.7.1",
     "cn": "0.5.1",
+    "jsqr": "^1.4.0",
     "lucide-react": "1.65.0",
     "motion": "14.8.0",
     "qrcode": "1.5.4",

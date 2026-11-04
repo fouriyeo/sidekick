@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { useEffect, useState } from "react";
+import { useUiStore } from "@/mobile/ui-store";
 import type { DiscoveredServer } from "@/protocol/discovery";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -71,6 +72,7 @@ function DeviceCard({ device, status, error, onConnect }: DeviceCardProps) {
 }
 
 export function ConnectionBar({ onError }: ConnectionBarProps) {
+  const setScanOpen = useUiStore((state) => state.setScanOpen);
   const addr = useConnectionStore((state) => state.addr);
   const status = useConnectionStore((state) => state.status);
   const error = useConnectionStore((state) => state.error);
@@ -189,6 +191,14 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               <li>电脑端 Sidekick 已打开</li>
               <li>允许防火墙接收 Sidekick 的连接</li>
             </ul>
+            <Button
+              type="button"
+              size="sm"
+              className="mt-3 h-11 w-full rounded-[10px] text-xs"
+              onClick={() => setScanOpen(true)}
+            >
+              扫电脑上的二维码
+            </Button>
             <Button
               type="button"
               variant="outline"

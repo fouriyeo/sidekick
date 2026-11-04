@@ -24,6 +24,8 @@ const permissions = [
   // Android 16（API 36）起访问局域网设备要这个 dangerous 运行时权限；
   // targetSdk >= 36 默认拒绝，缺它时 UDP 发现与 WebSocket 直连都会被系统拦掉。
   "android.permission.ACCESS_LOCAL_NETWORK",
+  // 扫码连接要用后置相机；系统相机授权由 wry 在 getUserMedia 时自动弹出（见 lib.rs 的 on_permission_request）。
+  "android.permission.CAMERA",
 ];
 
 let text = readFileSync(manifestPath, "utf8");

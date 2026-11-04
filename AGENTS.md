@@ -76,6 +76,8 @@
 | Tauri 命令 | `set_keep_screen_on({enabled})` | 宠物页前台屏幕常亮：Android JNI 加/清 `FLAG_KEEP_SCREEN_ON`；iOS 暂为空实现 |
 | Tauri 事件 | `conn` / `chat` | `conn: {online, url}`；`chat: <JSON 字符串>`（含 status/sessionList/focus.result/mic.*/chat） |
 
+扫码连接不是独立的 Tauri 命令：聊天页「扫电脑上的二维码」→ `getUserMedia` + `jsqr` 解出桌面二维码里的 `http://ip:端口` → 复用 `connect_server`。桌面二维码内容不变，浏览器扫码打开落地页的行为也不变（D74）。
+
 ## 4. 目录结构
 
 ```
@@ -201,6 +203,7 @@ sidekick/
 - **变暗/常亮时长**：`dimMinutes`（默认 5，1–60）与 `keepAwakeHours`（默认 2，0 = 不限）在 `persistence.ts` 归一化；改默认值要同步迁移测试与 `docs/prd/pet/SPEC.md` §7。
 - **手机只支持竖屏**：`use-orientation` / `posture` / `SET_POSTURE` 已删除；`scripts/patch-android-manifest.mjs` 给 `MainActivity` 写 `android:screenOrientation="portrait"`。旧存档里的 `posture` 字段被忽略。浏览器 dev 也按竖屏单布局渲染，不写 `landscape:` 断点。
 - **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
+- **扫码要用相机（D74）**：manifest 声明 `CAMERA` 后，只需在 `lib.rs` 的 `on_permission_request` 里让 `PermissionKind::Camera` 返回 `Allow`，**不用改 MainActivity**——wry 的 `grantPermissionRequest` 拿到 Allow 会自己调 `activity.requestPermissions(CAMERA)` 弹系统授权。解码用 `jsqr`（动态 import，43KB gzip），**不要换 `BarcodeDetector`**：它在 Android 依赖 GMS 的 ML Kit，缺 GMS 静默失效。扫码解析只认 IPv4 与 http/https/ws/wss，忽略 path/query（给未来配对 token 留余地）；全屏扫码页要 `pushBackHandler`，否则按返回会被根页面当成退出确认。
 - **Android 16+ 局域网权限**：`targetSdk` 37 下访问局域网要 `ACCESS_LOCAL_NETWORK`（dangerous 运行时权限），系统默认拒绝。缺它时自动发现恒为 0 台、手动连电脑报「连接超时」（Rust 侧 `CONNECT_TIMEOUT` 4s），**但同一台手机 shell 里 `curl` 能连通**——不要据此误判成防火墙或企业网隔离。补丁脚本已在 manifest 声明并在 `MainActivity.kt` 请求（仅 `SDK_INT >= 36`）；`gen/` 不入库，每次 `pnpm tauri android init` 后必须重跑。排查：`adb shell appops get dev.sidekick.app ACCESS_LOCAL_NETWORK`，出现 `Uid mode: ignore` 即被拒；`adb reverse tcp:47810 tcp:47810` 后连 `127.0.0.1:47810` 能通，正好反证是该权限而非网络。
 - **权限修好后自动发现仍可能失败（独立问题，D73）**：`example-corp` 这类企业 WiFi **只放行单播**，广播和组播全丢。2026-11-04 用原生探针（NDK 编译的静态 ARM64 程序，绕开 toybox `nc` 没有 `SO_BROADCAST` 的限制）实测：五类包手机侧全部 `sent OK`、`Udp OutDatagrams` 差值 +3 与三次探测严格对应，但电脑只收到单播——网段广播、受限广播、组播 `224.0.0.251`(mDNS)、`224.0.0.1`(all-hosts) 全丢。**所以 mDNS 也不能作为替代方案**，它走组播同样被丢；不要一遇到广播不通就想到 mDNS。排查两层要分开：先看 `appops` 权限（TCP 与广播都被它拦），再单独验广播（`python3` 监听 `0.0.0.0:47820` 后重启 App，或看 `OutDatagrams` 差值与实际到达是否对得上）。广播不通时只能手动输入地址（App 会记住并自动重连，实测 8 秒内），或改用不依赖发现的扫码；单播扫描同 /24 能做但接近端口扫描，在企业网可能触发安全告警。
 - **百炼云端 ASR（唯一）**：本机 whisper 已下线；`whisper-rs`/cmake/libclang 不再是构建前提。未同意/地址或模型无效/无 Key 时 `mic.start` 直接回 `mic.error(cloud_not_configured|cloud_key_unavailable)`，不建会话、不回退。`asr.json`（0600，含明文 `apiKey` 与派生 `keyPresent`/`keyHint`）。`asr.json` 在 `~/.sidekick/asr.json`。**整个链路不再读写 Keychain**，所以开页/测试/录音都不弹系统密码；升级前存在旧钥匙串里的 Key 不会自动迁移，需在模型页重新粘贴一次（2026-11-03 试过自动迁移：开发版重编译后签名变化，读旧条目会弹系统登录密码，已回退）。代价是明文 Key 只靠 0600 权限保护，不要分享/提交该文件。地址必须完整 URL；业务空间直接粘贴并把 `{WorkspaceId}` 换成真实 ID，未替换报“请填写完整服务地址…”，不再发 `X-DashScope-WorkSpace`。`task-started` 前只缓存音频，之后二进制 PCM 转发；`mic.partial` 50ms 节流、`rev` 只增、整体替换、只回显不落字；最终只插入一次。

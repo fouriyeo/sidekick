@@ -108,7 +108,7 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 ```
 
 生成的 Gradle 配置使用 `compileSdk = 37`，对应 SDK 包名 `platforms;android-37.0`。
-生成后必须跑一次补丁脚本，写入麦克风与局域网权限、请求局域网运行时授权、锁定竖屏：
+生成后必须跑一次补丁脚本，写入麦克风/局域网/相机权限、请求局域网运行时授权、锁定竖屏：
 
 ```sh
 node scripts/patch-android-manifest.mjs

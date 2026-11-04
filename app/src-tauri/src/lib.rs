@@ -123,6 +123,8 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .on_permission_request(|_, kind| match kind {
             tauri::webview::PermissionKind::Microphone => tauri::webview::PermissionResponse::Allow,
+            // 扫码连接要用后置相机；wry 的 grantPermissionRequest 会自动带出 Android 系统相机授权。
+            tauri::webview::PermissionKind::Camera => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
         .setup(|app| {

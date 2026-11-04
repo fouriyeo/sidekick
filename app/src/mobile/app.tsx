@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
 import { ChatView } from "@/mobile/features/chat/components/chat-view";
+import { ScanView } from "@/mobile/features/connect/components/scan-view";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { PetSettings } from "@/mobile/features/pet/pet-settings";
@@ -49,8 +50,10 @@ export function MobileApp() {
   const setOnline = useConnectionStore((state) => state.setOnline);
   const view = useUiStore((state) => state.view);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
+  const scanOpen = useUiStore((state) => state.scanOpen);
   const setView = useUiStore((state) => state.setView);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
+  const setScanOpen = useUiStore((state) => state.setScanOpen);
   const keepAwake = usePetStore((state) => state.pet.settings.keepAwake);
   const keepAwakeHours = usePetStore((state) => state.pet.settings.keepAwakeHours);
   const keepAwakeMs = keepAwakeHours > 0 ? keepAwakeHours * 60 * 60 * 1000 : null;
@@ -128,7 +131,8 @@ export function MobileApp() {
     [],
   );
 
-  // 启动即自动搜索电脑：不需要用户输入 IP 或扫码；搜索不到就进入自动重连。
+  // 启动即自动搜索电脑；搜索不到进入自动重连。企业网等广播被丢弃的网络下发现会恒为 0 台，
+  // 用户可在聊天页手动输入地址或扫电脑上的二维码。
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
@@ -225,6 +229,7 @@ export function MobileApp() {
   const closeChat = useCallback(() => setView("pet"), [setView]);
   const openSettings = useCallback(() => setSettingsOpen(true), [setSettingsOpen]);
   const closeSettings = useCallback(() => setSettingsOpen(false), [setSettingsOpen]);
+  const closeScan = useCallback(() => setScanOpen(false), [setScanOpen]);
 
   return (
     <>
@@ -235,6 +240,7 @@ export function MobileApp() {
       />
       {view === "chat" && <ChatView onBack={closeChat} onError={appendSystem} />}
       <PetSettings open={settingsOpen} onClose={closeSettings} />
+      <ScanView open={scanOpen} onClose={closeScan} />
       {exitHintVisible && (
         <div
           role="status"

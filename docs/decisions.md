@@ -572,3 +572,17 @@
 - 影响与可选路径：不依赖广播/组播的地址传递只有四条——扫码（桌面 `server_info` 已有二维码，手机扫码读出 `IP:端口`，不受任何网络策略影响，最可靠）、单播扫描同 /24（单播通，但行为接近端口扫描，可能触发企业 IDS/安全告警）、固定地址（需 IT 配静态 IP 或内网 DNS）、手动输入（现状，零成本但要知道 IP）。
 - 决策：本轮**只记录结论、不改发现实现**。自动发现维持 UDP 广播（在家用路由器等正常网络仍有效），企业网场景继续靠手动输入地址兜底；扫码连接留待后续单独排期。
 - 规范：`AGENTS.md` §8、`docs/status.md` 已知问题、`docs/setup.md` 故障排查、`docs/decisions.md` D72。
+
+## D74 · 手机扫电脑二维码连接（兜底连接方式）（2026-11-04）
+
+- 背景：D73 证实企业网只放行单播、广播与组播全丢，自动发现在这类网络必然恒为 0 台，用户只能手输 `IP:端口`。需要一条完全不依赖网络发现的连接路径。
+- 决策：
+  - **手机 App 内扫码**：新增全屏扫码页，用 `getUserMedia({video:{facingMode:"environment"}})` 开后置相机，`jsqr` 逐帧解码，扫到地址后直接走已有的 `connect_server`。
+  - **桌面二维码内容不变**：仍是 `http://<ip>:<port>`（`server_info`）。手机浏览器扫码打开落地页下载 APK 的行为零变化，App 内扫码只是复用同一个码。
+  - **解析只认 IPv4**：`parseScanPayload` 接受 http/https/ws/wss 与裸 `ip[:port]`，缺端口补 `47810`，忽略 path/query（为将来带配对 token 的二维码留余地）；域名一律拒绝，避免扫到任意二维码就去连外部地址。
+  - **相机权限链**：manifest 声明 `android.permission.CAMERA`，Rust `on_permission_request` 对 `PermissionKind::Camera` 返回 Allow。**不改 MainActivity**——wry 的 `grantPermissionRequest` 在拿到 Allow 后会自己调 `activity.requestPermissions(CAMERA)` 弹系统授权。
+  - **解码库选 `jsqr@1.4.0`**（Apache-2.0，约 135KB min / 43KB gzip，纯 JS），只在扫码页动态 `import()`。不用 `BarcodeDetector`：它在 Android 依赖 Google Play Services 的 ML Kit，设备缺 GMS 会静默失效。
+- 原因：扫码本质是「把地址从电脑传到手机」，用二维码就绕开了整条网络发现链路，所以不受任何广播/组播策略影响，比单播扫描同 /24 更稳（后者行为接近端口扫描，可能触发企业 IDS）。选 App 内扫码而不是系统相机 + deep link，是因为后者要改二维码内容、破坏现有落地页用途，且各扫码工具对自定义 scheme 的支持不一致。
+- 放弃：`BarcodeDetector`（GMS 依赖不可控）；系统相机 + `sidekick://` deep link（破坏落地页、行为不一致）；原生 Kotlin 扫码插件（成本高、收益不比纯前端多）；扫到域名也去连（安全面过大）。
+- 代价：App 多一次相机权限授权（只在用户主动点扫码时才申请）；包体 +43KB gzip 且懒加载；相机预览的帧率与弱光识别率必须真机验收；后续配对鉴权若给二维码加 token，解析逻辑需扩展（当前已忽略 query，不会直接坏）。
+- 规范：`app/src/mobile/features/connect/{scan-payload.ts,scan-camera.ts,components/scan-view.tsx}`、`connection-bar.tsx`、`app/src/mobile/{app.tsx,ui-store.ts}`、`app/src-tauri/src/lib.rs`、`scripts/patch-android-manifest.mjs`、`AGENTS.md`、`docs/setup.md`。

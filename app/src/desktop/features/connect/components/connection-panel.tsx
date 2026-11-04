@@ -238,7 +238,7 @@ export function ConnectionPanel({
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium">扫码打开</p>
                       <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                        同一局域网 · 下载 App 后启动会自动连接
+                        同一局域网 · App 内扫码可直接连接
                       </p>
                     </div>
                   </div>
@@ -256,7 +256,9 @@ export function ConnectionPanel({
                 {!url && <p className="text-xs text-muted-foreground">正在获取连接信息…</p>}
 
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  手机扫码打开页面，点「下载 App」安装后，同一 Wi-Fi 下打开 App 会自动发现这台电脑。
+                  手机扫码打开页面可下载 App；装好后在 App 里扫这个二维码直接连接。若 App
+                  提示找不到电脑（部分公司/企业网络不转发局域网广播），请在 App
+                  内手动输入上面的地址。
                 </p>
               </div>
             )}

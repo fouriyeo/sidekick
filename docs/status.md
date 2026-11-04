@@ -38,6 +38,7 @@
 32. 视觉系统方向 B「深潜声呐」+ 双主题（2026-11-04，D71）：`tokens.css` 重写为双主题深海语义色板（deep sea 自发光 / sea glass 海面雾光，全部 hex，默认深色）；新增主题运行时（`sidekick:theme`、`system|light|dark`、`index.html` 防闪脚本、`shared/lib/theme.ts` 的 `initTheme/useTheme/setThemePreference`、`data-theme` + `.dark` 双写、系统变化与 `storage` 监听、Sonner 跟随）与设置页「外观」三选一；桌面壳/连接声呐点/导航/聊天/剪贴板/AI 联动/模型/设置换皮，手机舞台保持深海并加 6.4s 背景声呐环；宠物复用现有 OpenPets 图集，不重绘/染色；`design-lab/` 评审稿收口；visual/ux/frontend-architecture/decisions/AGENTS 文档同步。
 
 33. 修复 Android 16+ 连不上电脑（2026-11-04，D72）：真机换成 Android 17 / SDK 37 后 App 一直「未连接」，手动连接报「连接超时」。根因是 `targetSdk >= 36` 时访问局域网需要 `ACCESS_LOCAL_NETWORK` 运行时权限且系统默认拒绝，把 UDP 广播与 TCP 连接一并拦在进程内（`appops` 显示 `Uid mode: ignore`，shell 的 `curl` 却能连通，极易误判成防火墙/企业网）。补丁脚本现在声明该权限并在 `MainActivity.kt` 请求授权；同时修掉构建脚本写死的 JDK/NDK 路径与 pnpm 版本校验。真机验证：授权后局域网直连成功、重启 8 秒内自动重连；但该办公网仍抑制 UDP 广播，自动发现依旧为 0 台，只能手动填地址。
+34. 手机扫电脑二维码连接（2026-11-04，D74）：企业网只放行单播（D73）导致自动发现不可用时，用户可在 App 聊天页点「扫电脑上的二维码」，扫桌面已有的二维码直接连接。桌面二维码内容不变（仍是 `http://<ip>:<port>`，浏览器扫码落地页下载 APK 不受影响）；手机端 `getUserMedia` 开后置相机 + `jsqr` 逐帧解码（懒加载 43KB gzip），解析只认 IPv4 并忽略 path/query；相机权限走 manifest + `on_permission_request`，由 wry 自动弹系统授权，未改 MainActivity。顺带修正桌面端「下载 App 后会自动发现」的误导文案（该路径在企业网必然失败）。
 
 ## 已验证（有实际证据）
 
