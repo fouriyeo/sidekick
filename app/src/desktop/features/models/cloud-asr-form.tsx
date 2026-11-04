@@ -2,6 +2,7 @@ import { KeyRound, Loader2, ShieldCheck, TestTube2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { SignalDot } from "@/shared/ui/signal-dot";
 import {
   CLOUD_ENDPOINT_PRESETS,
   type CloudLanguage,
@@ -10,10 +11,10 @@ import {
 } from "./cloud-asr-store";
 
 const selectClass =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
+  "h-10 w-full rounded-[10px] border border-input bg-popover px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 const textareaClass =
-  "min-h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
+  "min-h-20 w-full rounded-[10px] border border-input bg-popover px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -58,25 +59,32 @@ export function CloudAsrForm() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2.5">
-        <div className="min-w-0">
-          <p className="text-xs font-medium">
-            {status.configured ? "已配置" : "未配置"}
-            {status.configured && (
-              <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                云端识别
-              </span>
-            )}
-          </p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {status.configured
-              ? `${status.config.model}${status.hasKey ? ` · ${status.keyMasked ?? "Key 已保存"}` : ""}`
-              : "填好地址和 API Key，测试连接后保存即可使用"}
-          </p>
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <SignalDot
+            status={status.configured ? "connected" : "idle"}
+            pulse={false}
+            className="mt-1"
+          />
+          <div className="min-w-0">
+            <p className="text-xs font-medium">
+              {status.configured ? "已配置" : "未配置"}
+              {status.configured && (
+                <span className="ml-2 rounded-full border border-signal/50 px-1.5 py-0.5 text-[10px] text-signal">
+                  云端识别
+                </span>
+              )}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {status.configured
+                ? `${status.config.model}${status.hasKey ? ` · ${status.keyMasked ?? "Key 已保存"}` : ""}`
+                : "填好地址和 API Key，测试连接后保存即可使用"}
+            </p>
+          </div>
         </div>
       </div>
 
-      <label className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-relaxed">
+      <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-xs leading-relaxed">
         <input
           type="checkbox"
           className="mt-0.5 size-3.5 shrink-0 accent-primary"
@@ -236,7 +244,7 @@ export function CloudAsrForm() {
         </div>
       </div>
 
-      <details className="rounded-xl border border-border bg-background/60 p-3">
+      <details className="rounded-lg border border-border bg-card p-3">
         <summary className="cursor-pointer text-xs font-medium">高级</summary>
         <div className="mt-3 flex flex-col gap-3">
           <div>

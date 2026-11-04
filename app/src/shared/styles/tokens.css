@@ -1,107 +1,134 @@
-:root,
-.dark {
-  --radius: 0.75rem;
+/* ============================================================================
+   Sidekick design tokens · Direction B「深潜声呐 / Sonar」
+   ----------------------------------------------------------------------------
+   两套主题手调：deep sea（深色，第一主题）与 sea glass（浅色，第二主题）。
+   全部为 hex，安卓 WebView 103 可直接使用；不使用 oklch / color-mix。
+
+   主题契约：
+   - 默认（无 data-theme）与 data-theme="dark" 使用深色值；
+   - data-theme="light" 使用浅色值；
+   - <html class="dark"> 只服务于 Tailwind 的 dark: 变体，必须与 data-theme 同步；
+   - 宠物舞台（--pet-*）在两套主题里都保持深海，只有 --pet-bg 微差。
+   ========================================================================== */
+
+:root {
+  --radius: 12px; /* shadcn 基座；--radius-md 等由 @theme inline 提供 */
   --motion-ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 240ms;
+  --dur-4: 320ms;
 
-  /* WebView <111 fallback: keep the app usable with hex/rgb colors. */
-  --background: #0f1115;
-  --foreground: #e8eaf0;
-  --card: #141821;
-  --card-foreground: var(--foreground);
-  --popover: #171b24;
-  --popover-foreground: var(--foreground);
-  --primary: #2e5bff;
-  --primary-foreground: #fbfcff;
-  --secondary: #1c2029;
-  --secondary-foreground: var(--foreground);
-  --muted: #1b1f27;
-  --muted-foreground: #9aa0b0;
-  --accent: #262c3a;
-  --accent-foreground: var(--foreground);
-  --destructive: #d9534f;
-  --destructive-foreground: #fff5f5;
-  --border: #2b303c;
-  --input: #2b303c;
-  --ring: #2e5bff;
+  --window-shadow: 0 26px 60px -24px rgba(0, 0, 0, 0.55);
+  --popover-shadow: 0 18px 44px -20px rgba(0, 0, 0, 0.55);
 
-  --success: #5fd97f;
-  --warning: #f0b45c;
+  /* ---- 深色（默认）：深海自发光 ---- */
+  --background: #06181e;
+  --foreground: #dceceb;
+  --card: #0b242c;
+  --card-foreground: #dceceb;
+  --popover: #11313a;
+  --popover-foreground: #dceceb;
+  --primary: #3fc4a0;
+  --primary-foreground: #032019;
+  --secondary: #11313a;
+  --secondary-foreground: #dceceb;
+  --muted: #10393b;
+  --muted-foreground: #93b4b2;
+  --accent: #10393b;
+  --accent-foreground: #dceceb;
+  --destructive: #e6847a;
+  --destructive-foreground: #2b100c;
+  --border: #2b5560;
+  --input: #578893;
+  --ring: #6ef0c8;
 
-  /* 宠物舞台保持纯深色：不加光晕/大面积亮色（OLED 亮像素耗电，见 visual.md §9 / D58）。 */
-  --pet-bg: #0f1115;
-  --pet-primary: #f0c27a;
-  --pet-primary-foreground: #2a241c;
-  --pet-coral: #e88a6a;
-  --pet-success: #8fd9b6;
-  --pet-danger: #d9534f;
-  --pet-text: #f5efe3;
-  --pet-muted: #b8b0a0;
-  --pet-border: #2b303c;
-  --pet-body: #f4dcc0;
-  --pet-body-shadow: #d9b896;
-  --pet-belly: #fbf0df;
-  --pet-ear: #e8b19a;
-  --pet-eye: #3b2f2a;
-  --pet-cheek: rgba(232, 138, 106, 0.45);
+  --success: #64d9a4;
+  --warning: #eab173;
+  --signal: #6ef0c8;
+  --decide: #eab173;
+  --whale: #8fb6e0;
+  --wash: #10393b;
+  --abyss: #030e12;
+  --glow: #6ef0c8;
 
-  --chart-1: #2e5bff;
-  --chart-2: #5fd97f;
-  --chart-3: #f0b45c;
-  --chart-4: #d9534f;
-  --chart-5: #7cc4d9;
+  --chart-1: #6ef0c8;
+  --chart-2: #8fb6e0;
+  --chart-3: #eab173;
+  --chart-4: #e6847a;
+  --chart-5: #64d9a4;
+
+  /* ---- 宠物舞台：两套主题都深；除 --pet-bg 外主题不变 ----
+     鲸鱼本体颜色归 OpenPets 图集所有，CSS 不再定义 body/belly/eye 等颜色。 */
+  --pet-bg: #030e12;
+  --pet-surface: #0b242c;
+  --pet-input: #578893;
+  --pet-surface-2: #11313a;
+  --pet-wash: #10393b;
+  --pet-text: #dceceb;
+  --pet-muted: #93b4b2;
+  --pet-border: #2b5560;
+  --pet-primary: #3fc4a0;
+  --pet-primary-foreground: #032019;
+  --pet-signal: #6ef0c8;
+  --pet-coral: #e6847a;
+  --pet-ask: #eab173;
+  --pet-success: #64d9a4;
+  --pet-danger: #e6847a;
+
+  color-scheme: dark;
 }
 
-@supports (color: oklch(0.5 0.1 100)) {
-  :root,
-  .dark {
-    --background: oklch(0.18 0.02 260);
-    --foreground: oklch(0.93 0.01 260);
-    --card: oklch(0.21 0.02 260);
-    --card-foreground: var(--foreground);
-    --popover: oklch(0.23 0.02 260);
-    --popover-foreground: var(--foreground);
-    --primary: oklch(0.62 0.19 265);
-    --primary-foreground: oklch(0.98 0.01 260);
-    --secondary: oklch(0.26 0.02 260);
-    --secondary-foreground: var(--foreground);
-    --muted: oklch(0.24 0.02 260);
-    --muted-foreground: oklch(0.68 0.02 260);
-    --accent: oklch(0.28 0.03 265);
-    --accent-foreground: var(--foreground);
-    --destructive: oklch(0.62 0.22 25);
-    --destructive-foreground: oklch(0.98 0.01 25);
-    --border: oklch(0.3 0.02 260);
-    --input: oklch(0.3 0.02 260);
-    --ring: oklch(0.62 0.19 265);
+:root[data-theme="light"] {
+  /* ---- 浅色（第二主题）：海面雾光 + 海玻璃 ---- */
+  --background: #e7efed;
+  --foreground: #0e2a2b;
+  --card: #f5faf8;
+  --card-foreground: #0e2a2b;
+  --popover: #fcfefd;
+  --popover-foreground: #0e2a2b;
+  --primary: #095b51;
+  --primary-foreground: #f7fdfb;
+  --secondary: #fcfefd;
+  --secondary-foreground: #0e2a2b;
+  --muted: #dfece8;
+  --muted-foreground: #3f5e5d;
+  --accent: #dfece8;
+  --accent-foreground: #0e2a2b;
+  --destructive: #9c3a2b;
+  --destructive-foreground: #fff8f6;
+  --border: #a4beb9;
+  --input: #6f8f89;
+  --ring: #0a7764;
 
-    --success: oklch(0.72 0.16 150);
-    --warning: oklch(0.8 0.14 80);
+  --success: #186b49;
+  --warning: #8a5410;
+  --signal: #0a7764;
+  --decide: #8a5410;
+  --whale: #28618c;
+  --wash: #dfece8;
+  --abyss: #082229;
+  --glow: #6ef0c8;
 
-    --pet-bg: oklch(0.17 0.02 260);
-    --pet-primary: oklch(0.78 0.13 70);
-    --pet-primary-foreground: oklch(0.2 0.03 60);
-    --pet-coral: oklch(0.72 0.14 30);
-    --pet-success: oklch(0.78 0.1 160);
-    --pet-danger: oklch(0.66 0.18 25);
-    --pet-text: oklch(0.94 0.015 80);
-    --pet-muted: oklch(0.72 0.02 80);
-    --pet-border: oklch(0.32 0.02 260);
-    --pet-body: oklch(0.9 0.05 80);
-    --pet-body-shadow: oklch(0.8 0.06 70);
-    --pet-belly: oklch(0.96 0.03 80);
-    --pet-ear: oklch(0.84 0.07 45);
-    --pet-eye: oklch(0.25 0.03 60);
-    --pet-cheek: oklch(0.78 0.12 30 / 0.45);
+  --chart-1: #0a7764;
+  --chart-2: #28618c;
+  --chart-3: #8a5410;
+  --chart-4: #9c3a2b;
+  --chart-5: #186b49;
 
-    --chart-1: oklch(0.62 0.19 265);
-    --chart-2: oklch(0.72 0.16 150);
-    --chart-3: oklch(0.8 0.14 80);
-    --chart-4: oklch(0.65 0.2 25);
-    --chart-5: oklch(0.7 0.1 200);
-  }
+  --window-shadow: 0 24px 60px -30px rgba(8, 34, 41, 0.28);
+  --popover-shadow: 0 18px 40px -24px rgba(8, 34, 41, 0.22);
+
+  /* 深海舷窗在浅色主题里只是稍微提亮，仍然是深色舞台。 */
+  --pet-bg: #082229;
+
+  color-scheme: light;
 }
 
 @theme inline {
+  --font-sans: -apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Cascadia Mono", monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -124,15 +151,29 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
 
+  --color-signal: var(--signal);
+  --color-decide: var(--decide);
+  --color-whale: var(--whale);
+  --color-wash: var(--wash);
+  --color-abyss: var(--abyss);
+  --color-glow: var(--glow);
+
   --color-pet-bg: var(--pet-bg);
-  --color-pet-primary: var(--pet-primary);
-  --color-pet-primary-foreground: var(--pet-primary-foreground);
-  --color-pet-coral: var(--pet-coral);
-  --color-pet-success: var(--pet-success);
-  --color-pet-danger: var(--pet-danger);
+  --color-pet-surface: var(--pet-surface);
+  --color-pet-input: var(--pet-input);
+  --color-pet-surface-2: var(--pet-surface-2);
+  --color-pet-wash: var(--pet-wash);
   --color-pet-text: var(--pet-text);
   --color-pet-muted: var(--pet-muted);
   --color-pet-border: var(--pet-border);
+  --color-pet-primary: var(--pet-primary);
+  --color-pet-primary-foreground: var(--pet-primary-foreground);
+  --color-pet-signal: var(--pet-signal);
+  --color-pet-coral: var(--pet-coral);
+  --color-pet-ask: var(--pet-ask);
+  --color-pet-success: var(--pet-success);
+  --color-pet-danger: var(--pet-danger);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -141,11 +182,15 @@
 
   --ease-out-soft: var(--motion-ease-out-soft);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 28px;
+  --radius-pill: 999px;
+
+  --shadow-window: var(--window-shadow);
+  --shadow-popover: var(--popover-shadow);
 }

@@ -20,6 +20,7 @@
 - ✅ **触感接管 + 可配时长**（2026-11-02）：启动时关闭 WebView 默认长按震动（`setHapticFeedbackEnabled(false)`），App 用原生 `performHapticFeedback` 发轻/中/成功/失败触感（**不申请 VIBRATE 权限**，跟随系统触感）；麦克风按下即中震；宠物页禁长按选中/复制；自动变暗默认 5 分钟、屏幕常亮最长默认 2 小时，设置页可调。
 - ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
 - ✅ **前端 Phase 1 已完成**（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）双 entry；`entries/desktop.tsx` / `entries/mobile.tsx`、`desktop/**`、`mobile/**`、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；连接/聊天 1:1 迁移，旧 `main.ts` / `styles.css` 已删除；桌面浏览器与安卓真机双向收发通过。
+- ✅ **视觉系统方向 B「深潜声呐」+ 双主题**（2026-11-04，D71）：`tokens.css` 重写为深海语义色板（全 hex）；深色「深海自发光」默认 + 浅色「海面雾光/海玻璃」两套手调主题；`sidekick:theme`（system/light/dark）、`index.html` 防闪脚本、`shared/lib/theme.ts`、`data-theme` + `.dark` 双写、Sonner 跟随；桌面/手机换皮与设置页「外观」三选一；宠物复用 OpenPets 图集不重绘、舞台两主题都深；`design-lab/` 评审稿按 D71 收口删除（不再作为事实源）。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
@@ -48,7 +49,7 @@
 - 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；`src/main.tsx` 据此动态 import 并挂载 `entries/desktop.tsx` / `entries/mobile.tsx`。
 - 协议：WebSocket 文本帧 JSON；服务端把消息广播给所有已连接客户端。定义见 `protocol/README.md`。
 - 数据流：手机 App →(ws)→ 桌面服务 → 广播 → 桌面 UI / 其他客户端。
-- 前端重构目标栈（脚手架已就绪，旧 UI 未迁移）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion；宠物为帧动画图集（OpenPets schema 2），见 `docs/frontend-architecture.md`。
+- 前端重构目标栈（Phase 1 已落地）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion；宠物为帧动画图集（OpenPets schema 2）；视觉为「深海声呐」双主题，颜色/圆角/字体只看 `app/src/shared/styles/tokens.css`，主题运行时在 `shared/lib/theme.ts`，见 `docs/frontend-architecture.md` §6。
 
 ### 桌面端接口
 
@@ -186,7 +187,11 @@ sidekick/
 - **自动重连**：`connection-store` 用模块级单一定时器，退避 1s→2s→4s→8s→16s→30s（上限 30s），每次重试先静默 UDP 重新发现（覆盖端口回退/IP 变化），发现 0 台退回上次地址，多台回上次那台、无地址则停止；手动连接/重新搜索会取消排期并清零退避；`document.hidden` 暂停、回前台立即重试。电脑恢复最晚一个退避周期（≤30s）连上。
 - **无心跳**：协议没有 ping/pong；进程退出/网络断开靠 FIN/RST 立刻发现（实测约 0.5s），电脑睡眠/路由器静默丢包可能长时间仍显示「已连接」，需心跳方案补齐。
 - **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
-- **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex/rgb fallback，`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。**也不支持 CSS `translate` 属性**：Tailwind v4 的 `translate-x/y-*` 工具类编译成 `translate: var(--tw-translate-x) …`，在真机上会被忽略（元素整体偏半个自身宽度）。居中/位移不要用 `left-1/2 -translate-x-1/2`，改用 `inset-x-0` + flex `items-center`，或 `left-0 right-0 mx-auto`；dialog/sheet/tooltip 里仍有 translate 类，属已知待修项。
+- **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex（**不要用 `oklch`/`color-mix` 定义最终令牌**，D71），`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。**也不支持 CSS `translate` 属性**：Tailwind v4 的 `translate-x/y-*` 工具类编译成 `translate: var(--tw-translate-x) …`，在真机上会被忽略（元素整体偏半个自身宽度）。居中/位移不要用 `left-1/2 -translate-x-1/2`，改用 `inset-x-0` + flex `items-center`，或 `left-0 right-0 mx-auto`；dialog/sheet/tooltip 里仍有 translate 类，属已知待修项。
+- **主题防闪**：`app/index.html` `<head>` 里的内联脚本必须保留且在最前——它在 CSS/React 之前读 `localStorage["sidekick:theme"]`（`system|light|dark`，缺失/非法默认深色），写 `<html>` 的 `data-theme` + `.dark` + `color-scheme`。移到 React 或删掉会首屏闪一下错误主题；key 不能改（`shared/lib/theme.ts` 的 `THEME_STORAGE_KEY` 同值）。
+- **主题双写**：令牌看 `data-theme`，Tailwind `dark:` 变体看 `.dark` class；`shared/lib/theme.ts` 的 `applyTheme` 已同时处理，不要只改其中一个或手写 `document.documentElement.className`。系统主题跟随 `matchMedia`、多窗口同步靠 `storage` 事件；Sonner 用 `useTheme().resolved`，不要写死 dark。
+- **默认窗口 1180×760**（min 960×640）：桌面按这个基准设计分栏与间距；改窗口/左栏宽度时同步检查 960 宽不溢出、1180 宽不空。
+- **浅色主题舞台恒深**：切浅色只换壳与内容表面，宠物舞台仍是 `--pet-bg`（浅色 `#082229`）；不要为了“统一”把舞台刷成海玻璃底，也不要改蓝白鲸鱼颜色（浅底会掉对比度）。
 - **Android 返回键**：不注册 `back-button` 监听时系统默认直接 finish（退出 App）。现在 App 启动即注册一次 `subscribeBackButton`（`shared/lib/tauri.ts`）；设置页/聊天页通过 `mobile/system-back.ts` 返回栈消费，根页面走「再按一次退出」（第一次提示、2 秒内第二次调 `exitApp()`，需要 `core:app:allow-exit` 权限，已在 `capabilities/default.json`）。**新增全屏页面时记得 `pushBackHandler`，否则该页按返回会被根页面当成退出确认**。浏览器 `?role=mobile` 用 Esc 模拟返回键（dev mock）。
 - **屏幕常亮**：走 Android 原生窗口标志（`app/src-tauri/src/keep_awake.rs`，`WebviewWindow::with_webview` + `jni_handle().exec`），不用 `navigator.wakeLock`（WebView 上可用性/权限前提不确定）；`jni` 只加在 Android 目标并**锁 0.21**（必须与 `tauri-runtime-wry` 一致，否则 `JniHandle::exec` 闭包类型不匹配）。窗口标志只在窗口可见时生效，所以聊天页/后台由 JS 显式释放；无需 `WAKE_LOCK` 权限。JNI 失败只打 `[keep-awake]` 日志，静默降级为系统默认熄屏。常亮有上限：`useKeepAwake(active, maxDurationMs)` 到点释放，回前台重新计时（`keepAwakeHours` 默认 2，0 = 不限）。
 - **触感（震动）**：WebView 默认长按会由系统发 `LONG_PRESS` 震动（看起来像「点了但没反应」，实际每一下都震）；启动时调 `disable_webview_haptics` → `WebView.setHapticFeedbackEnabled(false)` 关掉它。App 自己的触感走 `haptic(style)` 命令 → `decorView.performHapticFeedback`（light/medium/success/error，API<30 时 CONFIRM/REJECT 降级），**不需要 VIBRATE 权限**；`navigator.vibrate` 因 APK 未声明 VIBRATE 会被 Chromium 忽略（只当浏览器兜底），所以不要再指望它。系统「触摸振动」关闭时 App 静默不震。宠物页靠 `user-select:none` + `-webkit-touch-callout:none` + `contextmenu` 阻止选中/复制，聊天文本和输入框不受影响。
@@ -204,6 +209,7 @@ sidekick/
 - **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind = "voice"` 入库（暂停记录时仍写系统剪贴板、但不入历史）；最多 100 条（置顶优先淘汰）；文件 `~/.sidekick/clipboard.json` 权限 600（旧目录同名文件首次启动自动复制）。
 - **宠物背景不要加光晕**：OLED 像素自发光，光晕/大面积亮色渐变直接耗电；宠物舞台只用 `--pet-bg` 纯深色背景（2026-11-02 移除 `--pet-glow`，D58），装饰只做小面积低亮度。
 - **宠物图集（OpenPets schema 2）**：资产在 `app/src/mobile/features/pet/assets/openpet/`（webp 764KB + poster 14KB + pet.json）；一列一帧、单状态 ≤32 帧、兼容 16；播放器 rAF 按 `frames[].duration` 推进，done 播一次并在末帧定格；后台/覆盖层暂停，减少动效冻结第 0 帧；manifest 非法/解码失败/尺寸不匹配 → poster 兜底。新增状态行只需图集加行 + manifest 登记（可选改 `sprite-state-map.ts` 候选链），渲染器不用动。单帧 256 在 ~500px 舞台 2 倍放大会偏软，解码约 16.8MB；**`.petSlot` 在 max-width 卡住时会变竖长（360×800 屏上是 272×440 CSS），播放器必须按 min(宽,高) 取方形格子 + `overflow:hidden` 居中，否则会露出图集相邻行（看起来像两只宠物）**；资产来自 DeepSeek 鲸鱼（zip 无 LICENSE），发版前确认授权。
+- **宠物资产红线（D71，不可越界）**：复用现有 OpenPets 图集 + `SpritePet`，**不重绘、不染色、不新增鲸鱼**；本体颜色归图集，`tokens.css` 已删除 `--pet-body`/`--pet-belly`/`--pet-eye`/`--pet-cheek`，不要再给鲸鱼加 CSS fill/filter。舞台声呐环只是背景装饰（精灵之后、`aria-hidden`、细描边低亮度），不加光晕（OLED，D58）。
 - **宠物触摸互动已下线**（2026-11-04，D69）：点击、长按、来回抚摸宠物都不产生任何反应，不再有 `POKE`/`PET_*`/`interacting`/手势识别/亲密度/触摸爱心；不要再加 pointer 手势或 `interacting` 状态。命名完成时的爱心、AI 四态、麦克风反应、睡眠/变暗保留。变暗遮罩的点击唤醒是屏幕行为，不是宠物互动。
 - **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume/sessionList`（id、标题、状态、askKind、lastEventAt、completedAt），**不要加提示词/回复/工具参数/路径/cwd/模型名**。标题是唯一内容类外发字段：单行 ≤80 字符、不写日志、不落盘；`sessionList` 最多 50 条，旧客户端忽略。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
 - **手机会话列表**：`sessionList` 随 `status` 广播（最多 50 条，标题 ≤80 字符）；手机 `session-store` 用本地清除标记过滤（`lastEventAt <= cleared.through` 隐藏），标记存 `sidekick-sessions.json` 只含 id/at/through（7 天 TTL、最多 200 条），有新事件自动解除。首次快照/重连不自动展开，只有新的 asking 会话才展开；完成态保留到清除或下一轮。点 asking 会话发 `focus.request`，桌面 `app_focus.rs` 只做 `open -a "DeepSeek Harness"`（1.5s 限频，错误只回错误码），**不接受手机传来的应用路径**。**已归档会话不下发**：桌面桥读 `$DSH_HOME/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存，文件缺失/异常按空）过滤列表，并按可见列表重算聚合态与 `sessions`，避免归档的 asking 让宠物一直停在「等你决定」；插件仍上报原始列表，旧桥忽略。改 `sessionList` 字段要同步 `protocol/README.md`、Rust 桥与手机解析三处。
@@ -211,6 +217,8 @@ sidekick/
 - **结果卡片手动按键**：`key.request` 只接受「最近一次 `mic.result(inserted)`」的目标（owner+mic session），30 秒过期、成功一次即作废、桌面 500ms 限频；按键前重新核对前台应用、密码框、辅助功能，任一不符只回错误码、不按键。「清空」是 `⌘A`+`Delete`（两次确认），不是 ⌘Z；终端等非标准输入框可能不生效，**绝不能因此回退成回车**。日志不打文本/应用名/按键序列；结果卡片只在 `outcome=inserted` 时显示按钮。
 - **麦克风会话/中断（2026-11-04，D70）**：手机 `mic-button` 的手势结束必须看 ref（`heldRef`/`pointerIdRef`）而不是渲染期 `phase`；一次只允许一个 in-flight start（`startingRef` + `lifecycleRef` token），否则 `sessionIdRef`/`startSentRef` 会被并发 start 覆盖，出现「手指已抬起但电脑端一直正在听」。服务端同端重复 `mic.start` 以最新会话为准、异端仍 `session_busy`；`mic.stop` 必须 owner+session 匹配；每个会话 `maxMs+3s` 看门狗；新增 `mic.cancel`（桌面 UI 请求 → 服务端广播 `reason=desktop|timeout`），手机收到后**不校验本地 session** 强制停本地采集。桌面浮层「倾听中」右侧有「取消录音」。改 `mic.cancel` 要同步 `protocol/README.md`、`protocol-audio.md`、Rust `handle_mic_cancel` 与双端解析。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
+- **`--accent` 与 `--whale` 分开（D71）**：`--accent` 是 shadcn 的 hover/选中面（语义 = `--wash` 薄荷薄层）；鲸蓝用新令牌 `--whale`。不要改 `--accent` 当品牌次色，否则所有 shadcn 组件 hover 会变蓝块。
+- **声呐环只做装饰且可暂停**：桌面状态点 `.sonar-dot-ring` 5.6s、手机舞台背景环 6.4s；只动 `transform`/`opacity`，细描边、不发光、不叠 `filter`；`prefers-reduced-motion` 冻结；`useMotionPause` 在后台/窗口失焦写 `<html data-motion-paused>` 暂停。常驻窗口不要再加更多循环动画。
 
 ## 9. 协作约定
 
@@ -237,3 +245,4 @@ sidekick/
 9. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
 10. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
 11. P2：系统级虚拟麦克风、云同步/多语言。
+12. 视觉系统双主题回归（2026-11-04，D71）：逐页检查深/浅两套主题的对比度与层级、浅色下深色宠物舞台的衔接、声呐环在 reduced-motion/后台失焦下的暂停；之后每个新组件都要双主题验收。

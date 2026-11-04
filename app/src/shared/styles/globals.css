@@ -18,13 +18,30 @@
 
   html {
     color-scheme: dark;
+    background: var(--background);
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
   }
 
   body {
     @apply bg-background text-foreground;
     margin: 0;
-    font-family: -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
     overscroll-behavior: none;
+  }
+
+  /* 非 shadcn 组件（链接、原生按钮）的键盘焦点兜底。 */
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--signal);
+    color: var(--primary-foreground);
   }
 }
 
@@ -36,4 +53,36 @@
 
 .min-h-dvh {
   min-height: 100vh;
+}
+
+/* ----------------------------------------------------------------------------
+   Sonar signature · 只动 transform/opacity，低亮度细线
+   -------------------------------------------------------------------------- */
+
+@keyframes sonar-dot {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+
+.sonar-dot-ring {
+  animation: sonar-dot 5.6s var(--motion-ease-out-soft) infinite;
+  animation-play-state: var(--motion-play-state, running);
+}
+
+html[data-motion-paused="true"] {
+  --motion-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sonar-dot-ring {
+    animation: none;
+    opacity: 0.35;
+  }
 }

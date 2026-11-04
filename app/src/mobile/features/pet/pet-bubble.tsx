@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import deepSea from "@/mobile/styles/deep-sea.module.css";
 import { PetStatusCaption } from "./pet-status-caption";
 import type { Bubble } from "./types";
 
@@ -9,8 +10,9 @@ type PetBubbleProps = {
   className?: string;
 };
 
+/** 舞台闲聊气泡：深海卡、14px 圆角、1px 海水描边，不发光。 */
 const BUBBLE_CLASS =
-  "line-clamp-2 max-w-full rounded-2xl border bg-card px-4 py-3 text-[15px] leading-relaxed text-pet-text shadow-sm";
+  "line-clamp-2 max-w-full rounded-[14px] border border-pet-border px-3.5 py-2.5 text-[15px] leading-relaxed text-pet-text";
 
 export function PetBubble({ bubble, caption, className }: PetBubbleProps) {
   return (
@@ -20,7 +22,7 @@ export function PetBubble({ bubble, caption, className }: PetBubbleProps) {
       ) : (
         <div aria-live="polite">
           {bubble && (
-            <p key={bubble.id} className={cn(BUBBLE_CLASS, "border-pet-border")}>
+            <p key={bubble.id} className={cn(BUBBLE_CLASS, deepSea.surface)}>
               {bubble.text}
             </p>
           )}

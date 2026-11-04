@@ -1,10 +1,30 @@
 <!doctype html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN" class="dark" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Sidekick</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // 首屏防闪：在 CSS/React 之前确定主题；key 必须与 shared/lib/theme.ts 一致。
+      (function () {
+        try {
+          var raw = window.localStorage.getItem("sidekick:theme");
+          var pref = raw === "light" || raw === "dark" || raw === "system" ? raw : "dark";
+          var light =
+            pref === "light" ||
+            (pref === "system" &&
+              typeof window.matchMedia === "function" &&
+              window.matchMedia("(prefers-color-scheme: light)").matches);
+          var root = document.documentElement;
+          root.dataset.theme = light ? "light" : "dark";
+          root.classList.toggle("dark", !light);
+          root.style.colorScheme = light ? "light" : "dark";
+        } catch (error) {
+          /* localStorage 被禁用时保持默认深色 */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

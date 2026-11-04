@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { DiscoveredServer } from "@/protocol/discovery";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { SignalDot } from "@/shared/ui/signal-dot";
 import { type ConnectionStatus, useConnectionStore } from "../connection-store";
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
@@ -38,16 +39,20 @@ type DeviceCardProps = {
   onConnect: () => void;
 };
 
+/** 设备卡：名字 + mono 地址 + 状态点，连接按钮 44px。 */
 function DeviceCard({ device, status, error, onConnect }: DeviceCardProps) {
   const connected = status === "connected";
   const connecting = status === "connecting";
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-[14px] border border-border bg-card px-3 py-3">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{device.name}</p>
-        <p className="truncate font-mono text-xs text-muted-foreground">{device.addr}</p>
-        <p className={cn("text-xs", connected ? "text-success" : "text-muted-foreground")}>
+        <div className="flex items-center gap-2">
+          <SignalDot status={connected ? "connected" : connecting ? "waiting" : "idle"} />
+          <p className="truncate text-sm font-medium">{device.name}</p>
+        </div>
+        <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{device.addr}</p>
+        <p className={cn("mt-0.5 text-xs", connected ? "text-success" : "text-muted-foreground")}>
           {connected ? "已连接，可以开始聊天" : connecting ? "正在连接…" : "准备连接"}
         </p>
         {status === "error" && error && (
@@ -57,7 +62,7 @@ function DeviceCard({ device, status, error, onConnect }: DeviceCardProps) {
         )}
       </div>
       {!connected && !connecting && (
-        <Button type="button" size="sm" className="shrink-0" onClick={onConnect}>
+        <Button type="button" size="lg" className="h-11 shrink-0" onClick={onConnect}>
           连接
         </Button>
       )}
@@ -101,23 +106,28 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
 
   return (
     <>
-      <header className="flex shrink-0 items-center justify-between gap-3">
+      <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 pt-1">
         <div className="flex min-w-0 items-center gap-2">
           <img
             src="/logo-icon.svg"
             alt=""
             aria-hidden="true"
-            className="size-7 shrink-0 rounded-lg"
+            className="size-7 shrink-0 rounded-[10px]"
           />
-          <h1 className="text-xl font-semibold tracking-tight">Sidekick</h1>
-          <span className="text-xs text-muted-foreground">手机端</span>
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <h1 className="truncate text-base font-semibold tracking-[-0.01em]">小跟班</h1>
+            <span className="hidden shrink-0 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted-foreground min-[360px]:inline">
+              SIDEKICK · PHONE
+            </span>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <SignalDot status={connected ? "connected" : connecting ? "waiting" : "idle"} />
           <span
-            aria-hidden="true"
-            className={cn("size-2 rounded-full", connected ? "bg-success" : "bg-warning")}
-          />
-          <span role="status" aria-live="polite">
+            role="status"
+            aria-live="polite"
+            className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+          >
             {STATUS_LABELS[status]}
           </span>
         </div>
@@ -125,15 +135,17 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
 
       <section className="mt-4 shrink-0" aria-label="自动发现电脑">
         {discovering ? (
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2.5 rounded-[14px] border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
             <span
               aria-hidden="true"
-              className="size-2.5 shrink-0 rounded-full bg-warning motion-safe:animate-pulse"
+              className="size-2.5 shrink-0 rounded-full bg-decide motion-safe:animate-pulse"
             />
             <span role="status" aria-live="polite">
               正在找电脑…
             </span>
-            <span className="min-w-0 truncate text-xs">请确保手机和电脑在同一个 Wi-Fi</span>
+            <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.1em]">
+              同一 Wi-Fi
+            </span>
           </div>
         ) : devices.length === 1 ? (
           <DeviceCard
@@ -144,15 +156,15 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
           />
         ) : devices.length > 1 ? (
           <div>
-            <p className="text-xs text-muted-foreground">
-              找到 {devices.length} 台电脑，点一台连接：
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              找到 {devices.length} 台电脑，点一台连接
             </p>
             <ul className="mt-2 flex flex-col gap-2">
               {devices.map((device) => (
                 <li key={device.addr}>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                    className="flex min-h-12 w-full items-center justify-between gap-2 rounded-[14px] border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-signal focus-visible:border-signal"
                     onClick={() => handleConnect(device.addr)}
                   >
                     <span className="min-w-0">
@@ -161,8 +173,8 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
                         {device.addr}
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {connectingAddr === device.addr ? "连接中…" : "连接"}
+                    <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                      {connectingAddr === device.addr ? "连接中…" : "连接 →"}
                     </span>
                   </button>
                 </li>
@@ -170,7 +182,7 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
             </ul>
           </div>
         ) : hasDiscovered && !discoverError ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/30 px-3 py-3">
+          <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-3 py-3">
             <p className="text-sm font-medium">没找到电脑</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-muted-foreground">
               <li>手机和电脑连同一个 Wi-Fi</li>
@@ -183,7 +195,7 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
         {discoverError && !discovering && (
           <div
             role="alert"
-            className="mt-2 rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-3"
+            className="mt-2 rounded-[14px] border border-destructive/40 bg-destructive/5 px-3 py-3"
           >
             <p className="text-sm break-words text-destructive">{discoverError}</p>
           </div>
@@ -191,8 +203,12 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
       </section>
 
       {showRetryRow && (
-        <div className="mt-2 flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span role="status" aria-live="polite" className="min-w-0 truncate">
+        <div className="mt-3 flex min-h-11 shrink-0 items-center justify-between gap-2">
+          <span
+            role="status"
+            aria-live="polite"
+            className="min-w-0 truncate font-mono text-[10px] tracking-[0.04em] text-muted-foreground"
+          >
             {retrying
               ? `正在自动重连（第 ${retryAttempt} 次）…`
               : retrySeconds !== null
@@ -204,8 +220,7 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-xs"
+                className="h-11 px-2.5 text-xs text-signal hover:bg-wash hover:text-signal"
                 onClick={retryNow}
               >
                 立即重连
@@ -215,7 +230,7 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 px-2.5 text-xs"
+              className="h-11 rounded-[10px] px-3 text-xs"
               disabled={discovering || retrying}
               onClick={() => void discover()}
             >
@@ -225,14 +240,14 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
         </div>
       )}
 
-      <div className="mt-2 flex shrink-0 flex-col">
+      <div className="mt-1 flex shrink-0 flex-col">
         <button
           type="button"
           aria-expanded={manualOpen}
-          className="self-start text-xs text-muted-foreground underline underline-offset-2"
+          className="flex min-h-11 items-center gap-1 self-start font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
           onClick={() => setManualOpen((open) => !open)}
         >
-          手动输入地址
+          手动输入地址 <span aria-hidden="true">{manualOpen ? "−" : "+"}</span>
         </button>
         {manualOpen && (
           <form
@@ -252,9 +267,9 @@ export function ConnectionBar({ onError }: ConnectionBarProps) {
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              className="h-11 flex-1 text-[15px]"
+              className="h-11 flex-1 rounded-[12px] font-mono text-[15px]"
             />
-            <Button type="submit" size="lg" className="h-11 px-4">
+            <Button type="submit" size="lg" className="h-11 rounded-[12px] px-4">
               连接
             </Button>
           </form>

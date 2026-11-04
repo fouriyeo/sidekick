@@ -533,3 +533,19 @@
 - 放弃：只加服务端看门狗（最坏要等 63 秒，用户仍无法主动取消）；只修手机端（旧 APK/异常路径仍会卡住，且电脑端没有控制权）；在手机端加独立取消按钮（与「按住说话」手势冲突，D62 已明确不设）；桌面用独立的系统级快捷键/托盘取消（本轮 P0 只做应用内浮层，always-on-top/全局快捷键 P1）；取消进入 `processing` 后的云端收尾（该阶段有 9 秒自身超时，本轮不扩展）。
 - 代价：新增一个协议类型与两处解析；同一客户端重复 start 从 `session_busy` 改为替换，旧会话音频丢弃（异常客户端才会触发）；看门狗比手机 60 秒上限晚 3 秒，最坏多等 3 秒；`mic.cancel` 在局域网无鉴权 MVP 下任何已连接客户端都能发（与现有协议一致，配对鉴权后收紧）。
 - 规范：`protocol/README.md`、`docs/engineering/protocol-audio.md`、`audio-pipeline.md`、`asr-cloud-bailian.md`、`docs/prd/mic/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/standards/ux.md`、`app/src-tauri/src/desktop_server.rs`、`app/src/protocol/messages.ts`、`app/src/mobile/features/mic/{mic-button,mic-store,mic-copy}.ts(x)`、`app/src/desktop/features/mic-receiver/*`、`app/src/desktop/use-desktop-connection.ts`、`app/src/shared/lib/mic-status-copy.ts`、`AGENTS.md`。
+
+## D71 · 视觉系统采用方向 B「深潜声呐」，双主题 + 宠物资产不重绘（2026-11-04）
+
+- 背景：用户评价现有界面「太简约、有点丑」——暗色单主题、靛蓝主色、shadcn 默认令牌，桌面端像普通工具面板，手机端宠物页之外没有性格。design-lab 用三份自包含 HTML 提案（A 夜灯暖屋 / B 深潜声呐 / C 掌心贴纸）做双主题评审，用户选定方向 B，并要求浅色主题也是设计过的一套。
+- 决策：
+  - **采用方向 B「深潜声呐」作为唯一视觉系统**：`app/src/shared/styles/tokens.css` 重写为深海语义色板（hex、无 oklch/color-mix），两套手调主题——深色「深海自发光」（默认、第一主题）与浅色「海面雾光 + 海玻璃」（第二主题）；概念从「夜灯桌宠」改为「深海声呐」，删除「本期不做浅色」。
+  - **主题运行时**：`app/index.html` `<head>` 内联防闪脚本读 `localStorage` 的 `sidekick:theme`（`system | light | dark`，非法/缺失默认 `dark`），在 CSS/React 之前写 `data-theme` + `.dark` + `color-scheme`；`shared/lib/theme.ts` 提供 `initTheme` / `useTheme` / `setThemePreference` / `applyTheme`，跟随 `matchMedia` 系统变化、监听 `storage` 同步多窗口；Sonner 用 `resolved` 跟随主题。`data-theme` 服务令牌、`.dark` 只服务 Tailwind `dark:` 变体，两者必须同步。
+  - **宠物资产不重绘**：复用现有 OpenPets schema 2 图集与 `SpritePet`，不重绘/不染色/不新增鲸鱼；删除旧的 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek` CSS 颜色变量（本体颜色归图集）。宠物舞台在两套主题里都保持深海底色（`--pet-bg` 深 `#030e12` / 浅 `#082229`）；声呐环只是背景装饰，不加光晕（OLED，D58）。
+  - **`--accent` 与 `--whale` 语义拆分**：`--accent` 保持 shadcn 的 hover/选中面语义（= `--wash` 薄荷薄层），鲸蓝单独新开 `--whale`，避免改 `--accent` 导致所有组件 hover 变蓝块。
+  - **`--input` 加强**：`--border` 保持约 1.9:1 的 1px hairline（只做分隔，不承担文字/控件识别）；表单控件描边单独用 `--input`（浅 `#6f8f89` / 深 `#578893`；对实际输入框底 `--popover` 约 3.48 / 3.51，对卡片 3.34 / 4.10），满足 WCAG 1.4.11 而不把全站描边加粗；宠物舞台输入框用固定的 `--pet-input`（`#578893`）。
+  - **清理 `design-lab/`**：评审结束后删除提案 HTML、对比首页、预览图与 QA 脚本，只保留正式规范（`docs/standards/visual.md`）与令牌文件；不再把评审稿当事实源。
+  - **放弃方向 A（夜灯暖屋）与方向 C（掌心贴纸）**：不再保留备选主题或切换入口。
+- 原因：B 的「深、清、准」最贴合产品定位（常驻仪器 + 掌心宠物），且用语义色（信号/鲸蓝/琥珀）而不是装饰表达状态；双主题是用户明确的白天/办公室诉求；宠物资产复用能一次改皮、零美术返工；令牌 hex 是 WebView 103 兼容底线。
+- 放弃：只做深色（用户明确要浅色）；把深色直接反色当浅色（浅色需重新设计光源与表面）；为浅色主题重绘浅底鲸鱼/加描边（资产与授权成本高）；把鲸蓝写进 `--accent`（破坏 shadcn 语义）；把 `--border` 整体提到 3:1（仪器感变工程图）；继续用 `oklch`/`color-mix` 定义令牌（真机不支持）。
+- 代价：两套主题每个新组件都要双主题验收，对比度与视觉层级维护成本约翻倍；浅色主题下宠物舞台仍是深色舷窗，页面与舞台有有意的明度断层；`design-lab/` 评审稿删除后不可恢复（只留结论与令牌）；以后改色值必须同时更新两套并重跑对比度检查。
+- 规范：`app/index.html`、`app/src/shared/styles/{tokens.css,globals.css}`、`app/src/shared/lib/{theme.ts,local-storage.ts}`、`app/src/shared/ui/{theme-options.tsx,signal-dot.tsx,sonner.tsx}`、`app/src/desktop/features/settings/components/settings-sheet.tsx`、`app/src/mobile/features/pet/pet-settings.tsx`、`docs/standards/{visual,ux}.md`、`docs/frontend-architecture.md` §6、`docs/status.md`、`AGENTS.md` §2/§3/§8/§10。

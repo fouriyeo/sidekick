@@ -59,7 +59,7 @@ docs/
 │  ├─ documentation.md          # 文档树、元数据、懒加载协议
 │  ├─ product.md                # PRD / 优先级 / 变更 / 质量门
 │  ├─ ux.md                     # 竖屏、反馈、AI 联动、无障碍
-│  ├─ visual.md                 # 夜灯桌宠视觉、令牌、宠物资产、动效
+│  ├─ visual.md                 # 深海声呐双主题、令牌、宠物资产、动效
 │  └─ engineering.md            # 平台边界、依赖方向、DoD
 ├─ prd/                         # 功能需求
 │  ├─ INDEX.md

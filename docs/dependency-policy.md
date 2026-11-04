@@ -183,7 +183,7 @@
 - 图表库（ECharts / Recharts）：有统计页再评估。
 - i18n 框架：当前中文优先，有第二语言需求再引。
 - 日期库（date-fns / dayjs）：先用 `Intl`；确需复杂时区/计算再引。
-- 主题库（next-themes）：当前只做暗色；需要浅色主题时再评估。
+- 主题库（next-themes）：不引；主题运行时用 `shared/lib/theme.ts` + `data-theme`/`.dark` 双写，避免为单一切换场景加依赖。
 
 **原生替代**
 

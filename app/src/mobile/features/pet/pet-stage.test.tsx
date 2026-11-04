@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { createIdleAiStatus } from "./ai-status";
 import { PetStage } from "./pet-stage";
@@ -203,5 +204,56 @@ describe("PetStage 会话列表", () => {
     expect(stageSection(container)).toHaveAttribute("data-session-panel", "expanded");
     expect(container.querySelector('[style*="--pet-session-shift: 56px"]')).not.toBeNull();
     expect(screen.queryByText("等你决定")).not.toBeInTheDocument();
+  });
+});
+
+describe("PetStage 方向 B 舞台装饰", () => {
+  it("顶部细状态条 aria-hidden，显示「已连接 · 名字」，断连显示未连接", () => {
+    useConnectionStore.setState({ status: "connected" });
+    const { container, unmount } = renderStage();
+
+    const marker = screen.getByText("已连接");
+    expect(marker.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByText("小跟班")).toBeInTheDocument();
+    // 状态条不抢舞台 aria-live 的播报。
+    expect(container.querySelector('[aria-live="polite"].sr-only')).toHaveTextContent("小跟班");
+
+    unmount();
+    useConnectionStore.setState({ status: "disconnected" });
+    renderStage();
+    expect(screen.getByText("未连接")).toBeInTheDocument();
+    expect(screen.queryByText("已连接")).not.toBeInTheDocument();
+  });
+
+  it("声呐环在精灵之后、aria-hidden，且减少动效时冻结", () => {
+    const { container, unmount } = renderStage();
+    const sonar = container.querySelector('[data-sonar="stage"]');
+    const sprite = container.querySelector("[data-sprite-state]");
+    if (!(sonar instanceof HTMLElement) || !(sprite instanceof HTMLElement)) {
+      throw new Error("声呐环或精灵未渲染");
+    }
+    expect(sonar).toHaveAttribute("aria-hidden", "true");
+    // DOM 顺序：环先于精灵 => 视觉上在精灵后面。
+    expect(sonar.compareDocumentPosition(sprite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+
+    setStageState({ reduceMotion: "on" });
+    const reduced = renderStage();
+    expect(stageSection(reduced.container)).toHaveAttribute("data-reduced-motion", "true");
+  });
+
+  it("状态文案 21px + mono 副行；asking 用琥珀，不用珊瑚", () => {
+    setStageState({ ai: "asking", caption: "ai_asking" });
+    renderStage();
+
+    const caption = screen.getByText("等你决定");
+    const card = caption.closest("p");
+    if (!(card instanceof HTMLElement)) throw new Error("状态卡未渲染");
+    expect(card.className).toContain("rounded-[14px]");
+    expect(card.className).toContain("border-pet-ask");
+    expect(card.className).not.toContain("border-pet-coral");
+    expect(caption.className).toContain("text-[21px]");
+    expect(screen.getByText("AWAITING")).toBeInTheDocument();
+    expect(screen.getByText("请到电脑上确认")).toBeInTheDocument();
   });
 });

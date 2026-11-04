@@ -67,11 +67,11 @@ afterEach(() => {
 });
 
 describe("ClipboardPanel 查看详情", () => {
-  it("列表仍只截两行，但每条都有查看详情按钮", async () => {
+  it("列表行单行截断，但每条都有查看详情按钮", async () => {
     render(<ClipboardPanel />);
 
     const preview = await screen.findByText(/第一行：把这段代码改成异步/);
-    expect(preview.className).toContain("line-clamp-2");
+    expect(preview.className).toContain("truncate");
     expect(screen.getAllByRole("button", { name: "查看详情" })).toHaveLength(2);
   });
 

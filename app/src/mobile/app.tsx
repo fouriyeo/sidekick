@@ -17,6 +17,7 @@ import {
   parseMicMessage,
   parseStatusMessage,
 } from "@/protocol/messages";
+import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import {
   disableWebviewHaptics,
   exitApp,
@@ -53,6 +54,8 @@ export function MobileApp() {
   const keepAwake = usePetStore((state) => state.pet.settings.keepAwake);
   const keepAwakeHours = usePetStore((state) => state.pet.settings.keepAwakeHours);
   const keepAwakeMs = keepAwakeHours > 0 ? keepAwakeHours * 60 * 60 * 1000 : null;
+
+  useMotionPause();
 
   // 宠物页在前台（含设置弹层）时屏幕常亮；聊天页与后台交给系统默认熄屏。
   // 常亮默认最多 2 小时，到点释放，避免放桌边整夜耗电（设置页可调，0 = 不限）。

@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统改为「深海声呐」双主题（D71），主题运行时见 §6。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -63,6 +63,8 @@ app/
 │  │  ├─ ui/                  # shadcn 复制组件（button/dialog/sheet/...）
 │  │  ├─ lib/
 │  │  │  ├─ tauri.ts          # invoke/listen 唯一出口
+│  │  │  ├─ theme.ts          # 主题偏好：initTheme/useTheme/setThemePreference
+│  │  │  ├─ local-storage.ts  # 安全 localStorage 读写（含 sidekick:theme）
 │  │  │  ├─ utils.ts          # cn() 等
 │  │  │  └─ format.ts         # Intl 等纯函数
 │  │  └─ styles/
@@ -164,24 +166,72 @@ UI 事件
 - `shared/styles/globals.css` 依次引入 `tailwindcss`、`tw-animate-css`、`shadcn/tailwind.css`、`./tokens.css`；`@custom-variant dark` 使用 `.dark` 类。
 - 设计令牌以 shadcn 语义名为基线：`background`、`foreground`、`card`、`popover`、`primary`、`secondary`、`muted`、`accent`、`destructive`、`border`、`input`、`ring`、`radius`；品牌值只在 `tokens.css` 覆盖。
 - `shadcn/tailwind.css` 只提供 variants/utilities；颜色值在 `tokens.css` 定义。
-- 暗色优先：`:root, .dark` 先共用暗色值，`<html class="dark">`；浅色主题以后再加，不在本期实现。
-- 字体用系统栈：`-apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif`；不打包完整中文字体。
+- 视觉系统是「深海声呐」双主题（2026-11-04，D71）：`tokens.css` 的 `:root` 放深色（默认），`:root[data-theme="light"]` 放浅色；**颜色不再由 `.dark` 块承载**。`.dark` 只服务 Tailwind 的 `dark:` 变体，必须与 `data-theme` 同步。
+- 令牌全部 hex（真机 WebView 103 不支持 `oklch`/`color-mix`），`--radius: 12px`；语义色板与用法见 [standards/visual.md](./standards/visual.md)。
+- 字体用系统栈：`-apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif`；数据/地址/用量用 `ui-monospace`；`body` 开启 `tabular-nums`；不打包完整中文字体。
 - 图标统一用 lucide-react；不引 iconfont、不内联一大段 SVG path。
+
+**主题运行时**
+
+主题必须在 CSS/React 之前确定，否则首屏会闪；持久化 key 为 `sidekick:theme`。
+
+1. `app/index.html` 的 `<head>` 内联防闪脚本（在样式与入口脚本之前执行）：
+   - 读 `localStorage["sidekick:theme"]`，只接受 `system | light | dark`，非法/缺失一律 `dark`（默认深色）；
+   - `system` 用 `matchMedia("(prefers-color-scheme: light)")` 解析；
+   - 同时写 `<html>` 的 `data-theme`（令牌）、`dark` class（Tailwind `dark:` 变体）与 `color-scheme`；localStorage 被禁用（隐私模式等）时静默保持深色。
+2. `shared/lib/theme.ts` 是运行时唯一出口：
+   - `ThemePreference = "system" | "light" | "dark"`，`ResolvedTheme = "light" | "dark"`；
+   - `initTheme()`：入口调用一次，应用当前偏好并挂上系统监听；
+   - `useTheme()`：`useSyncExternalStore`，返回 `{ preference, resolved }`；
+   - `setThemePreference(pref)`：写 localStorage + 立即应用，切换即时生效、不刷新；
+   - `applyTheme` 负责双写 `data-theme` + `.dark` + `color-scheme`，三者不能只改一个。
+3. 跟随系统与多窗口同步：偏好为 `system` 时监听 `matchMedia("(prefers-color-scheme: light)")` 的 `change`；任意窗口改偏好通过 `storage` 事件同步到其它窗口。
+4. Sonner 跟随主题：`shared/ui/sonner.tsx` 用 `useTheme().resolved` 作为 `<Sonner theme={...}>`，不写死 dark。
+5. 设置入口：桌面设置 Sheet 与手机宠物设置共用 `shared/ui/theme-options.tsx`（跟随系统 / 浅色 / 深色，`aria-pressed`）；只影响本机界面，不改变宠物舞台。
 
 **令牌示例**
 
 ```css
-/* shared/styles/tokens.css */
-:root,
-.dark {
-  --radius: 0.75rem;
-  --background: oklch(0.18 0.02 260);
-  --foreground: oklch(0.93 0.01 260);
-  --primary: oklch(0.62 0.19 265);
-  --primary-foreground: oklch(0.98 0.01 260);
-  --border: oklch(0.3 0.02 260);
-  --ring: oklch(0.62 0.19 265);
+/* shared/styles/tokens.css（节选；完整值以此文件为准） */
+:root {
+  --radius: 12px;
   --motion-ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 240ms;
+  --dur-4: 320ms;
+
+  /* 深色（默认）：深海自发光 */
+  --background: #06181e;
+  --foreground: #dceceb;
+  --card: #0b242c;
+  --primary: #3fc4a0;
+  --primary-foreground: #032019;
+  --border: #2b5560;
+  --input: #578893;
+  --ring: #6ef0c8;
+  --signal: #6ef0c8;
+  --whale: #8fb6e0;
+  --wash: #10393b;
+  --abyss: #030e12;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  /* 浅色（第二主题）：海面雾光 + 海玻璃 */
+  --background: #e7efed;
+  --foreground: #0e2a2b;
+  --card: #f5faf8;
+  --primary: #095b51;
+  --primary-foreground: #f7fdfb;
+  --border: #a4beb9;
+  --input: #6f8f89;
+  --ring: #0a7764;
+  --signal: #0a7764;
+  --whale: #28618c;
+  --wash: #dfece8;
+  --abyss: #082229;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -190,29 +240,37 @@ UI 事件
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-lg: var(--radius);
+  --color-signal: var(--signal);
+  --color-whale: var(--whale);
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
   --ease-out-soft: var(--motion-ease-out-soft);
 }
 ```
 
-完整令牌集见 `app/src/shared/styles/tokens.css`。
+完整令牌集（含 `--pet-*`、`--chart-*`、`--shadow-*`）见 `app/src/shared/styles/tokens.css`；语义解释见 [standards/visual.md](./standards/visual.md) §3。
 
 **类名与组件**
 
 - 条件类名统一用 `cn()`（来自 `cn` 包，已替代 `clsx` + `tailwind-merge`）；不要手写字符串拼接。
 - 多变体组件用 CVA（shadcn 默认方案）；不要为每个变体写一套 CSS。
 - 类名顺序：布局 → 盒模型 → 排版 → 视觉 → 状态；启用 Biome 的 `useSortedClasses` 时自动排序。
-- 不给 `<body>` 或全局元素写“状态类”做布局切换；用组件边界和 `data-*` 属性。
+- 不给 `<body>` 或全局元素写“状态类”做布局切换；用组件边界和 `data-*` 属性。主题切换统一走 `data-theme` + `.dark`，不要手改 `<html>` 的 class。
+- 颜色令牌已随 `data-theme` 变化，组件优先用语义类（`bg-card`、`text-muted-foreground`）；只有需要针对主题换结构/图片时才用 `dark:`。
 - 动态值（进度、位移）用 CSS 变量传，不在 JSX 里拼复杂字符串。
 
 **移动端**
 
 - 所有全屏容器使用 `env(safe-area-inset-*)`；底部输入区必须避开手势条。
-- 高度用 `100dvh` / `min-h-dvh`，不要用 `100vh`；键盘弹出时用 `visualViewport` 调整底部输入区。
+- 高度用 `100dvh` / `min-h-dvh`；真机 WebView 103 不支持 `dvh`，`globals.css` 里未分层的 `.h-dvh { height: 100vh }` / `.min-h-dvh { min-height: 100vh }` 兜底优先于 Tailwind 分层工具类，**不要删**。
+- 键盘弹出时用 `visualViewport` 调整底部输入区，避免输入框被遮挡。
 - 点击目标 ≥ 44×44 px；图标按钮要有 `aria-label`。
 - 安卓上避免大面积 `backdrop-filter`、`filter: blur()`、阴影动画；优先 `transform`/`opacity`。
-- 桌面窗口可缩放：用 `min-w`/`max-w` 与 grid/flex，不写死像素宽度；手机 entry 不假设桌面尺寸。
+- 桌面窗口可缩放：用 `min-w`/`max-w` 与 grid/flex，不写死像素宽度；设计基准 1180×760（最小 960×640），手机 entry 不假设桌面尺寸。
 
 ## 7. 组件规范（shadcn/ui + Base UI）
 
@@ -364,6 +422,5 @@ adb shell dumpsys package com.android.webview | grep versionName
 - 真机 WebView 版本（决定 Tailwind v4 是否可直接用）。
 - 宠物美术方向：改用内置 OpenPets schema 2 帧动画图集（2026-11-02，D57）；自绘 SVG 与 Rive 路线停止。
 - 聊天记录是否持久化、存哪里（SQLite/tauri-plugin-store）。
-- 浅色主题是否要做；当前只做暗色。
 - 协议类型是否用 ts-rs 自动生成；等协议字段稳定后再定。
 - iOS 端 WebView 性能与帧动画兼容性，后续单独评估。

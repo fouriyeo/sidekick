@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import { ChevronDown, ChevronUp, ExternalLink, Loader2, X } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import deepSea from "@/mobile/styles/deep-sea.module.css";
 import { pushBackHandler } from "@/mobile/system-back";
 import { formatRelativeTime } from "@/shared/lib/format";
 import { type SessionRow, useSessionStore, visibleSessions } from "./session-store";
@@ -11,11 +12,19 @@ type SessionPanelProps = {
   onInteract?: () => void;
 };
 
-const DOT_CLASS: Record<SessionRow["display"], string> = {
-  asking: "bg-pet-coral",
-  working: "bg-pet-primary",
-  completed: "bg-pet-success",
-  idle: "bg-pet-muted",
+/** 方向 B：状态用 1–3 格信号强度表达，颜色只是第二线索（色弱也能读）。 */
+const SIGNAL_LEVEL: Record<SessionRow["display"], number> = {
+  asking: 1,
+  working: 2,
+  completed: 3,
+  idle: 1,
+};
+
+const TONE_CLASS: Record<SessionRow["display"], string> = {
+  asking: "text-pet-ask",
+  working: "text-pet-signal",
+  completed: "text-pet-success",
+  idle: "text-pet-muted",
 };
 
 function displayStateText(row: SessionRow): string {
@@ -39,6 +48,29 @@ function sessionTitle(row: SessionRow): string {
 function rowTime(row: SessionRow): string {
   const at = row.display === "completed" && row.completedAt ? row.completedAt : row.lastEventAt;
   return formatRelativeTime(at);
+}
+
+/** 三格信号条：asking 1 格、working 2 格、completed 3 格、idle 1 格（灰）。 */
+function SignalBars({ display }: { display: SessionRow["display"] }) {
+  const level = SIGNAL_LEVEL[display];
+  return (
+    <span
+      aria-hidden="true"
+      data-signal-bars={level}
+      className={cn("inline-flex h-2.5 shrink-0 items-end gap-0.5", TONE_CLASS[display])}
+    >
+      {[4, 7, 10].map((height, index) => (
+        <i
+          key={height}
+          className={cn(
+            "w-0.5 rounded-[1px] bg-current",
+            index < level ? "opacity-100" : "opacity-30",
+          )}
+          style={{ height }}
+        />
+      ))}
+    </span>
+  );
 }
 
 export function SessionPanel({ active, onInteract }: SessionPanelProps) {
@@ -77,12 +109,12 @@ export function SessionPanel({ active, onInteract }: SessionPanelProps) {
         className="absolute left-0 right-0 z-20 mx-auto w-[min(92vw,520px)] pointer-events-auto top-[calc(env(safe-area-inset-top)+64px)]"
         onPointerDown={onInteract}
       >
-        <div className="rounded-2xl border border-pet-border bg-pet-bg shadow-lg">
+        <div className={cn("rounded-[14px] border border-pet-border", deepSea.surface)}>
           <p
             key={noticeId}
             role="status"
             aria-live="polite"
-            className="px-3 py-2 text-[11px] leading-relaxed text-pet-muted"
+            className="px-3 py-2 font-mono text-[10.5px] leading-relaxed text-pet-muted"
           >
             {notice}
           </p>
@@ -109,15 +141,22 @@ export function SessionPanel({ active, onInteract }: SessionPanelProps) {
       className="absolute left-0 right-0 z-20 mx-auto w-[min(92vw,520px)] pointer-events-auto top-[calc(env(safe-area-inset-top)+64px)]"
       onPointerDown={onInteract}
     >
-      <div className="overflow-hidden rounded-2xl border border-pet-border bg-pet-bg shadow-lg">
+      <div
+        className={cn("overflow-hidden rounded-[14px] border border-pet-border", deepSea.surface)}
+      >
         {expanded && (
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <span className="text-xs font-medium text-pet-text">会话</span>
-            <span className="min-w-0 truncate text-[11px] text-pet-muted">{summary}</span>
+          <div className="flex min-h-11 items-center justify-between gap-2 px-3">
+            <span className="flex shrink-0 items-baseline gap-1.5">
+              <span className="text-xs font-medium text-pet-text">会话</span>
+              <span className="font-mono text-[10px] tracking-[0.14em] text-pet-muted">
+                · {String(rows.length).padStart(2, "0")}
+              </span>
+            </span>
+            <span className="min-w-0 truncate font-mono text-[10px] text-pet-muted">{summary}</span>
             <button
               type="button"
               aria-label="收起会话列表"
-              className="flex size-8 shrink-0 items-center justify-center rounded-full text-pet-muted"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full text-pet-muted hover:text-pet-text"
               onClick={toggle}
             >
               <ChevronUp className="size-4" />
@@ -126,7 +165,7 @@ export function SessionPanel({ active, onInteract }: SessionPanelProps) {
         )}
 
         {expanded ? (
-          <ul className="max-h-[240px] list-none overflow-y-auto border-t border-pet-border p-0">
+          <ul className="max-h-[244px] list-none overflow-y-auto border-t border-pet-border p-0">
             {rows.map((row) => (
               <SessionRowItem
                 key={row.id}
@@ -158,7 +197,7 @@ export function SessionPanel({ active, onInteract }: SessionPanelProps) {
             key={noticeId}
             role="status"
             aria-live="polite"
-            className="border-t border-pet-border px-3 py-1.5 text-[11px] leading-relaxed text-pet-muted"
+            className="border-t border-pet-border px-3 py-2 font-mono text-[10.5px] leading-relaxed text-pet-muted"
           >
             {notice}
           </p>
@@ -192,44 +231,44 @@ function SessionRowItem({
   return (
     <li
       className={cn(
-        "flex items-center gap-1.5 px-3 py-2",
-        asking ? "bg-secondary" : undefined,
+        "flex min-h-12 items-center gap-1 px-2",
+        asking ? deepSea.wash : undefined,
         expanded ? "border-t border-pet-border first:border-t-0" : undefined,
       )}
     >
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-1 text-left"
         aria-label={actionLabel}
         onClick={onOpen}
       >
-        <span
-          aria-hidden="true"
-          className={cn("size-2 shrink-0 rounded-full", DOT_CLASS[row.display])}
-        />
+        <SignalBars display={row.display} />
         <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              "block truncate text-xs font-medium",
-              asking ? "text-pet-coral" : "text-pet-text",
-            )}
-          >
-            {title}
-          </span>
-          <span className="mt-0.5 block text-[10px] text-pet-muted">
-            {displayStateText(row)} · {rowTime(row)}
+          <span className="block truncate text-[13px] font-medium text-pet-text">{title}</span>
+          <span className="mt-0.5 flex min-w-0 items-baseline gap-1.5 font-mono text-[10px] whitespace-nowrap">
+            <span className={cn("shrink-0", TONE_CLASS[row.display])}>
+              {displayStateText(row)} ·
+            </span>
+            <span className="min-w-0 truncate text-pet-muted">{rowTime(row)}</span>
           </span>
         </span>
-        {asking && <ExternalLink aria-hidden="true" className="size-3.5 shrink-0 text-pet-coral" />}
-        {pendingFocus && <Loader2 aria-hidden="true" className="size-3.5 shrink-0 animate-spin" />}
+        {asking && (
+          <ExternalLink
+            aria-hidden="true"
+            className={cn("size-3.5 shrink-0", TONE_CLASS[row.display])}
+          />
+        )}
+        {pendingFocus && (
+          <Loader2 aria-hidden="true" className="size-3.5 shrink-0 animate-spin text-pet-muted" />
+        )}
       </button>
 
       <button
         type="button"
         aria-label={pendingClear ? `确认清除会话 ${title}` : `清除会话 ${title}`}
         className={cn(
-          "flex h-8 shrink-0 items-center justify-center rounded-full px-1.5 text-pet-muted",
-          pendingClear ? "text-pet-coral" : undefined,
+          "flex size-11 shrink-0 items-center justify-center rounded-full text-pet-muted hover:text-pet-text",
+          pendingClear ? "text-pet-danger hover:text-pet-danger" : undefined,
         )}
         onClick={onClear}
       >
@@ -244,7 +283,7 @@ function SessionRowItem({
         <button
           type="button"
           aria-label="展开会话列表"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-pet-muted"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-pet-muted hover:text-pet-text"
           onClick={onExpand}
         >
           <ChevronDown aria-hidden="true" className="size-4" />

@@ -180,3 +180,46 @@ describe("SessionPanel", () => {
     expect(screen.getByRole("status").textContent).toContain("已在电脑上打开");
   });
 });
+
+describe("SessionPanel 方向 B 视觉结构", () => {
+  it("会话行 48px 高，asking 是 1 格琥珀信号", () => {
+    seed([session({ id: "s-1", title: "写周报", state: "asking", askKind: "question" })]);
+    const { container } = render(<SessionPanel active />);
+
+    const row = container.querySelector("li");
+    expect(row?.className).toContain("min-h-12");
+    const bars = container.querySelector("[data-signal-bars]");
+    if (!(bars instanceof HTMLElement)) throw new Error("信号格未渲染");
+    expect(bars).toHaveAttribute("data-signal-bars", "1");
+    expect(bars.className).toContain("text-pet-ask");
+    expect(bars.querySelectorAll("i")).toHaveLength(3);
+    expect(bars.className).not.toContain("text-pet-coral");
+  });
+
+  it("working 2 格信号、completed 3 格完成绿", () => {
+    seed(
+      [
+        session({ id: "s-1", title: "重构鉴权", state: "working" }),
+        session({ id: "s-2", title: "写周报", state: "idle", completedAt: 900 }),
+      ],
+      true,
+    );
+    const { container } = render(<SessionPanel active />);
+
+    const bars = [...container.querySelectorAll("[data-signal-bars]")];
+    expect(bars[0]).toHaveAttribute("data-signal-bars", "2");
+    expect(bars[0]?.className).toContain("text-pet-signal");
+    expect(bars[1]).toHaveAttribute("data-signal-bars", "3");
+    expect(bars[1]?.className).toContain("text-pet-success");
+  });
+
+  it("清除与展开按钮保持 44px 触控目标", () => {
+    seed([session({ id: "s-1", title: "修复登录", state: "working" })]);
+    render(<SessionPanel active />);
+
+    expect(screen.getByRole("button", { name: "清除会话 修复登录" }).className).toContain(
+      "size-11",
+    );
+    expect(screen.getByRole("button", { name: "展开会话列表" }).className).toContain("size-11");
+  });
+});

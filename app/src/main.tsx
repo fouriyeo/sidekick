@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { getAppRole, normalizeError } from "@/shared/lib/tauri";
+import { initTheme } from "@/shared/lib/theme";
 import "./shared/styles/globals.css";
 
 function FatalError({ message }: { message: string }) {
@@ -23,6 +24,7 @@ async function bootstrap() {
     installTauriMock();
   }
 
+  initTheme();
   const root = createRoot(container);
 
   try {

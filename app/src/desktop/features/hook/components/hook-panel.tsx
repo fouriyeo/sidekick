@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { Label } from "@/shared/ui/label";
+import { SignalDot } from "@/shared/ui/signal-dot";
 import { Switch } from "@/shared/ui/switch";
 import {
   defaultHookProfile,
@@ -24,11 +25,11 @@ import {
   useHookStore,
 } from "../hook-store";
 
-const TONE_DOT_CLASS: Record<HookStatusTone, string> = {
-  connected: "bg-success",
-  waiting: "bg-warning",
-  error: "bg-destructive",
-  muted: "bg-muted-foreground/50",
+const TONE_SIGNAL_STATUS: Record<HookStatusTone, "connected" | "waiting" | "error" | "idle"> = {
+  connected: "connected",
+  waiting: "waiting",
+  error: "error",
+  muted: "idle",
 };
 
 const TONE_TEXT_CLASS: Record<HookStatusTone, string> = {
@@ -115,14 +116,16 @@ export function HookPanel() {
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-border bg-card p-5">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-card p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <Plug className="size-4 text-muted-foreground" />
             AI 联动
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">把 AI 的工作状态同步给手机宠物</p>
+          <p className="mt-1 font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
+            Hook · DeepSeek Harness
+          </p>
         </div>
         <Button
           type="button"
@@ -142,20 +145,14 @@ export function HookPanel() {
         </Button>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3.5">
+      <div className="flex flex-col gap-3.5">
         <section
           aria-label="DeepSeek Harness 联动"
-          className="rounded-xl border border-border bg-background/40 p-4"
+          className="rounded-lg border border-border bg-popover p-4"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-2.5">
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "mt-1.5 inline-flex size-2 shrink-0 rounded-full",
-                  TONE_DOT_CLASS[summary.tone],
-                )}
-              />
+              <SignalDot status={TONE_SIGNAL_STATUS[summary.tone]} className="mt-1.5" />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold">DeepSeek Harness</h3>
@@ -205,7 +202,7 @@ export function HookPanel() {
           )}
 
           {profiles.length > 1 && (
-            <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <div className="mt-3 rounded-lg border border-border bg-card px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Label htmlFor="dsh-hook-profile" className="text-xs text-muted-foreground">
                   DSH profile
@@ -215,7 +212,7 @@ export function HookPanel() {
                   value={selectedProfile}
                   disabled={profileLocked || !idle}
                   onChange={(event) => setProfile(event.target.value)}
-                  className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                  className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {profiles.map((item) => (
                     <option key={item.name} value={item.name}>
@@ -238,7 +235,7 @@ export function HookPanel() {
           )}
 
           {!installed && (
-            <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+            <div className="mt-3 rounded-lg border border-border bg-card px-3 py-2.5">
               <p className="text-xs font-medium">还没有写入联动</p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 打开「启用」会先在本机写入配置、同步脚本和一小段 cordis 补丁；不会安装 npm
@@ -251,20 +248,26 @@ export function HookPanel() {
           )}
 
           {installed && !enabled && (
-            <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-              联动已暂停：脚本停止上报，宠物回到静态；安装会保留，下次打开开关即可。
-            </p>
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2">
+              <SignalDot status="waiting" pulse={false} className="mt-1" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                联动已暂停：脚本停止上报，宠物回到静态；安装会保留，下次打开开关即可。
+              </p>
+            </div>
           )}
 
           {installed && enabled && !connected && (
-            <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-warning">
-              已写入，等待 DeepSeek Harness
-              重启/连接。启动后会自动出现「已连接」，不需要再点其他按钮。
-            </p>
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2">
+              <SignalDot status="waiting" pulse={false} className="mt-1" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                已写入，等待 DeepSeek Harness
+                重启/连接。启动后会自动出现「已连接」，不需要再点其他按钮。
+              </p>
+            </div>
           )}
 
           {connected && status?.lastEventAt === null && (
-            <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <div className="mt-3 rounded-lg border border-border bg-card px-3 py-2">
               <p className="text-xs font-medium">已连接，还没有收到事件</p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 在 DeepSeek Harness 里开始一轮对话后就会出现状态。如果一直没有，可能是 DSH
@@ -315,7 +318,7 @@ export function HookPanel() {
           )}
         </section>
 
-        <section className="rounded-xl border border-border bg-background/40 p-4">
+        <section className="rounded-lg border border-border bg-popover p-4">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold">模拟一次状态</h3>
             <span className="text-[11px] text-muted-foreground">会真的推送到手机</span>
@@ -340,7 +343,7 @@ export function HookPanel() {
           </p>
         </section>
 
-        <section className="rounded-xl border border-border bg-background/40 p-4">
+        <section className="rounded-lg border border-border bg-popover p-4">
           <h3 className="text-sm font-semibold">状态怎么映射</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
             DSH 只把事件映射成四种宠物状态，不读取事件内容。
@@ -367,7 +370,7 @@ export function HookPanel() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-background/40 p-4">
+        <section className="rounded-lg border border-border bg-popover p-4">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold">最近事件</h3>
             <span className="text-[11px] text-muted-foreground">最多 20 条 · 不含内容</span>
@@ -381,7 +384,7 @@ export function HookPanel() {
               {recentEvents.map((event) => (
                 <li
                   key={`${event.at}-${event.state}-${event.sessions}-${event.source}`}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/60 px-2.5 py-1.5 text-[11px]"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px]"
                 >
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="text-muted-foreground">{formatRelativeTime(event.at)}</span>
@@ -399,7 +402,7 @@ export function HookPanel() {
           )}
         </section>
 
-        <details className="group rounded-xl border border-border bg-background/40 p-4">
+        <details className="group rounded-lg border border-border bg-popover p-4">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold">
             文件位置
             <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
@@ -416,7 +419,7 @@ export function HookPanel() {
           </p>
         </details>
 
-        <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-popover p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium">移除联动</p>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
@@ -437,7 +440,7 @@ export function HookPanel() {
           </Button>
         </div>
 
-        <section className="rounded-xl border border-dashed border-border bg-background/20 p-4 text-muted-foreground">
+        <section className="rounded-lg border border-dashed border-border bg-popover p-4 text-muted-foreground">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold">Claude Code / Qoder</h3>

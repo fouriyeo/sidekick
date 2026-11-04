@@ -26,7 +26,7 @@ export function PermissionPrimer({
         className="rounded-t-2xl border-pet-border bg-pet-bg pb-[calc(env(safe-area-inset-bottom)+24px)] text-pet-text"
       >
         <SheetHeader className="gap-2 px-6 pt-6">
-          <div className="flex size-11 items-center justify-center rounded-full bg-pet-primary/15 text-pet-primary">
+          <div className="flex size-11 items-center justify-center rounded-full border border-pet-border text-pet-primary">
             {mode === "primer" ? <Mic className="size-5" /> : <ShieldCheck className="size-5" />}
           </div>
           <SheetTitle className="text-lg text-pet-text">
@@ -52,7 +52,7 @@ export function PermissionPrimer({
           <ol className="flex flex-col gap-3 px-6 text-sm text-pet-text">
             {MIC_COPY.permissionGuideSteps.map((step, index) => (
               <li key={step} className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-pet-primary/15 text-xs text-pet-primary">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border border-pet-border text-xs text-pet-primary">
                   {index + 1}
                 </span>
                 {step}
@@ -76,7 +76,7 @@ export function PermissionPrimer({
               type="button"
               variant="ghost"
               size="lg"
-              className="h-11 rounded-full text-pet-muted"
+              className="h-11 rounded-full text-pet-muted hover:bg-transparent hover:text-pet-text"
               onClick={() => onOpenChange(false)}
             >
               {MIC_COPY.permissionPrimerLater}

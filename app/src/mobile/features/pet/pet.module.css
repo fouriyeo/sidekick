@@ -25,6 +25,84 @@
   will-change: transform;
 }
 
+/* ----------------------------------------------------------------------------
+   舞台声呐环（方向 B 签名元素里的手机端那条）
+   纯装饰：在精灵之后、aria-hidden、1px 细描边、低亮度；只动 transform/opacity，
+   不叠 filter/glow（OLED 大面积亮像素耗电，D58）。reduced-motion 冻结，
+   后台/失焦由 useMotionPause 的 --motion-play-state 暂停。
+   -------------------------------------------------------------------------- */
+.sonar {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sonarRing,
+.sonarHalo {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  bottom: 2.5%;
+  height: 15%;
+  border: 1px solid var(--pet-signal);
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+}
+
+.sonarRing {
+  opacity: 0;
+  animation: sonar-stage 6.4s var(--motion-ease-out-soft) infinite;
+  animation-play-state: var(--motion-play-state, running);
+}
+
+.sonarRingDelay {
+  animation-delay: 3.2s;
+}
+
+.sonarHalo {
+  opacity: 0.12;
+}
+
+@keyframes sonar-stage {
+  0% {
+    transform: scale(0.42);
+    opacity: 0;
+  }
+
+  14% {
+    opacity: 0.5;
+  }
+
+  70% {
+    opacity: 0.1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* 减少动效 / 设置页等覆盖层打开时：环冻结成静态低亮度椭圆。 */
+.reduceMotion .sonarRing {
+  animation: none;
+  opacity: 0.28;
+  transform: none;
+}
+
+.stage[aria-hidden="true"] .sonarRing {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sonarRing {
+    animation: none;
+    opacity: 0.28;
+    transform: none;
+  }
+}
+
 /* 精灵图集容器：保持方形，内部 sprite 用 background-position 逐帧。 */
 .motionLayer {
   --pet-amber: #e8a33d;

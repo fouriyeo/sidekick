@@ -10,6 +10,7 @@ import {
   useSessionStore,
 } from "@/mobile/features/sessions/session-store";
 import { Button } from "@/shared/ui/button";
+import { SignalDot } from "@/shared/ui/signal-dot";
 import { type AiState, displayStateOf } from "./ai-status";
 import { isNight } from "./mood";
 import { NamePrompt } from "./name-prompt";
@@ -172,6 +173,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   } as CSSProperties;
 
   const night = isNight(Date.now());
+  const connected = connectionStatus === "connected";
   const displayAi = displayStateOf(pet.phase, ai.state);
   // AI 状态文案优先占用气泡槽位；触摸/录音/即时心情反馈时暂时让位给闲聊气泡。
   const caption = displayAi === "idle" ? null : aiCaption;
@@ -195,33 +197,37 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       data-reduced-motion={reducedMotion ? "true" : "false"}
       data-session-panel={panelVisible ? (sessionExpanded ? "expanded" : "collapsed") : "hidden"}
     >
-      <div className="absolute top-[calc(env(safe-area-inset-top)+16px)] left-[calc(env(safe-area-inset-left)+24px)] z-30">
+      {/*
+        顶部细状态条：连接状态 + 宠物名。整体 aria-hidden，播报交给下面的
+        sr-only aria-live region，避免读屏重复念一遍。
+      */}
+      <div className="absolute top-[calc(env(safe-area-inset-top)+12px)] left-[calc(env(safe-area-inset-left)+16px)] right-[calc(env(safe-area-inset-right)+16px)] z-30 flex items-center gap-2">
         <Button
           type="button"
           variant="ghost"
           size="icon-lg"
           aria-label="打开设置"
-          className="size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text"
+          className="size-11 shrink-0 rounded-full border border-pet-border bg-transparent text-pet-muted hover:border-pet-signal hover:bg-transparent hover:text-pet-text focus-visible:ring-pet-signal focus-visible:ring-offset-pet-bg"
           onClick={onOpenSettings}
         >
           <Settings className="size-5" />
         </Button>
-      </div>
 
-      <div className="absolute top-[calc(env(safe-area-inset-top)+16px)] right-[calc(env(safe-area-inset-right)+24px)] z-30 flex items-center gap-2">
-        <span
-          aria-hidden="true"
-          className={cn(
-            "size-2 rounded-full transition-opacity duration-200",
-            connectionStatus === "connected" ? "bg-pet-success" : "bg-pet-muted",
-          )}
-        />
+        <div aria-hidden="true" className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
+          <SignalDot tone="stage" status={connected ? "connected" : "idle"} />
+          <span className="min-w-0 truncate font-mono text-[10.5px] uppercase tracking-[0.12em] text-pet-muted">
+            <b className="font-normal text-pet-text">{connected ? "已连接" : "未连接"}</b>
+            <span className="px-1 text-pet-border">·</span>
+            {pet.name}
+          </span>
+        </div>
+
         <Button
           type="button"
           variant="ghost"
           size="icon-lg"
           aria-label="打开聊天"
-          className="size-11 rounded-full text-pet-muted transition-opacity duration-200 hover:bg-secondary hover:text-pet-text"
+          className="size-11 shrink-0 rounded-full border border-pet-border bg-transparent text-pet-muted hover:border-pet-signal hover:bg-transparent hover:text-pet-text focus-visible:ring-pet-signal focus-visible:ring-offset-pet-bg"
           onClick={onOpenChat}
         >
           <MessageCircle className="size-5" />
@@ -233,7 +239,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
       {!(panelVisible && sessionExpanded) && (
         <div
           className={cn(
-            "absolute z-20 left-[calc(env(safe-area-inset-left)+8%)] w-[42%]",
+            "absolute z-20 left-[calc(env(safe-area-inset-left)+6%)] w-[48%]",
             panelVisible ? "top-[calc(env(safe-area-inset-top)+136px)]" : "top-[16%]",
           )}
         >
@@ -243,6 +249,12 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
 
       <div className={styles.petSlot} style={poseStyle}>
         <div className="relative h-full w-full touch-none select-none" aria-hidden="true">
+          {/* 声呐环在精灵之后：只做背景装饰，不参与布局与读屏。 */}
+          <div className={styles.sonar} aria-hidden="true" data-sonar="stage">
+            <span className={styles.sonarRing} />
+            <span className={cn(styles.sonarRing, styles.sonarRingDelay)} />
+            <span className={styles.sonarHalo} />
+          </div>
           <SpritePet
             ai={displayAi}
             phase={pet.phase}

@@ -35,6 +35,7 @@
 29. 结果卡片手动「回车 / 清空」（2026-11-04，D68）：语音输入成功后，手机「已输入」卡片新增两个用户主动点按的按钮——「回车」合成 Return（keycode 36），「清空」合成 `⌘A`+`Delete`（两次确认，第一次变「再点一次」）；新增 `key.request` / `key.result` 协议与桌面 `desktop_keys.rs` 安全闸门（目标窗口=插入时前台应用、密码框/辅助功能/非 macOS 拒绝、30 秒时效、成功即作废、500ms 限频），日志不含文本/应用名；桌面浮层同步提示。仍保持「绝不自动回车/发送」。
 30. 下线宠物触摸互动（2026-11-04，D69）：删除手势识别、点击/戳/摸摸、触摸爱心、亲密度、`interacting` 状态与设置页「无障碍互动」；手机点击、长按、来回抚摸宠物都不再有任何反应，也不写存档。保留命名完成爱心、AI 四态、麦克风反应、睡眠/06:00 醒来、自动变暗；存档 version 1 不变，旧 `affinity*` 字段忽略。
 31. 麦克风会话稳定性 + 电脑端中断（2026-11-04，D70）：修复手机快速连按/启动中松手导致电脑端永久「正在听」——手机端启动串行化（`startingRef` + `lifecycleRef` token + ref 判手势 + window pointerup 兜底），松手/取消一定结束；服务端同端重复 start 以最新会话为准、每个会话 `maxMs+3s` 看门狗、`mic.stop` 严格 owner+session；新增 `mic.cancel` 协议，桌面浮层「倾听中」右侧常显「取消录音」，点击 1 秒内两端 idle，不转写/不插入/不写剪贴板；手机提示「电脑端已取消录音。」，看门狗提示「录音超时，已自动停止。」。
+32. 视觉系统方向 B「深潜声呐」+ 双主题（2026-11-04，D71）：`tokens.css` 重写为双主题深海语义色板（deep sea 自发光 / sea glass 海面雾光，全部 hex，默认深色）；新增主题运行时（`sidekick:theme`、`system|light|dark`、`index.html` 防闪脚本、`shared/lib/theme.ts` 的 `initTheme/useTheme/setThemePreference`、`data-theme` + `.dark` 双写、系统变化与 `storage` 监听、Sonner 跟随）与设置页「外观」三选一；桌面壳/连接声呐点/导航/聊天/剪贴板/AI 联动/模型/设置换皮，手机舞台保持深海并加 6.4s 背景声呐环；宠物复用现有 OpenPets 图集，不重绘/染色；`design-lab/` 评审稿收口；visual/ux/frontend-architecture/decisions/AGENTS 文档同步。
 
 
 ## 已验证（有实际证据）

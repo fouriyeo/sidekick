@@ -1,16 +1,23 @@
 import { cn } from "cn";
-import { Clipboard, Cloud, MessageCircle, Plug } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { ClipboardPanel } from "@/desktop/features/clipboard/components/clipboard-panel";
 import { ConnectionPanel } from "@/desktop/features/connect/components/connection-panel";
 import { HookPanel } from "@/desktop/features/hook/components/hook-panel";
 import { MicStatusOverlay } from "@/desktop/features/mic-receiver/mic-status-overlay";
 import { ModelsPanel } from "@/desktop/features/models/models-panel";
 import { SettingsSheet } from "@/desktop/features/settings/components/settings-sheet";
+import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import { ChatPanel } from "./features/chat/components/chat-panel";
 import { useDesktopConnection } from "./use-desktop-connection";
 
 type DesktopView = "chat" | "clipboard" | "hook" | "models";
+
+const VIEWS: ReadonlyArray<{ id: DesktopView; label: string }> = [
+  { id: "chat", label: "聊天" },
+  { id: "clipboard", label: "剪贴板" },
+  { id: "hook", label: "AI 联动" },
+  { id: "models", label: "模型" },
+];
 
 /** 浏览器开发时可用 ?view=hook|clipboard|models 直接打开对应页；生产构建恒为聊天。 */
 function initialView(): DesktopView {
@@ -32,9 +39,10 @@ export function DesktopApp() {
   const { status, info, error, sendText, cancelMic, retry } = useDesktopConnection();
   const [view, setView] = useState<DesktopView>(initialView);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useMotionPause();
 
   return (
-    <main className="grid h-dvh min-h-0 grid-cols-[minmax(300px,360px)_minmax(0,1fr)] gap-3.5 overflow-hidden bg-background p-3.5 text-foreground">
+    <main className="grid h-dvh min-h-0 grid-cols-[320px_minmax(0,1fr)] gap-6 overflow-hidden bg-background p-8 text-foreground">
       <ConnectionPanel
         info={info}
         status={status}
@@ -43,36 +51,28 @@ export function DesktopApp() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      <section className="flex min-h-0 min-w-0 flex-col gap-3">
-        <nav
-          aria-label="桌面视图"
-          className="flex shrink-0 items-center gap-1 self-start rounded-xl border border-border bg-card p-1"
-        >
-          <ViewTab
-            active={view === "chat"}
-            icon={<MessageCircle className="size-3.5" />}
-            label="聊天"
-            onClick={() => setView("chat")}
-          />
-          <ViewTab
-            active={view === "clipboard"}
-            icon={<Clipboard className="size-3.5" />}
-            label="剪贴板"
-            onClick={() => setView("clipboard")}
-          />
-          <ViewTab
-            active={view === "hook"}
-            icon={<Plug className="size-3.5" />}
-            label="AI 联动"
-            onClick={() => setView("hook")}
-          />
-          <ViewTab
-            active={view === "models"}
-            icon={<Cloud className="size-3.5" />}
-            label="模型"
-            onClick={() => setView("models")}
-          />
-        </nav>
+      <section className="flex min-h-0 min-w-0 flex-col gap-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <nav
+            aria-label="桌面视图"
+            className="flex shrink-0 items-center gap-0.5 rounded-xl border border-border bg-popover p-1"
+          >
+            {VIEWS.map((item) => (
+              <ViewTab
+                key={item.id}
+                active={view === item.id}
+                label={item.label}
+                onClick={() => setView(item.id)}
+              />
+            ))}
+          </nav>
+
+          <div className="flex min-w-0 items-center gap-3 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+            {info && <span>WS · {info.port}</span>}
+            {info?.discoveryPort != null && <span>UDP · {info.discoveryPort}</span>}
+            <span className="hidden sm:inline">局域网直连</span>
+          </div>
+        </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {view === "chat" ? (
@@ -95,12 +95,10 @@ export function DesktopApp() {
 
 function ViewTab({
   active,
-  icon,
   label,
   onClick,
 }: {
   active: boolean;
-  icon: ReactNode;
   label: string;
   onClick: () => void;
 }) {
@@ -109,14 +107,13 @@ function ViewTab({
       type="button"
       aria-pressed={active}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors",
+        "inline-flex h-9 items-center rounded-lg px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         active
-          ? "bg-muted text-foreground"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          ? "bg-wash text-signal shadow-[inset_0_0_0_1px_var(--border)]"
+          : "text-muted-foreground hover:bg-wash/60 hover:text-foreground",
       )}
       onClick={onClick}
     >
-      {icon}
       {label}
     </button>
   );

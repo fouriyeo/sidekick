@@ -14,6 +14,7 @@ import {
   Type,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { EmptyState } from "@/desktop/components/empty-state";
 import { formatRelativeTime } from "@/shared/lib/format";
 import { type ClipboardItem, subscribeClipboardChanged } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
@@ -26,6 +27,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
+import { SignalDot } from "@/shared/ui/signal-dot";
 import {
   DEFAULT_CLIPBOARD_MAX_ITEMS,
   filterClipboardItems,
@@ -82,18 +84,18 @@ export function ClipboardPanel() {
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 rounded-xl border border-border bg-card p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-border bg-card p-6">
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Clipboard className="size-4 text-muted-foreground" />
             剪贴板
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {formatClipboardCount(items.length, maxItems)}
+          <p className="mt-1 font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
+            Clipboard · 只存本机
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <Button
             type="button"
             variant="outline"
@@ -116,20 +118,21 @@ export function ClipboardPanel() {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative mt-4 shrink-0">
+        <Search className="pointer-events-none absolute top-[13px] left-3 size-3.5 text-muted-foreground" />
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="搜索复制过的文字…"
           aria-label="搜索剪贴板"
           autoComplete="off"
-          className="h-9 rounded-lg pl-8 text-sm"
+          className="h-10 rounded-[10px] bg-popover pl-9 text-sm"
         />
       </div>
 
       {!enabled && (
-        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p className="mt-3 flex shrink-0 items-center gap-2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-muted-foreground">
+          <SignalDot status="waiting" pulse={false} className="shrink-0" />
           记录已暂停，新的复制不会进入列表。
         </p>
       )}
@@ -137,24 +140,26 @@ export function ClipboardPanel() {
       {error && (
         <p
           role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          className="mt-3 shrink-0 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
         >
           {error}
         </p>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-0.5">
         {filtered.length === 0 ? (
-          <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-2 text-center">
-            <Clipboard className="size-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              {query
-                ? "没有匹配的剪贴板"
-                : enabled
-                  ? "复制一段文字，会出现在这里"
-                  : "剪贴板记录已暂停"}
-            </p>
-            {loading && <p className="text-xs text-muted-foreground">正在读取…</p>}
+          <div className="flex h-full min-h-[220px] items-center justify-center">
+            <EmptyState
+              icon={<Clipboard className="size-4" />}
+              title={query ? "没有匹配的记录" : "还没有记录"}
+              description={
+                query
+                  ? "换个关键词再搜一次。"
+                  : enabled
+                    ? "复制一段文字，就会出现在这里；命令和链接也会保留。"
+                    : "剪贴板记录已暂停，继续记录后新复制的内容才会出现。"
+              }
+            />
           </div>
         ) : (
           <ul className="flex list-none flex-col gap-1.5 p-0">
@@ -162,37 +167,48 @@ export function ClipboardPanel() {
               <li
                 key={item.id}
                 className={cn(
-                  "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
-                  item.pinned
-                    ? "border-primary/30 bg-primary/5"
-                    : "border-border bg-background hover:bg-muted/40",
+                  "group flex h-12 items-center gap-2 rounded-[10px] border border-border bg-popover px-3 transition-colors hover:bg-wash focus-within:border-signal",
+                  item.pinned && "border-signal/60",
                 )}
               >
-                <span className="mt-0.5 text-muted-foreground">
-                  <ClipboardKindIcon kind={item.kind} />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center",
+                    item.pinned ? "text-signal" : "text-muted-foreground/50",
+                  )}
+                >
+                  {item.pinned ? (
+                    <Pin className="size-3 fill-current" />
+                  ) : (
+                    <span className="block size-1.5 rounded-[1px] bg-current" />
+                  )}
                 </span>
 
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
                   onClick={() => void handleCopy(item.id)}
                   title="复制到剪贴板"
                 >
-                  <p className="line-clamp-2 text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
+                  <span className="block truncate font-mono text-[12px] leading-relaxed text-foreground">
                     {item.text}
-                  </p>
-                  <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                    {formatRelativeTime(item.lastUsedAt)}
-                    {item.pinned ? " · 已置顶" : ""}
-                    {item.kind === "voice" && (
-                      <span className="rounded bg-muted px-1 py-px text-[10px] leading-relaxed text-muted-foreground">
-                        语音
-                      </span>
-                    )}
-                  </p>
+                  </span>
                 </button>
 
-                <div className="flex shrink-0 items-center gap-0.5">
+                <span className="flex shrink-0 items-center gap-1.5 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">
+                  <span>{formatRelativeTime(item.lastUsedAt)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatClipboardKind(item.kind)}</span>
+                  {item.kind === "voice" && (
+                    <span className="inline-flex items-center gap-0.5 rounded-[4px] border border-signal/50 px-1 py-px text-[9px] text-signal normal-case">
+                      <Mic className="size-2.5" />
+                      语音
+                    </span>
+                  )}
+                </span>
+
+                <div className="flex shrink-0 items-center gap-0.5 text-muted-foreground">
                   <Button
                     type="button"
                     variant="ghost"
@@ -211,7 +227,7 @@ export function ClipboardPanel() {
                     onClick={() => void handleCopy(item.id)}
                   >
                     {copiedId === item.id ? (
-                      <Check className="size-3.5 text-success" />
+                      <Check className="size-3.5 text-signal" />
                     ) : (
                       <Copy className="size-3.5" />
                     )}
@@ -221,7 +237,7 @@ export function ClipboardPanel() {
                     variant="ghost"
                     size="icon-sm"
                     aria-label={item.pinned ? "取消置顶" : "置顶"}
-                    className={item.pinned ? "text-primary" : undefined}
+                    className={item.pinned ? "text-signal" : undefined}
                     onClick={() => void togglePin(item.id)}
                   >
                     <Pin className={item.pinned ? "size-3.5 fill-current" : "size-3.5"} />
@@ -242,10 +258,19 @@ export function ClipboardPanel() {
         )}
       </div>
 
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        点条目复制；点眼睛看全文。最多保留最近 {maxItems}{" "}
-        条；新内容淘汰最旧的未置顶项。只记录文本；密码管理器标记为隐藏的内容不会记录。数据仅保存在本机，不联网、不写日志。
-      </p>
+      <div className="mt-3 flex shrink-0 flex-col gap-1.5 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <span className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+            {loading ? "正在读取…" : formatClipboardCount(items.length, maxItems)}
+          </span>
+          <span className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
+            Local only · 不联网
+          </span>
+        </div>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          点条目复制；点眼睛看全文。新内容淘汰最旧的未置顶项。只记录文本；密码管理器标记为隐藏的内容不会记录，数据仅保存在本机、不写日志。
+        </p>
+      </div>
 
       <Dialog
         open={detailItem !== null}
@@ -257,13 +282,17 @@ export function ClipboardPanel() {
           {detailItem && (
             <>
               <DialogHeader className="shrink-0 pr-7">
-                <DialogTitle className="flex items-center gap-2">
+                <p className="font-mono text-[9px] tracking-[0.16em] text-signal uppercase">
+                  Clipboard · 详情
+                </p>
+                <DialogTitle className="mt-1 flex items-center gap-2">
                   <span className="text-muted-foreground">
                     <ClipboardKindIcon kind={detailItem.kind} />
                   </span>
                   剪贴板详情
                   {detailItem.pinned && (
-                    <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-px text-[10px] font-normal text-primary">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-signal/50 px-1.5 py-px text-[10px] font-normal text-signal">
+                      <Pin className="size-2.5 fill-current" />
                       已置顶
                     </span>
                   )}
@@ -275,7 +304,7 @@ export function ClipboardPanel() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-popover px-3 py-2.5">
                 <p className="text-sm leading-relaxed break-words whitespace-pre-wrap select-text text-foreground">
                   {detailItem.text}
                 </p>
@@ -299,7 +328,7 @@ export function ClipboardPanel() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className={detailItem.pinned ? "text-primary" : undefined}
+                  className={detailItem.pinned ? "text-signal" : undefined}
                   onClick={() => void togglePin(detailItem.id)}
                 >
                   <Pin className={detailItem.pinned ? "size-3.5 fill-current" : "size-3.5"} />
@@ -321,6 +350,9 @@ export function ClipboardPanel() {
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
+          <p className="font-mono text-[9px] tracking-[0.16em] text-destructive uppercase">
+            确认 · 破坏性操作
+          </p>
           <DialogHeader>
             <DialogTitle>清空剪贴板历史？</DialogTitle>
             <DialogDescription>所有记录（包括置顶）都会被删除，且不能恢复。</DialogDescription>

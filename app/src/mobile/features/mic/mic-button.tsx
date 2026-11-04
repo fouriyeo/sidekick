@@ -21,6 +21,7 @@ import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { createHaptics } from "@/mobile/features/pet/haptics";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useReducedMotion } from "@/mobile/features/pet/use-reduced-motion";
+import deepSea from "@/mobile/styles/deep-sea.module.css";
 import type { MicStopReason } from "@/protocol/messages";
 import {
   MIC_PERMISSION_DENIED_KEY,
@@ -661,7 +662,10 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
             <span
               role="status"
               aria-live="polite"
-              className="max-w-[86vw] rounded-full border border-pet-border bg-pet-bg px-3 py-1.5 text-center text-xs text-pet-text shadow-sm"
+              className={cn(
+                "max-w-[86vw] rounded-full border border-pet-border px-3 py-1.5 text-center text-xs text-pet-text",
+                deepSea.surface,
+              )}
             >
               {message}
             </span>
@@ -670,7 +674,8 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
           {showResult && (
             <div
               className={cn(
-                "pointer-events-auto w-full rounded-2xl border bg-pet-bg p-3 text-left shadow-lg",
+                "pointer-events-auto w-full rounded-2xl border p-3 text-left",
+                deepSea.surface,
                 error ? "border-pet-danger" : "border-pet-border",
               )}
             >
@@ -678,7 +683,8 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
                 <span
                   className={cn(
                     "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
-                    error ? "bg-secondary text-pet-danger" : "bg-secondary text-pet-success",
+                    deepSea.surface2,
+                    error ? "text-pet-danger" : "text-pet-success",
                   )}
                 >
                   {error ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5" />}
@@ -687,13 +693,13 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
               </div>
 
               {result?.text && (
-                <div className="mt-2 rounded-xl bg-secondary px-2.5 py-2">
+                <div className={cn("mt-2 rounded-[12px] px-2.5 py-2", deepSea.surface2)}>
                   <p className="line-clamp-2 text-xs leading-relaxed text-pet-muted">
                     {result.text}
                   </p>
                   <button
                     type="button"
-                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-pet-primary"
+                    className="mt-1.5 inline-flex min-h-11 items-center gap-1 text-[11px] text-pet-signal"
                     onClick={handleCopyResult}
                   >
                     {copyDone ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -712,7 +718,7 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
                     <button
                       type="button"
                       aria-label="在电脑上按回车"
-                      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-pet-primary text-xs font-medium text-pet-primary-foreground disabled:opacity-50"
+                      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[12px] bg-pet-primary text-xs font-medium text-pet-primary-foreground disabled:opacity-50"
                       disabled={keyPending !== null || keyNotice !== null || !connected}
                       onClick={() => handleKeyAction("enter")}
                     >
@@ -723,10 +729,10 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
                       type="button"
                       aria-label={keyArmedClear ? "再点一次清空电脑输入框" : "清空电脑输入框"}
                       className={cn(
-                        "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border text-xs font-medium disabled:opacity-50",
+                        "inline-flex h-11 items-center justify-center gap-1.5 rounded-[12px] border text-xs font-medium disabled:opacity-50",
                         keyArmedClear
-                          ? "border-pet-coral bg-pet-coral text-white"
-                          : "border-pet-border bg-secondary text-pet-text",
+                          ? "border-pet-coral bg-pet-coral text-[#2b100c]"
+                          : cn("border-pet-border text-pet-text", deepSea.surface2),
                       )}
                       disabled={keyPending !== null || keyNotice !== null || !connected}
                       onClick={() => handleKeyAction("clear")}
@@ -757,7 +763,12 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
           )}
 
           {partialText && (recording || processing) && (
-            <div className="pointer-events-auto w-full rounded-2xl border border-pet-border bg-pet-bg px-3 py-2 text-left shadow-lg">
+            <div
+              className={cn(
+                "pointer-events-auto w-full rounded-[14px] border border-pet-border px-3 py-2 text-left",
+                deepSea.surface,
+              )}
+            >
               <span className="rounded-full border border-pet-border px-1.5 py-0.5 text-[10px] text-pet-muted">
                 {recording ? recordingEngineLabel : processingEngineLabel}
               </span>
@@ -776,17 +787,18 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
           aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
           aria-pressed={listening}
           className={cn(
-            "pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border px-5 text-sm font-medium shadow-sm transition-transform active:scale-[0.98]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-primary",
+            "pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border px-5 text-sm font-medium transition-transform active:scale-[0.98]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-signal focus-visible:ring-offset-2 focus-visible:ring-offset-pet-bg",
             recording ? "w-[min(90vw,420px)]" : "w-[min(86vw,360px)]",
             cancelZone
-              ? "border-pet-coral bg-pet-coral text-white"
+              ? "border-pet-coral bg-pet-coral text-[#2b100c]"
               : recording
-                ? "border-pet-coral bg-pet-coral text-white"
+                ? "border-pet-coral bg-pet-coral text-[#2b100c]"
                 : processing
-                  ? "border-pet-border bg-secondary text-pet-muted"
-                  : "border-pet-primary bg-pet-primary text-pet-primary-foreground",
-            !connected && !recording && "border-pet-border bg-secondary text-pet-muted",
+                  ? "border-pet-border text-pet-muted"
+                  : "border-pet-border text-pet-text",
+            !connected && !recording && "border-pet-border text-pet-muted",
+            !recording && !processing && deepSea.surface2,
           )}
           disabled={processing}
           onContextMenu={(event) => event.preventDefault()}
@@ -824,7 +836,7 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
             </>
           ) : (
             <>
-              <Mic className="size-5" />
+              <Mic className={cn("size-5", connected ? "text-pet-signal" : "text-pet-muted")} />
               <span>{label}</span>
             </>
           )}
@@ -852,7 +864,10 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
         <button
           type="button"
           aria-label="查看麦克风权限设置"
-          className="absolute bottom-[calc(env(safe-area-inset-bottom)+24px)] left-[calc(env(safe-area-inset-left)+24px)] z-30 flex size-11 items-center justify-center rounded-full border border-pet-border bg-pet-bg text-pet-primary"
+          className={cn(
+            "absolute bottom-[calc(env(safe-area-inset-bottom)+24px)] left-[calc(env(safe-area-inset-left)+24px)] z-30 flex size-11 items-center justify-center rounded-full border border-pet-border text-pet-signal",
+            deepSea.surface,
+          )}
           onClick={() => setGuideOpen(true)}
         >
           <ShieldAlert className="size-5" />{" "}

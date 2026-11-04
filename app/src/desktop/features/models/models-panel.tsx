@@ -27,15 +27,15 @@ export function ModelsPanel() {
   const refreshing = cloudLoading || usageLoading;
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-border bg-card p-5">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-card p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <Cloud className="size-4 text-muted-foreground" />
             模型
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            语音识别只使用百炼云端；这里配置连接与查看用量。
+          <p className="mt-1 font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
+            Models · 百炼云端
           </p>
         </div>
         <Button
@@ -59,16 +59,13 @@ export function ModelsPanel() {
         </Button>
       </div>
 
-      <div className="mt-4 flex flex-col gap-4">
-        <section
-          aria-label="百炼配置"
-          className="rounded-xl border border-border bg-background/40 p-4"
-        >
+      <div className="flex flex-col gap-4">
+        <section aria-label="百炼配置" className="rounded-xl border border-border bg-popover p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold">百炼云端语音识别</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                按住说话时，桌面会把 16k 音频实时发给百炼，最终文本只输入一次。
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                按住说话时，桌面会把 16k 音频实时发给百炼，最终文本只输入一次；录音不保存。
               </p>
             </div>
           </div>
