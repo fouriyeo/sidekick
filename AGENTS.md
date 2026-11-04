@@ -56,7 +56,7 @@
 | 方式 | 路径/名称 | 说明 |
 | --- | --- | --- |
 | HTTP GET | `/` | 手机落地页（含「下载 App」按钮 + 网页聊天预览） |
-| HTTP GET | `/download/apk` | 直接下载 debug APK（读取 `gen/android/.../app-universal-debug.apk`，未构建时返回 404） |
+| HTTP GET | `/download/apk` | 下发手机安装包：优先仓库 `release/Sidekick-Android.apk`（release 签名），其次编译期嵌入的同一份（`build.rs` 打进桌面二进制），最后回退 debug 构建产物；带 `Content-Length`，文件名 `Sidekick-Android.apk`，全缺时 HTML 404 |
 | WS | `/ws` | 消息通道 |
 | UDP | `47820` | 发现响应器：收 `sidekick.discover` 探测，单播回主机名 + 真实端口 |
 | Tauri 命令 | `server_info` | 等就绪后返回 `{ip, port, url, discoveryPort}`，前端展示地址/发现状态/二维码 |
@@ -182,6 +182,9 @@ sidekick/
 - **手机与电脑需同一局域网**；开发机 IP 会变，一般不用手填（自动发现），发现失败时再手动输入桌面窗口显示的地址。
 - **自动发现的三个前提**：同一网段、路由器不拦广播/无 AP 隔离、macOS 防火墙允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。
 - **端口被占用是正常的**：`47810` 被占会自动顺延到 `47811`…，桌面日志与窗口地址显示真实端口；手机发现回包也带真实端口。
+- **关窗即退出**：Tauri 默认关闭最后一个窗口就结束进程，HTTP（47810+）与 UDP 发现（47820）一起停。手机此时的表现是「发现 0 台电脑」→「connecting to ws://<旧地址>」→「Connection refused」，约 31s 重试一次；不是自动发现坏了，先把桌面窗口重新打开。没有菜单栏驻留模式。
+- **桌面 IP 不写死**：`server_info` 每次按网卡实时选 IPv4（`desktop_server::pick_lan_ip`：en* 优先，跳过 utun/bridge/awdl/anpi 等虚拟接口，防 VPN 地址进二维码）；手机连接地址来自 UDP **源 IP** + 发现回包里的真实端口，换网段/换 IP 不需要改代码。
+- **手动输入在聊天页**：手机 App 右上角气泡 → 聊天页底部「手动输入电脑地址」；发现失败的空状态卡片里也有同一个入口。桌面窗口显示的 `IP:端口` 即要填的地址（自动发现失败时才需要）。
 - **桌面端单实例（防多开）**：`tauri-plugin-single-instance` 在 `Builder` 最先注册，第二个进程只把已有窗口叫到前台然后退出（D60）。多开的代价很隐蔽：后启动实例会把 `~/.dsh/sidekick/config.json` 的 `endpoint` 改成它的回环端口（47816），它退出后 DSH hook 的上报全部打空，剩下那个实例的桥永远 idle；而手机发现只认持有 UDP 47820 的先启动实例，于是「AI 在工作、宠物是 idle」。状态不更新时先查 `lsof -nP -iTCP:47815-47819`、config.json 的 endpoint 是否指向活着的进程（`curl -s -o /dev/null -w '%{http_code}' -X POST <endpoint>`）。
 - **重复连接**：手机端 `connect_server` 已串行化（先 abort 旧连接 + generation 守卫），自动连接与手动点击并发不会互相覆盖状态。
 - **自动重连**：`connection-store` 用模块级单一定时器，退避 1s→2s→4s→8s→16s→30s（上限 30s），每次重试先静默 UDP 重新发现（覆盖端口回退/IP 变化），发现 0 台退回上次地址，多台回上次那台、无地址则停止；手动连接/重新搜索会取消排期并清零退避；`document.hidden` 暂停、回前台立即重试。电脑恢复最晚一个退避周期（≤30s）连上。

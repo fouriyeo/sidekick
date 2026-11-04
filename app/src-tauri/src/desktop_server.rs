@@ -1,4 +1,5 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -30,8 +31,12 @@ use crate::dsh_hook::HookBridge;
 use crate::mic_protocol::{self, MicStartMessage, MicStopReason};
 
 static MOBILE_PAGE: &str = include_str!("../mobile/index.html");
-const APK_REL_PATH: &str =
+// 编译期嵌入的 Android 安装包（由 build.rs 生成；没打过安卓包时为 None）。
+include!(concat!(env!("OUT_DIR"), "/embedded_apk.rs"));
+/// 旧环境兜底：仓库里的 debug 构建产物（release 包不可用时才用）。
+const DEBUG_APK_REL_PATH: &str =
     "gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk";
+const APK_FILE_NAME: &str = "Sidekick-Android.apk";
 const MAX_SESSION_BYTES: usize = 2_200_000;
 const MAX_SESSION_SECONDS: u64 = 65;
 const SERVER_INFO_TIMEOUT: Duration = Duration::from_secs(3);
@@ -80,10 +85,50 @@ pub struct ServerInfo {
     pub discovery_port: Option<u16>,
 }
 
+/// 虚拟/隧道网卡前缀：VPN（utun）、桥接、AirDrop 等地址不该出现在二维码里。
+const VIRTUAL_INTERFACE_PREFIXES: [&str; 8] =
+    ["utun", "gif", "stf", "bridge", "awdl", "llw", "anpi", "ap"];
+
+fn is_virtual_interface(name: &str) -> bool {
+    VIRTUAL_INTERFACE_PREFIXES
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+}
+
+/// 从网卡列表里挑一个局域网可用的 IPv4：物理网卡（en*）优先，其次是其他非虚拟
+/// 接口；回环/自分配地址/虚拟接口都跳过。这样开了 VPN 时也不会把隧道地址当成本机地址。
+fn pick_lan_ip(interfaces: impl IntoIterator<Item = (String, IpAddr)>) -> Option<IpAddr> {
+    let mut best: Option<(u8, IpAddr)> = None;
+    for (name, ip) in interfaces {
+        let IpAddr::V4(ipv4) = ip else {
+            continue;
+        };
+        if ipv4.is_loopback() || ipv4.is_link_local() || ipv4.is_unspecified() {
+            continue;
+        }
+        if is_virtual_interface(&name) {
+            continue;
+        }
+        let score = if name.starts_with("en") { 0 } else { 1 };
+        if best.is_none_or(|(best_score, _)| score < best_score) {
+            best = Some((score, ip));
+        }
+    }
+    best.map(|(_, ip)| ip)
+}
+
+/// 本机对外的局域网 IPv4（IP 不写死，每次启动按网卡实时取）。
 fn local_ip() -> String {
-    local_ip_address::local_ip()
+    local_ip_address::list_afinet_netifas()
+        .ok()
+        .and_then(pick_lan_ip)
         .map(|ip| ip.to_string())
-        .unwrap_or_else(|_| "127.0.0.1".to_string())
+        .or_else(|| {
+            local_ip_address::local_ip()
+                .ok()
+                .map(|ip| ip.to_string())
+        })
+        .unwrap_or_else(|| "127.0.0.1".to_string())
 }
 
 pub async fn info() -> Result<ServerInfo, String> {
@@ -135,28 +180,94 @@ async fn mobile_page() -> Html<&'static str> {
     Html(MOBILE_PAGE)
 }
 
-async fn download_apk() -> Response {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(APK_REL_PATH);
-    match tokio::fs::File::open(&path).await {
-        Ok(file) => {
-            let body = Body::from_stream(ReaderStream::new(file));
-            let mut response = body.into_response();
-            response.headers_mut().insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("application/vnd.android.package-archive"),
-            );
-            response.headers_mut().insert(
-                header::CONTENT_DISPOSITION,
-                HeaderValue::from_static("attachment; filename=\"sidekick-debug.apk\""),
-            );
-            response
-        }
-        Err(_) => (
-            StatusCode::NOT_FOUND,
-            "APK 还没构建好，请先在项目里执行安卓构建",
-        )
-            .into_response(),
+/// app 包里的资源目录（打包后是 `Sidekick.app/Contents/Resources`）；开发态返回 None。
+fn bundle_resources_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let macos = exe.parent()?;
+    if macos.file_name()? != "MacOS" {
+        return None;
     }
+    let resources = macos.parent()?.join("Resources");
+    resources.is_dir().then_some(resources)
+}
+
+/// 手机安装包候选路径（按优先级）：
+/// 1. `SIDEKICK_APK_PATH`：本地调试自定义；
+/// 2. app 包 Resources 里的安装包（以后打进去时不用改代码）；
+/// 3. 仓库 `release/Sidekick-Android.apk`：开发机上通常比嵌入副本新；
+/// 4. 旧的 debug 构建产物：只给没有 release 包的老环境兜底。
+fn apk_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(path) = std::env::var_os("SIDEKICK_APK_PATH") {
+        candidates.push(PathBuf::from(path));
+    }
+    if let Some(resources) = bundle_resources_dir() {
+        candidates.push(resources.join(APK_FILE_NAME));
+    }
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    candidates.push(repo.join("release").join(APK_FILE_NAME));
+    candidates.push(Path::new(env!("CARGO_MANIFEST_DIR")).join(DEBUG_APK_REL_PATH));
+    candidates
+}
+
+fn apk_response(body: Body, length: u64) -> Response {
+    let mut response = body.into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/vnd.android.package-archive"),
+    );
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"Sidekick-Android.apk\""),
+    );
+    // Content-Length 让手机浏览器能显示进度、也便于断点判断（不支持 Range）。
+    headers.insert(header::CONTENT_LENGTH, HeaderValue::from(length));
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+fn apk_not_found() -> Response {
+    const PAGE: &str = r#"<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>安装包还没准备好</title></head>
+  <body style="font-family:-apple-system,'PingFang SC',sans-serif;background:#0f1115;color:#e8eaf0;padding:24px;line-height:1.7">
+    <h1 style="font-size:18px;margin:0 0 8px">安装包还没准备好</h1>
+    <p style="font-size:14px;color:#8a90a0;margin:0">电脑端没找到 Android 安装包。请在项目里执行
+      <code style="color:#aab0c0">scripts/package-android.sh</code> 重新打包后再刷新本页。</p>
+  </body>
+</html>"#;
+    (
+        StatusCode::NOT_FOUND,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        PAGE,
+    )
+        .into_response()
+}
+
+async fn download_apk() -> Response {
+    for path in apk_candidates() {
+        let Ok(metadata) = tokio::fs::metadata(&path).await else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let Ok(file) = tokio::fs::File::open(&path).await else {
+            continue;
+        };
+        println!("[server] 下发 Android 安装包 {}", path.display());
+        return apk_response(Body::from_stream(ReaderStream::new(file)), metadata.len());
+    }
+
+    // 磁盘上都没有时用编译期嵌入的那份：换电脑 / 源码目录被移走也能下载。
+    if let Some(bytes) = EMBEDDED_APK {
+        println!("[server] 下发 Android 安装包（编译期嵌入，{} 字节）", bytes.len());
+        return apk_response(Body::from(bytes), bytes.len() as u64);
+    }
+
+    eprintln!("[server] 找不到 Android 安装包，/download/apk 返回 404");
+    apk_not_found()
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
@@ -995,6 +1106,56 @@ pub async fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn v4(a: u8, b: u8, c: u8, d: u8) -> IpAddr {
+        IpAddr::V4(std::net::Ipv4Addr::new(a, b, c, d))
+    }
+
+    #[test]
+    fn pick_lan_ip_prefers_physical_interface_over_vpn() {
+        let interfaces = vec![
+            ("utun3".to_string(), v4(10, 8, 0, 2)),
+            ("bridge0".to_string(), v4(192, 168, 64, 1)),
+            ("awdl0".to_string(), v4(169, 254, 10, 2)),
+            ("anpi0".to_string(), v4(169, 254, 20, 2)),
+            ("en1".to_string(), v4(192, 168, 3, 14)),
+        ];
+        assert_eq!(pick_lan_ip(interfaces), Some(v4(192, 168, 3, 14)));
+    }
+
+    #[test]
+    fn pick_lan_ip_skips_unusable_addresses() {
+        let interfaces = vec![
+            ("lo0".to_string(), v4(127, 0, 0, 1)),
+            ("en0".to_string(), v4(169, 254, 3, 9)),
+            ("utun0".to_string(), v4(10, 0, 0, 1)),
+        ];
+        assert_eq!(pick_lan_ip(interfaces), None);
+    }
+
+    #[test]
+    fn pick_lan_ip_accepts_non_en_physical_interface() {
+        let interfaces = vec![
+            ("utun0".to_string(), v4(10, 8, 0, 6)),
+            ("eth0".to_string(), v4(192, 168, 1, 20)),
+        ];
+        assert_eq!(pick_lan_ip(interfaces), Some(v4(192, 168, 1, 20)));
+    }
+
+    #[test]
+    fn apk_response_sets_download_headers() {
+        let response = apk_response(Body::empty(), 7_379_538);
+        let headers = response.headers();
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            "application/vnd.android.package-archive"
+        );
+        assert_eq!(
+            headers.get(header::CONTENT_DISPOSITION).unwrap(),
+            "attachment; filename=\"Sidekick-Android.apk\""
+        );
+        assert_eq!(headers.get(header::CONTENT_LENGTH).unwrap(), "7379538");
+    }
 
     fn focus_channel() -> broadcast::Sender<String> {
         let (tx, _rx) = broadcast::channel(8);

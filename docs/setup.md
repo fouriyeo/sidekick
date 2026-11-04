@@ -115,7 +115,8 @@ pnpm tauri android init   # 会生成 gen/android 并补齐 Rust 安卓目标
 | --- | --- |
 | App 打开全黑 | 常见是 CSS 把 `body` 设成 `display:none`（见 AGENTS.md 第 8 节）；用 CDP 检查 `getComputedStyle(document.body).display` 与元素尺寸 |
 | 手机连不上电脑 | 是否同一 Wi-Fi；macOS 防火墙是否允许传入（TCP 服务端口 + UDP 47820）；服务端口是否监听；电脑 IP 是否变化 |
-| 手机找不到电脑（自动发现失败） | 路由器是否禁止广播/开启 AP 隔离；macOS 是否允许 Sidekick 传入连接；`pnpm tauri dev` 日志是否有 `[discovery]`；可改用「手动输入地址」并填桌面窗口显示的地址 |
+| 手机找不到电脑（自动发现失败） | 先确认**电脑端 Sidekick 正在运行**（窗口关了 App 就退出、服务也停，手机日志会是 `发现 0 台电脑` + `Connection refused`）；再看手机与电脑是否同一 Wi-Fi/网段、路由器是否禁止广播/开启 AP 隔离；macOS 防火墙是否允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。兜底：手机 App → 聊天页（右上角气泡）→「手动输入电脑地址」填桌面窗口显示的 `IP:端口`（App 找不到电脑时，空状态卡片里也有这个按钮）。 |
+| 扫码下载不了 App | 二维码打开的是 `http://<电脑 IP>:<端口>/` 落地页，点「下载 App」才下载 `/download/apk`；手机要和电脑同一局域网。桌面端优先下发 `release/Sidekick-Android.apk`（release 签名约 7MB），没有时才回退嵌入副本/debug 包 |
 | 服务端口被占用 | 日志会显示候选端口依次失败、最终监听的真实端口；桌面窗口显示的地址即为真实端口，无需手改 |
 | `adb pair` 报 `protocol fault` | 配对端口/码已失效；重开配对弹窗，用弹窗里的端口与最新码 |
 | `more than one device/emulator` | 断开 mDNS transport：`adb disconnect <服务名>` |

@@ -27,7 +27,9 @@ AI 状态：DeepSeek Harness（DSH）→ 本地脚本 → Sidekick 回环桥 →
 - 收到任意文本帧 → 打印 `[ws] recv:` → 原样广播。
 - 连接 / 断开 → 广播 `system` 消息（含当前连接数，瞬时值）。
 - `server_info` 命令返回局域网 IP / 真实端口 / URL / `discoveryPort`；前端用于展示地址、自动发现状态与按需展开的二维码。
-- `/download/apk` 从 `gen/android/.../app-universal-debug.apk` 流式读取 APK；文件不存在返回 404 提示。
+- `/download/apk` 下发手机安装包：优先 `SIDEKICK_APK_PATH` / app 包 Resources / 仓库 `release/Sidekick-Android.apk`（release 签名、约 7MB），
+  都没有时回退到编译期嵌入的同一份包（`build.rs` 在打桌面端时把 `release/Sidekick-Android.apk` 嵌进二进制），
+  最后才是旧的 `gen/android/.../debug` 产物；全部缺失返回 HTML 404 提示。响应带 `Content-Length`，文件名固定 `Sidekick-Android.apk`。
 
 ## 手机端（`app/src-tauri/src/lib.rs` · `mobile_client` 模块）
 
@@ -70,7 +72,8 @@ AI 状态：DeepSeek Harness（DSH）→ 本地脚本 → Sidekick 回环桥 →
 - 手机端断连自动重连：退避 1s→2s→4s→8s→16s→30s，每次先静默 UDP 重新发现（覆盖 IP/端口变化）；桌面 UI 固定 1.5s 重连。协议无心跳，半开连接（电脑睡眠/路由器静默丢包）检测依赖 TCP，待补。
 - 无历史持久化；广播会回显自己发送的消息。
 - 端口自动回退；桌面端强制单实例（`tauri-plugin-single-instance`），第二个进程只聚焦已有窗口后退出，因此 UDP 47820 与 47815–47819 回环桥都只有一个主人（D60）。
-- 广播可能被路由器/AP 隔离拦截；此时降级为手动地址。
+- 广播可能被路由器/AP 隔离拦截（或手机/电脑不在同一网段，如 5G、访客 Wi-Fi、VPN）；此时降级为手动地址。
+- 本机 IP 每次启动按网卡实时选择：物理网卡（en*）优先，跳过 utun/bridge/awdl/anpi 等虚拟接口，避免把 VPN 地址当成二维码地址（IP 不写死）。
 - 调试客户端会混入在线人数统计。
 - 开发包为 debug 构建（debug 签名）；`release/` 已提供固定命名的 dmg 与 release APK（本地 keystore 签名，未公证，D63），正式签名/公证与自动更新未配置。
 - `app/src-tauri/gen/` 不入库，需 `pnpm tauri android init` 重新生成。
