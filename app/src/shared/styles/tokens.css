@@ -8,7 +8,8 @@
    - 默认（无 data-theme）与 data-theme="dark" 使用深色值；
    - data-theme="light" 使用浅色值；
    - <html class="dark"> 只服务于 Tailwind 的 dark: 变体，必须与 data-theme 同步；
-   - 宠物舞台（--pet-*）在两套主题里都保持深海，只有 --pet-bg 微差。
+   - 宠物舞台（--pet-*）跟随主题：深色 = 深海自发光，浅色 = 海玻璃舞台（D76）；
+   - 恒定深色的表面用 .deep-sea-scope 重新钉住深色 --pet-*（桌面麦克风浮层）。
    ========================================================================== */
 
 :root {
@@ -58,8 +59,9 @@
   --chart-4: #e6847a;
   --chart-5: #64d9a4;
 
-  /* ---- 宠物舞台：两套主题都深；除 --pet-bg 外主题不变 ----
-     鲸鱼本体颜色归 OpenPets 图集所有，CSS 不再定义 body/belly/eye 等颜色。 */
+  /* ---- 宠物舞台（深色）：深海自发光 ----
+     鲸鱼本体颜色归 OpenPets 图集所有，CSS 不再定义 body/belly/eye 等颜色。
+     浅色主题的海玻璃舞台值见 :root[data-theme="light"]（D76）。 */
   --pet-bg: #030e12;
   --pet-surface: #0b242c;
   --pet-input: #578893;
@@ -72,6 +74,7 @@
   --pet-primary-foreground: #032019;
   --pet-signal: #6ef0c8;
   --pet-coral: #e6847a;
+  --pet-coral-foreground: #2b100c;
   --pet-ask: #eab173;
   --pet-success: #64d9a4;
   --pet-danger: #e6847a;
@@ -119,10 +122,55 @@
   --window-shadow: 0 24px 60px -30px rgba(8, 34, 41, 0.28);
   --popover-shadow: 0 18px 40px -24px rgba(8, 34, 41, 0.22);
 
-  /* 深海舷窗在浅色主题里只是稍微提亮，仍然是深色舞台。 */
-  --pet-bg: #082229;
+  /* ---- 宠物舞台（浅色）：海玻璃舞台（D76） ----
+     舞台不再恒定深海：背景换成雾光海玻璃，文字/描边同步压深；
+     鲸鱼资产不重绘、不加 CSS filter，白色围裙在浅底上对比度偏低是可接受的取舍。 */
+  --pet-bg: #dcebe7;
+  --pet-surface: #f7fcfa;
+  --pet-input: #6f8f89;
+  --pet-surface-2: #edf7f3;
+  --pet-wash: #cfe4de;
+  --pet-text: #0e2a2b;
+  --pet-muted: #3f5e5d;
+  --pet-border: #9dbab4;
+  --pet-primary: #095b51;
+  --pet-primary-foreground: #f7fdfb;
+  --pet-signal: #0a7764;
+  --pet-coral: #b34628;
+  --pet-coral-foreground: #fff8f6;
+  --pet-ask: #8a5410;
+  --pet-success: #186b49;
+  --pet-danger: #9c3a2b;
 
   color-scheme: light;
+}
+
+/* 恒定深色的表面（桌面麦克风浮层等）：重新钉住深色 --pet-*，不随浅色主题翻转。
+   自定义属性在作用域元素上重新声明，优先级高于从 <html> 继承来的主题值。
+   浮层还会引用页面壳层的信号色，一并钉回深色主题值；否则浅色 --signal 是
+   深青 #0a7764，压在深底上只有约 3:1。 */
+.deep-sea-scope {
+  --abyss: #030e12;
+  --signal: #6ef0c8;
+  --ring: #6ef0c8;
+  --decide: #eab173;
+  --destructive: #e6847a;
+  --pet-bg: #030e12;
+  --pet-surface: #0b242c;
+  --pet-input: #578893;
+  --pet-surface-2: #11313a;
+  --pet-wash: #10393b;
+  --pet-text: #dceceb;
+  --pet-muted: #93b4b2;
+  --pet-border: #2b5560;
+  --pet-primary: #3fc4a0;
+  --pet-primary-foreground: #032019;
+  --pet-signal: #6ef0c8;
+  --pet-coral: #e6847a;
+  --pet-coral-foreground: #2b100c;
+  --pet-ask: #eab173;
+  --pet-success: #64d9a4;
+  --pet-danger: #e6847a;
 }
 
 @theme inline {
@@ -170,6 +218,7 @@
   --color-pet-primary-foreground: var(--pet-primary-foreground);
   --color-pet-signal: var(--pet-signal);
   --color-pet-coral: var(--pet-coral);
+  --color-pet-coral-foreground: var(--pet-coral-foreground);
   --color-pet-ask: var(--pet-ask);
   --color-pet-success: var(--pet-success);
   --color-pet-danger: var(--pet-danger);

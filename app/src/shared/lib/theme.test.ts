@@ -37,9 +37,9 @@ afterEach(() => {
 });
 
 describe("theme preference", () => {
-  it("defaults to dark when nothing is stored", () => {
+  it("defaults to system when nothing is stored", () => {
     localStorage.clear();
-    expect(readThemePreference()).toBe("dark");
+    expect(readThemePreference()).toBe("system");
   });
 
   it("reads a stored preference and rejects invalid values", () => {
@@ -47,7 +47,15 @@ describe("theme preference", () => {
     expect(readThemePreference()).toBe("light");
 
     localStorage.setItem(THEME_STORAGE_KEY, "neon");
-    expect(readThemePreference()).toBe("dark");
+    expect(readThemePreference()).toBe("system");
+  });
+
+  it("follows matchMedia on a fresh install", () => {
+    mockLightSystem(true);
+    localStorage.clear();
+    initTheme();
+    expect(getThemeSnapshot()).toEqual({ preference: "system", resolved: "light" });
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 
   it("resolves system preference from matchMedia", () => {

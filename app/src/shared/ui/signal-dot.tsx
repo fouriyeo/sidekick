@@ -9,7 +9,7 @@ const DOT_CLASS: Record<SignalStatus, string> = {
   error: "bg-destructive",
 };
 
-/** 深海舞台里要用固定深色主题的宠物令牌，避免浅色主题把点压暗。 */
+/** 宠物舞台令牌：随主题翻转（浅色主题下是压深的海玻璃色），与页面壳层的 signal/decide 分开。 */
 const PET_DOT_CLASS: Record<SignalStatus, string> = {
   connected: "bg-pet-signal",
   waiting: "bg-pet-ask",
@@ -21,7 +21,7 @@ type SignalDotProps = {
   status?: SignalStatus;
   /** 是否播放极慢声呐环；只在已连接时生效。 */
   pulse?: boolean;
-  /** stage = 宠物深海舞台（固定用 --pet-* 令牌，不随浅色主题变暗）。 */
+  /** stage = 宠物舞台（用随主题的 --pet-* 令牌）。 */
   tone?: "default" | "stage";
   className?: string;
 };

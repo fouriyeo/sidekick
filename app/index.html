@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- 无 JS / 脚本异常时兜底为深色（tokens.css 的 :root 默认值）；脚本正常时首帧即按偏好或系统确定。 -->
 <html lang="zh-CN" class="dark" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
@@ -7,10 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
       // 首屏防闪：在 CSS/React 之前确定主题；key 必须与 shared/lib/theme.ts 一致。
+      // 默认跟随系统：缺失/非法值一律按 system 解析（D76）。
       (function () {
         try {
           var raw = window.localStorage.getItem("sidekick:theme");
-          var pref = raw === "light" || raw === "dark" || raw === "system" ? raw : "dark";
+          var pref = raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
           var light =
             pref === "light" ||
             (pref === "system" &&

@@ -82,8 +82,9 @@ export function MicStatusOverlay({ onCancel }: MicStatusOverlayProps) {
     }, 2500);
   };
 
+  // 浮层恒定深海（bg-abyss）：deep-sea-scope 钉住深色 pet 令牌，浅色主题下不翻转。
   return (
-    <div className="pointer-events-none fixed top-6 right-6 z-50 flex w-[min(92vw,380px)] flex-col gap-2 rounded-xl border border-signal/45 bg-abyss px-4 py-3 text-sm text-pet-text shadow-popover">
+    <div className="deep-sea-scope pointer-events-none fixed top-6 right-6 z-50 flex w-[min(92vw,380px)] flex-col gap-2 rounded-xl border border-signal/45 bg-abyss px-4 py-3 text-sm text-pet-text shadow-popover">
       <div className="flex items-center justify-between gap-3">
         <span className="font-mono text-[9px] tracking-[0.16em] text-signal uppercase">
           Mic · 百炼云端

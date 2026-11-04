@@ -731,7 +731,7 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
                       className={cn(
                         "inline-flex h-11 items-center justify-center gap-1.5 rounded-[12px] border text-xs font-medium disabled:opacity-50",
                         keyArmedClear
-                          ? "border-pet-coral bg-pet-coral text-[#2b100c]"
+                          ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
                           : cn("border-pet-border text-pet-text", deepSea.surface2),
                       )}
                       disabled={keyPending !== null || keyNotice !== null || !connected}
@@ -791,9 +791,9 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-signal focus-visible:ring-offset-2 focus-visible:ring-offset-pet-bg",
             recording ? "w-[min(90vw,420px)]" : "w-[min(86vw,360px)]",
             cancelZone
-              ? "border-pet-coral bg-pet-coral text-[#2b100c]"
+              ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
               : recording
-                ? "border-pet-coral bg-pet-coral text-[#2b100c]"
+                ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
                 : processing
                   ? "border-pet-border text-pet-muted"
                   : "border-pet-border text-pet-text",

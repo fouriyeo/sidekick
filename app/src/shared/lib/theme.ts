@@ -11,7 +11,8 @@ export type ThemeSnapshot = {
   resolved: ResolvedTheme;
 };
 
-const DEFAULT_PREFERENCE: ThemePreference = "dark";
+// 默认跟随系统（D76）：缺失/非法存档都按 system 解析，首次启动随系统亮暗。
+const DEFAULT_PREFERENCE: ThemePreference = "system";
 const THEME_QUERY = "(prefers-color-scheme: light)";
 
 const listeners = new Set<() => void>();
@@ -105,7 +106,7 @@ function ensureGlobalListeners(): void {
       window.matchMedia(THEME_QUERY).addEventListener("change", onSystemChange);
     }
   } catch {
-    /* 老 WebView 没有 addEventListener 时跟随系统不可用，默认深色 */
+    /* 老 WebView 没有 addEventListener 时跟随系统不可实时切换，回退到当前解析结果 */
   }
   window.addEventListener("storage", onStorage);
 }

@@ -9,7 +9,7 @@ const OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
 
 /**
  * 外观三选一。桌面设置 Sheet 与手机宠物设置共用；
- * 只改本机界面，不改变宠物舞台的深海底色。
+ * 默认跟随系统（D76），界面与宠物舞台一起跟随。
  */
 export function ThemeOptions({ className }: { className?: string }) {
   const { preference } = useTheme();

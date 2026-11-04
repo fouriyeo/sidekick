@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统改为「深海声呐」双主题（D71），主题运行时见 §6。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成，当前入口是 React 双 entry；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统改为「深海声呐」双主题（D71），同日 D76 改为默认跟随系统、宠物舞台随主题；主题运行时见 §6。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -166,7 +166,7 @@ UI 事件
 - `shared/styles/globals.css` 依次引入 `tailwindcss`、`tw-animate-css`、`shadcn/tailwind.css`、`./tokens.css`；`@custom-variant dark` 使用 `.dark` 类。
 - 设计令牌以 shadcn 语义名为基线：`background`、`foreground`、`card`、`popover`、`primary`、`secondary`、`muted`、`accent`、`destructive`、`border`、`input`、`ring`、`radius`；品牌值只在 `tokens.css` 覆盖。
 - `shadcn/tailwind.css` 只提供 variants/utilities；颜色值在 `tokens.css` 定义。
-- 视觉系统是「深海声呐」双主题（2026-11-04，D71）：`tokens.css` 的 `:root` 放深色（默认），`:root[data-theme="light"]` 放浅色；**颜色不再由 `.dark` 块承载**。`.dark` 只服务 Tailwind 的 `dark:` 变体，必须与 `data-theme` 同步。
+- 视觉系统是「深海声呐」双主题（2026-11-04，D71）：`tokens.css` 的 `:root` 放深色（无 JS/回退兜底），`:root[data-theme="light"]` 放浅色；**颜色不再由 `.dark` 块承载**。`.dark` 只服务 Tailwind 的 `dark:` 变体，必须与 `data-theme` 同步。
 - 令牌全部 hex（真机 WebView 103 不支持 `oklch`/`color-mix`），`--radius: 12px`；语义色板与用法见 [standards/visual.md](./standards/visual.md)。
 - 字体用系统栈：`-apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif`；数据/地址/用量用 `ui-monospace`；`body` 开启 `tabular-nums`；不打包完整中文字体。
 - 图标统一用 lucide-react；不引 iconfont、不内联一大段 SVG path。
@@ -176,18 +176,18 @@ UI 事件
 主题必须在 CSS/React 之前确定，否则首屏会闪；持久化 key 为 `sidekick:theme`。
 
 1. `app/index.html` 的 `<head>` 内联防闪脚本（在样式与入口脚本之前执行）：
-   - 读 `localStorage["sidekick:theme"]`，只接受 `system | light | dark`，非法/缺失一律 `dark`（默认深色）；
+   - 读 `localStorage["sidekick:theme"]`，只接受 `system | light | dark`，非法/缺失一律 `system`（默认跟随系统，D76）；
    - `system` 用 `matchMedia("(prefers-color-scheme: light)")` 解析；
-   - 同时写 `<html>` 的 `data-theme`（令牌）、`dark` class（Tailwind `dark:` 变体）与 `color-scheme`；localStorage 被禁用（隐私模式等）时静默保持深色。
+   - 同时写 `<html>` 的 `data-theme`（令牌）、`dark` class（Tailwind `dark:` 变体）与 `color-scheme`；localStorage 被禁用（隐私模式等）时静默回退深色。
 2. `shared/lib/theme.ts` 是运行时唯一出口：
-   - `ThemePreference = "system" | "light" | "dark"`，`ResolvedTheme = "light" | "dark"`；
+   - `ThemePreference = "system" | "light" | "dark"`（默认 `system`），`ResolvedTheme = "light" | "dark"`；
    - `initTheme()`：入口调用一次，应用当前偏好并挂上系统监听；
    - `useTheme()`：`useSyncExternalStore`，返回 `{ preference, resolved }`；
    - `setThemePreference(pref)`：写 localStorage + 立即应用，切换即时生效、不刷新；
    - `applyTheme` 负责双写 `data-theme` + `.dark` + `color-scheme`，三者不能只改一个。
 3. 跟随系统与多窗口同步：偏好为 `system` 时监听 `matchMedia("(prefers-color-scheme: light)")` 的 `change`；任意窗口改偏好通过 `storage` 事件同步到其它窗口。
 4. Sonner 跟随主题：`shared/ui/sonner.tsx` 用 `useTheme().resolved` 作为 `<Sonner theme={...}>`，不写死 dark。
-5. 设置入口：桌面设置 Sheet 与手机宠物设置共用 `shared/ui/theme-options.tsx`（跟随系统 / 浅色 / 深色，`aria-pressed`）；只影响本机界面，不改变宠物舞台。
+5. 设置入口：桌面设置 Sheet 与手机宠物设置共用 `shared/ui/theme-options.tsx`（跟随系统 / 浅色 / 深色，`aria-pressed`）；默认跟随系统，宠物舞台的 `--pet-*` 也一起跟随（D76）。
 
 **令牌示例**
 
@@ -201,7 +201,7 @@ UI 事件
   --dur-3: 240ms;
   --dur-4: 320ms;
 
-  /* 深色（默认）：深海自发光 */
+  /* 深色（:root 基座；偏好默认 system，按系统解析） */
   --background: #06181e;
   --foreground: #dceceb;
   --card: #0b242c;
@@ -252,7 +252,7 @@ UI 事件
 }
 ```
 
-完整令牌集（含 `--pet-*`、`--chart-*`、`--shadow-*`）见 `app/src/shared/styles/tokens.css`；语义解释见 [standards/visual.md](./standards/visual.md) §3。
+完整令牌集（含 `--pet-*`、`--chart-*`、`--shadow-*`）见 `app/src/shared/styles/tokens.css`；语义解释见 [standards/visual.md](./standards/visual.md) §3。`--pet-*` 也随 `data-theme` 切换（深色深海自发光 / 浅色海玻璃舞台，D76）；始终深色的表面用 `.deep-sea-scope` 重新钉住深色 pet 令牌与浮层用到的壳层信号色（如桌面麦克风浮层）。
 
 **类名与组件**
 

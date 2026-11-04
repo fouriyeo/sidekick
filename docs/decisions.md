@@ -601,3 +601,16 @@
 - 代价：常驻一条提示条；「稍后」只对本次会话生效，下次启动仍会提醒（未授权状态下提醒是合理的）。
 - **已知限制（未解决）**：App 是 ad-hoc 签名（`Identifier=desktop-<hash>`、`TeamIdentifier=not set`），TCC 按 CDHash 记账，**每次重新打包桌面端旧授权就对新二进制失效**，表现为「系统设置里开关明明开着，功能仍然只复制」。排查确认：`codesign -dvv /Applications/Sidekick.app` 的 `CDHash` 与上次打包不同即是此因；`tccutil reset Accessibility dev.sidekick.app` 清掉旧条目后重新授权可以恢复。根治需要固定签名证书（让 TCC 按证书 + bundle id 记账而不是按内容哈希），或正式开发者签名 + 公证。
 - 规范：`app/src/desktop/features/settings/components/accessibility-hint.tsx`、`app/src/desktop/app.tsx`、`app/src/shared/lib/mic-status-copy.ts`。
+
+## D76 · 外观默认跟随系统 + 宠物舞台随主题（浅色海玻璃）（2026-11-04，取代 D71 中「默认深色」「舞台两套主题都深」两点）
+
+- 背景：D71 定了双主题，但留了两个「深色优先」的取舍——外观默认值写死 `dark`，宠物舞台在两套主题里都用深海底色。用户随后明确要求「宠物页背景也跟随系统」：浅色主题下页面是海玻璃浅底、宠物页却是一整块深色舷窗，明度断层很突兀；首次启动也默认深色，白天/办公室用户第一眼看到的不是自己系统的主题。需要把默认值改成跟随系统，并让舞台跟着主题走。
+- 决策：
+  - **外观默认跟随系统**：`sidekick:theme` 缺失/非法一律按 `system` 处理（不再 `dark`）；首次启动、无存档时随系统亮暗；浅色/深色仍可手动强制；`app/index.html` 防闪脚本与 `shared/lib/theme.ts` 同步，localStorage 不可用（隐私模式等）时运行时静默回退深色。
+  - **宠物舞台 `--pet-*` 随主题**：深色仍是深海自发光；浅色换成新的「海玻璃舞台」——`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、wash `#cfe4de`、text `#0e2a2b`、muted `#3f5e5d`、border `#9dbab4`、input `#6f8f89`、primary `#095b51`/`#f7fdfb`、signal `#0a7764`、coral `#b34628`、ask `#8a5410`、success `#186b49`、danger `#9c3a2b`；新增 `--pet-coral-foreground`（深色 `#2b100c` / 浅色 `#fff8f6`）。声呐环与鲸鱼图集不变。
+  - **始终深色的表面显式钉住**：新增 `.deep-sea-scope` 作用域，在任意主题下重新声明深色 `--pet-*`，并把浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`）一并钉回深色值；桌面麦克风浮层（`mic-status-overlay`）套用它，避免浅色主题下出现「深底深字/深底深信号色」。`SignalDot` 的 `tone="stage"` 语义从「固定深色」改为「用 pet 令牌（随主题）」。
+  - **取代 D71 的两点**：D71 中「深色（默认、第一主题）」与「宠物舞台在两套主题里都保持深海底色」作废，D71 其它结论（方向 B、令牌语义拆分、`--input` 加强、资产不重绘、hex 底线）继续有效；D71 原文保留不改。
+- 原因：用户明确要宠物页背景跟随系统，深色舷窗是设计取舍而非硬约束；跟随系统也是「默认不打扰」的正确默认值——用户选过浅色/深色才强制，没选过就尊重系统。舞台跟随主题后，浅色主题从「深浅拼接」变成一套连续的浅海玻璃，视觉更完整。
+- 放弃：只改默认值、舞台仍恒深（浅色下还是断崖式深色块，没解决用户诉求）；把「舞台恒深」做成设置开关（用户要的是跟随，不是再多一个开关）；为浅底重绘浅色鲸鱼或加描边（资产与授权成本，D71 红线）；给鲸鱼加 CSS `filter` 提亮/压暗（污染自发光资产、安卓 WebView 合成开销）；浅色舞台继续用大面积低亮度装饰（浅底上观感脏，且不省电）。
+- 代价：鲸鱼资产不重绘、不加 CSS filter，浅色海玻璃舞台下白色围裙与亮部对比度偏低——实测约 26% 不透明像素对比度 <1.5，中位数约 3.5，轮廓仍可辨但细节掉；浅色舞台是大面积浅底，OLED 常驻宠物页的功耗会比深底高（D58 的深底省电前提只在深色主题成立）；`--pet-*` 从一套固定深色变成两套，以后改舞台色要双主题验收；`.deep-sea-scope` 是额外作用域，浮层内新增组件要记得它不跟页面主题走。
+- 规范：`app/index.html`、`app/src/shared/lib/theme.ts`、`app/src/shared/styles/tokens.css`、`app/src/shared/ui/{theme-options.tsx,signal-dot.tsx}`、`app/src/desktop/features/settings/components/settings-sheet.tsx`、`app/src/desktop/features/mic-receiver/*`、`app/src/mobile/styles/deep-sea.module.css`、`app/src/mobile/features/pet/{pet-settings.tsx,name-prompt.tsx}`、`app/src/mobile/features/mic/*`、`docs/standards/{visual,ux}.md`、`docs/frontend-architecture.md` §6、`docs/status.md`、`AGENTS.md` §2/§8。

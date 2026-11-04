@@ -62,7 +62,7 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
                 外观
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                只影响本机界面；宠物舞台在两套主题里都保持深海。
+                只影响本机界面；默认跟随系统，界面与宠物舞台一起跟随。
               </p>
             </div>
             <ThemeOptions />

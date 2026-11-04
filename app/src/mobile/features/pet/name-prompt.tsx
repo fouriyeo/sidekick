@@ -10,8 +10,8 @@ type NamePromptProps = {
 };
 
 /**
- * 首次命名弹层：落在宠物舞台上，所以两套主题里都保持深海舷窗表面，
- * 不用跟随全局的 --card（浅色主题下会变成海玻璃白，和 pet 文本撞对比）。
+ * 首次命名弹层：落在宠物舞台上，表面走 --pet-surface（随主题：深海/海玻璃），
+ * 不直接引用全局的 --card。
  */
 export function NamePrompt({ open }: NamePromptProps) {
   const name = usePetStore((state) => state.pet.name);

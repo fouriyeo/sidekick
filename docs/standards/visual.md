@@ -9,8 +9,8 @@ load: on-demand
 # 视觉与动效规范
 
 > 概念：**深海声呐（Direction B · Sonar）**——鲸鱼在深海里发声，电脑和手机用声呐互相找到；信号与连接本身就是品牌。
-> 两套主题：深色「深海自发光」（默认、第一主题）与浅色「海面雾光 + 海玻璃」（第二主题，重新设计光源，不是把深色反色）。宠物舞台在两套主题里都保持深海底色。
-> 唯一事实源：颜色、圆角、字体、动效令牌以 [`app/src/shared/styles/tokens.css`](../../app/src/shared/styles/tokens.css) 为准，本文档解释语义与用法。2026-11-04 起取代「夜灯桌宠」单暗色方案（[D71](../decisions.md)）。
+> 两套主题：深色「深海自发光」与浅色「海面雾光 + 海玻璃」（第二主题，重新设计光源，不是把深色反色）。外观默认跟随系统；宠物舞台随主题——深色是深海自发光，浅色换成「海玻璃舞台」。
+> 唯一事实源：颜色、圆角、字体、动效令牌以 [`app/src/shared/styles/tokens.css`](../../app/src/shared/styles/tokens.css) 为准，本文档解释语义与用法。2026-11-04 起取代「夜灯桌宠」单暗色方案（[D71](../decisions.md)）；同日 D76 把默认值改为跟随系统、宠物舞台随主题。
 
 ## 1. 视觉原则
 
@@ -19,11 +19,11 @@ load: on-demand
 3. **仪器而不是玩具**：数据用等宽字 + tabular-nums；状态不是红绿灯（信号格数 + 文字，颜色只是第二线索）。
 4. **会呼吸的仪器**：同心声呐环、呼吸光点；只动 `transform` / `opacity`。
 5. **可读性优先**：正文/次要文字 ≥ 4.5:1；颜色不是唯一状态提示；焦点永远可见。
-6. **性能即风格**：安卓 WebView 避免大面积 `filter`/`blur`/阴影动画；OLED 保持深底、装饰只做小面积低亮度。
+6. **性能即风格**：安卓 WebView 避免大面积 `filter`/`blur`/阴影动画；OLED 在深色主题下保持深底、装饰只做小面积低亮度。
 
 ## 2. 两套主题
 
-| | 深色（默认） | 浅色 |
+| | 深色 | 浅色 |
 | --- | --- | --- |
 | 名字 | 深海自发光 | 海面雾光 + 海玻璃 |
 | 光源 | 生物荧光自身发光 | 顶部雾光打在磨砂海玻璃上 |
@@ -33,10 +33,11 @@ load: on-demand
 | 薄荷 | 亮 `#6ef0c8` / `#3fc4a0` | 沉成深水青 `#0a7764` / `#095b51` |
 | 鲸蓝 | 远处水体 `#8fb6e0` | 印刷墨蓝 `#28618c` |
 | 阴影 | 少，靠描边与明度分层 | 极轻顶光，几乎无投影 |
+| 宠物舞台 | `#030e12` 深海自发光 | `#dcebe7` 海玻璃舞台 |
 
-- 默认深色：首次启动、无存档、localStorage 不可用时都是深色（运行时见 [frontend-architecture](../frontend-architecture.md#6-样式规范)）。
+- 默认跟随系统：`sidekick:theme` 缺失/非法一律视为 `system`，首次启动、无存档时随系统亮暗（运行时见 [frontend-architecture](../frontend-architecture.md#6-样式规范)）；只有 localStorage 不可用（隐私模式等）时运行时静默回退深色，偏好本身不会写成 `dark`。
 - 浅色是独立手调的一套，不是反色；两套都必须单独验收对比度与视觉层级。
-- **宠物舞台在两套主题里都深**：`--pet-bg` 深色 `#030e12` / 浅色 `#082229`。鲸鱼是蓝白资产，放在浅底会被冲淡；深水舷窗也是浅色主题的记忆点。
+- **宠物舞台随主题**：深色 `--pet-bg #030e12` 深海自发光；浅色换成「海玻璃舞台」`--pet-bg #dcebe7`（表面 `#f7fcfa`/`#edf7f3`、文字 `#0e2a2b`/`#3f5e5d`）。鲸鱼资产不重绘、不加 CSS filter，浅底对比度偏低是已知代价（见 §8）。
 
 ## 3. 语义色板
 
@@ -66,14 +67,14 @@ hex 与 `tokens.css` 一致；对比度按 WCAG 2.1 计算（正文 ≥ 4.5:1，
 | `--decide` | `#8a5410` | `#eab173` | 只给「等你决定」 | 5.93 / 8.47（卡片） |
 | `--whale` | `#28618c` | `#8fb6e0` | 鲸蓝：次层信息、剪影、完成态 | 5.65 / 8.59（页面底） |
 | `--wash` | `#dfece8` | `#10393b` | 选中/悬停/我方气泡的薄荷薄层 | — |
-| `--abyss` | `#082229` | `#030e12` | 宠物舞台/舷窗，两主题都深 | 仅深底 |
+| `--abyss` | `#082229` | `#030e12` | 深色舷窗/装饰底；宠物舞台已改用随主题的 `--pet-bg`（D76） | 仅深底 |
 | `--glow` | `#6ef0c8` | `#6ef0c8` | 舷窗内生物荧光（两主题同值，装饰） | 仅深底 |
 | `--success` | `#186b49` | `#64d9a4` | 完成/成功（小面积） | 6.15 / 9.21（卡片） |
 | `--warning` | `#8a5410` | `#eab173` | 表单校验/提醒，与 `--decide` 同源 | 5.93 / 8.47（卡片） |
 | `--destructive` / `--destructive-foreground` | `#9c3a2b` / `#fff8f6` | `#e6847a` / `#2b100c` | 删除/失败，只小面积 | 6.52 / 6.10（卡片） |
 | `--chart-1…5` | 见 tokens.css | 见 tokens.css | 图表，顺序 = signal / whale / decide / destructive / success | — |
 
-**宠物作用域**：`--pet-bg` / `--pet-surface` / `--pet-surface-2` / `--pet-wash` / `--pet-input` / `--pet-text` / `--pet-muted` / `--pet-border` / `--pet-primary` / `--pet-primary-foreground` / `--pet-signal` / `--pet-coral` / `--pet-ask` / `--pet-success` / `--pet-danger`。除 `--pet-bg` 外两主题同值（`--pet-surface` `#0b242c`、`--pet-surface-2` `#11313a`、`--pet-wash` `#10393b`、`--pet-input` `#578893` 固定对齐深色层）；鲸鱼本体颜色归 OpenPets 图集，CSS 不再定义 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek`。
+**宠物作用域**：`--pet-*` 随主题切成两套。深色：`--pet-bg #030e12`、surface `#0b242c`/`#11313a`、wash `#10393b`、text `#dceceb`、muted `#93b4b2`、border `#2b5560`、input `#578893`、primary `#3fc4a0`/`#032019`、signal `#6ef0c8`、coral `#e6847a`、coral-foreground `#2b100c`、ask `#eab173`、success `#64d9a4`、danger `#e6847a`。浅色「海玻璃舞台」：`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、wash `#cfe4de`、text `#0e2a2b`、muted `#3f5e5d`、border `#9dbab4`、input `#6f8f89`、primary `#095b51`/`#f7fdfb`、signal `#0a7764`、coral `#b34628`、coral-foreground `#fff8f6`、ask `#8a5410`、success `#186b49`、danger `#9c3a2b`。始终深色的表面（桌面麦克风浮层）加 `.deep-sea-scope` 重新钉住深色 pet 令牌，以及浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），避免浅色主题把深底浮层刷成深底深字/深底深信号色。鲸鱼本体颜色归 OpenPets 图集，CSS 不再定义 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek`。
 
 ### 3.1 语义约定
 
@@ -189,9 +190,9 @@ hex 与 `tokens.css` 一致；对比度按 WCAG 2.1 计算（正文 ≥ 4.5:1，
 
 1. **复用现有 OpenPets schema 2 图集 + `SpritePet`**：资产在 `app/src/mobile/features/pet/assets/openpet/`（`pet.json` + `spritesheet.webp` + `poster.webp`）。不重绘、不染色、不新增鲸鱼，不用 CSS `filter` 调鲸鱼颜色。
 2. **颜色归图集**：`tokens.css` 不再定义 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek`；不要再为鲸鱼本体加颜色变量或内联 fill。
-3. **舞台两套主题都深**：`--pet-bg` 深色 `#030e12` / 浅色 `#082229`；浅色主题不把舞台刷白、不换成海玻璃底。
+3. **舞台随主题（浅色海玻璃）**：`--pet-*` 跟随 `data-theme`——深色是 `--pet-bg #030e12` 深海自发光，浅色换成「海玻璃舞台」`--pet-bg #dcebe7`（surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`/`#3f5e5d`、border `#9dbab4`）。始终深色的表面（桌面麦克风浮层等）加 `.deep-sea-scope` 钉住深色 pet 令牌与浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），不随浅色主题漂白。鲸鱼资产不重绘、不加 CSS `filter`：浅色舞台下白色围裙/亮部对比度偏低（实测约 26% 不透明像素对比度 <1.5，中位数约 3.5）是明确接受的代价，不能靠重绘图集、加光晕或加描边 filter「修」（违反第 1、2、5 条）。
 4. **声呐环只是背景装饰**：在精灵之后（z-index 低于宠物）、`aria-hidden`、细描边低亮度、只动 transform/opacity；不改变宠物帧、不跟随宠物姿态、不包住鲸鱼做发光描边。
-5. **不加光晕**：OLED 像素自发光，光晕/大面积亮色渐变直接耗电；舞台只保留纯深色底 + 小面积低亮度装饰（2026-11-02 移除 `--pet-glow`，D58）。
+5. **不加光晕**：OLED 像素自发光，光晕/大面积亮色渐变直接耗电；舞台只保留单一纯色底 + 小面积低亮度装饰（深色主题为深海深底，D58 于 2026-11-02 移除 `--pet-glow`；浅色海玻璃舞台同样不叠加光晕/大面积亮色渐变）。
 6. 帧动画要求继续按 [engineering/pet-runtime.md](../engineering/pet-runtime.md) 执行：一列一帧、单状态 ≤32 帧、后台暂停、减少动效冻结、失败降级 poster；资产来源/授权/体积登记到 [dependency-policy](../dependency-policy.md)。
 
 ## 9. 声音
@@ -210,7 +211,7 @@ hex 与 `tokens.css` 一致；对比度按 WCAG 2.1 计算（正文 ≥ 4.5:1，
 - 宠物舞台 `devicePixelRatio` 上限 2；安卓避免大面积 blur/shadow 动画。
 - 真机 60fps 是硬指标；掉帧就减粒子/网格，不降整体帧率目标。
 - 暗色 OLED 防烧屏：屏幕常亮已落地（默认开、默认最长 2 小时，可关/可调），宠物页无操作默认 5 分钟自动暗到 70%（可调 1/2/5/10/15/30 分钟），触摸恢复。
-- **OLED 功耗**：OLED 像素自发光，功耗与亮度和点亮面积近似成正比；宠物舞台保持纯深色背景，不叠加光晕/大渐变/大面积亮色（2026-11-02 移除 `--pet-glow`，D58），装饰只做小面积、低亮度。
+- **OLED 功耗**：OLED 像素自发光，功耗与亮度和点亮面积近似成正比；深色主题下宠物舞台保持纯深色背景，不叠加光晕/大渐变/大面积亮色（2026-11-02 移除 `--pet-glow`，D58），装饰只做小面积、低亮度。浅色主题是海玻璃浅底、跟随用户偏好出现（D76），功耗会明显高于深底——这是「舞台随系统」的取舍，不是回归。
 - 声呐环是常驻动效：只动 transform/opacity、细描边不发光、reduced-motion 冻结、后台/失焦暂停；安卓舞台不叠 filter 与大面积亮像素。
 
 ## 11. 无障碍
