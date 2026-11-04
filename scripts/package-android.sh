@@ -14,19 +14,21 @@ if [[ -z "$NDK_HOME" ]]; then
   exit 1
 fi
 
-# `beforeBuildCommand` 会调 pnpm；PATH 里的 pnpm 版本与 packageManager 不一致时
-# 会被 corepack 的版本自检拦下，这里用 corepack 提供的同版本 shim 兜底。
-if command -v corepack >/dev/null 2>&1; then
-  PNPM_SHIM_DIR="$(mktemp -d)"
-  printf '#!/bin/sh\nexec corepack pnpm "$@"\n' >"$PNPM_SHIM_DIR/pnpm"
-  chmod +x "$PNPM_SHIM_DIR/pnpm"
-  export PATH="$PNPM_SHIM_DIR:$PATH"
-  trap 'rm -rf "$PNPM_SHIM_DIR"' EXIT
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$ROOT_DIR/app"
+
+# gradle 的 rust 任务经 `beforeBuildCommand` 调 pnpm，但工作目录是 gen/android
+# （没有 package.json），corepack 在那里读不到 packageManager 会退回全局版本并被拦。
+# shim 先切到 app 目录再转给 corepack；用固定路径，避免被 gradle 的 configuration cache 记住临时目录。
+PNPM_SHIM_DIR="$APP_DIR/.pnpm-shim"
+if command -v corepack >/dev/null 2>&1; then
+  mkdir -p "$PNPM_SHIM_DIR"
+  printf '#!/bin/sh\ncd "%s" && exec corepack pnpm "$@"\n' "$APP_DIR" >"$PNPM_SHIM_DIR/pnpm"
+  chmod +x "$PNPM_SHIM_DIR/pnpm"
+  export PATH="$PNPM_SHIM_DIR:$PATH"
+fi
+
 RELEASE_DIR="$ROOT_DIR/release"
 OUT="$RELEASE_DIR/Sidekick-Android.apk"
 

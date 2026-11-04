@@ -10,6 +10,16 @@ OUT="$RELEASE_DIR/Sidekick-macOS.dmg"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
+# 同 build-android.sh：PATH 里的 pnpm 版本可能与 packageManager 不一致而被拦，
+# 用 corepack 提供的锁定版本兜底（固定路径，避免 gradle/vite 缓存记住临时目录）。
+PNPM_SHIM_DIR="$APP_DIR/.pnpm-shim"
+if command -v corepack >/dev/null 2>&1; then
+  mkdir -p "$PNPM_SHIM_DIR"
+  printf '#!/bin/sh\ncd "%s" && exec corepack pnpm "$@"\n' "$APP_DIR" >"$PNPM_SHIM_DIR/pnpm"
+  chmod +x "$PNPM_SHIM_DIR/pnpm"
+  export PATH="$PNPM_SHIM_DIR:$PATH"
+fi
+
 echo "[desktop] pnpm tauri build"
 cd "$APP_DIR"
 pnpm tauri build
