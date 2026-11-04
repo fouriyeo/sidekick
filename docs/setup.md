@@ -128,6 +128,7 @@ node scripts/patch-android-manifest.mjs
 | `adb pair` 报 `protocol fault` | 配对端口/码已失效；重开配对弹窗，用弹窗里的端口与最新码 |
 | `more than one device/emulator` | 断开 mDNS transport：`adb disconnect <服务名>` |
 | Android 16+ 手机连不上 / 自动发现 0 台，但手机 shell 里 `curl` 能通 | 缺 `ACCESS_LOCAL_NETWORK` 运行时权限：`adb shell appops get dev.sidekick.app ACCESS_LOCAL_NETWORK` 若为 `Uid mode: ignore` 即被拒；重跑 `scripts/build-android.sh` 装新包，并在 App 首次启动的系统弹窗里允许本地网络。`adb reverse tcp:47810 tcp:47810` 后连 `127.0.0.1:47810` 能通，可反证是权限而非网络（D72） |
+| 权限已允许、TCP 能连，但自动发现仍是 0 台 | 该网络只放行单播，广播和组播被丢弃（D73）。验证：`python3` 绑定 `0.0.0.0:47820` 并加入 `224.0.0.251` 后重启 App，收不到包；同时对比 `adb shell cat /proc/net/snmp` 里 `Udp OutDatagrams` 的差值——若差值等于探测次数（3）却没人收到，就是网络丢包。**mDNS 同样走组播，换成它也无效**。处置：手动输入电脑 `IP:端口`（App 会记住并自动重连）；要彻底解决需做扫码连接 |
 | Gradle 报缺少 android-37 / build-tools | `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"` |
 | APK 很大 | debug 版正常（含调试符号）；release 需签名，体积预计 10–20MB |
 | 首次构建很慢 | Gradle 首次下载依赖；`~/.gradle` 缓存后会明显加快 |
