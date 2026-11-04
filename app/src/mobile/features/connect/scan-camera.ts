@@ -32,6 +32,32 @@ function toScanError(error: unknown): ScanError {
   return "camera_unavailable";
 }
 
+/** 相机被上一轮会话占着还会短暂报错，这类错误值得重试；权限被拒不值得。 */
+function isTransientCameraError(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : "";
+  return name === "NotReadableError" || name === "AbortError" || name === "TrackStartError";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 等 video 元素拿到非零尺寸；首次挂载时它可能还是 0×0，直接 play() 会被拒。 */
+async function waitForVideoLayout(video: HTMLVideoElement, maxFrames = 6): Promise<void> {
+  if (video.clientWidth > 0 && video.clientHeight > 0) return;
+  for (let frame = 0; frame < maxFrames; frame += 1) {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    if (video.clientWidth > 0 && video.clientHeight > 0) return;
+  }
+}
+
+function openCameraStream(): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" },
+    audio: false,
+  });
+}
+
 /** 打开后置相机并开始解码；失败时返回 null（具体原因走 onError）。 */
 export async function startScan({
   video,
@@ -53,13 +79,21 @@ export async function startScan({
 
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-      audio: false,
-    });
+    stream = await openCameraStream();
   } catch (error) {
-    onError(toScanError(error));
-    return null;
+    // 上一轮会话可能还在释放相机（NotReadableError），短暂等待后重试一次；
+    // 权限被拒时不重试，否则会反复弹授权框。
+    if (!isTransientCameraError(error)) {
+      onError(toScanError(error));
+      return null;
+    }
+    await sleep(200);
+    try {
+      stream = await openCameraStream();
+    } catch (retryError) {
+      onError(toScanError(retryError));
+      return null;
+    }
   }
 
   const canvas = document.createElement("canvas");
@@ -107,12 +141,20 @@ export async function startScan({
   };
 
   video.srcObject = stream;
+  // 首次打开时元素可能还没完成布局（尺寸为 0×0），此时 play() 会被拒。
+  await waitForVideoLayout(video);
   try {
     await video.play();
   } catch {
-    release();
-    onError("camera_unavailable");
-    return null;
+    // 个别 WebView 首次挂载会拒绝一次，等一帧再试。
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    try {
+      await video.play();
+    } catch {
+      release();
+      onError("camera_unavailable");
+      return null;
+    }
   }
 
   frameId = requestAnimationFrame(tick);

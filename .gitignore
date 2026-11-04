@@ -4,3 +4,4 @@
 # Tauri Android generated project (regenerate: pnpm tauri android init)
 app/src-tauri/gen/
 artifacts
+.pnpm-shim/

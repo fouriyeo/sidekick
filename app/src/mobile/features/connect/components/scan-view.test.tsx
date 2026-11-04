@@ -1,6 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearBackHandlers, handleBack } from "@/mobile/system-back";
 
 const scan = vi.hoisted(() => ({
   startScan: vi.fn(),
@@ -33,12 +32,10 @@ describe("ScanView", () => {
     connection.connect.mockReset();
     connection.connect.mockResolvedValue(null);
     scan.startScan.mockResolvedValue({ stop: scan.stop });
-    clearBackHandlers();
   });
 
   afterEach(() => {
     cleanup();
-    clearBackHandlers();
   });
 
   it("打开时启动相机", async () => {
@@ -89,17 +86,6 @@ describe("ScanView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
 
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it("系统返回键消费掉这次返回并关闭页面", async () => {
-    const onClose = vi.fn();
-    renderScan(onClose);
-    await waitFor(() => expect(scan.startScan).toHaveBeenCalled());
-
-    const consumed = handleBack();
-
-    expect(consumed).toBe(true);
     expect(onClose).toHaveBeenCalled();
   });
 });

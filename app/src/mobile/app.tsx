@@ -97,6 +97,15 @@ export function MobileApp() {
 
   // App 启动时注册唯一的返回键监听；设置页/聊天页通过返回栈优先消费。
   const onSystemBack = useCallback(() => {
+    // 扫码页是最上层的全屏页，返回键先关它。这里直接看 store 状态，
+    // 不依赖 ScanView 的 pushBackHandler 注册时序，避免连聊天页一起退掉。
+    const ui = useUiStore.getState();
+    if (ui.scanOpen) {
+      ui.setScanOpen(false);
+      clearExitHint();
+      return;
+    }
+
     if (handleBack()) {
       clearExitHint();
       return;

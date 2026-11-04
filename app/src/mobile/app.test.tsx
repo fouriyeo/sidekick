@@ -64,6 +64,10 @@ vi.mock("@/mobile/features/pet/pet-settings", () => ({
   PetSettings: () => null,
 }));
 
+vi.mock("@/mobile/features/connect/components/scan-view", () => ({
+  ScanView: () => null,
+}));
+
 vi.mock("@/shared/lib/tauri", () => ({
   connectServer: tauri.connectServer,
   disableWebviewHaptics: tauri.disableWebviewHaptics,
@@ -220,6 +224,18 @@ describe("MobileApp", () => {
     act(() => tauri.backHandler?.());
 
     expect(useUiStore.getState().view).toBe("pet");
+    expect(tauri.exitApp).not.toHaveBeenCalled();
+  });
+
+  it("closes the scan page on back without also leaving chat", async () => {
+    await renderApp();
+    openChat();
+    act(() => useUiStore.getState().setScanOpen(true));
+
+    act(() => tauri.backHandler?.());
+
+    expect(useUiStore.getState().scanOpen).toBe(false);
+    expect(useUiStore.getState().view).toBe("chat");
     expect(tauri.exitApp).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { pushBackHandler } from "@/mobile/system-back";
 import { Button } from "@/shared/ui/button";
 import { useConnectionStore } from "../connection-store";
 import { type ScanError, type ScanSession, startScan } from "../scan-camera";
@@ -93,15 +92,6 @@ export function ScanView({ open, onClose }: ScanViewProps) {
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [open, fatal, startCamera, stopCamera]);
-
-  // 全屏页要消费返回键，否则会被根页面当成「再按一次退出」。
-  useEffect(() => {
-    if (!open) return;
-    return pushBackHandler(() => {
-      onClose();
-      return true;
-    });
-  }, [open, onClose]);
 
   if (!open) return null;
 
