@@ -1,21 +1,15 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import { useSessionStore } from "@/mobile/features/sessions/session-store";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createIdleAiStatus } from "./ai-status";
 import { PetStage } from "./pet-stage";
 import { usePetStore } from "./pet-store";
-
-// 只验证舞台的 AI 文案/无障碍/减少动效，不拉起真实录音链路。
-vi.mock("@/mobile/features/mic/mic-button", () => ({
-  MicButton: () => null,
-}));
 
 function setStageState(options: {
   ai?: "idle" | "working" | "asking" | "completed";
   caption?: "ai_working" | "ai_asking" | "ai_completed" | null;
   reduceMotion?: "system" | "on" | "off";
-  phase?: "idle" | "celebrating" | "sleeping";
+  phase?: "idle" | "sleeping" | "away";
+  onboarded?: boolean;
 }) {
   const aiState = options.ai ?? "idle";
   const now = Date.now();
@@ -42,8 +36,7 @@ function setStageState(options: {
       : null,
     pet: {
       ...state.pet,
-      onboarded: true,
-      name: "小跟班",
+      onboarded: options.onboarded ?? true,
       visible: true,
       phase: options.phase ?? "idle",
       mood: "content",
@@ -57,7 +50,7 @@ function setStageState(options: {
 }
 
 function renderStage() {
-  return render(<PetStage active={true} onOpenChat={vi.fn()} onOpenSettings={vi.fn()} />);
+  return render(<PetStage />);
 }
 
 function stageSection(container: HTMLElement): HTMLElement {
@@ -68,8 +61,6 @@ function stageSection(container: HTMLElement): HTMLElement {
 
 beforeEach(() => {
   setStageState({});
-  useSessionStore.getState().clearAll();
-  useSessionStore.setState({ hydrated: true });
 });
 
 afterEach(() => {
@@ -88,8 +79,7 @@ describe("PetStage AI 联动展示", () => {
     setStageState({ ai: "working" });
     const { container } = renderStage();
 
-    const section = stageSection(container);
-    expect(section).toHaveAttribute("data-ai-state", "working");
+    expect(stageSection(container)).toHaveAttribute("data-ai-state", "working");
 
     const motionLayer = container.querySelector("[data-reduced-motion]");
     expect(motionLayer).toHaveAttribute("data-ai-state", "working");
@@ -105,7 +95,7 @@ describe("PetStage AI 联动展示", () => {
     expect(screen.queryByText("回来啦。")).not.toBeInTheDocument();
   });
 
-  it("aria-live 播报四态文案：正在陪你工作/等你决定/完成了一件事", () => {
+  it("aria-live 播报四态文案：正在陪你工作/等你决定/完成", () => {
     setStageState({ ai: "working", caption: "ai_working" });
     const working = renderStage();
     expect(screen.getByText("小跟班，正在陪你工作")).toBeInTheDocument();
@@ -118,16 +108,16 @@ describe("PetStage AI 联动展示", () => {
 
     setStageState({ ai: "completed", caption: "ai_completed" });
     renderStage();
-    expect(screen.getByText("小跟班，完成了一件事")).toBeInTheDocument();
+    expect(screen.getByText("小跟班，完成")).toBeInTheDocument();
   });
 
-  it("命名庆祝时 AI 姿态回到静态、不显示 AI 文案", () => {
-    setStageState({ ai: "asking", caption: "ai_asking", phase: "celebrating" });
+  it("休息时 AI 姿态回到静态、不显示 AI 文案", () => {
+    setStageState({ ai: "asking", caption: "ai_asking", phase: "away" });
     const { container } = renderStage();
 
     expect(stageSection(container)).toHaveAttribute("data-ai-state", "idle");
     expect(screen.queryByText("等你决定")).not.toBeInTheDocument();
-    expect(screen.getByText("小跟班，很开心")).toBeInTheDocument();
+    expect(screen.getByText("小跟班，在休息")).toBeInTheDocument();
   });
 
   it("减少动效设置反映到舞台标记", () => {
@@ -137,7 +127,7 @@ describe("PetStage AI 联动展示", () => {
     expect(stageSection(container)).toHaveAttribute("data-reduced-motion", "true");
   });
 
-  it("点击、长按、滑动宠物都没有任何反应", () => {
+  it("点击、长按、滑动宠物都没有任何反应、也不写存档", () => {
     const { container } = renderStage();
     const pet = container.querySelector("[data-sprite-state]");
     if (!(pet instanceof HTMLElement)) throw new Error("宠物未渲染");
@@ -151,78 +141,23 @@ describe("PetStage AI 联动展示", () => {
 
     expect(usePetStore.getState().pet).toBe(before.pet);
     expect(usePetStore.getState().bubble).toBeNull();
-    expect(usePetStore.getState().heartBurst).toBeNull();
   });
 });
 
-describe("PetStage 会话列表", () => {
-  it("没有会话时面板隐藏、宠物不下移", () => {
-    const { container } = renderStage();
-    expect(stageSection(container)).toHaveAttribute("data-session-panel", "hidden");
-    expect(container.querySelector('[style*="--pet-session-shift: 0px"]')).not.toBeNull();
-  });
-
-  it("有会话时默认收起，宠物下移 32px", () => {
-    useSessionStore.setState({
-      raw: [
-        {
-          id: "s-1",
-          title: "修复登录",
-          source: "dsh",
-          state: "working",
-          askKind: null,
-          lastEventAt: Date.now(),
-          completedAt: null,
-        },
-      ],
-    });
+describe("PetStage D77 舞台红线", () => {
+  it("没有背景声呐环，也没有触摸互动的入口", () => {
     const { container } = renderStage();
 
-    expect(stageSection(container)).toHaveAttribute("data-session-panel", "collapsed");
-    expect(screen.getByText("修复登录")).toBeInTheDocument();
-    expect(container.querySelector('[style*="--pet-session-shift: 32px"]')).not.toBeNull();
+    expect(container.querySelector(".sonar-dot-ring")).toBeNull();
+    expect(container.querySelector("[data-pet-interactive]")).toBeNull();
+    expect(screen.queryByRole("button", { name: /摸摸|戳/ })).toBeNull();
   });
 
-  it("展开时宠物下移 56px，并让出气泡位置", () => {
-    setStageState({ ai: "asking", caption: "ai_asking" });
-    useSessionStore.setState({
-      expanded: true,
-      raw: [
-        {
-          id: "s-1",
-          title: "修复登录",
-          source: "dsh",
-          state: "working",
-          askKind: null,
-          lastEventAt: Date.now(),
-          completedAt: null,
-        },
-      ],
-    });
-    const { container } = renderStage();
-
-    expect(stageSection(container)).toHaveAttribute("data-session-panel", "expanded");
-    expect(container.querySelector('[style*="--pet-session-shift: 56px"]')).not.toBeNull();
-    expect(screen.queryByText("等你决定")).not.toBeInTheDocument();
-  });
-});
-
-describe("PetStage 方向 B 舞台装饰", () => {
-  it("顶部细状态条 aria-hidden，显示「已连接 · 名字」，断连显示未连接", () => {
-    useConnectionStore.setState({ status: "connected" });
-    const { container, unmount } = renderStage();
-
-    const marker = screen.getByText("已连接");
-    expect(marker.closest('[aria-hidden="true"]')).not.toBeNull();
-    expect(screen.getByText("小跟班")).toBeInTheDocument();
-    // 状态条不抢舞台 aria-live 的播报。
-    expect(container.querySelector('[aria-live="polite"].sr-only')).toHaveTextContent("小跟班");
-
-    unmount();
-    useConnectionStore.setState({ status: "disconnected" });
+  it("宠物名固定为「小跟班」，不渲染输入框", () => {
     renderStage();
-    expect(screen.getByText("未连接")).toBeInTheDocument();
-    expect(screen.queryByText("已连接")).not.toBeInTheDocument();
+
+    expect(screen.getByText("小跟班 · Sidekick")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   it("状态文案 21px + mono 副行；asking 用琥珀，不用珊瑚", () => {

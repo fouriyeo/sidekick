@@ -1,7 +1,5 @@
 import type { PetSaveV1, PetSettings, PetState, PetStorage, ReduceMotionSetting } from "./types";
 
-export const DEFAULT_NAME = "小跟班";
-
 export const DEFAULT_SETTINGS: PetSettings = {
   haptics: true,
   sound: false,
@@ -24,7 +22,6 @@ export function createDefaultSave(now: number): PetSaveV1 {
   return {
     version: 1,
     onboarded: false,
-    name: DEFAULT_NAME,
     mood: "content",
     energy: 100,
     lastSeenAt: now,
@@ -39,12 +36,10 @@ export function defaultPetState(now: number): PetState {
     phase: "idle",
     mood: "content",
     onboarded: false,
-    name: DEFAULT_NAME,
     energy: 100,
     lastSeenAt: now,
     lastInteractionAt: now,
     lastEnergyAt: now,
-    phaseUntil: 0,
     overlayOpen: false,
     visible: true,
     settings: { ...DEFAULT_SETTINGS },
@@ -56,7 +51,6 @@ export function petStateFromSave(save: PetSaveV1): PetState {
     ...defaultPetState(save.lastEnergyAt),
     mood: save.mood,
     onboarded: save.onboarded,
-    name: save.name,
     energy: clampNumber(save.energy, 0, 100),
     lastSeenAt: save.lastSeenAt,
     lastInteractionAt: save.lastInteractionAt,
@@ -71,7 +65,6 @@ export function petSaveFromState(state: PetState, now: number): PetSaveV1 {
   return {
     version: 1,
     onboarded: state.onboarded,
-    name: state.name,
     mood,
     energy: clampNumber(state.energy, 0, 100),
     lastSeenAt: now,
@@ -79,41 +72,6 @@ export function petSaveFromState(state: PetState, now: number): PetSaveV1 {
     lastEnergyAt: state.lastEnergyAt,
     settings: { ...state.settings },
   };
-}
-
-function graphemes(value: string): string[] {
-  const Segmenter = (
-    Intl as unknown as {
-      Segmenter?: new (
-        locale?: string,
-        options?: { granularity: "grapheme" },
-      ) => { segment: (input: string) => Iterable<{ segment: string }> };
-    }
-  ).Segmenter;
-
-  if (Segmenter) {
-    return Array.from(
-      new Segmenter(undefined, { granularity: "grapheme" }).segment(value),
-      (item) => {
-        return item.segment;
-      },
-    );
-  }
-
-  return Array.from(value);
-}
-
-export function normalizeName(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-
-  const trimmed = raw.trim();
-  if (!trimmed || /[\r\n]/.test(trimmed)) return null;
-  if (trimmed.includes("/") || trimmed.includes("://") || /^www\./i.test(trimmed)) return null;
-
-  const parts = graphemes(trimmed);
-  if (parts.length < 1 || parts.length > 8) return null;
-
-  return parts.join("");
 }
 
 function normalizeReduceMotion(value: unknown): ReduceMotionSetting {
@@ -166,20 +124,11 @@ export function parsePetSave(
 
   const value = input as Record<string, unknown>;
   if (value.version !== 1) {
-    const salvagedName = normalizeName(value.name);
-    return {
-      save: {
-        ...createDefaultSave(now),
-        name: salvagedName ?? DEFAULT_NAME,
-        onboarded: salvagedName !== null,
-      },
-      corrupted: true,
-    };
+    // 未知版本回退默认值；旧存档的 name 字段不迁移、不参与恢复。
+    return { save: createDefaultSave(now), corrupted: true };
   }
 
   let corrupted = false;
-  const name = normalizeName(value.name);
-  if (name === null) corrupted = true;
 
   const readNumber = (field: unknown, fallback: number, min: number, max: number) => {
     if (typeof field !== "number" || !Number.isFinite(field)) {
@@ -189,13 +138,10 @@ export function parsePetSave(
     return clampNumber(field, min, max);
   };
 
-  const onboarded = typeof value.onboarded === "boolean" ? value.onboarded : name !== null;
-
   return {
     save: {
       version: 1,
-      onboarded,
-      name: name ?? DEFAULT_NAME,
+      onboarded: typeof value.onboarded === "boolean" ? value.onboarded : false,
       mood: value.mood === "sleepy" ? "sleepy" : "content",
       energy: readNumber(value.energy, 100, 0, 100),
       lastSeenAt: readNumber(value.lastSeenAt, now, 0, Number.MAX_SAFE_INTEGER),

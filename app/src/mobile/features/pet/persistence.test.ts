@@ -3,7 +3,6 @@ import {
   createDefaultSave,
   createMemoryPetStorage,
   defaultPetState,
-  normalizeName,
   parsePetSave,
   petSaveFromState,
   petStateFromSave,
@@ -19,10 +18,11 @@ describe("pet persistence", () => {
     expect(save).toMatchObject({
       version: 1,
       onboarded: false,
-      name: "小跟班",
       energy: 100,
     });
+    expect(save).not.toHaveProperty("name");
     expect(save).not.toHaveProperty("affinity");
+    expect(state).not.toHaveProperty("name");
     expect(state.onboarded).toBe(false);
     expect(state.settings.dimMinutes).toBe(5);
     expect(state.settings.keepAwakeHours).toBe(2);
@@ -32,7 +32,6 @@ describe("pet persistence", () => {
     const state = {
       ...defaultPetState(NOW),
       onboarded: true,
-      name: "小满",
       phase: "idle" as const,
       mood: "sleepy" as const,
       energy: 42,
@@ -41,11 +40,12 @@ describe("pet persistence", () => {
     const save = petSaveFromState(state, NOW);
     expect(save.mood).toBe("sleepy");
     expect(save.lastSeenAt).toBe(NOW);
+    expect(save).not.toHaveProperty("name");
 
     const restored = petStateFromSave(save);
-    expect(restored.name).toBe("小满");
     expect(restored.energy).toBe(42);
     expect(restored.onboarded).toBe(true);
+    expect(restored).not.toHaveProperty("name");
   });
 
   it("returns null for a fresh install", () => {
@@ -55,22 +55,54 @@ describe("pet persistence", () => {
   it("recovers from corrupt JSON", () => {
     const parsed = parsePetSave("{broken", NOW);
     expect(parsed.corrupted).toBe(true);
-    expect(parsed.save?.name).toBe("小跟班");
+    expect(parsed.save?.onboarded).toBe(false);
+    expect(parsed.save).not.toHaveProperty("name");
+  });
+
+  it("falls back to defaults for unknown versions", () => {
+    const parsed = parsePetSave({ version: 0, name: "小满", energy: 42 }, NOW);
+    expect(parsed.corrupted).toBe(true);
+    expect(parsed.save).not.toHaveProperty("name");
+    expect(parsed.save?.energy).toBe(100);
     expect(parsed.save?.onboarded).toBe(false);
   });
 
-  it("migrates unknown versions and keeps a valid name", () => {
-    const parsed = parsePetSave({ version: 0, name: "小满" }, NOW);
-    expect(parsed.corrupted).toBe(true);
-    expect(parsed.save?.name).toBe("小满");
-    expect(parsed.save?.onboarded).toBe(true);
+  it("ignores the removed name field and restores everything else", () => {
+    const parsed = parsePetSave(
+      {
+        version: 1,
+        onboarded: true,
+        name: "小满",
+        mood: "sleepy",
+        energy: 42,
+        lastSeenAt: NOW - 1000,
+        lastInteractionAt: NOW - 2000,
+        lastEnergyAt: NOW - 3000,
+        settings: { haptics: false, dimMinutes: 10 },
+      },
+      NOW,
+    );
+
+    // 旧 name 字段忽略、不迁移；存档 version 仍 1，其他字段照常恢复。
+    expect(parsed.corrupted).toBe(false);
+    expect(parsed.save).not.toHaveProperty("name");
+    expect(parsed.save).toMatchObject({
+      version: 1,
+      onboarded: true,
+      mood: "sleepy",
+      energy: 42,
+      lastSeenAt: NOW - 1000,
+      lastInteractionAt: NOW - 2000,
+      lastEnergyAt: NOW - 3000,
+    });
+    expect(parsed.save?.settings.haptics).toBe(false);
+    expect(parsed.save?.settings.dimMinutes).toBe(10);
   });
 
   it("ignores removed fields and clamps values", () => {
     const parsed = parsePetSave(
       {
         version: 1,
-        name: "小满",
         energy: 200,
         affinity: -4,
         affinityGainedToday: 9,
@@ -92,7 +124,6 @@ describe("pet persistence", () => {
     const parsed = parsePetSave(
       {
         version: 1,
-        name: "小满",
         settings: { dimMinutes: 99, keepAwakeHours: -3 },
       },
       NOW,
@@ -102,7 +133,7 @@ describe("pet persistence", () => {
     expect(parsed.save?.settings.keepAwakeHours).toBe(0);
 
     const fallback = parsePetSave(
-      { version: 1, name: "小满", settings: { dimMinutes: "soon", keepAwakeHours: null } },
+      { version: 1, settings: { dimMinutes: "soon", keepAwakeHours: null } },
       NOW,
     );
     expect(fallback.save?.settings.dimMinutes).toBe(5);
@@ -110,23 +141,11 @@ describe("pet persistence", () => {
   });
 
   it("normalizes keepAwake: legacy 未接入 值落到默认开，显式关闭保留", () => {
-    const legacy = parsePetSave(
-      { version: 1, name: "小满", settings: { keepAwake: "never" } },
-      NOW,
-    );
+    const legacy = parsePetSave({ version: 1, settings: { keepAwake: "never" } }, NOW);
     expect(legacy.save?.settings.keepAwake).toBe(true);
 
-    const off = parsePetSave({ version: 1, name: "小满", settings: { keepAwake: false } }, NOW);
+    const off = parsePetSave({ version: 1, settings: { keepAwake: false } }, NOW);
     expect(off.save?.settings.keepAwake).toBe(false);
-  });
-
-  it("validates names", () => {
-    expect(normalizeName("  小满  ")).toBe("小满");
-    expect(normalizeName("12345678")).toBe("12345678");
-    expect(normalizeName("123456789")).toBeNull();
-    expect(normalizeName("  ")).toBeNull();
-    expect(normalizeName("a\nb")).toBeNull();
-    expect(normalizeName("https://example.com")).toBeNull();
   });
 
   it("provides a memory storage adapter", async () => {

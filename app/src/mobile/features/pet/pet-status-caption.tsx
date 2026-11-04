@@ -43,7 +43,7 @@ const META: Record<string, CaptionMeta> = {
  * AI 状态文案：与宠物闲聊气泡共享槽位，但优先级更高。
  *
  * 方向 B：深海卡 + 14px 圆角；21px 状态 + mono 眉标/副行。
- * 琥珀（--pet-ask）只给「等你决定」，珊瑚（--pet-coral）留给录音与爱心。
+ * 琥珀（--pet-ask）只给「等你决定」，珊瑚（--pet-coral）留给录音。
  * 可见文案 aria-hidden，播报统一交给舞台的 aria-live region，避免重复。
  */
 export function PetStatusCaption({ caption, className }: PetStatusCaptionProps) {

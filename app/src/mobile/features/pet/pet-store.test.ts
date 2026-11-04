@@ -48,7 +48,7 @@ describe("pet store", () => {
     const save = {
       ...createDefaultSave(now),
       onboarded: true,
-      name: "小满",
+      energy: 42,
       lastSeenAt: now,
     };
     const storage = createStorage(save);
@@ -58,19 +58,67 @@ describe("pet store", () => {
     await store.getState().hydrate();
 
     expect(store.getState().hydrated).toBe(true);
-    expect(store.getState().pet.name).toBe("小满");
+    expect(store.getState().pet.energy).toBe(42);
+    expect(store.getState().pet).not.toHaveProperty("name");
     expect(storage.load).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores an old save that still carries a name", async () => {
+    const now = NOW;
+    const storage = createStorage({
+      version: 1,
+      onboarded: true,
+      name: "小满",
+      mood: "content",
+      energy: 42,
+      lastSeenAt: now,
+      lastInteractionAt: now,
+      lastEnergyAt: now,
+      settings: { haptics: false, sound: true, dimMinutes: 10, keepAwakeHours: 4 },
+    });
+    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
+
+    await expect(store.getState().hydrate()).resolves.toBeUndefined();
+
+    expect(store.getState().hydrated).toBe(true);
+    expect(store.getState().pet.energy).toBe(42);
+    expect(store.getState().pet).not.toHaveProperty("name");
+    expect(store.getState().pet.settings.haptics).toBe(false);
+    expect(store.getState().pet.settings.sound).toBe(true);
+    expect(store.getState().pet.settings.dimMinutes).toBe(10);
+    expect(store.getState().pet.settings.keepAwakeHours).toBe(4);
+    // 旧 name 不迁移，下一次落盘也不再有 name。
+    await store.getState().flush();
+    expect(storage.value()).not.toHaveProperty("name");
+  });
+
+  it("first boot greets once, marks onboarded and persists it", async () => {
+    const now = NOW;
+    const storage = createStorage();
+    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
+
+    await store.getState().hydrate();
+
+    expect(store.getState().bubble?.copyId).toBe("first_meet");
+    expect(store.getState().bubble?.text).toBe("你来了。我是小跟班。");
+    expect(store.getState().pet.onboarded).toBe(true);
+
+    await store.getState().flush();
+    expect(storage.value()).toMatchObject({ version: 1, onboarded: true });
+    expect(storage.value()).not.toHaveProperty("name");
   });
 
   it("shows a bubble and clears it after four seconds", async () => {
     const now = NOW;
-    const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
-    const storage = createStorage(save);
-    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
+    const store = createPetStore({
+      storage: createStorage(),
+      haptics: createHaptics(),
+      now: () => now,
+    });
     await store.getState().hydrate();
 
-    store.getState().dispatch({ type: "NAME_SET", now, name: "小满", skipped: false });
-    expect(store.getState().bubble?.copyId).toBe("named");
+    store.getState().dispatch({ type: "BOOT", now, save: null });
+    expect(store.getState().bubble?.copyId).toBe("first_meet");
 
     vi.advanceTimersByTime(4000);
     expect(store.getState().bubble).toBeNull();
@@ -78,8 +126,7 @@ describe("pet store", () => {
 
   it("rate-limits bubbles within thirty seconds", async () => {
     let now = NOW;
-    const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
-    const storage = createStorage(save);
+    const storage = createStorage();
     const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
     await store.getState().hydrate();
 
@@ -92,49 +139,6 @@ describe("pet store", () => {
     now += 4000;
     store.getState().dispatch({ type: "BOOT", now, save: null });
     expect(store.getState().bubble).toBeNull();
-  });
-
-  it("shows naming hearts and clears them after the burst", async () => {
-    const now = NOW;
-    const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
-    const storage = createStorage(save);
-    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
-    await store.getState().hydrate();
-
-    store.getState().dispatch({ type: "NAME_SET", now, name: "小满", skipped: false });
-    expect(store.getState().heartBurst?.count).toBe(3);
-
-    vi.advanceTimersByTime(1200);
-    expect(store.getState().heartBurst).toBeNull();
-  });
-
-  it("ends the naming celebration after its phase window, not on the 30s tick", async () => {
-    let now = NOW;
-    const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
-    const storage = createStorage(save);
-    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
-    await store.getState().hydrate();
-
-    store.getState().dispatch({ type: "NAME_SET", now, name: "小满", skipped: false });
-    expect(store.getState().pet.phase).toBe("celebrating");
-
-    now += 1600;
-    vi.advanceTimersByTime(1600);
-    expect(store.getState().pet.phase).toBe("idle");
-  });
-
-  it("saves a valid name and rejects an invalid one", async () => {
-    const now = NOW;
-    const storage = createStorage();
-    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
-    await store.getState().hydrate();
-
-    await expect(store.getState().setName("小满")).resolves.toBe(true);
-    expect(store.getState().pet.name).toBe("小满");
-    expect(storage.value()).toMatchObject({ name: "小满", onboarded: true });
-
-    await expect(store.getState().setName("123456789")).resolves.toBe(false);
-    expect(store.getState().pet.name).toBe("小满");
   });
 
   it("rolls settings back when saving fails", async () => {
@@ -155,13 +159,12 @@ describe("pet store", () => {
     const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
     await store.getState().hydrate();
 
-    await store.getState().setName("小满");
     await store.getState().updateSettings({ haptics: false });
     await store.getState().resetPet();
 
     expect(store.getState().pet.onboarded).toBe(false);
-    expect(store.getState().pet.name).toBe("小跟班");
     expect(store.getState().pet.settings.haptics).toBe(false);
+    expect(store.getState().bubble).toBeNull();
   });
 
   it("survives a storage load failure", async () => {
@@ -174,7 +177,8 @@ describe("pet store", () => {
 
     expect(store.getState().hydrated).toBe(true);
     expect(store.getState().saveStatus).toBe("error");
-    expect(store.getState().pet.onboarded).toBe(false);
+    // 存储读失败也会走一次 BOOT：没有可迁移的用户数据，按首次见面对待。
+    expect(store.getState().pet.onboarded).toBe(true);
   });
 });
 

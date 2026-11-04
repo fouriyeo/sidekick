@@ -3,14 +3,12 @@ import { defaultPetState, petStateFromSave } from "./persistence";
 import type { PetEffect, PetEvent, PetPhase, PetState } from "./types";
 
 const NIGHT_SLEEP_MS = 5 * 60_000;
-const CELEBRATE_MS = 1500;
 
 function idleState(state: PetState, now: number): PetState {
   return {
     ...state,
     phase: "idle",
     mood: deriveIdleMood(now, state.energy),
-    phaseUntil: 0,
   };
 }
 
@@ -33,9 +31,10 @@ export function reducePet(
       let next: PetState = {
         ...base,
         phase: "idle",
+        // 首次 BOOT 一次就算「已见过面」，之后不再重复问候。
+        onboarded: true,
         visible: true,
         overlayOpen: false,
-        phaseUntil: 0,
         lastSeenAt: now,
       };
 
@@ -72,34 +71,9 @@ export function reducePet(
       return { state: next, effects };
     }
 
-    case "NAME_SET": {
-      const name = event.name.trim();
-      if (!name) return { state, effects: [] };
-
-      return {
-        state: {
-          ...state,
-          name,
-          onboarded: true,
-          phase: "celebrating",
-          mood: "happy",
-          phaseUntil: event.now + CELEBRATE_MS,
-          lastInteractionAt: event.now,
-        },
-        effects: [
-          { type: "bubble", copyId: "named" },
-          { type: "hearts", count: 3 },
-        ],
-      };
-    }
-
     case "TICK": {
       let next = settleEnergy(state, event.now, energyMode(state));
       const effects: PetEffect[] = [];
-
-      if (next.phase === "celebrating" && next.phaseUntil > 0 && event.now >= next.phaseUntil) {
-        next = idleState(next, event.now);
-      }
 
       if (next.phase === "sleeping" && !isNight(event.now)) {
         next = idleState(next, event.now);
@@ -114,7 +88,6 @@ export function reducePet(
           ...next,
           phase: "sleeping",
           mood: "sleepy",
-          phaseUntil: 0,
         };
       } else if (next.phase === "sleeping") {
         next = { ...next, mood: "sleepy" };
@@ -137,7 +110,6 @@ export function reducePet(
           phase: "away",
           visible: false,
           overlayOpen: false,
-          phaseUntil: 0,
           lastSeenAt: event.now,
           lastEnergyAt: event.now,
         };
@@ -173,7 +145,6 @@ export function reducePet(
         mood,
         visible: true,
         overlayOpen: false,
-        phaseUntil: 0,
         lastSeenAt: event.now,
       };
 

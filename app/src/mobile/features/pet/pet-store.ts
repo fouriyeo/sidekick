@@ -12,14 +12,13 @@ import {
 } from "./ai-status";
 import { renderCopy } from "./copy";
 import { createHaptics, type Haptics } from "./haptics";
-import { defaultPetState, normalizeName, parsePetSave, petSaveFromState } from "./persistence";
+import { defaultPetState, parsePetSave, petSaveFromState } from "./persistence";
 import { createPetSounds, type PetSoundGates } from "./sound";
 import { reducePet } from "./state-machine";
 import { createTauriPetStorage } from "./tauri-pet-storage";
 import type {
   Bubble,
   CopyId,
-  HeartBurst,
   PetEffect,
   PetEvent,
   PetSaveV1,
@@ -50,7 +49,6 @@ type PetStoreDeps = {
 
 const BUBBLE_COOLDOWN_MS = 30_000;
 const BUBBLE_DURATION_MS = 4000;
-const HEART_DURATION_MS = 1200;
 const SAVE_DEBOUNCE_MS = 500;
 
 function defaultAppVisible(): boolean {
@@ -81,14 +79,11 @@ export function createPetStore(deps: PetStoreDeps) {
   let hydratePromise: Promise<void> | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
-  let heartTimer: ReturnType<typeof setTimeout> | null = null;
   let completedTimer: ReturnType<typeof setTimeout> | null = null;
   let captionTimer: ReturnType<typeof setTimeout> | null = null;
-  let phaseTimer: ReturnType<typeof setTimeout> | null = null;
   let writeChain: Promise<void> = Promise.resolve();
   let lastBubbleAt = 0;
   let bubbleId = 0;
-  let heartId = 0;
   let captionId = 0;
 
   return create<PetStoreState>((set, get) => {
@@ -112,24 +107,6 @@ export function createPetStore(deps: PetStoreDeps) {
       captionTimer = null;
     }
 
-    /**
-     * `phaseUntil` 到点补发一次 TICK：命名庆祝等瞬态状态按设置时长结束，
-     * 而不是干等宠物页 30 秒一次的兜底 tick（否则会停在庆祝/末帧几十秒）。
-     */
-    function schedulePhaseExpiry(state: PetState) {
-      if (phaseTimer !== null) {
-        clearTimeout(phaseTimer);
-        phaseTimer = null;
-      }
-      if (state.phaseUntil <= 0) return;
-
-      const delay = Math.max(0, state.phaseUntil - deps.now()) + 16;
-      phaseTimer = setTimeout(() => {
-        phaseTimer = null;
-        get().dispatch({ type: "TICK", now: deps.now() });
-      }, delay);
-    }
-
     function appVisible(): boolean {
       return deps.isAppVisible ? deps.isAppVisible() : defaultAppVisible();
     }
@@ -137,10 +114,7 @@ export function createPetStore(deps: PetStoreDeps) {
     function showBubble(copyId: CopyId, durationMs = BUBBLE_DURATION_MS) {
       const now = deps.now();
       const bypass =
-        copyId === "named" ||
-        copyId === "corrupted" ||
-        copyId === "returning" ||
-        copyId === "returning_long";
+        copyId === "corrupted" || copyId === "returning" || copyId === "returning_long";
 
       if (!bypass && lastBubbleAt > 0 && now - lastBubbleAt < BUBBLE_COOLDOWN_MS) return;
 
@@ -151,7 +125,7 @@ export function createPetStore(deps: PetStoreDeps) {
       const bubble: Bubble = {
         id: bubbleId,
         copyId,
-        text: renderCopy(copyId, get().pet.name),
+        text: renderCopy(copyId),
       };
       set({ bubble });
 
@@ -178,7 +152,7 @@ export function createPetStore(deps: PetStoreDeps) {
           aiCaption: {
             id: captionId,
             copyId,
-            text: renderCopy(copyId, get().pet.name),
+            text: renderCopy(copyId),
           },
         });
       }
@@ -215,7 +189,7 @@ export function createPetStore(deps: PetStoreDeps) {
           return;
         }
 
-        // 庆祝结束回到静态/工作时不补新文案（工作文案只在真正开工时出现）。
+        // completed 结束回到静态/工作时不补新文案（工作文案只在真正开工时出现）。
         clearCaptionTimer();
         set({ aiCaption: null });
       }, delay);
@@ -247,7 +221,7 @@ export function createPetStore(deps: PetStoreDeps) {
 
       if (transition.to === "working") {
         if (transition.from === "completed" || transition.from === "asking") {
-          // 从庆祝/等待直接切到工作时不补开工音，避免连续三声响。
+          // 从 completed/等待直接切到工作时不补开工音，避免连续三声响。
           deps.sounds?.stopAsking();
           return;
         }
@@ -265,18 +239,6 @@ export function createPetStore(deps: PetStoreDeps) {
         showBubble(bubbleEffect.copyId, bubbleEffect.durationMs);
       }
 
-      const heartsEffect = effects.find((effect) => effect.type === "hearts");
-      if (heartsEffect) {
-        heartId += 1;
-        if (heartTimer !== null) clearTimeout(heartTimer);
-        const burst: HeartBurst = { id: heartId, count: Math.min(6, heartsEffect.count) };
-        set({ heartBurst: burst });
-        heartTimer = setTimeout(() => {
-          heartTimer = null;
-          set({ heartBurst: null });
-        }, HEART_DURATION_MS);
-      }
-
       if (pet.settings.haptics) {
         for (const effect of effects) {
           if (effect.type === "haptic") deps.haptics[effect.style]();
@@ -289,7 +251,6 @@ export function createPetStore(deps: PetStoreDeps) {
       hydrated: false,
       saveStatus: "idle",
       bubble: null,
-      heartBurst: null,
       ai: createIdleAiStatus(),
       aiCaption: null,
       micListening: false,
@@ -320,7 +281,6 @@ export function createPetStore(deps: PetStoreDeps) {
 
           set({ pet: state, hydrated: true, saveStatus: loadFailed ? "error" : "idle" });
           processEffects(effects, state);
-          schedulePhaseExpiry(state);
 
           if (!loadFailed) scheduleSave();
         })();
@@ -332,10 +292,9 @@ export function createPetStore(deps: PetStoreDeps) {
         const { state, effects } = reducePet(get().pet, event);
         set({ pet: state });
         processEffects(effects, state);
-        schedulePhaseExpiry(state);
 
         if (event.type === "VISIBILITY" && !event.visible) {
-          // 切后台时立刻结束 completed 姿态：回前台/重连不重播庆祝。
+          // 切后台时立刻结束 completed 姿态：回前台/重连不重播完成动画。
           clearCompletedTimer();
           clearCaptionTimer();
           deps.sounds?.stopAsking();
@@ -386,25 +345,6 @@ export function createPetStore(deps: PetStoreDeps) {
         deps.sounds?.unlock();
       },
 
-      setName: async (name: string) => {
-        const normalized = normalizeName(name);
-        if (!normalized) return false;
-
-        const now = deps.now();
-        const { state, effects } = reducePet(get().pet, {
-          type: "NAME_SET",
-          now,
-          name: normalized,
-          skipped: false,
-        });
-        set({ pet: state });
-        processEffects(effects, state);
-        schedulePhaseExpiry(state);
-        await get().flush();
-
-        return get().saveStatus !== "error";
-      },
-
       updateSettings: async (patch: Partial<PetSettings>) => {
         const previous = get().pet;
         const next = {
@@ -435,9 +375,7 @@ export function createPetStore(deps: PetStoreDeps) {
             overlayOpen: current.overlayOpen,
           },
           bubble: null,
-          heartBurst: null,
         });
-        schedulePhaseExpiry(get().pet);
         await get().flush();
       },
 

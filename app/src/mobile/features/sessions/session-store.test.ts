@@ -40,14 +40,11 @@ function resetStore() {
     raw: [],
     cleared: {},
     hydrated: true,
-    expanded: false,
     notice: null,
     noticeId: 0,
     pendingFocusId: null,
     pendingRequestId: null,
     pendingClearId: null,
-    lastAskingIds: [],
-    seenSnapshot: false,
   });
   storage.load.mockReset();
   storage.load.mockResolvedValue({});
@@ -76,16 +73,15 @@ describe("session-store", () => {
     expect(rows.map((row) => row.display)).toEqual(["asking", "working", "completed", "idle"]);
   });
 
-  it("does not auto-expand on the first snapshot, but expands on a new asking", () => {
+  it("keeps the last snapshot until a new status arrives", () => {
     const store = useSessionStore.getState();
-    store.apply([session({ id: "s-1", state: "working" })]);
-    expect(useSessionStore.getState().expanded).toBe(false);
+    store.apply([session({ id: "s-1", state: "asking" })]);
+    expect(useSessionStore.getState().raw).toHaveLength(1);
 
-    store.apply([
-      session({ id: "s-1", state: "working" }),
-      session({ id: "s-2", state: "asking" }),
-    ]);
-    expect(useSessionStore.getState().expanded).toBe(true);
+    // 断连不调用 clearAll：动态页展示「最后一次快照」。
+    expect(
+      visibleSessions(useSessionStore.getState().raw, useSessionStore.getState().cleared),
+    ).toHaveLength(1);
   });
 
   it("clears a finished session locally and brings it back on a newer event", () => {
@@ -179,12 +175,11 @@ describe("session-store", () => {
     expect(useSessionStore.getState().notice).toContain("没有找到 DeepSeek Harness");
   });
 
-  it("clears all transient state on disconnect", () => {
+  it("clearAll resets transient state", () => {
     const store = useSessionStore.getState();
     store.apply([session({ state: "asking" })]);
     store.clearAll();
     expect(useSessionStore.getState().raw).toEqual([]);
-    expect(useSessionStore.getState().expanded).toBe(false);
-    expect(useSessionStore.getState().seenSnapshot).toBe(false);
+    expect(useSessionStore.getState().pendingFocusId).toBeNull();
   });
 });

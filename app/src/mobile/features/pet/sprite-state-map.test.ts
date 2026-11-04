@@ -10,8 +10,8 @@ describe("spriteStateChain", () => {
     expect(spriteStateChain("idle", "idle")).toEqual(["idle"]);
   });
 
-  it("交互状态优先于 AI 状态", () => {
-    expect(spriteStateChain("celebrating", "idle")).toEqual(["celebrate", "done", "idle"]);
+  it("离开状态优先于 AI 状态", () => {
+    expect(spriteStateChain("away", "idle")).toEqual(["away", "idle"]);
     expect(spriteStateChain("away", "working")).toEqual(["away", "idle"]);
   });
 
@@ -46,11 +46,7 @@ describe("resolveSpriteState", () => {
       ),
     ).toBe("idle");
     expect(
-      resolveSpriteState(
-        spriteStateChain("celebrating", "idle"),
-        MANIFEST.states,
-        MANIFEST.defaultState,
-      ),
-    ).toBe("done");
+      resolveSpriteState(spriteStateChain("away", "idle"), MANIFEST.states, MANIFEST.defaultState),
+    ).toBe("idle");
   });
 });

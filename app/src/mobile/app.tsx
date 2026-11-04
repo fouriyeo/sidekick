@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AskingPage } from "@/mobile/features/asking/asking-page";
+import { ChatPage } from "@/mobile/features/chat/chat-page";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
-import { ChatView } from "@/mobile/features/chat/components/chat-view";
 import { ScanView } from "@/mobile/features/connect/components/scan-view";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import { useMicStore } from "@/mobile/features/mic/mic-store";
-import { PetSettings } from "@/mobile/features/pet/pet-settings";
-import { PetStage } from "@/mobile/features/pet/pet-stage";
+import { OfflinePage } from "@/mobile/features/connect/offline-page";
+import { useFirstUseStore } from "@/mobile/features/first-use/store";
+import { micBusyNow, useMicStore } from "@/mobile/features/mic/mic-store";
+import { PetPage } from "@/mobile/features/pet/pet-page";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
+import { MorePage } from "@/mobile/features/settings/more-page";
+import { useMobileActivityStore } from "@/mobile/features/stream/activity-store";
+import { StreamPage } from "@/mobile/features/stream/stream-page";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
+import type { SessionSummary, StatusMessage } from "@/protocol/messages";
 import {
   parseFocusResult,
   parseKeyResult,
@@ -19,6 +25,7 @@ import {
   parseStatusMessage,
 } from "@/protocol/messages";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
+import { focusErrorText, sessionTitle } from "@/shared/lib/sessions";
 import {
   disableWebviewHaptics,
   exitApp,
@@ -44,23 +51,54 @@ function requestStatusIfConnected(): void {
   }
 }
 
+/** 从 status 快照里找当前最需要展示的标题；只读标题，不展开内容。 */
+function statusTitle(
+  list: readonly SessionSummary[] | undefined,
+  pick: (session: SessionSummary) => boolean,
+): string | null {
+  const session = list?.find(pick);
+  if (!session) return null;
+  return sessionTitle({ id: session.id, title: session.title });
+}
+
+/** 把 AI 状态切换写进「最近发生」；同一状态的重复快照不重复记。 */
+function recordAiActivity(message: StatusMessage, previous: string, next: string): void {
+  if (previous === next) return;
+  const record = useMobileActivityStore.getState().record;
+  const list = message.sessionList ?? [];
+
+  if (next === "asking") {
+    const title = statusTitle(list, (session) => session.state === "asking");
+    record({
+      kind: "ai",
+      title: title ? `${title} 进入「等你决定」` : "AI 在等你决定",
+      detail: "手机只负责提醒，到电脑上处理",
+    });
+    return;
+  }
+
+  if (next === "completed") {
+    const title = statusTitle(
+      list,
+      (session) => session.completedAt !== null && session.completedAt !== undefined,
+    );
+    record({ kind: "ai", title: title ? `${title} 完成` : "AI 完成了一件任务", detail: "已推送" });
+  }
+}
+
 export function MobileApp() {
   const append = useChatStore((state) => state.append);
   const bootstrap = useConnectionStore((state) => state.bootstrap);
   const setOnline = useConnectionStore((state) => state.setOnline);
   const view = useUiStore((state) => state.view);
-  const settingsOpen = useUiStore((state) => state.settingsOpen);
   const scanOpen = useUiStore((state) => state.scanOpen);
-  const setView = useUiStore((state) => state.setView);
-  const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
-  const setScanOpen = useUiStore((state) => state.setScanOpen);
   const keepAwake = usePetStore((state) => state.pet.settings.keepAwake);
   const keepAwakeHours = usePetStore((state) => state.pet.settings.keepAwakeHours);
   const keepAwakeMs = keepAwakeHours > 0 ? keepAwakeHours * 60 * 60 * 1000 : null;
 
   useMotionPause();
 
-  // 宠物页在前台（含设置弹层）时屏幕常亮；聊天页与后台交给系统默认熄屏。
+  // 屏幕常亮只在宠物页（含首用清单/变暗层）生效；聊天/动态/设置与后台释放。
   // 常亮默认最多 2 小时，到点释放，避免放桌边整夜耗电（设置页可调，0 = 不限）。
   useKeepAwake(keepAwake && view === "pet", keepAwakeMs);
 
@@ -69,6 +107,11 @@ export function MobileApp() {
   useEffect(() => {
     void disableWebviewHaptics().catch(() => undefined);
   }, []);
+
+  // 宠物页之外的页面把 overlayOpen 置 true：AI 音效/触感只在宠物页前台响。
+  useEffect(() => {
+    usePetStore.getState().dispatch({ type: "OVERLAY", now: Date.now(), open: view !== "pet" });
+  }, [view]);
 
   // 根页面返回键：第一次提示「再按一次退出」，2 秒内第二次才真正退出。
   const [exitHintVisible, setExitHintVisible] = useState(false);
@@ -95,10 +138,12 @@ export function MobileApp() {
     }, EXIT_HINT_MS);
   }, []);
 
-  // App 启动时注册唯一的返回键监听；设置页/聊天页通过返回栈优先消费。
+  // App 启动时注册唯一的返回键监听；页面内弹层/确认态先由返回栈消费。
+  // 返回层级：scan → 上一页；settings/stream/chat → pet；asking → stream；
+  // offline → 上一页；根页面 pet 走「再按一次退出」。
   const onSystemBack = useCallback(() => {
-    // 扫码页是最上层的全屏页，返回键先关它。这里直接看 store 状态，
-    // 不依赖 ScanView 的 pushBackHandler 注册时序，避免连聊天页一起退掉。
+    if (micBusyNow()) return;
+
     const ui = useUiStore.getState();
     if (ui.scanOpen) {
       ui.setScanOpen(false);
@@ -107,6 +152,24 @@ export function MobileApp() {
     }
 
     if (handleBack()) {
+      clearExitHint();
+      return;
+    }
+
+    if (ui.view !== "pet") {
+      switch (ui.view) {
+        case "settings":
+        case "stream":
+        case "chat":
+          ui.setView("pet");
+          break;
+        case "asking":
+          ui.setView("stream");
+          break;
+        case "offline":
+          ui.closeOffline();
+          break;
+      }
       clearExitHint();
       return;
     }
@@ -123,10 +186,10 @@ export function MobileApp() {
 
   useEffect(() => subscribeBackButton(() => onSystemBack()), [onSystemBack]);
 
-  // 进入聊天/设置后立刻收起退出提示，避免提示和当前界面错位。
+  // 离开根页面后立刻收起退出提示，避免提示和当前界面错位。
   useEffect(() => {
-    if (view !== "pet" || settingsOpen) clearExitHint();
-  }, [clearExitHint, settingsOpen, view]);
+    if (view !== "pet") clearExitHint();
+  }, [clearExitHint, view]);
 
   // 卸载时只清计时器，不再 setState。
   useEffect(
@@ -141,14 +204,22 @@ export function MobileApp() {
   );
 
   // 启动即自动搜索电脑；搜索不到进入自动重连。企业网等广播被丢弃的网络下发现会恒为 0 台，
-  // 用户可在聊天页手动输入地址或扫电脑上的二维码。
+  // 用户可在连接页扫码或手动输入地址。
   useEffect(() => {
-    void bootstrap();
+    void bootstrap().catch((error: unknown) => {
+      console.warn("[app] 启动自动连接失败：", error);
+    });
   }, [bootstrap]);
 
-  // 会话清除标记只存在本机；水合完成前面板不渲染，避免已清除的会话闪一下。
+  // 会话清除标记与首用清单只存在本机；水合完成前列表不渲染，避免闪一下旧状态。
   useEffect(() => {
-    void useSessionStore.getState().hydrate();
+    void useSessionStore
+      .getState()
+      .hydrate()
+      .catch((error: unknown) => {
+        console.warn("[app] 读取本地清除标记失败：", error);
+      });
+    useFirstUseStore.getState().hydrate();
   }, []);
 
   // App 切后台时暂停自动重连排期，回前台立即重试一次（熄屏期间计时器会被系统冻结）。
@@ -174,6 +245,11 @@ export function MobileApp() {
       const focusResult = parseFocusResult(raw);
       if (focusResult) {
         useSessionStore.getState().handleFocusResult(focusResult);
+        useMobileActivityStore.getState().record({
+          kind: "system",
+          title: focusResult.ok ? "已在电脑上打开 DeepSeek Harness" : "唤起电脑上的 AI 失败",
+          detail: focusResult.ok ? undefined : focusErrorText(focusResult.error),
+        });
         return;
       }
 
@@ -184,24 +260,45 @@ export function MobileApp() {
         return;
       }
 
-      // AI 状态要先于聊天解析：它不进入聊天记录，只驱动宠物四态。
+      // AI 状态要先于聊天解析：它不进入聊天记录，只驱动宠物四态与会话列表。
       const status = parseStatusMessage(raw);
       if (status) {
-        // 列表与宠物四态分开推进：completed 快照可能过期，但会话列表仍要更新。
+        const previousAi = usePetStore.getState().ai.state;
         useSessionStore.getState().apply(status.sessionList ?? []);
         usePetStore.getState().applyAiStatus(status, {
           now: Date.now(),
           micListening: micListeningNow(),
         });
+        recordAiActivity(status, previousAi, usePetStore.getState().ai.state);
         return;
       }
 
       const micMessage = parseMicMessage(raw);
       if (micMessage) {
         const store = useMicStore.getState();
-        if (micMessage.type === "mic.result") store.handleResult(micMessage);
-        else if (micMessage.type === "mic.ready") store.handleReady(micMessage);
-        else if (micMessage.type === "mic.partial") store.handlePartial(micMessage);
+        if (micMessage.type === "mic.result") {
+          store.handleResult(micMessage);
+          const textLength = micMessage.text ? Array.from(micMessage.text).length : 0;
+          useMobileActivityStore.getState().record({
+            kind: "voice",
+            title:
+              micMessage.outcome === "inserted"
+                ? "语音输入已输入到电脑"
+                : micMessage.outcome === "copied"
+                  ? "语音已复制到电脑"
+                  : "语音转写失败",
+            detail: textLength > 0 ? `${textLength} 字` : undefined,
+          });
+        } else if (micMessage.type === "mic.ready") {
+          store.handleReady(micMessage);
+          // 第一次成功录到音频：首用清单的麦克风步骤由本机状态确认。
+          useFirstUseStore.getState().markMicReady();
+          useMobileActivityStore.getState().record({
+            kind: "voice",
+            title: "麦克风已就绪",
+            detail: "只在按住时录音",
+          });
+        } else if (micMessage.type === "mic.partial") store.handlePartial(micMessage);
         else if (micMessage.type === "mic.state") store.handleState(micMessage);
         else if (micMessage.type === "mic.cancel") store.handleCancel(micMessage);
         else if (micMessage.type === "mic.error") store.handleError(micMessage);
@@ -213,12 +310,15 @@ export function MobileApp() {
     });
     const unsubscribeConn = subscribeConn((event) => {
       setOnline(event.online);
+      useMobileActivityStore.getState().record({
+        kind: "connection",
+        title: event.online ? "已连接电脑" : "连接断了，正在自动重连",
+        detail: event.online ? "局域网直连" : undefined,
+      });
       if (event.online) {
         requestStatusIfConnected();
-      } else {
-        // 断线时立刻收起会话列表，避免展示已经过期的「工作中/等你决定」。
-        useSessionStore.getState().clearAll();
       }
+      // 断连时保留最后一次会话快照（动态页会标注「最后一次快照」），不清空列表。
     });
 
     return () => {
@@ -227,34 +327,20 @@ export function MobileApp() {
     };
   }, [append, setOnline]);
 
-  const appendSystem = useCallback(
-    (message: string) => {
-      append("system", message);
-    },
-    [append],
-  );
-
-  const openChat = useCallback(() => setView("chat"), [setView]);
-  const closeChat = useCallback(() => setView("pet"), [setView]);
-  const openSettings = useCallback(() => setSettingsOpen(true), [setSettingsOpen]);
-  const closeSettings = useCallback(() => setSettingsOpen(false), [setSettingsOpen]);
-  const closeScan = useCallback(() => setScanOpen(false), [setScanOpen]);
-
   return (
     <>
-      <PetStage
-        active={view === "pet" && !settingsOpen}
-        onOpenChat={openChat}
-        onOpenSettings={openSettings}
-      />
-      {view === "chat" && <ChatView onBack={closeChat} onError={appendSystem} />}
-      <PetSettings open={settingsOpen} onClose={closeSettings} />
-      <ScanView open={scanOpen} onClose={closeScan} />
+      {view === "pet" && <PetPage />}
+      {view === "stream" && <StreamPage />}
+      {view === "settings" && <MorePage />}
+      {view === "chat" && <ChatPage />}
+      {view === "asking" && <AskingPage />}
+      {view === "offline" && <OfflinePage />}
+      <ScanView open={scanOpen} onClose={() => useUiStore.getState().setScanOpen(false)} />
       {exitHintVisible && (
         <div
           role="status"
           aria-live="polite"
-          className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+112px)] left-0 right-0 z-50 mx-auto w-fit rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-lg"
+          className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+150px)] left-0 right-0 z-50 mx-auto w-fit rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background"
         >
           再按一次退出
         </div>

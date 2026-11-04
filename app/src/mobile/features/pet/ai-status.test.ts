@@ -182,8 +182,8 @@ describe("applyAiStatus", () => {
 });
 
 describe("displayStateOf", () => {
-  it("休息/命名庆祝优先于 AI 状态", () => {
-    const phases: PetPhase[] = ["away", "celebrating"];
+  it("休息优先于 AI 状态", () => {
+    const phases: PetPhase[] = ["away"];
     for (const phase of phases) {
       expect(displayStateOf(phase, "asking")).toBe("idle");
       expect(displayStateOf(phase, "completed")).toBe("idle");

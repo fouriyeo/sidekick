@@ -412,3 +412,12 @@ export const useMicStore = create<MicState>((set, get) => ({
     }, KEY_NOTICE_MS);
   },
 }));
+
+/**
+ * 录音链路是否占用麦克风。录音/处理中禁止切页、震动静音等统一用这个判断，
+ * 不要再在组件里各写一遍 phase 条件。
+ */
+export function micBusyNow(): boolean {
+  const phase = useMicStore.getState().phase;
+  return phase === "arming" || phase === "listening" || phase === "processing";
+}

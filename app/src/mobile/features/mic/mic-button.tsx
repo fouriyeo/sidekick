@@ -44,6 +44,11 @@ import { VoiceWaveform } from "./voice-waveform";
 type MicButtonProps = {
   active: boolean;
   onOpenConnection?: () => void;
+  /**
+   * 胶囊距页面底部的定位类。默认按「无底部导航」布局（安全区 + 16）；
+   * 宠物页有 62px 底部三档，传入升高后的值，覆盖层会一起上移。
+   */
+  bottomOffsetClassName?: string;
 };
 
 const MIN_RECORDING_MS = 300;
@@ -52,7 +57,7 @@ const WARN_RECORDING_MS = 50_000;
 const CANCEL_ENTER_PX = 48;
 const CANCEL_EXIT_PX = 24;
 
-export function MicButton({ active, onOpenConnection }: MicButtonProps) {
+export function MicButton({ active, onOpenConnection, bottomOffsetClassName }: MicButtonProps) {
   const connectionStatus = useConnectionStore((state) => state.status);
   const phase = useMicStore((state) => state.phase);
   const result = useMicStore((state) => state.result);
@@ -652,7 +657,12 @@ export function MicButton({ active, onOpenConnection }: MicButtonProps) {
 
   return (
     <>
-      <div className="pointer-events-none absolute inset-x-0 z-30 bottom-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col items-center">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center",
+          bottomOffsetClassName ?? "bottom-[calc(env(safe-area-inset-bottom)+16px)]",
+        )}
+      >
         {/*
           覆盖层（临时提示 / 结果卡片 / 实时文本）固定在胶囊上方：
           它不参与外层宽度计算，出现/消失都不会推动按钮。

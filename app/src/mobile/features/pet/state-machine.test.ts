@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultSave, defaultPetState } from "./persistence";
+import { createDefaultSave, defaultPetState, petSaveFromState } from "./persistence";
 import { reducePet } from "./state-machine";
 import type { PetState } from "./types";
 
@@ -14,7 +14,6 @@ function ready(now: number): PetState {
   return {
     ...defaultPetState(now),
     onboarded: true,
-    name: "小满",
   };
 }
 
@@ -87,38 +86,35 @@ describe("pet state machine", () => {
     expect(closed.state.lastInteractionAt).toBe(now + 200);
   });
 
-  it("sets the name and resets the pet", () => {
+  it("resets pet data but keeps settings", () => {
     const now = at(12);
-    const named = reducePet(
-      { ...ready(now), onboarded: false, name: "小跟班" },
-      { type: "NAME_SET", now, name: "小满", skipped: false },
-    );
-    expect(named.state.onboarded).toBe(true);
-    expect(named.state.name).toBe("小满");
-    expect(named.state.phase).toBe("celebrating");
-    expect(named.effects).toContainEqual({ type: "bubble", copyId: "named" });
+    const current = {
+      ...ready(now),
+      settings: { ...ready(now).settings, haptics: false },
+    };
 
-    const reset = reducePet(
-      {
-        ...named.state,
-        settings: { ...named.state.settings, haptics: false },
-      },
-      { type: "RESET", now },
-    );
+    const reset = reducePet(current, { type: "RESET", now });
     expect(reset.state.onboarded).toBe(false);
-    expect(reset.state.name).toBe("小跟班");
     expect(reset.state.settings.haptics).toBe(false);
   });
 
-  it("boots first-run, greeting and corrupted states", () => {
+  it("boots first-run (fixed name, no naming) and marks onboarded", () => {
     const now = at(12);
     const firstRun = reducePet(defaultPetState(now), { type: "BOOT", now, save: null });
-    expect(firstRun.state.onboarded).toBe(false);
+    // 首次 BOOT 即「已见过面」；只保留 first_meet 问候气泡。
+    expect(firstRun.state.onboarded).toBe(true);
+    expect(firstRun.state).not.toHaveProperty("name");
     expect(firstRun.effects).toContainEqual({ type: "bubble", copyId: "first_meet" });
 
+    const saved = petSaveFromState(firstRun.state, now);
+    const secondBoot = reducePet(firstRun.state, { type: "BOOT", now: now + 1000, save: saved });
+    expect(secondBoot.effects.some((effect) => effect.type === "bubble")).toBe(false);
+  });
+
+  it("boots returning and corrupted states", () => {
+    const now = at(12);
     const save = createDefaultSave(now - 7 * HOUR);
     save.onboarded = true;
-    save.name = "小满";
     const greeting = reducePet(defaultPetState(now), { type: "BOOT", now, save });
     expect(greeting.effects).toContainEqual({
       type: "bubble",

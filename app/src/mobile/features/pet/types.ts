@@ -1,11 +1,11 @@
 import type { StatusMessage } from "@/protocol/messages";
 import type { AiApplyOptions, AiStatus } from "./ai-status";
 
-export type Mood = "content" | "happy" | "curious" | "sleepy";
+export type Mood = "content" | "curious" | "sleepy";
 
 export type BaselineMood = "content" | "sleepy";
 
-export type PetPhase = "idle" | "celebrating" | "sleeping" | "away";
+export type PetPhase = "idle" | "sleeping" | "away";
 
 export type ReduceMotionSetting = "system" | "on" | "off";
 
@@ -24,13 +24,12 @@ export type PetSettings = {
 export type PetState = {
   phase: PetPhase;
   mood: Mood;
+  /** 是否已经见过面（首次 BOOT 置 true），不承载用户数据。 */
   onboarded: boolean;
-  name: string;
   energy: number;
   lastSeenAt: number;
   lastInteractionAt: number;
   lastEnergyAt: number;
-  phaseUntil: number;
   overlayOpen: boolean;
   visible: boolean;
   settings: PetSettings;
@@ -39,7 +38,6 @@ export type PetState = {
 export type PetSaveV1 = {
   version: 1;
   onboarded: boolean;
-  name: string;
   mood: BaselineMood;
   energy: number;
   lastSeenAt: number;
@@ -50,7 +48,6 @@ export type PetSaveV1 = {
 
 export type CopyId =
   | "first_meet"
-  | "named"
   | "returning"
   | "returning_long"
   | "night"
@@ -61,7 +58,6 @@ export type CopyId =
 
 export type PetEvent =
   | { type: "BOOT"; now: number; save: PetSaveV1 | null; corrupted?: boolean }
-  | { type: "NAME_SET"; now: number; name: string; skipped: boolean }
   | { type: "TICK"; now: number }
   | { type: "VISIBILITY"; now: number; visible: boolean }
   | { type: "OVERLAY"; now: number; open: boolean }
@@ -71,8 +67,7 @@ export type HapticStyle = "light" | "medium" | "success" | "error";
 
 export type PetEffect =
   | { type: "haptic"; style: HapticStyle }
-  | { type: "bubble"; copyId: CopyId; durationMs?: number }
-  | { type: "hearts"; count: number };
+  | { type: "bubble"; copyId: CopyId; durationMs?: number };
 
 export type PetStorage = {
   load: () => Promise<{ raw: unknown | null }>;
@@ -88,17 +83,11 @@ export type Bubble = {
   text: string;
 };
 
-export type HeartBurst = {
-  id: number;
-  count: number;
-};
-
 export type PetStoreState = {
   pet: PetState;
   hydrated: boolean;
   saveStatus: SaveStatus;
   bubble: Bubble | null;
-  heartBurst: HeartBurst | null;
   /** AI 联动四态；不落盘，App 重启后从 idle/静态重新开始。 */
   ai: AiStatus;
   /** 状态气泡（asking 常驻 / working 5 秒 / completed 3 秒），与闲聊气泡共享槽位。 */
@@ -111,7 +100,6 @@ export type PetStoreState = {
   setMicListening: (listening: boolean) => void;
   /** 首次用户手势时解锁 Web Audio（自动播放策略）。 */
   unlockSound: () => void;
-  setName: (name: string) => Promise<boolean>;
   updateSettings: (patch: Partial<PetSettings>) => Promise<boolean>;
   resetPet: () => Promise<void>;
   flush: () => Promise<void>;

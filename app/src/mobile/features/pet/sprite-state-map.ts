@@ -35,14 +35,12 @@ function aiChain(ai: AiState): string[] {
 /**
  * 返回候选状态链（从左到右优先级递减）。
  *
- * - 庆祝 / 离开：交互优先，AI 状态让位（与 hook SPEC §2 一致）。
+ * - 离开：交互优先，AI 状态让位（与 hook SPEC §2 一致）。
  * - 睡觉：只在 AI 静态时生效；夜间正在进行 AI 任务时仍展示 AI 状态。
  * - 其余情况跟随 AI 四态。
  */
 export function spriteStateChain(phase: PetPhase, ai: AiState): string[] {
   switch (phase) {
-    case "celebrating":
-      return [SPRITE_STATES.celebrate, SPRITE_STATES.done, SPRITE_STATES.idle];
     case "away":
       return [SPRITE_STATES.away, SPRITE_STATES.idle];
     case "sleeping":

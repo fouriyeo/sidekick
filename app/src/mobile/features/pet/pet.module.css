@@ -58,34 +58,3 @@
 .motionLayer[data-night="true"] .poster {
   filter: brightness(0.9) saturate(0.96);
 }
-
-.reduceMotion .heart {
-  animation: none;
-}
-
-.heart {
-  position: absolute;
-  bottom: 38%;
-  left: 50%;
-  width: 18px;
-  height: 18px;
-  color: var(--pet-coral);
-  animation: pet-heart 1s ease-out forwards;
-  pointer-events: none;
-}
-
-@keyframes pet-heart {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, 0) scale(0.6);
-  }
-
-  20% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -54px) scale(1);
-  }
-}

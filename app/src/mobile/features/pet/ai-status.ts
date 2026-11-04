@@ -190,13 +190,13 @@ export function applyAiStatus(
 }
 
 /**
- * 舞台最终展示的 AI 姿态。休息/命名庆祝会让 AI 状态暂时让位；
+ * 舞台最终展示的 AI 姿态。休息会让 AI 状态暂时让位；
  * asking 会盖过睡觉（夜里也完整叫醒），completed/working 同样会叫醒睡觉状态。
  */
 export function displayStateOf(pet: PetPhase | Pick<PetState, "phase">, ai: AiState): AiState {
   const phase = typeof pet === "string" ? pet : pet.phase;
 
-  if (phase === "away" || phase === "celebrating") {
+  if (phase === "away") {
     return "idle";
   }
 
@@ -204,7 +204,7 @@ export function displayStateOf(pet: PetPhase | Pick<PetState, "phase">, ai: AiSt
 }
 
 /**
- * 状态文案跟随状态出现：working 5 秒、completed 到庆祝结束、asking 一直保留。
+ * 状态文案跟随状态出现：working 5 秒、completed 到展示结束、asking 一直保留。
  * 返回 CopyId 由 store 渲染成气泡文本（设置页/AI 关闭时也能复用）。
  */
 export function aiCaptionCopyId(status: AiStatus, now: number): CopyId | null {

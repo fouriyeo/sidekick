@@ -12,7 +12,13 @@ import { useChatStore } from "../chat-store";
  * 我方气泡 = 薄荷水膜（--wash）+ 1px 信号边；对方 = 水面（--popover）；
  * 系统提示 = 居中 mono 读数。输入与发送保持 44px 触控高度。
  */
-export function ChatPanel() {
+type ChatPanelProps = {
+  /** 未连接：输入框禁用并给「去连接」，避免在断线时静默吞消息。 */
+  disabled?: boolean;
+  onOpenConnection?: () => void;
+};
+
+export function ChatPanel({ disabled = false, onOpenConnection }: ChatPanelProps) {
   const messages = useChatStore((state) => state.messages);
   const append = useChatStore((state) => state.append);
   const [draft, setDraft] = useState("");
@@ -27,7 +33,7 @@ export function ChatPanel() {
 
   const submit = async () => {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || disabled) return;
 
     setSending(true);
     try {
@@ -55,7 +61,7 @@ export function ChatPanel() {
           </span>
           <p className="mt-2 max-w-[260px] text-sm leading-relaxed text-foreground">还没有消息</p>
           <p className="mt-1 max-w-[280px] text-xs leading-relaxed text-muted-foreground">
-            在手机上按住说话，或在这里输入一句话，就会出现在两边。
+            这个页面是和电脑互发的调试通道；日常请用宠物页按住说话。
           </p>
         </div>
       ) : (
@@ -83,6 +89,21 @@ export function ChatPanel() {
         </ul>
       )}
 
+      {disabled && (
+        <div className="mt-2 flex shrink-0 items-center gap-2 rounded-[10px] border border-border bg-card px-2.5 py-1.5">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            还没连上电脑，先连接
+          </span>
+          <button
+            type="button"
+            className="min-h-11 shrink-0 rounded-[10px] px-2 text-xs font-medium text-signal"
+            onClick={onOpenConnection}
+          >
+            去连接
+          </button>
+        </div>
+      )}
+
       <form
         className="mt-2 flex shrink-0 gap-2"
         onSubmit={(event) => {
@@ -92,18 +113,19 @@ export function ChatPanel() {
       >
         <Input
           aria-label="消息内容"
-          placeholder="给电脑发条消息…"
+          placeholder={disabled ? "先连接电脑…" : "给电脑发条消息…"}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           autoComplete="off"
           enterKeyHint="send"
+          disabled={disabled}
           className="h-11 flex-1 rounded-[12px] border-input bg-popover text-[15px]"
         />
         <Button
           type="submit"
           size="lg"
           className="h-11 rounded-[12px] px-4"
-          disabled={!draft.trim() || sending}
+          disabled={disabled || !draft.trim() || sending}
         >
           发送
         </Button>
