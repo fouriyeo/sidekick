@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClipboardSnapshot } from "@/shared/lib/tauri";
 import { useClipboardStore } from "../clipboard-store";
-import { ClipboardPanel } from "./clipboard-panel";
+import { ClipboardSection } from "./clipboard-section";
 
 const api = vi.hoisted(() => ({
   listClipboard: vi.fn(),
@@ -66,9 +66,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("ClipboardPanel 查看详情", () => {
+describe("ClipboardSection 查看详情", () => {
   it("列表行单行截断，但每条都有查看详情按钮", async () => {
-    render(<ClipboardPanel />);
+    render(<ClipboardSection />);
 
     const preview = await screen.findByText(/第一行：把这段代码改成异步/);
     expect(preview.className).toContain("truncate");
@@ -76,7 +76,7 @@ describe("ClipboardPanel 查看详情", () => {
   });
 
   it("弹层展示完整文本、字数和行数", async () => {
-    render(<ClipboardPanel />);
+    render(<ClipboardSection />);
 
     fireEvent.click((await screen.findAllByRole("button", { name: "查看详情" }))[0]);
 
@@ -87,7 +87,7 @@ describe("ClipboardPanel 查看详情", () => {
   });
 
   it("在详情里可复制、置顶和删除", async () => {
-    render(<ClipboardPanel />);
+    render(<ClipboardSection />);
 
     fireEvent.click((await screen.findAllByRole("button", { name: "查看详情" }))[0]);
     const dialog = await screen.findByRole("dialog");

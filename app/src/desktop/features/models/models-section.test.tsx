@@ -15,7 +15,7 @@ const tauri = vi.hoisted(() => ({
 vi.mock("@/shared/lib/tauri", () => tauri);
 
 import { useCloudAsrStore } from "./cloud-asr-store";
-import { ModelsPanel } from "./models-panel";
+import { ModelsSection } from "./models-section";
 import { useUsageStore } from "./usage-store";
 
 function makeStatus(overrides: Partial<CloudAsrStatus> = {}): CloudAsrStatus {
@@ -74,7 +74,7 @@ function makeUsage(): UsageStats {
 }
 
 async function renderPanel() {
-  render(<ModelsPanel />);
+  render(<ModelsSection />);
   await screen.findByLabelText("API Key");
 }
 
@@ -112,7 +112,7 @@ afterEach(() => {
   useUsageStore.getState().reset();
 });
 
-describe("ModelsPanel 百炼配置", () => {
+describe("ModelsSection 百炼配置", () => {
   it("加载后显示掩码 Key、默认模型与用量金额", async () => {
     await renderPanel();
 
@@ -226,7 +226,7 @@ describe("ModelsPanel 百炼配置", () => {
   });
 });
 
-describe("ModelsPanel 用量统计", () => {
+describe("ModelsSection 用量统计", () => {
   it("切换区间：今天只看汇总，近 7 天/近 1 个月显示按天明细，近 1 年按月汇总", async () => {
     await renderPanel();
 

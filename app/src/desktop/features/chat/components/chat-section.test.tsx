@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useChatStore } from "../chat-store";
-import { ChatPanel } from "./chat-panel";
+import { ChatSection } from "./chat-section";
 
 beforeEach(() => {
   useChatStore.setState({ messages: [] });
@@ -9,11 +9,19 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe("ChatPanel 方向 B", () => {
+describe("ChatSection 通道调试", () => {
   it("空状态显示「还没有消息」", () => {
-    render(<ChatPanel onSend={vi.fn(() => true)} />);
+    render(
+      <ChatSection
+        onSend={vi.fn(() => true)}
+        info={null}
+        status="connected"
+        onOpenOverview={vi.fn()}
+        onOpenConnection={vi.fn()}
+      />,
+    );
 
-    expect(screen.getByText("还没有消息")).toBeInTheDocument();
+    expect(screen.getByText("还没有往来消息")).toBeInTheDocument();
     expect(screen.getByText(/在手机上按住说话/)).toBeInTheDocument();
   });
 
@@ -24,7 +32,15 @@ describe("ChatPanel 方向 B", () => {
         { id: 2, kind: "me", text: "把这句记到剪贴板" },
       ],
     });
-    render(<ChatPanel onSend={vi.fn(() => true)} />);
+    render(
+      <ChatSection
+        onSend={vi.fn(() => true)}
+        info={null}
+        status="connected"
+        onOpenOverview={vi.fn()}
+        onOpenConnection={vi.fn()}
+      />,
+    );
 
     const mine = screen.getByText("把这句记到剪贴板");
     expect(mine.className).toContain("bg-wash");
@@ -39,7 +55,15 @@ describe("ChatPanel 方向 B", () => {
 
   it("系统提示退成居中小字，不画气泡", () => {
     useChatStore.setState({ messages: [{ id: 1, kind: "system", text: "AI 正在等待你确认" }] });
-    render(<ChatPanel onSend={vi.fn(() => true)} />);
+    render(
+      <ChatSection
+        onSend={vi.fn(() => true)}
+        info={null}
+        status="connected"
+        onOpenOverview={vi.fn()}
+        onOpenConnection={vi.fn()}
+      />,
+    );
 
     const system = screen.getByText("AI 正在等待你确认");
     expect(system.className).toContain("self-center");
@@ -48,7 +72,15 @@ describe("ChatPanel 方向 B", () => {
 
   it("发送成功后清空输入框，失败保留草稿", () => {
     const onSend = vi.fn(() => true);
-    render(<ChatPanel onSend={onSend} />);
+    render(
+      <ChatSection
+        onSend={onSend}
+        info={null}
+        status="connected"
+        onOpenOverview={vi.fn()}
+        onOpenConnection={vi.fn()}
+      />,
+    );
 
     const input = screen.getByLabelText("消息内容");
     fireEvent.change(input, { target: { value: "发一条消息" } });

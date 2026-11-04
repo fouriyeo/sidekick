@@ -15,7 +15,7 @@ const tauri = vi.hoisted(() => ({
 vi.mock("@/shared/lib/tauri", () => tauri);
 
 import { useHookStore } from "../hook-store";
-import { HookPanel } from "./hook-panel";
+import { HookSection } from "./hook-section";
 
 function makeStatus(overrides: Partial<DshHookStatus> = {}): DshHookStatus {
   return {
@@ -80,10 +80,10 @@ afterEach(() => {
   useHookStore.getState().reset();
 });
 
-describe("HookPanel", () => {
+describe("HookSection", () => {
   it("未安装时给出首次写入说明，确认后按所选 profile 安装", async () => {
     tauri.getDshHookStatus.mockResolvedValue(notInstalled);
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("未写入")).toBeInTheDocument();
     expect(screen.getByText("还没有写入联动")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("HookPanel", () => {
     tauri.getDshHookStatus.mockResolvedValue(
       makeStatus({ installed: true, enabled: true, connected: false }),
     );
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     const matches = await screen.findAllByText(/已写入，等待 DeepSeek Harness 重启\/连接/);
     expect(matches.length).toBeGreaterThan(0);
@@ -117,7 +117,7 @@ describe("HookPanel", () => {
   });
 
   it("已连接后开关只调用 setDshHookEnabled", async () => {
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("已连接")).toBeInTheDocument();
     const toggle = screen.getByRole("switch", { name: "启用 AI 联动" });
@@ -130,7 +130,7 @@ describe("HookPanel", () => {
   });
 
   it("模拟按钮把状态传给 testDshHook", async () => {
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("已连接")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "模拟等你决定" }));
@@ -139,7 +139,7 @@ describe("HookPanel", () => {
   });
 
   it("移除联动需要二次确认，确认后调用 removeDshHook", async () => {
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("已连接")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "移除联动" }));
@@ -154,7 +154,7 @@ describe("HookPanel", () => {
   });
 
   it("已写入后 profile 选择器锁定，提示先移除联动", async () => {
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("已连接")).toBeInTheDocument();
     const select = screen.getByLabelText("DSH profile");
@@ -165,7 +165,7 @@ describe("HookPanel", () => {
 
   it("未写入时可以选另一个 profile 再写入", async () => {
     tauri.getDshHookStatus.mockResolvedValue(notInstalled);
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("未写入")).toBeInTheDocument();
     const select = screen.getByLabelText("DSH profile");
@@ -183,7 +183,7 @@ describe("HookPanel", () => {
 
   it("读取失败时显示带下一步的 alert", async () => {
     tauri.getDshHookStatus.mockRejectedValue(new Error("permission denied"));
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("读取联动失败");
@@ -193,7 +193,7 @@ describe("HookPanel", () => {
 
   it("状态快照带 error 时显示修复与移除入口", async () => {
     tauri.getDshHookStatus.mockResolvedValue(makeStatus({ error: "cordis.patch.yml 写入失败" }));
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("cordis.patch.yml 写入失败");
@@ -202,7 +202,7 @@ describe("HookPanel", () => {
   });
 
   it("展示事件列表、状态映射与隐私说明，不含对话内容", async () => {
-    render(<HookPanel />);
+    render(<HookSection onOpenSessions={vi.fn()} />);
 
     expect(await screen.findByText("已连接")).toBeInTheDocument();
     expect(screen.getByText("最近事件")).toBeInTheDocument();

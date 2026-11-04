@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "@/desktop/components/empty-state";
+import { StateTag } from "@/desktop/shell/page-chips";
 import { formatRelativeTime } from "@/shared/lib/format";
 import { type ClipboardItem, subscribeClipboardChanged } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
@@ -27,7 +28,6 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
-import { SignalDot } from "@/shared/ui/signal-dot";
 import {
   DEFAULT_CLIPBOARD_MAX_ITEMS,
   filterClipboardItems,
@@ -37,7 +37,11 @@ import {
   useClipboardStore,
 } from "../clipboard-store";
 
-export function ClipboardPanel() {
+/**
+ * 内容页（剪贴板）：搜索、计数、暂停开关收进一条工具带；列表行统一动作；
+ * 详情弹层看全文，清空有二次确认。数据只在本机。
+ */
+export function ClipboardSection() {
   const snapshot = useClipboardStore((state) => state.snapshot);
   const loading = useClipboardStore((state) => state.loading);
   const error = useClipboardStore((state) => state.error);
@@ -84,71 +88,57 @@ export function ClipboardPanel() {
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-border bg-card p-6">
-      <div className="flex shrink-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <Clipboard className="size-4 text-muted-foreground" />
-            剪贴板
-          </h2>
-          <p className="mt-1 font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
-            Clipboard · 只存本机
-          </p>
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-[14px] border border-border bg-card p-3.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="relative min-w-[180px] flex-1">
+          <Search className="pointer-events-none absolute top-[11px] left-3 size-3.5 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索复制过的文字…"
+            aria-label="搜索剪贴板"
+            autoComplete="off"
+            className="h-9 rounded-[10px] bg-popover pl-9 text-sm"
+          />
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void setEnabled(!enabled)}
-          >
-            {enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-            {enabled ? "暂停记录" : "继续记录"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={items.length === 0}
-            onClick={() => setConfirmOpen(true)}
-          >
-            <Trash2 className="size-3.5" />
-            清空
-          </Button>
-        </div>
-      </div>
-
-      <div className="relative mt-4 shrink-0">
-        <Search className="pointer-events-none absolute top-[13px] left-3 size-3.5 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索复制过的文字…"
-          aria-label="搜索剪贴板"
-          autoComplete="off"
-          className="h-10 rounded-[10px] bg-popover pl-9 text-sm"
-        />
+        <StateTag label={enabled ? "正在记录" : "已暂停"} tone={enabled ? "signal" : "muted"} />
+        <span className="shrink-0 font-mono text-[10px] tracking-[0.06em] text-muted-foreground uppercase">
+          {loading ? "正在读取…" : formatClipboardCount(items.length, maxItems)}
+        </span>
+        <Button type="button" variant="outline" size="sm" onClick={() => void setEnabled(!enabled)}>
+          {enabled ? <Pause /> : <Play />}
+          {enabled ? "暂停记录" : "继续记录"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={items.length === 0}
+          onClick={() => setConfirmOpen(true)}
+        >
+          <Trash2 />
+          清空
+        </Button>
       </div>
 
       {!enabled && (
-        <p className="mt-3 flex shrink-0 items-center gap-2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-muted-foreground">
-          <SignalDot status="waiting" pulse={false} className="shrink-0" />
-          记录已暂停，新的复制不会进入列表。
+        <p className="shrink-0 rounded-lg border border-border bg-popover px-3 py-2 text-[11px] text-muted-foreground">
+          记录已暂停，新的复制不会进入列表；继续记录后新内容才会出现。
         </p>
       )}
 
       {error && (
         <p
           role="alert"
-          className="mt-3 shrink-0 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          className="shrink-0 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
         >
           {error}
         </p>
       )}
 
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
         {filtered.length === 0 ? (
-          <div className="flex h-full min-h-[220px] items-center justify-center">
+          <div className="flex h-full min-h-[200px] items-center justify-center">
             <EmptyState
               icon={<Clipboard className="size-4" />}
               title={query ? "没有匹配的记录" : "还没有记录"}
@@ -167,7 +157,7 @@ export function ClipboardPanel() {
               <li
                 key={item.id}
                 className={cn(
-                  "group flex h-12 items-center gap-2 rounded-[10px] border border-border bg-popover px-3 transition-colors hover:bg-wash focus-within:border-signal",
+                  "group flex h-11 items-center gap-2 rounded-[10px] border border-border bg-popover px-3 transition-colors hover:bg-wash focus-within:border-signal",
                   item.pinned && "border-signal/60",
                 )}
               >
@@ -258,18 +248,13 @@ export function ClipboardPanel() {
         )}
       </div>
 
-      <div className="mt-3 flex shrink-0 flex-col gap-1.5 border-t border-border pt-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <span className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
-            {loading ? "正在读取…" : formatClipboardCount(items.length, maxItems)}
-          </span>
-          <span className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-            Local only · 不联网
-          </span>
-        </div>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-2">
+        <p className="min-w-0 flex-1 text-[10.5px] leading-relaxed text-muted-foreground">
           点条目复制；点眼睛看全文。新内容淘汰最旧的未置顶项。只记录文本；密码管理器标记为隐藏的内容不会记录，数据仅保存在本机、不写日志。
         </p>
+        <span className="shrink-0 font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
+          Local only · 不联网
+        </span>
       </div>
 
       <Dialog
@@ -305,7 +290,7 @@ export function ClipboardPanel() {
               </DialogHeader>
 
               <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-popover px-3 py-2.5">
-                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap select-text text-foreground">
+                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap text-foreground select-text">
                   {detailItem.text}
                 </p>
               </div>
@@ -373,7 +358,7 @@ export function ClipboardPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }
 
