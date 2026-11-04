@@ -182,8 +182,8 @@ describe("applyAiStatus", () => {
 });
 
 describe("displayStateOf", () => {
-  it("录音/即时心情反馈优先于 AI 状态", () => {
-    const phases: PetPhase[] = ["away", "listening", "celebrating", "concerned"];
+  it("休息/命名庆祝优先于 AI 状态", () => {
+    const phases: PetPhase[] = ["away", "celebrating"];
     for (const phase of phases) {
       expect(displayStateOf(phase, "asking")).toBe("idle");
       expect(displayStateOf(phase, "completed")).toBe("idle");

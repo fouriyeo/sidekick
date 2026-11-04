@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import { usePetStore } from "@/mobile/features/pet/pet-store";
 import type {
   KeyAction,
   KeyResultMessage,
@@ -159,10 +158,6 @@ function scheduleResultReset(reset: () => void) {
   }, RESULT_VISIBLE_MS);
 }
 
-function petDispatch(event: "MIC_START" | "MIC_SUCCESS" | "MIC_CANCEL" | "MIC_ERROR") {
-  usePetStore.getState().dispatch({ type: event, now: Date.now() });
-}
-
 export const useMicStore = create<MicState>((set, get) => ({
   phase: "idle",
   session: null,
@@ -185,7 +180,6 @@ export const useMicStore = create<MicState>((set, get) => ({
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     });
-    petDispatch("MIC_START");
   },
 
   markListening: () => {
@@ -249,8 +243,6 @@ export const useMicStore = create<MicState>((set, get) => ({
       ...EMPTY_KEY,
     });
 
-    petDispatch(failed ? "MIC_ERROR" : "MIC_SUCCESS");
-
     scheduleResultReset(() => get().reset());
   },
 
@@ -273,8 +265,6 @@ export const useMicStore = create<MicState>((set, get) => ({
   },
 
   handleCancel: (message) => {
-    const wasActive =
-      get().phase === "arming" || get().phase === "listening" || get().session !== null;
     clearTimers();
     set((state) => ({
       phase: "idle",
@@ -288,7 +278,6 @@ export const useMicStore = create<MicState>((set, get) => ({
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     }));
-    if (wasActive) petDispatch("MIC_CANCEL");
   },
 
   fail: (message, code) => {
@@ -308,7 +297,6 @@ export const useMicStore = create<MicState>((set, get) => ({
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     });
-    petDispatch("MIC_ERROR");
 
     errorTimer = window.setTimeout(() => {
       errorTimer = null;
@@ -327,7 +315,6 @@ export const useMicStore = create<MicState>((set, get) => ({
       ...EMPTY_PARTIAL,
       ...EMPTY_KEY,
     });
-    petDispatch("MIC_CANCEL");
   },
 
   reset: () => {

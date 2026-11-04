@@ -114,6 +114,46 @@ pub enum SessionState {
     Asking,
 }
 
+/// 会话当前正在使用的工具类别（粗粒度白名单，不含工具名原文/参数/路径）。
+///
+/// 插件在本地把工具名归一成固定类别；这里是第二道白名单，未知值也只会落成通用的
+/// [`SessionTool::Tool`]，绝不把原始字符串透传给手机。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionTool {
+    Bash,
+    Read,
+    Edit,
+    Search,
+    Web,
+    Agent,
+    Plan,
+    Tool,
+}
+
+impl SessionTool {
+    /// 宽松解析：缺失/空 → None（旧插件，手机显示「思考中」）；未知 → 通用 Tool。
+    pub fn parse(value: Option<&str>) -> Option<Self> {
+        let value = match value {
+            Some(value) => value.trim().to_ascii_lowercase(),
+            None => return None,
+        };
+        if value.is_empty() {
+            return None;
+        }
+        Some(match value.as_str() {
+            "bash" => Self::Bash,
+            "read" => Self::Read,
+            "edit" => Self::Edit,
+            "search" => Self::Search,
+            "web" => Self::Web,
+            "agent" => Self::Agent,
+            "plan" => Self::Plan,
+            _ => Self::Tool,
+        })
+    }
+}
+
 /// 正在等待用户回答的类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -135,6 +175,9 @@ pub struct IncomingSession {
     pub state: SessionState,
     #[serde(default)]
     pub ask_kind: Option<AskKind>,
+    /// 当前工具类别（白名单词，见 [`SessionTool`]）；旧插件不发送。
+    #[serde(default)]
+    pub tool: Option<String>,
     #[serde(default)]
     pub last_event_at: u64,
     #[serde(default)]
@@ -151,6 +194,8 @@ pub struct SessionSummary {
     pub source: &'static str,
     pub state: SessionState,
     pub ask_kind: Option<AskKind>,
+    /// 仅 working 有值：当前工具类别；旧插件/非工作态为 null。
+    pub tool: Option<SessionTool>,
     pub last_event_at: u64,
     pub completed_at: Option<u64>,
 }
@@ -1187,6 +1232,11 @@ pub fn normalize_session_list(list: Vec<IncomingSession>) -> Vec<SessionSummary>
             } else {
                 None
             },
+            tool: if raw.state == SessionState::Working {
+                SessionTool::parse(raw.tool.as_deref())
+            } else {
+                None
+            },
             last_event_at: raw.last_event_at,
             completed_at: raw.completed_at,
         });
@@ -1499,6 +1549,7 @@ mod tests {
             source: Some("dsh".to_string()),
             state,
             ask_kind: None,
+            tool: None,
             last_event_at: 1_000,
             completed_at: None,
         }
@@ -1581,9 +1632,9 @@ mod tests {
             r#"{"type":"state","state":"asking","sessions":1,"resume":null,
                  "sessionList":[
                    {"id":"s1","title":"修复登录","source":"dsh","state":"asking",
-                    "askKind":"question","lastEventAt":1730000000000,"completedAt":null},
+                    "askKind":"question","tool":"bash","lastEventAt":1730000000000,"completedAt":null},
                    {"id":"s2","title":null,"source":"dsh","state":"idle",
-                    "askKind":null,"lastEventAt":1730000000001,"completedAt":1730000000002}
+                    "askKind":null,"tool":null,"lastEventAt":1730000000001,"completedAt":1730000000002}
                  ],"ts":9}"#
                 .as_bytes(),
         )
@@ -1595,8 +1646,75 @@ mod tests {
         assert_eq!(session_list[0].id, "s1");
         assert_eq!(session_list[0].title.as_deref(), Some("修复登录"));
         assert_eq!(session_list[0].ask_kind, Some(AskKind::Question));
+        assert_eq!(session_list[0].tool.as_deref(), Some("bash"));
         assert_eq!(session_list[1].completed_at, Some(1_730_000_000_002));
         assert_eq!(session_list[1].state, SessionState::Idle);
+        assert_eq!(session_list[1].tool, None);
+    }
+
+    #[test]
+    fn normalizes_tool_activity_to_a_whitelist() {
+        assert_eq!(SessionTool::parse(None), None);
+        assert_eq!(SessionTool::parse(Some("")), None);
+        assert_eq!(SessionTool::parse(Some("bash")), Some(SessionTool::Bash));
+        assert_eq!(SessionTool::parse(Some(" Read ")), Some(SessionTool::Read));
+        assert_eq!(SessionTool::parse(Some("agent")), Some(SessionTool::Agent));
+        // 未知工具折成通用类别，不保留原文。
+        assert_eq!(
+            SessionTool::parse(Some("deploy_secret_service")),
+            Some(SessionTool::Tool)
+        );
+
+        let list = normalize_session_list(vec![
+            IncomingSession {
+                id: "working-bash".to_string(),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                tool: Some("bash".to_string()),
+                last_event_at: 1,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "working-unknown".to_string(),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                tool: Some("sk-raw-name".to_string()),
+                last_event_at: 2,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "asking-tool".to_string(),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Asking,
+                ask_kind: Some(AskKind::Question),
+                tool: Some("bash".to_string()),
+                last_event_at: 3,
+                completed_at: None,
+            },
+            IncomingSession {
+                id: "legacy".to_string(),
+                title: None,
+                source: Some("dsh".to_string()),
+                state: SessionState::Working,
+                ask_kind: None,
+                tool: None,
+                last_event_at: 4,
+                completed_at: None,
+            },
+        ]);
+        assert_eq!(list[0].tool, Some(SessionTool::Bash));
+        // 未知值折叠成通用类别，原文不会出现在序列化输出里。
+        assert_eq!(list[1].tool, Some(SessionTool::Tool));
+        assert_eq!(list[2].tool, None);
+        assert_eq!(list[3].tool, None);
+        let serialized = serde_json::to_string(&list).unwrap();
+        assert!(!serialized.contains("sk-raw-name"));
+        assert!(serialized.contains("\"tool\":\"bash\""));
     }
 
     #[test]
@@ -1619,6 +1737,7 @@ mod tests {
                 source: Some("dsh".to_string()),
                 state: SessionState::Working,
                 ask_kind: None,
+                tool: None,
                 last_event_at: 1,
                 completed_at: None,
             },
@@ -1628,6 +1747,7 @@ mod tests {
                 source: Some("dsh".to_string()),
                 state: SessionState::Working,
                 ask_kind: None,
+                tool: None,
                 last_event_at: 1,
                 completed_at: None,
             },
@@ -1637,6 +1757,7 @@ mod tests {
                 source: Some("dsh".to_string()),
                 state: SessionState::Working,
                 ask_kind: None,
+                tool: None,
                 last_event_at: 2,
                 completed_at: None,
             },
@@ -1646,6 +1767,7 @@ mod tests {
                 source: Some("claude-code".to_string()),
                 state: SessionState::Working,
                 ask_kind: None,
+                tool: None,
                 last_event_at: 3,
                 completed_at: None,
             },
@@ -1655,6 +1777,7 @@ mod tests {
                 source: None,
                 state: SessionState::Asking,
                 ask_kind: Some(AskKind::Approval),
+                tool: None,
                 last_event_at: 4,
                 completed_at: None,
             },
@@ -1664,6 +1787,7 @@ mod tests {
                 source: Some("dsh".to_string()),
                 state: SessionState::Idle,
                 ask_kind: Some(AskKind::Question),
+                tool: None,
                 last_event_at: 5,
                 completed_at: None,
             },
@@ -1676,6 +1800,7 @@ mod tests {
                 source: Some("dsh".to_string()),
                 state: SessionState::Working,
                 ask_kind: None,
+                tool: None,
                 last_event_at: 10 + index,
                 completed_at: None,
             });

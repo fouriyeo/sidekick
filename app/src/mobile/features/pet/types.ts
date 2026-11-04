@@ -1,11 +1,11 @@
 import type { StatusMessage } from "@/protocol/messages";
 import type { AiApplyOptions, AiStatus } from "./ai-status";
 
-export type Mood = "content" | "happy" | "curious" | "sleepy" | "listening" | "proud" | "concerned";
+export type Mood = "content" | "happy" | "curious" | "sleepy";
 
 export type BaselineMood = "content" | "sleepy";
 
-export type PetPhase = "idle" | "listening" | "celebrating" | "concerned" | "sleeping" | "away";
+export type PetPhase = "idle" | "celebrating" | "sleeping" | "away";
 
 export type ReduceMotionSetting = "system" | "on" | "off";
 
@@ -31,7 +31,6 @@ export type PetState = {
   lastInteractionAt: number;
   lastEnergyAt: number;
   phaseUntil: number;
-  resumeMood: Mood | null;
   overlayOpen: boolean;
   visible: boolean;
   settings: PetSettings;
@@ -55,8 +54,6 @@ export type CopyId =
   | "returning"
   | "returning_long"
   | "night"
-  | "mic_success"
-  | "mic_error"
   | "corrupted"
   | "ai_working"
   | "ai_asking"
@@ -68,10 +65,6 @@ export type PetEvent =
   | { type: "TICK"; now: number }
   | { type: "VISIBILITY"; now: number; visible: boolean }
   | { type: "OVERLAY"; now: number; open: boolean }
-  | { type: "MIC_START"; now: number }
-  | { type: "MIC_SUCCESS"; now: number }
-  | { type: "MIC_CANCEL"; now: number }
-  | { type: "MIC_ERROR"; now: number }
   | { type: "RESET"; now: number };
 
 export type HapticStyle = "light" | "medium" | "success" | "error";

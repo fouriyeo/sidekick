@@ -127,6 +127,7 @@ describe("status messages", () => {
             source: "dsh",
             state: "asking",
             askKind: "question",
+            tool: "bash",
             lastEventAt: 1730000000000,
             completedAt: null,
           },
@@ -152,9 +153,29 @@ describe("status messages", () => {
         source: "dsh",
         state: "asking",
         askKind: "question",
+        // asking 状态下工具类别没有意义，归一化为 null。
+        tool: null,
         lastEventAt: 1730000000000,
         completedAt: null,
       },
+    ]);
+  });
+
+  it("keeps only whitelisted tool activity while a session is working", () => {
+    const list = normalizeSessionList([
+      { id: "s-1", source: "dsh", state: "working", tool: "bash", lastEventAt: 1 },
+      { id: "s-2", source: "dsh", state: "working", tool: "read", lastEventAt: 2 },
+      { id: "s-3", source: "dsh", state: "working", tool: "mcp__secret", lastEventAt: 3 },
+      { id: "s-4", source: "dsh", state: "working", lastEventAt: 4 },
+      { id: "s-5", source: "dsh", state: "idle", tool: "bash", lastEventAt: 5 },
+    ]);
+
+    expect(list.map((item) => [item.id, item.tool])).toEqual([
+      ["s-1", "bash"],
+      ["s-2", "read"],
+      ["s-3", null],
+      ["s-4", null],
+      ["s-5", null],
     ]);
   });
 

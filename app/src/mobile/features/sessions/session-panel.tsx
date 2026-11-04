@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, ExternalLink, Loader2, X } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import deepSea from "@/mobile/styles/deep-sea.module.css";
 import { pushBackHandler } from "@/mobile/system-back";
+import type { SessionTool } from "@/protocol/messages";
 import { formatRelativeTime } from "@/shared/lib/format";
 import { type SessionRow, useSessionStore, visibleSessions } from "./session-store";
 
@@ -40,6 +41,22 @@ function displayStateText(row: SessionRow): string {
   }
 }
 
+/** 工作中行第二行的中文动作：只展示协议白名单里的粗粒度类别。 */
+const TOOL_ACTION_TEXT: Record<SessionTool, string> = {
+  bash: "运行命令",
+  read: "阅读文件",
+  edit: "修改文件",
+  search: "搜索代码",
+  web: "查资料",
+  agent: "处理子任务",
+  plan: "整理计划",
+  tool: "使用工具",
+};
+
+function workingActionText(tool: SessionTool | null | undefined): string {
+  return tool ? `正在${TOOL_ACTION_TEXT[tool]}` : "正在思考";
+}
+
 function sessionTitle(row: SessionRow): string {
   if (row.title) return row.title;
   return `新会话 ${row.id.slice(-4)}`;
@@ -69,6 +86,20 @@ function SignalBars({ display }: { display: SessionRow["display"] }) {
           style={{ height }}
         />
       ))}
+    </span>
+  );
+}
+
+/** 工作中：小圆环 + 「正在<动作>」，颜色 pet-signal；相对时间仍跟在行尾。 */
+function WorkingStatus({ tool }: { tool: SessionTool | null | undefined }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-pet-signal">
+      <span
+        aria-hidden="true"
+        data-session-spinner
+        className="size-2.5 shrink-0 animate-spin rounded-full border border-current border-t-transparent motion-reduce:animate-none"
+      />
+      <span className="min-w-0 truncate">{workingActionText(tool)} ·</span>
     </span>
   );
 }
@@ -230,6 +261,7 @@ function SessionRowItem({
 
   return (
     <li
+      data-session-tool={row.tool ?? "none"}
       className={cn(
         "flex min-h-12 items-center gap-1 px-2",
         asking ? deepSea.wash : undefined,
@@ -245,10 +277,14 @@ function SessionRowItem({
         <SignalBars display={row.display} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-pet-text">{title}</span>
-          <span className="mt-0.5 flex min-w-0 items-baseline gap-1.5 font-mono text-[10px] whitespace-nowrap">
-            <span className={cn("shrink-0", TONE_CLASS[row.display])}>
-              {displayStateText(row)} ·
-            </span>
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-[10px] whitespace-nowrap">
+            {row.display === "working" ? (
+              <WorkingStatus tool={row.tool} />
+            ) : (
+              <span className={cn("shrink-0", TONE_CLASS[row.display])}>
+                {displayStateText(row)} ·
+              </span>
+            )}
             <span className="min-w-0 truncate text-pet-muted">{rowTime(row)}</span>
           </span>
         </span>

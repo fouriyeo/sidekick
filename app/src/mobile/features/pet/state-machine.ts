@@ -4,8 +4,6 @@ import type { PetEffect, PetEvent, PetPhase, PetState } from "./types";
 
 const NIGHT_SLEEP_MS = 5 * 60_000;
 const CELEBRATE_MS = 1500;
-const SUCCESS_MS = 2000;
-const CONCERN_MS = 1500;
 
 function idleState(state: PetState, now: number): PetState {
   return {
@@ -38,7 +36,6 @@ export function reducePet(
         visible: true,
         overlayOpen: false,
         phaseUntil: 0,
-        resumeMood: null,
         lastSeenAt: now,
       };
 
@@ -87,7 +84,6 @@ export function reducePet(
           phase: "celebrating",
           mood: "happy",
           phaseUntil: event.now + CELEBRATE_MS,
-          resumeMood: null,
           lastInteractionAt: event.now,
         },
         effects: [
@@ -101,11 +97,7 @@ export function reducePet(
       let next = settleEnergy(state, event.now, energyMode(state));
       const effects: PetEffect[] = [];
 
-      if (
-        (next.phase === "celebrating" || next.phase === "concerned") &&
-        next.phaseUntil > 0 &&
-        event.now >= next.phaseUntil
-      ) {
+      if (next.phase === "celebrating" && next.phaseUntil > 0 && event.now >= next.phaseUntil) {
         next = idleState(next, event.now);
       }
 
@@ -146,7 +138,6 @@ export function reducePet(
           visible: false,
           overlayOpen: false,
           phaseUntil: 0,
-          resumeMood: null,
           lastSeenAt: event.now,
           lastEnergyAt: event.now,
         };
@@ -183,7 +174,6 @@ export function reducePet(
         visible: true,
         overlayOpen: false,
         phaseUntil: 0,
-        resumeMood: null,
         lastSeenAt: event.now,
       };
 
@@ -200,79 +190,6 @@ export function reducePet(
       return {
         state: { ...state, overlayOpen: false, lastInteractionAt: event.now },
         effects: [],
-      };
-    }
-
-    case "MIC_START": {
-      if (state.phase === "listening") return { state, effects: [] };
-
-      const wasSleeping = state.phase === "sleeping";
-      const resumeMood = wasSleeping ? "content" : state.mood;
-
-      return {
-        state: {
-          ...state,
-          phase: "listening",
-          mood: "listening",
-          resumeMood,
-          phaseUntil: 0,
-          lastInteractionAt: event.now,
-        },
-        effects: [],
-      };
-    }
-
-    case "MIC_SUCCESS": {
-      if (state.phase !== "listening") return { state, effects: [] };
-
-      return {
-        state: {
-          ...state,
-          phase: "celebrating",
-          mood: "proud",
-          phaseUntil: event.now + SUCCESS_MS,
-          resumeMood: null,
-          lastInteractionAt: event.now,
-        },
-        effects: [
-          { type: "haptic", style: "success" },
-          { type: "bubble", copyId: "mic_success" },
-        ],
-      };
-    }
-
-    case "MIC_CANCEL": {
-      if (state.phase !== "listening") return { state, effects: [] };
-
-      return {
-        state: {
-          ...state,
-          phase: "idle",
-          mood: state.resumeMood ?? deriveIdleMood(event.now, state.energy),
-          resumeMood: null,
-          phaseUntil: 0,
-          lastInteractionAt: event.now,
-        },
-        effects: [],
-      };
-    }
-
-    case "MIC_ERROR": {
-      if (state.phase !== "listening") return { state, effects: [] };
-
-      return {
-        state: {
-          ...state,
-          phase: "concerned",
-          mood: "concerned",
-          phaseUntil: event.now + CONCERN_MS,
-          resumeMood: null,
-          lastInteractionAt: event.now,
-        },
-        effects: [
-          { type: "haptic", style: "error" },
-          { type: "bubble", copyId: "mic_error" },
-        ],
       };
     }
 

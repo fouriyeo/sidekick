@@ -11,9 +11,7 @@ describe("spriteStateChain", () => {
   });
 
   it("交互状态优先于 AI 状态", () => {
-    expect(spriteStateChain("listening", "working")).toEqual(["listening", "idle"]);
     expect(spriteStateChain("celebrating", "idle")).toEqual(["celebrate", "done", "idle"]);
-    expect(spriteStateChain("concerned", "working")).toEqual(["concerned", "idle"]);
     expect(spriteStateChain("away", "working")).toEqual(["away", "idle"]);
   });
 
@@ -27,7 +25,7 @@ describe("resolveSpriteState", () => {
   const states = { idle: {}, working: {}, attention: {}, done: {} };
 
   it("选候选链里第一个存在的状态", () => {
-    expect(resolveSpriteState(["sleeping", "listening", "idle"], states, "idle")).toBe("idle");
+    expect(resolveSpriteState(["sleeping", "celebrate", "idle"], states, "idle")).toBe("idle");
     expect(resolveSpriteState(["working", "idle"], states, "idle")).toBe("working");
   });
 

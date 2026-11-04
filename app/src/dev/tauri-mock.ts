@@ -336,6 +336,7 @@ export function installTauriMock(): void {
               state:
                 requested === "asking" ? "asking" : requested === "working" ? "working" : "idle",
               askKind: requested === "asking" ? "question" : null,
+              tool: requested === "working" ? "bash" : null,
               lastEventAt: now,
               completedAt: completed ? now : null,
             },

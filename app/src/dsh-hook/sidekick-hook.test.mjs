@@ -26,6 +26,8 @@ import {
   normalizeSessionTitle,
   parseConfigText,
   PLUGIN_VERSION,
+  SESSION_TOOLS,
+  toolActivityOf,
   profileFromModuleUrl,
   resolveConfigPath,
   resolveDshHome,
@@ -105,7 +107,7 @@ function createControllerHarness(initialConfig = BASE_CONFIG) {
 describe("plugin metadata", () => {
   it("exports the DSH plugin name and a thin apply() entry", () => {
     expect(name).toBe("sidekick-hook");
-    expect(PLUGIN_VERSION).toBe(2);
+    expect(PLUGIN_VERSION).toBe(3);
     expect(typeof apply).toBe("function");
   });
 
@@ -560,6 +562,109 @@ describe("createDshHookReducer", () => {
     ).toMatchObject({ state: "idle" });
   });
 
+  it("normalizes tool names to the whitelist and never leaks raw names", () => {
+    expect(SESSION_TOOLS).toContain("bash");
+    expect(toolActivityOf("bash")).toBe("bash");
+    expect(toolActivityOf("Bash")).toBe("bash");
+    expect(toolActivityOf("file_read")).toBe("read");
+    expect(toolActivityOf("readImage")).toBe("read");
+    expect(toolActivityOf("web_search")).toBe("web");
+    expect(toolActivityOf("glob_files")).toBe("search");
+    expect(toolActivityOf("subagent")).toBe("agent");
+    expect(toolActivityOf("")).toBeNull();
+    expect(toolActivityOf(null)).toBeNull();
+
+    // 未知工具只落到固定类别 "tool"，工具名原文/参数不会进入会话摘要。
+    const { reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+    const result = reducer.handle(
+      session,
+      makeEvent("tool/call", {
+        name: "deploy_secret_service",
+        callId: "c1",
+        arguments: '{"apiKey":"sk-secret"}',
+      }),
+    );
+    expect(result.list[0]).toMatchObject({ state: "working", tool: "tool" });
+    expect(JSON.stringify(result)).not.toContain("deploy_secret_service");
+    expect(JSON.stringify(result)).not.toContain("sk-secret");
+  });
+
+  it("tracks the most recent pending tool and clears it when the turn ends", () => {
+    const { reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+    expect(
+      reducer.handle(session, makeEvent("tool/call", { name: "bash", callId: "c1" })).list[0],
+    ).toMatchObject({ state: "working", tool: "bash" });
+
+    // 并行工具：展示最近开始的那个；它结束后退回仍在跑的那个。
+    expect(
+      reducer.handle(session, makeEvent("tool/call", { name: "read", callId: "c2" })).list[0].tool,
+    ).toBe("read");
+    expect(
+      reducer.handle(
+        session,
+        makeEvent("tool/result", { message: { role: "tool", toolCallId: "c2" } }),
+      ).list[0].tool,
+    ).toBe("bash");
+    expect(
+      reducer.handle(
+        session,
+        makeEvent("tool/result", { message: { role: "tool", toolCallId: "c1" } }),
+      ).list[0].tool,
+    ).toBeNull();
+
+    // 无法配对 callId 的结果：防呆清空，避免工具动作永久卡住。
+    reducer.handle(session, makeEvent("tool/call", { name: "grep", callId: "c3" }));
+    expect(
+      reducer.handle(session, makeEvent("tool/result", { message: { role: "tool" } })).list[0].tool,
+    ).toBeNull();
+
+    reducer.handle(session, makeEvent("tool/call", { name: "edit", callId: "c4" }));
+    expect(
+      reducer.handle(session, makeEvent("turn/end", { reason: { kind: "completed" } })).list[0]
+        .tool,
+    ).toBeNull();
+  });
+
+  it("does not expose a tool category while the session is waiting for the user", () => {
+    const { reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+    reducer.handle(session, makeEvent("tool/call", { name: "bash", callId: "c1" }));
+    const asking = reducer.handle(
+      session,
+      makeEvent("tool/call", { name: "ask_user_question", callId: "c2" }),
+    );
+    expect(asking.list[0]).toMatchObject({ state: "asking", tool: null });
+    const back = reducer.handle(
+      session,
+      makeEvent("tool/result", { message: { role: "tool", toolCallId: "c2" } }),
+    );
+    expect(back.list[0]).toMatchObject({ state: "working", tool: null });
+
+    // 用户消息也会清掉进行中的工具动作，避免旧工具一直挂在会话行上。
+    reducer.handle(session, makeEvent("tool/call", { name: "bash", callId: "c3" }));
+    const afterUser = reducer.handle(session, makeEvent("user/message", { role: "user" }));
+    expect(afterUser.list[0].tool).toBeNull();
+  });
+
+  it("changes the signature when only the current tool changes", () => {
+    const { reducer } = createReducerHarness();
+    const session = makeSession("s1");
+    reducer.handle(session, makeEvent("turn/start"));
+    const started = reducer.snapshot();
+
+    const bash = reducer.handle(session, makeEvent("tool/call", { name: "bash", callId: "c1" }));
+    expect(bash.state).toBe(started.state);
+    expect(bash.signature).not.toBe(started.signature);
+
+    const read = reducer.handle(session, makeEvent("tool/call", { name: "read", callId: "c2" }));
+    expect(read.signature).not.toBe(bash.signature);
+  });
+
   it("maps every turn/end reason kind", () => {
     const { reducer } = createReducerHarness();
     const session = makeSession("s1");
@@ -726,6 +831,7 @@ describe("createDshHookReducer", () => {
         source: "dsh",
         state: "working",
         askKind: null,
+        tool: null,
         lastEventAt: clock.value,
         completedAt: null,
       },
@@ -906,6 +1012,7 @@ describe("createDshHookReducer", () => {
         source: "dsh",
         state: "idle",
         askKind: null,
+        tool: null,
         lastEventAt: clock.value,
         completedAt: null,
       },
@@ -1006,7 +1113,7 @@ describe("createHookController", () => {
     expect(transport.sent.map(({ message }) => message.type)).toEqual(["hello", "state"]);
     expect(transport.sent[0].message).toMatchObject({
       type: "hello",
-      pluginVersion: 2,
+      pluginVersion: 3,
       profile: "desktop",
     });
     expect(transport.sent[0].message).not.toHaveProperty("state");
@@ -1159,6 +1266,7 @@ describe("createHookController", () => {
         source: "dsh",
         state: "idle",
         askKind: null,
+        tool: null,
         lastEventAt: 1_000,
         completedAt: null,
       },

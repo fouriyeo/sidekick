@@ -85,6 +85,7 @@ DSH session/event
 
 - 文件：`sidekick-hook.mjs`；纯 ESM，无外部 import。
 - 导出：`export const name = "sidekick-hook"`、`export function apply(ctx)`。
+- 协议版本：`PLUGIN_VERSION = 3`（v2 增加 `sessionList`，v3 增加会话当前工具类别）；随 `hello` / `state` 上报，桌面 AI 联动页的「插件 v3」由该值动态渲染，页面代码不用改。
 - 监听：`const root = ctx.root ?? ctx; root.on("session/event", handler, { global: true })`、`root.on("session/disposed", ...)`；`ctx.effect` 负责清理 interval/listener。
 - 配置：`<DSH_HOME>/sidekick/config.json`，每秒读一次（缓存 mtime）：
   ```json
@@ -106,17 +107,21 @@ DSH session/event
 
 | event.type / 条件 | 处理 |
 | --- | --- |
-| `turn/start` | 会话 working；清空旧 ask/approval |
-| `tool/call` 提问类 | 会话 asking；记录 callId |
-| `tool/result` 对应 callId | 清 ask；回 working/idle |
-| `approval/asked` | 会话 asking；记录 approval id |
+| `turn/start` | 会话 working；清空旧 ask/approval 与进行中工具 |
+| `tool/call` 提问类 | 会话 asking；记录 callId；清空工具动作（手机行显示「等你决定」） |
+| `tool/call` 普通工具 | 工具名归一成白名单类别，记入进行中工具；会话行 `tool` 取最近开始的一个 |
+| `tool/result` 对应 callId | 清 ask / 移除该工具；`tool` 回退到仍在跑的工具（没有则 null）；回 working/idle |
+| `tool/result` 无法配对 callId | 防呆清空该会话所有 ask/工具，避免「工具动作」永久卡住 |
+| `approval/asked` | 会话 asking；记录 approval id；清空工具动作 |
 | `approval/decided` | 清 approval；回 working/idle |
-| `user/message` | 清该会话所有 ask/approval；按 turnActive 回 working/idle |
-| `turn/end` reason completed | 完成脉冲（无 asking 时） |
-| `turn/end` reason blocked | asking |
-| `turn/end` 其他 reason | idle |
+| `user/message` | 清该会话所有 ask/approval 与工具；按 turnActive 回 working/idle |
+| `turn/end` reason completed | 完成脉冲（无 asking 时）；清空工具动作 |
+| `turn/end` reason blocked | asking；清空工具动作 |
+| `turn/end` 其他 reason | idle；清空工具动作 |
 | `session/title` | 更新会话标题（单行 ≤80 字符） |
 | `session/disposed` | 移除会话 |
+
+工具类别白名单（插件本地归一，`SESSION_TOOLS`）：`bash` / `read` / `edit` / `search` / `web` / `agent` / `plan` / `tool`。常见工具名先整名匹配、再按 token 兜底（如 `file_read`→`read`、`web_search`→`web`、`glob`/`grep`→`search`、`subagent`→`agent`、`todo_write`/`enter_plan_mode`→`plan`）；未知工具统一落 `tool`，空工具名不记录（手机显示「正在思考」）。**工具名原文、参数、路径都不离开本机**；只有 working 会话上报 `tool`，asking/idle/completed 恒为 null。
 
 子代理过滤：`session.header.origin === "subagent"` 或 `delegationDepth > 0` 不参与状态/计数（P0）。
 
@@ -145,13 +150,16 @@ DSH session/event
   "remainingMs": null,
   "sessionList": [
     { "id": "…", "title": "修复登录", "source": "dsh", "state": "working",
-      "askKind": null, "lastEventAt": 1730000000000, "completedAt": null }
+      "askKind": null, "tool": "bash", "lastEventAt": 1730000000000, "completedAt": null }
   ],
   "ts": 1730000000000
 }
 ```
 
 `sessionList`：最多 50 条；`state` 不含 completed，完成态由 `completedAt` 推导；旧客户端忽略。已归档会话不会出现在列表里（桌面桥按 DSH `workspace.json` 过滤，见 §6），归档的 asking/working 也不再计入聚合态。
+
+- `tool`：仅 `state=working` 有值，白名单 `bash` / `read` / `edit` / `search` / `web` / `agent` / `plan` / `tool`（§4）。旧插件不发送（手机显示「正在思考」）；未知值在桌面桥折叠为通用 `tool`，**不保留原文**；手机端对未知值/非 working 值归一为 `null`。
+- 隐私：`tool` 是插件本地归一后的固定枚举，不是工具名透传；提示词、回复、工具参数、文件路径、模型名、工具名原文都不外发。工具类别变化也会改变列表摘要并触发广播，手机行内动作能跟上当前工具。
 
 - 桌面是 completed 的权威计时器：收到 completed 后广播（带 `remainingMs`），3 秒后广播 resume 状态。
 - 手机用 `remainingMs` 本地兜底；新状态会取消旧定时器。
@@ -165,6 +173,7 @@ DSH session/event
 - `HookBridge`：
   - `Mutex` 状态：installed/enabled/connected/profile/current state/sessions/lastEventAt/recent 20。
   - 回环 axum `127.0.0.1:47815–47819`，`POST /hook/dsh`；Bearer token；body ≤64KB；state 枚举校验；`sessionList` 最多 50 条、标题截断 80 码点。
+  - `tool` 第二道白名单（`SessionTool`）：插件报来的值只在 working 时保留，未知字符串折叠为通用 `tool`，**绝不把原始字符串透传给手机**；旧插件缺字段按 `null`（手机显示「正在思考」）。
   - 状态变化：更新状态 → `tx.send(status_json)` 广播 → `app.emit("dsh-hook-status")`。
   - completed 定时器：3s 后广播 resume；新状态/关闭/断开取消。
   - 心跳超时：15s 无 hello/state/heartbeat → connected=false + idle + 广播。
@@ -173,7 +182,7 @@ DSH session/event
 - 端口：先绑定成功者生效；实际 endpoint 写回 `config.json`，脚本 1s 内切换。
 - 单实例前提：桌面端由 `tauri-plugin-single-instance` 保证一台机器只有一个进程（D60）。多开时后启动实例会把 endpoint 改成自己的回环端口，它退出后 hook 上报全部打空，存活实例一直 idle；排查时先看 `lsof -nP -iTCP:47815-47819` 与 `config.json` 的 endpoint 是否指向活着的进程。
 - 快照补发：新 WS 连接直发 `snapshot_json()`；手机上线/回前台发 `status.request`，服务端广播快照。手机重启不会丢状态。
-- 列表：`BridgeInner.session_list` 随 state/heartbeat 替换；heartbeat 列表变化也要广播；hello/超时/关闭/移除清空。
+- 列表：`BridgeInner.session_list` 随 state/heartbeat 替换；heartbeat 列表变化（含仅工具类别变化）也要广播；hello/超时/关闭/移除清空。
 - 归档过滤：读 `<DSH_HOME>/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存；文件缺失/非法按空集合），从 `sessionList` 去掉归档会话，并按可见列表重算聚合态/`sessions`；这样用户在 DSH 里归档的会话不会在手机上「突然蹦出来」，也不需要改插件或重启 DSH。
 - 命令：`dsh_hook_status/install/set_enabled/remove/test`；移动端注册 `send_status_request` 与 `send_focus_request`。
 
@@ -182,21 +191,21 @@ DSH session/event
 - 协议解析：`parseStatusMessage(raw)`；在 `subscribeChat` 中先于 `parseMessage`，避免进入聊天。
 - `ai-status.ts`：`AiState`、`AiStatus`、`reduceAiStatus`、`displayStateOf`。
   - completed：`remainingMs ?? 3000`；到点回 `resume ?? idle`；新状态取消旧定时器；超过 `remainingMs` 的旧 completed 忽略。
-  - asking 持久；working 覆盖 sleep；away/listening/celebrating/concerned 优先。
+  - asking 持久；working 覆盖 sleep；away/celebrating（命名庆祝）优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
 - `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
 - `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音。
 - `pet-fallback.tsx` / `pet.module.css`：`data-ai-state`；短爪层 + 道具层；四套 SVG 表情；只 transform/opacity。
 - `pet-status-caption.tsx`：气泡位；working 5s、asking 持续、completed 3s；AI 状态优先。
 - `app.tsx`：上线/回前台 `sendStatusRequest()`；状态不追加到聊天。
 - 旧存档 schema 不变；AI 状态只存内存。
-- 会话面板：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；首次快照不自动展开，新 asking 才展开。
+- 会话面板：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；首次快照不自动展开，新 asking 才展开。工作中行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。
 - 清除标记存 `sidekick-sessions.json`（只存 id/at/through，7 天 TTL、最多 200 条），不存标题/列表；有更新事件自动解除。
 - focus：手机生成 requestId 发 `focus.request`，3s 超时提示；`focus.result` 只处理匹配 requestId 的结果。
 
 ## 8. 隐私与安全
 
 - 回环 only；token；body 限制；不广播非法请求。
-- 只发 state/sessions/ts/resume/remainingMs/sessionList（id、标题、状态、askKind、时间）；不发送提示词、回复、工具参数、路径、cwd、模型名。标题单行 ≤80 字符，不写日志、不落盘。
+- 只发 state/sessions/ts/resume/remainingMs/sessionList（id、标题、状态、askKind、时间、粗粒度工具类别）；不发送提示词、回复、工具参数、路径、cwd、模型名或工具名原文。工具类别是插件本地归一后的固定枚举（未知工具落 `tool`），不是透传。标题单行 ≤80 字符，不写日志、不落盘。
 - 桌面事件日志只在内存，最多 20 条；不落盘。
 - 插件日志只记事件类型/错误码。
 - 同用户本机进程可读配置伪造状态，属于本机信任边界；P0 不防御本机恶意进程。
@@ -218,6 +227,8 @@ DSH session/event
 | 录音 | 录音静音；完成不补播 |
 | 音效被系统静音/音乐焦点 | P0 不保证；文档提示；P1 原生提示音 |
 | 会话列表过长 | 插件/桥截断 50 条；手机内部滚动，超出的不展示 |
+| 旧插件/旧桥无 `tool` | 手机工作行显示「正在思考」；不报错、不丢整条会话 |
+| 未知工具名 | 插件/桥折叠为通用 `tool`，手机显示「正在使用工具」；原文不外发 |
 | 会话已归档 | 桌面桥按 `workspace.json` 过滤后不下发；聚合态按可见会话重算，必要时回落 idle |
 | 归档文件读不到 | 按未归档处理（列表可能多一条，不影响其它功能） |
 | 清除后无新事件 | 保持隐藏；重启 App 仍隐藏（本地标记） |
@@ -226,10 +237,10 @@ DSH session/event
 
 ## 10. 测试
 
-- Rust：`cargo test --lib`（status 解析/token/body/timer/patch/端口/profile）。
-- 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流）。
+- Rust：`cargo test --lib`（status 解析/token/body/timer/patch/端口/profile/工具白名单折叠）。
+- 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流、工具类别归一）。
 - 协议：`pnpm exec vitest run src/protocol`。
-- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/面板）。
+- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/面板/工作行工具动作）。
 - 桌面：`pnpm exec vitest run src/desktop/features/hook`。
 - 全量：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`；`cargo test`；`node scripts/check-docs.mjs`；`node scripts/check-boundaries.mjs`。
 - 真机：安装/重启/四态/声音/杀 DSH/重连/录音/夜间/减少动效。
@@ -244,4 +255,4 @@ DSH session/event
 - 音效 P0 合成音；系统静音/勿扰/音乐焦点不保证。
 - 本机恶意进程可伪造状态；局域网 WS 仍无鉴权（现有 P1）。
 - 手机只支持竖屏；focus 只唤起/启动 DSH，不定位到具体会话。
-- 会话标题是本功能唯一新增的内容类字段，用户需知悉；如后续要关闭标题同步，可加设置开关。
+- 会话标题与粗粒度工具类别是本功能新增的外发字段（工具类别是固定枚举、不含工具名原文/参数/路径），用户需知悉；如后续要关闭标题同步，可加设置开关。

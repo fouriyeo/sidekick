@@ -30,9 +30,7 @@ type PetStageProps = {
 
 const STATUS_TEXT: Record<PetState["phase"], string> = {
   idle: "正在陪伴",
-  listening: "正在听",
   celebrating: "很开心",
-  concerned: "有点担心",
   sleeping: "睡着了",
   away: "在休息",
 };
@@ -175,7 +173,7 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
   const night = isNight(Date.now());
   const connected = connectionStatus === "connected";
   const displayAi = displayStateOf(pet.phase, ai.state);
-  // AI 状态文案优先占用气泡槽位；触摸/录音/即时心情反馈时暂时让位给闲聊气泡。
+  // AI 状态文案优先占用气泡槽位；命名庆祝/休息时暂时让位给闲聊气泡。
   const caption = displayAi === "idle" ? null : aiCaption;
   const liveText =
     displayAi === "idle"
@@ -249,12 +247,6 @@ export function PetStage({ active, onOpenChat, onOpenSettings }: PetStageProps) 
 
       <div className={styles.petSlot} style={poseStyle}>
         <div className="relative h-full w-full touch-none select-none" aria-hidden="true">
-          {/* 声呐环在精灵之后：只做背景装饰，不参与布局与读屏。 */}
-          <div className={styles.sonar} aria-hidden="true" data-sonar="stage">
-            <span className={styles.sonarRing} />
-            <span className={cn(styles.sonarRing, styles.sonarRingDelay)} />
-            <span className={styles.sonarHalo} />
-          </div>
           <SpritePet
             ai={displayAi}
             phase={pet.phase}

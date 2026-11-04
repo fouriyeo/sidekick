@@ -15,7 +15,7 @@ function setStageState(options: {
   ai?: "idle" | "working" | "asking" | "completed";
   caption?: "ai_working" | "ai_asking" | "ai_completed" | null;
   reduceMotion?: "system" | "on" | "off";
-  phase?: "idle" | "listening" | "sleeping";
+  phase?: "idle" | "celebrating" | "sleeping";
 }) {
   const aiState = options.ai ?? "idle";
   const now = Date.now();
@@ -46,7 +46,7 @@ function setStageState(options: {
       name: "小跟班",
       visible: true,
       phase: options.phase ?? "idle",
-      mood: options.phase === "listening" ? "listening" : "content",
+      mood: "content",
       lastEnergyAt: now,
       settings: {
         ...state.pet.settings,
@@ -121,13 +121,13 @@ describe("PetStage AI 联动展示", () => {
     expect(screen.getByText("小跟班，完成了一件事")).toBeInTheDocument();
   });
 
-  it("录音中即时反馈让位：AI 姿态回到静态、不显示 AI 文案", () => {
-    setStageState({ ai: "asking", caption: "ai_asking", phase: "listening" });
+  it("命名庆祝时 AI 姿态回到静态、不显示 AI 文案", () => {
+    setStageState({ ai: "asking", caption: "ai_asking", phase: "celebrating" });
     const { container } = renderStage();
 
     expect(stageSection(container)).toHaveAttribute("data-ai-state", "idle");
     expect(screen.queryByText("等你决定")).not.toBeInTheDocument();
-    expect(screen.getByText("小跟班，正在听")).toBeInTheDocument();
+    expect(screen.getByText("小跟班，很开心")).toBeInTheDocument();
   });
 
   it("减少动效设置反映到舞台标记", () => {
@@ -223,23 +223,6 @@ describe("PetStage 方向 B 舞台装饰", () => {
     renderStage();
     expect(screen.getByText("未连接")).toBeInTheDocument();
     expect(screen.queryByText("已连接")).not.toBeInTheDocument();
-  });
-
-  it("声呐环在精灵之后、aria-hidden，且减少动效时冻结", () => {
-    const { container, unmount } = renderStage();
-    const sonar = container.querySelector('[data-sonar="stage"]');
-    const sprite = container.querySelector("[data-sprite-state]");
-    if (!(sonar instanceof HTMLElement) || !(sprite instanceof HTMLElement)) {
-      throw new Error("声呐环或精灵未渲染");
-    }
-    expect(sonar).toHaveAttribute("aria-hidden", "true");
-    // DOM 顺序：环先于精灵 => 视觉上在精灵后面。
-    expect(sonar.compareDocumentPosition(sprite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    unmount();
-
-    setStageState({ reduceMotion: "on" });
-    const reduced = renderStage();
-    expect(stageSection(reduced.container)).toHaveAttribute("data-reduced-motion", "true");
   });
 
   it("状态文案 21px + mono 副行；asking 用琥珀，不用珊瑚", () => {

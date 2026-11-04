@@ -87,26 +87,6 @@ describe("pet state machine", () => {
     expect(closed.state.lastInteractionAt).toBe(now + 200);
   });
 
-  it("supports the reserved microphone transitions", () => {
-    const now = at(12);
-    const listening = reducePet(ready(now), { type: "MIC_START", now });
-    expect(listening.state.phase).toBe("listening");
-    expect(listening.state.mood).toBe("listening");
-    expect(listening.state.resumeMood).toBe("content");
-
-    const success = reducePet(listening.state, { type: "MIC_SUCCESS", now: now + 1000 });
-    expect(success.state.phase).toBe("celebrating");
-    expect(success.state.mood).toBe("proud");
-
-    const cancel = reducePet(listening.state, { type: "MIC_CANCEL", now: now + 1000 });
-    expect(cancel.state.phase).toBe("idle");
-    expect(cancel.effects.some((effect) => effect.type === "bubble")).toBe(false);
-
-    const error = reducePet(listening.state, { type: "MIC_ERROR", now: now + 1000 });
-    expect(error.state.phase).toBe("concerned");
-    expect(error.state.mood).toBe("concerned");
-  });
-
   it("sets the name and resets the pet", () => {
     const now = at(12);
     const named = reducePet(

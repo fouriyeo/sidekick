@@ -48,7 +48,7 @@ app/src/mobile/features/pet/
 - 资产：`app/src/mobile/features/pet/assets/openpet/`（`pet.json` + `spritesheet.webp` + `poster.webp`），通过 Vite 资源导入，只进 mobile 包，桌面包不引用。
 - **一列一帧**：`grid.cell` 是单帧边长（当前 256），`grid.cols` 是列数（当前 16；上限 32），行号由 `states.*.row` 声明。
 - 单状态帧数 1–32，兼容 16；不同状态可以帧数不同，只播 `frames` 里列出的列。
-- 播放：按 `frames[].duration` 累计推进（rAF，只在帧号变化时改 `background-position`）；`loop` 循环，`once` 播完停在末帧（done 的 1.5s 定格由末帧 duration 表达）。
+- 播放：按 `frames[].duration` 累计推进（rAF，只在帧号变化时改 `background-position`）；`loop` 无限循环，`once` 播完停在末帧。内置图集 `done` 已改为 `loop`：一轮 16×100ms=1.6 秒，completed 展示 3 秒内约循环 1.875 轮，不再末帧定格；`once` 能力保留给未来需要定格的状态，当前内置图集没有 `once` 状态。
 - 尺寸：`ResizeObserver` 量容器后取 `min(宽,高)` 做方形格子（`.petSlot` 可能被 max-width 卡成竖长），元素本身设成该方形 + `overflow:hidden` 居中，再按 px 设置 `background-size/position`；旋转/姿态变化不重新解码，DPR 上限 2。
 - 降级：manifest 校验失败、解码失败、或图片尺寸与 `cols/cell` 不匹配 → 显示 `poster.webp`；气泡/触感/录音不受影响。
 - 内存：4096×1024 解码约 16.8MB；需要再降可拆状态条按需解码（协议不变）。
@@ -57,8 +57,8 @@ app/src/mobile/features/pet/
 
 ### 3.1 应用状态
 
-`idle` / `listening` / `celebrating` / `concerned` / `sleeping` / `away`。
-转移规则见 [SPEC](../prd/pet/SPEC.md#3-状态机)；实现集中在 `state-machine.ts`，UI 不写条件分支。点击/抚摸宠物不产生事件（D69）。
+`idle` / `celebrating` / `sleeping` / `away`。
+转移规则见 [SPEC](../prd/pet/SPEC.md#3-状态机)；实现集中在 `state-machine.ts`，UI 不写条件分支。点击/抚摸宠物不产生事件（D69）；麦克风不产生宠物事件（D77）。
 
 ```ts
 type PetEvent =
@@ -67,15 +67,14 @@ type PetEvent =
   | { type: "TICK"; now: number }
   | { type: "VISIBILITY"; now: number; visible: boolean }
   | { type: "OVERLAY"; now: number; open: boolean }
-  | { type: "MIC_START"; now: number } | { type: "MIC_SUCCESS"; now: number }
-  | { type: "MIC_CANCEL"; now: number } | { type: "MIC_ERROR"; now: number }
   | { type: "RESET"; now: number };
 
 function reducePet(state: PetState, event: PetEvent): { state: PetState; effects: PetEffect[] };
 ```
 
 - 副作用（震动/气泡/爱心/存档）由 `effects` 描述，执行层统一处理。
-- MIC_* 本轮无生产事件源，仅单测注入；状态为 P1 契约保留。
+- `phaseUntil` 到点由 `pet-store.ts` 的 `schedulePhaseExpiry` 补发一次 TICK（`phaseUntil - now + 16ms`），命名庆祝按 1.5 秒正常结束；不再依赖宠物页 30 秒一次的兜底 tick，否则会停在庆祝/末帧几十秒。
+- 麦克风联动已下线（D77）：没有 `MIC_*` 事件、`listening`/`concerned` 姿态与成功/失败触感；录音时只通过 `micListening` 门禁静音 AI 音效/触感，宠物本身不变。
 - **AI 联动四态不新增 `PetPhase`**：静态=idle，工作中/等你决定/完成由 `mobile/features/pet/ai-status.ts` 的独立内存 store 驱动；`displayStateOf` 只决定最终展示姿态，AI 状态不落盘。优先级与动作见 [hook SPEC](../prd/hook/SPEC.md) §2。
 
 ### 3.2 图集状态映射（候选链）
@@ -85,15 +84,14 @@ App 不硬编码四个状态名：`sprite-state-map.ts` 给出**候选链**，`S
 | 场景（phase / AI） | 候选链（从左到右） |
 | --- | --- |
 | sleeping | `sleeping` → `idle`（AI 非静态时跟随 AI） |
-| listening | `listening` → `idle`（不落到 attention，避免误解为“等你决定”） |
-| celebrating | `celebrate` → `done` → `idle` |
-| concerned | `concerned` → `idle` |
+| celebrating（命名庆祝） | `celebrate` → `done` → `idle` |
 | away | `away` → `idle` |
 | AI working | `working` → `idle` |
 | AI asking | `attention` → `idle` |
 | AI completed | `done` → `celebrate` → `idle` |
 
 - 当前资产只有 `idle/working/attention/done` 四行，预留状态会自动回落。
+- 麦克风联动已下线（D77）：不再有 listening/concerned 候选链；录音时宠物不切换姿态。
 - **新增状态行**：① 图集底部加一行；② `pet.json` 增加 `states.<name> = { row, frames, loop? }`（一列一帧，≤32 帧）；③ 如需新触发，在 `sprite-state-map.ts` 的候选链里加名字；④ 渲染器/播放器不用改。
 - 减少动效：冻结每个状态的第 0 帧，保留四套可区分的静态轮廓。
 - 夜间/睡眠：只降亮度或冻结，不额外播素材（当前无睡眠行）。
@@ -102,13 +100,13 @@ App 不硬编码四个状态名：`sprite-state-map.ts` 给出**候选链**，`S
 ## 4. 心情与精力
 
 ```ts
-type Mood = "content" | "happy" | "curious" | "sleepy" | "listening" | "proud" | "concerned";
+type Mood = "content" | "happy" | "curious" | "sleepy";
 ```
 
 - 精力：初值 100、clamp 0–100；前台每 30 分钟 -1，后台每 2 小时 -1，睡眠每小时 +5。
-- 心情：只持久化基线（content/sleepy）；happy/curious/listening/proud/concerned 为瞬态，不落盘；启动按时段/精力重算基线。happy 来自命名完成，curious 来自首次见面。
+- 心情：只持久化基线（content/sleepy）；happy/curious 为瞬态，不落盘；启动按时段/精力重算基线。happy 来自命名完成，curious 来自首次见面。麦克风联动已下线（D77），不再有 listening/proud/concerned。
 - 低精力 `[假设]`：energy<30 哈欠增加、<15 sleepy；`energy_bucket` 取 0–25/26–50/51–75/76–100。
-- 负面状态最多 3 秒；不使用真实时间戳做“奖励结算”，只做衰减/恢复，避免时区/改时间刷值。
+- 没有负面状态与惩罚（麦克风失败关心已随 D77 下线）；不使用真实时间戳做“奖励结算”，只做衰减/恢复，避免时区/改时间刷值。
 - 所有数值隐藏；UI 不显示进度条/等级。
 
 ## 5. 持久化
@@ -158,15 +156,16 @@ type PetSaveV1 = {
 ## 7. 事件与副作用
 
 ```text
-BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / MIC_* / RESET
+BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / RESET
   → reducePet / dispatch(event)
   → 副作用：震动 + 气泡 + 爱心 + 存档（画图层由 phase/AI 驱动）
 ```
 
 - 宠物舞台不挂 pointer 处理器；点击、长按、来回抚摸不产生 `PetEvent`（D69），因此没有手势阈值/冷却/热区。
-- 录音中 `dispatch` 不响应触摸（已无触摸路径）；麦克风状态优先。
+- 麦克风不产生 `PetEvent`（D77）；录音时只由 `micListening` 门禁静音 AI 音效/触感，宠物姿态/气泡不变。
 - 震动/声音通过 adapter；测试时 mock。
 - 气泡受频率限制，`copy_id` + 触发原因，方便统计关闭率。
+- 瞬态状态由 `schedulePhaseExpiry` 定时补发 TICK 收尾（见 §3.1），不依赖 30 秒兜底 tick。
 - 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；聊天页/后台/卸载时释放。原生不支持或 JNI 失败时静默降级，不做用户可见报错。
 
 ## 8. 性能
@@ -180,9 +179,9 @@ BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / MIC_* / RESET
 
 ## 9. 测试
 
-- 单元：状态转移（含覆盖层/后台）、精力边界、时段/问候、plugin-store 迁移/损坏、点击宠物不产生事件。
-- 组件：四态行/候选链回落、done 定格、减少动效冻结、气泡频率、设置保存、解码失败降级。
-- 集成：麦克风状态 → 宠物反应（P1 mock）；后台/回前台；低电量。
+- 单元：状态转移（含覆盖层/后台/命名庆祝到点）、精力边界、时段/问候、plugin-store 迁移/损坏、点击宠物不产生事件、录音不产生事件。
+- 组件：四态行/候选链回落、done 循环（3 秒内约 1.875 轮、无末帧定格）、减少动效冻结、气泡频率、设置保存、解码失败降级。
+- 集成：录音中宠物无变化（D77）；后台/回前台；低电量。
 - 真机：Realme 16:9/20:9、手动态、60fps、掉电、锁屏恢复。
 - Mock：震动、时间、PetStorage adapter、Image 解码。
 
@@ -197,7 +196,7 @@ BOOT / NAME_SET / TICK / VISIBILITY / OVERLAY / MIC_* / RESET
 | 屏幕常亮耗电 | 设置可关；仅宠物页前台生效（聊天/后台释放）；最长常亮默认 2 小时（可调，0 = 不限）；无操作默认 5 分钟自动变暗（可调）；JNI 失败静默降级为系统默认熄屏 |
 | 时间/时区边界 | 可注入时钟；只做衰减/恢复 |
 | 图集授权/品牌 | 当前资产来自 DeepSeek 鲸鱼（zip 无 LICENSE）；正式发版前确认授权或替换同格式资产 |
-| 宠物与麦克风抢事件 | 状态优先级；录音中静音提醒 |
+| 麦克风与宠物已解耦 | D77 后麦克风不再驱动宠物；录音中只静音 AI 音效/触感，避免两套反馈抢注意力 |
 | 卸载丢宠物 | 关于页说明；P1 备份/导出 |
 
 ## 11. 交付物

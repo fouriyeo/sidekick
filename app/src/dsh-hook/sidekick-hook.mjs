@@ -19,8 +19,8 @@ import { fileURLToPath } from "node:url";
 
 export const name = "sidekick-hook";
 
-/** 与 Rust HookBridge / Sidekick 桌面端约定的插件协议版本。v2 增加 sessionList。 */
-export const PLUGIN_VERSION = 2;
+/** 与 Rust HookBridge / Sidekick 桌面端约定的插件协议版本。v2 增加 sessionList，v3 增加会话当前工具类别。 */
+export const PLUGIN_VERSION = 3;
 /** 配置文件格式版本。 */
 export const CONFIG_VERSION = 1;
 
@@ -206,6 +206,91 @@ export function isAskTool(toolName) {
   }
 
   return false;
+}
+
+/** 会话行「正在做什么」的白名单类别；手机只渲染这些固定词，不接触工具名原文。 */
+export const SESSION_TOOLS = [
+  "bash",
+  "read",
+  "edit",
+  "search",
+  "web",
+  "agent",
+  "plan",
+  "tool",
+];
+
+/** 常见工具名 → 类别（先整名匹配，再按 token 兜底；未知工具统一归 tool）。 */
+const TOOL_ACTIVITY_BY_NAME = {
+  bash: "bash",
+  shell: "bash",
+  exec: "bash",
+  command: "bash",
+  terminal: "bash",
+  read: "read",
+  read_file: "read",
+  read_image: "read",
+  edit: "edit",
+  write: "edit",
+  apply_patch: "edit",
+  patch: "edit",
+  glob: "search",
+  grep: "search",
+  rg: "search",
+  search: "search",
+  web_search: "web",
+  web_fetch: "web",
+  fetch: "web",
+  browser: "web",
+  subagent: "agent",
+  subagent_fork: "agent",
+  task: "agent",
+  workflow: "agent",
+  todo_write: "plan",
+  enter_plan_mode: "plan",
+  exit_plan_mode: "plan",
+};
+
+/** 整名没命中时的 token 兜底；只放不会误伤普通工具的词。 */
+const TOOL_ACTIVITY_TOKENS = {
+  bash: "bash",
+  shell: "bash",
+  exec: "bash",
+  command: "bash",
+  terminal: "bash",
+  read: "read",
+  edit: "edit",
+  write: "edit",
+  patch: "edit",
+  glob: "search",
+  grep: "search",
+  search: "search",
+  web: "web",
+  fetch: "web",
+  browser: "web",
+  subagent: "agent",
+  workflow: "agent",
+};
+
+/**
+ * 把工具名归一成会话行展示用的粗粒度类别。
+ *
+ * 工具名原文、参数、路径都不离开本机：返回值只会是 SESSION_TOOLS 之一或 null。
+ * 空工具名返回 null（调用方按「思考中」处理）；未知工具返回 "tool"。
+ */
+export function toolActivityOf(toolName) {
+  const raw = String(toolName ?? "").trim();
+  if (!raw) return null;
+
+  const exact = TOOL_ACTIVITY_BY_NAME[raw.toLowerCase()];
+  if (exact) return exact;
+
+  for (const token of tokenizeToolName(raw)) {
+    const activity = TOOL_ACTIVITY_TOKENS[token];
+    if (activity) return activity;
+  }
+
+  return "tool";
 }
 
 /** 会话 id：优先用不可变 header，其次兼容 session.id / session.sessionId。 */
@@ -427,6 +512,9 @@ function createSessionRecord(id, now) {
     turnActive: false,
     pendingAsks: new Set(),
     pendingApprovals: new Set(),
+    /** 进行中的工具调用：callId -> 工具类别；tool 取最近开始的那个。 */
+    pendingTools: new Map(),
+    tool: null,
     title: null,
     completedAt: null,
     lastEventAt: now,
@@ -472,6 +560,13 @@ function sessionPriority(record) {
   return 3;
 }
 
+/** 当前还在跑的工具里最近开始的一个；没有则为 null。 */
+function lastPendingTool(record) {
+  let tool = null;
+  for (const activity of record.pendingTools.values()) tool = activity;
+  return tool;
+}
+
 function sessionEntryOf(record) {
   return {
     id: record.id,
@@ -479,12 +574,14 @@ function sessionEntryOf(record) {
     source: "dsh",
     state: record.state,
     askKind: record.state === "asking" ? (record.askKind ?? null) : null,
+    // 只有工作中才带工具类别；等你决定/空闲时手机展示状态文案，不需要它。
+    tool: record.state === "working" ? (record.tool ?? null) : null,
     lastEventAt: Number.isFinite(record.lastEventAt) ? record.lastEventAt : 0,
     completedAt: record.completedAt ?? null,
   };
 }
 
-/** 列表摘要参与 signature，保证「聚合态不变但完成/改标题」也会推送。 */
+/** 列表摘要参与 signature，保证「聚合态不变但完成/改标题/换工具」也会推送。 */
 function listSignature(list) {
   return list
     .map((entry) =>
@@ -494,6 +591,7 @@ function listSignature(list) {
         entry.completedAt ?? "",
         entry.lastEventAt,
         entry.title ?? "",
+        entry.tool ?? "",
       ].join("\u0001"),
     )
     .join("\u0002");
@@ -615,6 +713,8 @@ export function createDshHookReducer(options = {}) {
         record.turnActive = true;
         record.pendingAsks.clear();
         record.pendingApprovals.clear();
+        record.pendingTools.clear();
+        record.tool = null;
         record.state = "working";
         record.askKind = null;
         record.completedAt = null;
@@ -629,10 +729,18 @@ export function createDshHookReducer(options = {}) {
           const callId = toolCallIdOf(event) ?? `seq:${String(event.seq ?? "")}`;
           record.pendingAsks.add(callId);
           record.state = "asking";
+          // 等用户回答时不展示工具动作：手机行内是「等你决定」。
+          record.tool = null;
           refreshAskKind(record);
           record.lastEventAt = now();
-        } else if (record.state !== "asking") {
-          record.state = "working";
+        } else {
+          const activity = toolActivityOf(toolName);
+          if (activity !== null) {
+            const callId = toolCallIdOf(event) ?? `seq:${String(event.seq ?? "")}`;
+            record.pendingTools.set(callId, activity);
+            record.tool = activity;
+          }
+          if (record.state !== "asking") record.state = "working";
         }
         return snapshot();
       }
@@ -642,9 +750,14 @@ export function createDshHookReducer(options = {}) {
         const callId = toolCallIdOf(event);
         if (callId !== null) {
           if (record.pendingAsks.delete(callId)) recomputeRecord(record);
-        } else if (record.pendingAsks.size > 0) {
+          if (record.pendingTools.delete(callId)) {
+            record.tool = lastPendingTool(record);
+          }
+        } else if (record.pendingAsks.size > 0 || record.pendingTools.size > 0) {
           // 拿不到 callId 时无法配对：宁可退回工作态，也不要把 waiting 永久卡住。
           record.pendingAsks.clear();
+          record.pendingTools.clear();
+          record.tool = null;
           recomputeRecord(record);
         }
         return snapshot();
@@ -655,6 +768,7 @@ export function createDshHookReducer(options = {}) {
         const approvalId = String(data?.id ?? `seq:${String(event.seq ?? "")}`);
         record.pendingApprovals.add(approvalId);
         record.state = "asking";
+        record.tool = null;
         refreshAskKind(record);
         record.lastEventAt = now();
         return snapshot();
@@ -672,13 +786,17 @@ export function createDshHookReducer(options = {}) {
       }
       case "user/message": {
         const record = ensureRecord(id);
-        // 用户消息意味着该会话的提问/审批已被回答或已过期；
-        // 见 docs/engineering/dsh-hook.md §4：清该会话所有 ask/approval。
-        if (record.pendingAsks.size > 0 || record.pendingApprovals.size > 0) {
-          record.pendingAsks.clear();
-          record.pendingApprovals.clear();
-          recomputeRecord(record);
-        }
+        // 用户消息意味着该会话的提问/审批已被回答或已过期，进行中的工具动作也不再可信；
+        // 见 docs/engineering/dsh-hook.md §4：清该会话所有 ask/approval 与工具。
+        const hadPending =
+          record.pendingAsks.size > 0 ||
+          record.pendingApprovals.size > 0 ||
+          record.pendingTools.size > 0;
+        record.pendingAsks.clear();
+        record.pendingApprovals.clear();
+        record.pendingTools.clear();
+        record.tool = null;
+        if (hadPending) recomputeRecord(record);
         return snapshot();
       }
       case "session/title": {
@@ -694,6 +812,8 @@ export function createDshHookReducer(options = {}) {
         record.turnActive = false;
         record.pendingAsks.clear();
         record.pendingApprovals.clear();
+        record.pendingTools.clear();
+        record.tool = null;
         record.askKind = null;
         const kind = data?.reason?.kind;
         if (kind === "completed") {

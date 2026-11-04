@@ -49,7 +49,10 @@ describe("parseManifest", () => {
     expect(result.manifest.cell).toBe(256);
     expect(result.manifest.rows).toBe(4);
     expect(Object.keys(result.manifest.states)).toEqual(["attention", "done", "idle", "working"]);
-    expect(result.manifest.states.done?.loop).toBe("once");
+    expect(result.manifest.states.done?.loop).toBe("loop");
+    expect(result.manifest.states.done?.frames).toHaveLength(16);
+    // 末帧不再定格 1.5 秒，与其余帧一样 100ms，3 秒 completed 内持续循环。
+    expect(result.manifest.states.done?.frames[15]?.duration).toBe(100);
     expect(result.manifest.states.idle?.frames).toHaveLength(16);
     expect(MANIFEST?.id).toBe("deepseek");
   });
@@ -62,7 +65,7 @@ describe("parseManifest", () => {
     expect(result.manifest.states["state-0"]?.frames).toHaveLength(32);
   });
 
-  it("接受任意多行状态（预留 sleeping/listening 等）", () => {
+  it("接受任意多行状态（预留 sleeping/celebrate 等）", () => {
     const result = parseManifest(
       makeManifest({
         rows: 6,
@@ -88,7 +91,7 @@ describe("parseManifest", () => {
             row: 4,
             frames: Array.from({ length: 8 }, (_, col) => ({ col, duration: 200 })),
           },
-          listening: {
+          celebrate: {
             row: 5,
             frames: Array.from({ length: 4 }, (_, col) => ({ col, duration: 150 })),
           },
@@ -99,7 +102,7 @@ describe("parseManifest", () => {
     if (!result.ok) return;
     expect(result.manifest.rows).toBe(6);
     expect(result.manifest.states.sleeping?.frames).toHaveLength(8);
-    expect(result.manifest.states.listening?.frames).toHaveLength(4);
+    expect(result.manifest.states.celebrate?.frames).toHaveLength(4);
   });
 
   it("拒绝超过 32 列", () => {

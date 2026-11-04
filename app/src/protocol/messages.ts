@@ -25,6 +25,14 @@ export type SessionState = "idle" | "working" | "asking";
 
 export type AskKind = "approval" | "question";
 
+/**
+ * 会话当前正在使用的工具类别（白名单，粗粒度）。
+ *
+ * 插件只上报这个类别，绝不上报工具名原文/参数/路径：工具名在本地映射成固定枚举，
+ * 未知工具统一落 `tool`。旧版桌面不发送，旧版手机忽略。
+ */
+export type SessionTool = "bash" | "read" | "edit" | "search" | "web" | "agent" | "plan" | "tool";
+
 /** 手机端会话列表用的最小元数据，不含任何对话内容。 */
 export type SessionSummary = {
   id: string;
@@ -33,11 +41,29 @@ export type SessionSummary = {
   source: SessionSource;
   state: SessionState;
   askKind?: AskKind | null;
+  /** 仅 working 有值：当前正在使用的工具类别；其余状态恒为 null。 */
+  tool?: SessionTool | null;
   /** 桌面时钟 ms；只在 turn/ask/title 等有意义事件更新。 */
   lastEventAt: number;
   /** 最近一轮 completed 的桌面时钟 ms；null 表示没有完成记录。 */
   completedAt?: number | null;
 };
+
+const SESSION_TOOLS: readonly SessionTool[] = [
+  "bash",
+  "read",
+  "edit",
+  "search",
+  "web",
+  "agent",
+  "plan",
+  "tool",
+];
+
+/** 白名单校验：未知/非字符串一律不认，避免把任意字符串当工具类别渲染。 */
+export function isSessionTool(value: unknown): value is SessionTool {
+  return typeof value === "string" && (SESSION_TOOLS as readonly string[]).includes(value);
+}
 
 /** 协议层会话列表上限；桌面桥与手机都会按这个值截断。 */
 export const MAX_SESSION_LIST = 50;
@@ -325,6 +351,8 @@ export function normalizeSessionSummary(value: unknown): SessionSummary | null {
     state: session.state,
     askKind:
       session.askKind === "approval" || session.askKind === "question" ? session.askKind : null,
+    // 工具类别只在 working 时有意义；未知值静默置 null，不整条丢弃（向后兼容）。
+    tool: session.state === "working" && isSessionTool(session.tool) ? session.tool : null,
     lastEventAt: session.lastEventAt,
     completedAt: isNonNegativeNumber(session.completedAt) ? session.completedAt : null,
   };

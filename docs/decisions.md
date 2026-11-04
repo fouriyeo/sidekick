@@ -614,3 +614,30 @@
 - 放弃：只改默认值、舞台仍恒深（浅色下还是断崖式深色块，没解决用户诉求）；把「舞台恒深」做成设置开关（用户要的是跟随，不是再多一个开关）；为浅底重绘浅色鲸鱼或加描边（资产与授权成本，D71 红线）；给鲸鱼加 CSS `filter` 提亮/压暗（污染自发光资产、安卓 WebView 合成开销）；浅色舞台继续用大面积低亮度装饰（浅底上观感脏，且不省电）。
 - 代价：鲸鱼资产不重绘、不加 CSS filter，浅色海玻璃舞台下白色围裙与亮部对比度偏低——实测约 26% 不透明像素对比度 <1.5，中位数约 3.5，轮廓仍可辨但细节掉；浅色舞台是大面积浅底，OLED 常驻宠物页的功耗会比深底高（D58 的深底省电前提只在深色主题成立）；`--pet-*` 从一套固定深色变成两套，以后改舞台色要双主题验收；`.deep-sea-scope` 是额外作用域，浮层内新增组件要记得它不跟页面主题走。
 - 规范：`app/index.html`、`app/src/shared/lib/theme.ts`、`app/src/shared/styles/tokens.css`、`app/src/shared/ui/{theme-options.tsx,signal-dot.tsx}`、`app/src/desktop/features/settings/components/settings-sheet.tsx`、`app/src/desktop/features/mic-receiver/*`、`app/src/mobile/styles/deep-sea.module.css`、`app/src/mobile/features/pet/{pet-settings.tsx,name-prompt.tsx}`、`app/src/mobile/features/mic/*`、`docs/standards/{visual,ux}.md`、`docs/frontend-architecture.md` §6、`docs/status.md`、`AGENTS.md` §2/§8。
+
+## D77 · 宠物交互收敛：去手机舞台声呐环、宠物不再响应麦克风、done 改循环（2026-11-04，取代 D69 中「保留麦克风反应」、D71/D76 中「手机舞台声呐环」）
+
+- 背景：宠物页在 D71 视觉换皮时加了手机舞台背景声呐环，并保留了 D31 设计的麦克风联动（倾听/成功/失败短态）。实际使用中这两块都变成「有表达但价值不明确」的负担：录音反馈与麦克风 UI 自身的波形/计时/结果卡片重复，验收成本高；舞台环在宠物页常驻，用户反馈不需要。同时 AI completed 的 done 动画沿用 `once` + 末帧 1.5 秒定格，在 3 秒 completed 窗口里看起来像卡住。
+- 决策：
+  - **手机宠物舞台删除背景声呐环**：删除 `pet-stage.tsx` 的 sonar JSX 与 `pet.module.css` 的 sonar/关键帧/减少动效覆盖；桌面 `SignalDot` 的 `.sonar-dot-ring` 保留（D71 的信号装饰只在桌面状态点）。
+  - **宠物不再响应麦克风**：删除 `PetEvent` 的 `MIC_START`/`MIC_SUCCESS`/`MIC_CANCEL`/`MIC_ERROR`、`PetPhase` 的 `listening`/`concerned`、`Mood` 的 `listening`/`proud`/`concerned`、`resumeMood`、`CopyId` 的 `mic_success`/`mic_error` 以及成功/失败触感与气泡；`mic-store` 不再 `petDispatch`，`pet-store` 的 `processEffects` 不再因 `listening` 屏蔽气泡。`PetPhase` 只剩 idle/celebrating/sleeping/away，`Mood` 只剩 content/happy/curious/sleepy。**保留**麦克风 UI 自身的 arming/listening/processing/delivered/cancelled/error 状态、波形/计时/结果卡片/上滑取消，以及 `micListening` 门禁（录音时静音 AI 音效/触感）。
+  - **done 动画改循环**：`pet.json` 的 `done.loop.mode` 由 `once` 改为 `loop`，末帧 `duration` 1500→100；一轮 16×100ms=1.6 秒，completed 3 秒内约循环 1.875 轮，不再末帧定格。`advanceFrames` 的 `once` 能力保留给未来需要定格的状态（当前内置图集没有 once 状态）。
+  - **顺带修复 `phaseUntil` 到点不结束**：`pet-store.ts` 新增 `schedulePhaseExpiry`，在 `phaseUntil` 到点（+16ms）补发一次 `TICK`。原先只靠宠物页 30 秒一次的兜底 TICK，命名庆祝（以及以前麦克风成功庆祝）会停在庆祝/末帧几十秒。
+- 原因：用户希望宠物回到「纯陪伴 + AI 状态展示」，录音时不要抢麦克风 UI 的注意力；舞台环是装饰性元素，手机舞台不需要；done 循环让 3 秒完成态持续有动作，不再像卡帧。phaseUntil 修复让所有瞬态状态按设计时长结束，不依赖低频 tick。
+- 放弃：只删成功/失败、保留倾听（用户要求完全不响应麦克风）；保留 sonar 但只在连接时显示（手机舞台仍常驻装饰，收益低）；done 改 once + 首尾拼接模拟循环（复杂且要改播放器）；用 CSS 动画模拟 done 循环（图集已支持 loop，没必要另起一套）。
+- 代价：宠物对录音不再有任何情绪反馈，录音时画面更「冷」；旧文档/旧测试里的 `MIC_*` 契约作废，回退旧版本时这些事件本来也无生产事件源；`once` 能力当前没有内置状态使用，只作为未来扩展点保留。
+- 规范：`app/src/mobile/features/pet/{types,state-machine,sprite-state-map,sprite-player,pet-store,pet-stage,pet.module.css,copy,persistence}.ts(x)`、`app/src/mobile/features/pet/assets/openpet/pet.json`、`app/src/mobile/features/mic/mic-store.ts`、`docs/prd/pet/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/engineering/pet-runtime.md`、`docs/standards/{visual,ux}.md`、`docs/prd/mic/{PRD,SPEC}.md`、`docs/product/scope.md`、`docs/status.md`、`AGENTS.md` §2/§8/§10。
+
+## D78 · 会话列表展示粗粒度工具类别（hook v3 / 双端白名单）（2026-11-04）
+
+- 背景：手机会话列表的工作行原先只显示「工作中」，用户看不出 AI 当前在跑命令、读文件还是查资料。隐私铁律要求不读取/外发提示词、回复、工具参数、文件路径、模型名，所以不能上报工具名原文或参数；需要在不引入内容类字段的前提下给工作行一个「正在做什么」的粒度。
+- 决策：
+  - **插件本地归一**：`sidekick-hook.mjs` 新增 `SESSION_TOOLS` 白名单（`bash`/`read`/`edit`/`search`/`web`/`agent`/`plan`/`tool`）与 `toolActivityOf`：常见工具名先整名匹配、再按 token 兜底（如 `file_read`→`read`、`web_search`→`web`、`glob`/`grep`→`search`、`subagent`→`agent`、`todo_write`/`enter_plan_mode`→`plan`），未知工具统一落 `tool`，空工具名不记录；`PLUGIN_VERSION` 2→3。
+  - **会话记录与广播**：`pendingTools`（callId→类别）跟踪进行中工具，`tool` 取最近开始的一个；`tool/result` 移除后回退到仍在跑的工具；`turn/start`、`turn/end`、`approval/asked`、`user/message` 清空。仅 `state=working` 上报 `tool`，asking/idle/completed 恒为 null；列表摘要 signature 含 `tool`，只换工具也会触发广播。
+  - **Rust 桥第二道白名单**：`SessionTool` 枚举只接受白名单词，未知字符串折叠为通用 `tool`，**绝不把原始字符串透传给手机**；旧插件缺字段按 `None`（手机显示「正在思考」）；仅 working 保留。
+  - **手机端**：`protocol/messages.ts` 新增 `SessionTool` 类型与 `isSessionTool` 白名单校验，未知/非 working 值归一为 `null`（不整条丢弃，保持向后兼容）；工作行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。
+  - **隐私口径**：只同步状态、会话数、标题/时间与粗粒度工具类别；不读取/外发提示词、回复、工具参数、文件路径、模型名、工具名原文。
+- 原因：用户需要「正在做什么」的可读信号；固定 8 值枚举既满足展示，又把外发面收窄成一个常量；双端白名单保证旧/异常插件也不会把任意字符串带到手机；工具类别属于元数据而非内容，与「只同步状态」的隐私承诺不冲突。
+- 放弃：上报工具名原文（隐私红线，且会随 DSH 工具变化泄漏路径/参数意图）；上报工具参数摘要（内容类字段）；在手机端做工具名映射（仍需原文过网，且双端逻辑不一致）；把 tool 塞进 title（语义混杂，且标题有独立的 80 字符限制）。
+- 代价：新增一个协议字段与两处白名单，改 `sessionList` 要同步 `protocol/README.md`、Rust 桥与手机解析三处；只有 8 个粗类别，无法区分具体工具；旧插件不报 `tool` 时工作行只能显示「正在思考」。
+- 规范：`app/src/dsh-hook/sidekick-hook.mjs`、`app/src-tauri/src/dsh_hook.rs`、`app/src/protocol/messages.ts`、`app/src/mobile/features/sessions/{session-panel.tsx,session-store.ts}`、`app/src/dev/tauri-mock.ts`、`app/src/desktop/features/hook/components/hook-panel.tsx`、`protocol/README.md`、`docs/engineering/dsh-hook.md`、`docs/prd/hook/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/standards/ux.md`、`docs/status.md`、`AGENTS.md`。

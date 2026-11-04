@@ -59,6 +59,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
       "source": "dsh",
       "state": "working",
       "askKind": null,
+      "tool": "bash",
       "lastEventAt": 1730000000000,
       "completedAt": null
     }
@@ -78,8 +79,10 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
   - `source`：会话来源，P0 恒为 `dsh`
   - `state`：`idle` / `working` / `asking`；**不含 completed**，完成态由 `completedAt` 推导
   - `askKind`：`approval` / `question` / null
+  - `tool`：可选，仅 `state=working` 有值；粗粒度工具类别，白名单 `bash` / `read` / `edit` / `search` / `web` / `agent` / `plan` / `tool`。桌面桥对未知值折叠为通用 `tool`（不保留原文），手机端对未知值/非 working 值归一为 `null`。旧版桌面不发送，旧版手机忽略
   - `lastEventAt`：最近有意义事件的桌面时钟 ms
   - `completedAt`：最近一轮完成的桌面时钟 ms；null 表示没有完成记录
+- 隐私：`sessionList` 只同步会话 id、标题、状态、askKind、时间与粗粒度工具类别；**不读取/外发**提示词、回复、工具参数、文件路径、模型名或工具名原文。`tool` 是固定枚举，不是工具名透传
 - 桌面在收到 completed 后 3 秒主动广播 resume 状态；手机也可用 `remainingMs` 本地回退
 - 新客户端连接、手机发 `status.request` 时，桌面立即回当前快照（含 `sessionList`）
 - 旧版手机按未知类型/未知字段忽略，不影响聊天/麦克风

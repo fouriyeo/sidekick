@@ -45,7 +45,6 @@ export function defaultPetState(now: number): PetState {
     lastInteractionAt: now,
     lastEnergyAt: now,
     phaseUntil: 0,
-    resumeMood: null,
     overlayOpen: false,
     visible: true,
     settings: { ...DEFAULT_SETTINGS },

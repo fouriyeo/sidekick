@@ -84,6 +84,7 @@ export function createPetStore(deps: PetStoreDeps) {
   let heartTimer: ReturnType<typeof setTimeout> | null = null;
   let completedTimer: ReturnType<typeof setTimeout> | null = null;
   let captionTimer: ReturnType<typeof setTimeout> | null = null;
+  let phaseTimer: ReturnType<typeof setTimeout> | null = null;
   let writeChain: Promise<void> = Promise.resolve();
   let lastBubbleAt = 0;
   let bubbleId = 0;
@@ -109,6 +110,24 @@ export function createPetStore(deps: PetStoreDeps) {
       if (captionTimer === null) return;
       clearTimeout(captionTimer);
       captionTimer = null;
+    }
+
+    /**
+     * `phaseUntil` 到点补发一次 TICK：命名庆祝等瞬态状态按设置时长结束，
+     * 而不是干等宠物页 30 秒一次的兜底 tick（否则会停在庆祝/末帧几十秒）。
+     */
+    function schedulePhaseExpiry(state: PetState) {
+      if (phaseTimer !== null) {
+        clearTimeout(phaseTimer);
+        phaseTimer = null;
+      }
+      if (state.phaseUntil <= 0) return;
+
+      const delay = Math.max(0, state.phaseUntil - deps.now()) + 16;
+      phaseTimer = setTimeout(() => {
+        phaseTimer = null;
+        get().dispatch({ type: "TICK", now: deps.now() });
+      }, delay);
     }
 
     function appVisible(): boolean {
@@ -242,7 +261,7 @@ export function createPetStore(deps: PetStoreDeps) {
 
     function processEffects(effects: PetEffect[], pet: PetState) {
       const bubbleEffect = effects.find((effect) => effect.type === "bubble");
-      if (bubbleEffect && pet.phase !== "listening") {
+      if (bubbleEffect) {
         showBubble(bubbleEffect.copyId, bubbleEffect.durationMs);
       }
 
@@ -301,6 +320,7 @@ export function createPetStore(deps: PetStoreDeps) {
 
           set({ pet: state, hydrated: true, saveStatus: loadFailed ? "error" : "idle" });
           processEffects(effects, state);
+          schedulePhaseExpiry(state);
 
           if (!loadFailed) scheduleSave();
         })();
@@ -312,6 +332,7 @@ export function createPetStore(deps: PetStoreDeps) {
         const { state, effects } = reducePet(get().pet, event);
         set({ pet: state });
         processEffects(effects, state);
+        schedulePhaseExpiry(state);
 
         if (event.type === "VISIBILITY" && !event.visible) {
           // 切后台时立刻结束 completed 姿态：回前台/重连不重播庆祝。
@@ -378,6 +399,7 @@ export function createPetStore(deps: PetStoreDeps) {
         });
         set({ pet: state });
         processEffects(effects, state);
+        schedulePhaseExpiry(state);
         await get().flush();
 
         return get().saveStatus !== "error";
@@ -415,6 +437,7 @@ export function createPetStore(deps: PetStoreDeps) {
           bubble: null,
           heartBurst: null,
         });
+        schedulePhaseExpiry(get().pet);
         await get().flush();
       },
 

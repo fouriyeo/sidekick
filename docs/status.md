@@ -40,6 +40,7 @@
 33. 修复 Android 16+ 连不上电脑（2026-11-04，D72）：真机换成 Android 17 / SDK 37 后 App 一直「未连接」，手动连接报「连接超时」。根因是 `targetSdk >= 36` 时访问局域网需要 `ACCESS_LOCAL_NETWORK` 运行时权限且系统默认拒绝，把 UDP 广播与 TCP 连接一并拦在进程内（`appops` 显示 `Uid mode: ignore`，shell 的 `curl` 却能连通，极易误判成防火墙/企业网）。补丁脚本现在声明该权限并在 `MainActivity.kt` 请求授权；同时修掉构建脚本写死的 JDK/NDK 路径与 pnpm 版本校验。真机验证：授权后局域网直连成功、重启 8 秒内自动重连；但该办公网仍抑制 UDP 广播，自动发现依旧为 0 台，只能手动填地址。
 34. 手机扫电脑二维码连接（2026-11-04，D74）：企业网只放行单播（D73）导致自动发现不可用时，用户可在 App 聊天页点「扫电脑上的二维码」，扫桌面已有的二维码直接连接。桌面二维码内容不变（仍是 `http://<ip>:<port>`，浏览器扫码落地页下载 APK 不受影响）；手机端 `getUserMedia` 开后置相机 + `jsqr` 逐帧解码（懒加载 43KB gzip），解析只认 IPv4 并忽略 path/query；相机权限走 manifest + `on_permission_request`，由 wry 自动弹系统授权，未改 MainActivity。顺带修正桌面端「下载 App 后会自动发现」的误导文案（该路径在企业网必然失败）。
 35. 外观默认跟随系统 + 宠物舞台随主题（2026-11-04，D76）：`sidekick:theme` 缺失/非法一律 `system`（首次启动、无存档时随系统亮暗；localStorage 不可用静默回退深色，偏好不写成 `dark`）；`--pet-*` 从「两套主题都深」改为随主题，浅色新增「海玻璃舞台」色板（`--pet-bg #dcebe7`、表面 `#f7fcfa`/`#edf7f3`、文字 `#0e2a2b`/`#3f5e5d` 等）与 `--pet-coral-foreground`；始终深色的桌面麦克风浮层改用新增的 `.deep-sea-scope` 钉住深色 pet 令牌，`SignalDot tone="stage"` 语义改为「用 pet 令牌（随主题）」；鲸鱼图集不重绘、不加 filter，浅色舞台下白色围裙/亮部对比度偏低（约 26% 不透明像素 <1.5、中位数约 3.5）是接受的代价。取代 D71 的「默认深色」与「舞台两套主题都深」两点。
+36. 宠物交互收敛 + 会话行工具类别（2026-11-04，D77/D78）：① 手机宠物舞台删除背景声呐环（桌面 `SignalDot` 的 `.sonar-dot-ring` 保留）；② 宠物不再响应麦克风——删除 `MIC_START/SUCCESS/CANCEL/ERROR` 事件、`listening`/`concerned` 姿态、`proud`/`listening`/`concerned` 心情、`mic_success`/`mic_error` 文案与成功/失败触感；`PetPhase` 只剩 idle/celebrating/sleeping/away，`Mood` 只剩 content/happy/curious/sleepy；录音时仅保留 `micListening` 门禁静音 AI 音效/触感；③ done 动画改 `loop`（一轮 16×100ms=1.6s，completed 3 秒内约 1.875 轮，不再末帧定格）；④ 顺带修复 `phaseUntil` 到点没有 TICK 导致命名庆祝停在庆祝/末帧几十秒——`pet-store.ts` 的 `schedulePhaseExpiry` 在到点补发一次 TICK，庆祝按 1.5 秒正常结束。AI 联动侧：hook 插件 `PLUGIN_VERSION` 2→3，新增会话当前工具类别（`SESSION_TOOLS` 白名单 bash/read/edit/search/web/agent/plan/tool，工具名本地归一、未知工具落 `tool`、仅 working 上报）；Rust 桥 `SessionTool` 第二道白名单（未知值折叠为通用 `tool`、不保留原文）；手机会话工作行显示 spinner + 「正在<动作>」（无 `tool` 为「正在思考」），行尾保留相对时间；隐私只同步粗粒度工具类别，不读取/外发提示词、回复、工具参数、文件路径、模型名、工具名原文；桌面 AI 联动页「插件 v3」由 hello 上报动态显示（无需改版本展示代码），隐私文案同步改为「只同步状态、会话标题、当前工具类别、数量和事件时间；工具类别只取固定枚举，不含工具名原文、提示词、回复、工具参数或文件路径」。
 
 ## 已验证（有实际证据）
 
@@ -100,9 +101,11 @@
 | 手持取消只支持上滑 | 按住说话是单指连续手势，不设「取消」按钮；TalkBack/VoiceOver 的取消动作（无障碍替代）P1 补 |
 | 宠物真机/性能未验证 | 无线 adb 断连；存档跨重启、横/竖屏安全区、3 分钟 60fps、掉电待真机回归 |
 | AI 联动未真机验证 | 本地 DSH 脚本注入、首次重启、四态动作、三音效、杀 DSH/重连待真机回归；P0 只聚合顶层会话，子代理可能提前完成 |
+| 会话工具动作真机（部分验证） | 2026-11-05 真机（Realme RMX3370 / Android 13）安装新 debug APK 后：桌面桥上报 `tool=bash` 时工作行显示 spinner +「正在运行命令」，旧数据无 `tool` 时回退「正在思考」；真实 DSH hook v3 链路需重启 DSH 后复验，抓包隐私审计与未知工具/并行回退仍待补（D78） |
+| 宠物交互收敛真机（部分验证） | 2026-11-05 真机安装后：舞台无背景声呐环、AI completed 时 done 动画在 3 秒窗口内持续变化（不再末帧定格）、安装/自动连接正常；录音全程宠物无变化与命名庆祝 1.5 秒结束仍待补真机回归（D77） |
 | AI 联动首次需重启 DSH | profile patch 在启动时加载；desktop profile 默认无 HMR；之后开关只改配置热生效 |
 | AI 联动自由文本提问 | 只认显式提问/审批（ask_user_question/exit_plan_mode/approval/blocked）；模型在回复末尾问一句不算 |
-| 宠物图集只有四态 | 已接 OpenPets schema 2（D57）；睡眠/倾听等状态行待美术 |
+| 宠物图集只有四态 | 已接 OpenPets schema 2（D57）；睡眠等状态行待美术；done 已改 loop（D77） |
 | 触感依赖系统设置 | App 主动触感走 `performHapticFeedback`，系统「触摸振动」关闭时不震（尊重用户设置，非 bug）；`navigator.vibrate` 因 APK 未声明 `VIBRATE` 被 WebView 忽略，只作浏览器兜底；iOS 暂无触感 |
 | WebView 默认长按触感 | 已在启动时用 `setHapticFeedbackEnabled(false)` 关闭；若未来需要「长按复制消息」，只恢复功能、不要恢复系统触感 |
 | WebView 103 兼容 | 真机 WebView 103 不支持 oklch/dvh/color-mix；已加 hex/rgb + 100vh 回退。也不支持 CSS `translate` 属性（Tailwind v4 的 translate 工具类）：麦克风居中、退出提示、宠物保存提示已改用 `inset-x-0`/`mx-auto`；dialog/sheet/tooltip 仍有 translate 类，真机居中待修 |
@@ -119,6 +122,7 @@
 - [x] **前端平台分目录 + 迁移**：按 [standards/engineering.md](./standards/engineering.md) 落 `src/entries` / `src/desktop` / `src/mobile` / `src/shared` / `src/protocol`；对应 `frontend-architecture.md` 的 Phase 1。
 - [x] **情绪宠物 P0**：代码完成（状态机/手势/plugin-store/静态舞台/手动双姿态/设置）；真机 60fps、存档跨重启与扩展状态行待补。
 - [ ] **宠物真机回归（剩余）**：竖屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行；设置/存档已通过（2026-10-31）。
+- [ ] **宠物交互收敛回归**：done 循环（3 秒约 1.875 轮、不末帧定格）、舞台无背景声呐环、录音全程宠物无变化、命名庆祝 1.5 秒结束（2026-11-04 代码完成，D77）。
 - [x] **外设麦克风 spike**：WebView 采集、whisper.cpp 本机转写、剪贴板/粘贴降级已跑通。
 - [x] **外设麦克风 P0 代码**：二进制协议、内存 ASR、模型管理、手机 UI、桌面设置/浮层；待真机与辅助功能实测。
 - [x] **桌面剪贴板 P1**：文本历史、搜索、置顶、隐私过滤、本地持久化。
@@ -127,6 +131,7 @@
 - [ ] **麦克风中断真机验收**：快速连点/连按、启动中松手、电脑浮层「取消录音」、看门狗超时（2026-11-04 代码完成，见 MIC-AC-40..44）。
 - [ ] **AI 联动（DSH hook）**：桌面 AI 联动页 + 本地脚本注入 + 手机四态/三音效 + 会话列表/清除/反问唤起；代码完成，待真机/隐私验收（2026-11-03）。
 - [ ] **会话列表真机回归**：两会话区分、自动展开、清除重现、focus 切前台/启动/失败提示、断连清空、旧插件兼容（2026-11-03）。
+- [ ] **会话行工具动作验收**：工作行 spinner + 「正在…」、无工具/未知工具/旧插件回退、抓包确认无工具名原文/参数/路径/模型名（2026-11-04 代码完成，D78）。
 - [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
 - [x] **Release 打包**：`release/` 固定文件名 dmg（3.8MB）+ 签名 APK（7MB）+ 三个打包脚本（2026-11-03，D63）；待正式签名/公证。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。

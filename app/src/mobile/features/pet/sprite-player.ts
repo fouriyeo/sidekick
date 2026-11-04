@@ -17,9 +17,10 @@ export type FrameStep = {
 /**
  * 根据「进入当前状态后经过的毫秒数」算出应该播第几帧。
  *
- * - `loop`：无限循环，取模。
- * - `once`：播完停在最后一帧（done 的 1.5 秒定格由该帧的 duration 表达，
- *   至于状态何时结束由上层状态机决定）。
+ * - `loop`：无限循环，取模。completed 的 done 状态用该模式，3 秒展示期内持续循环，
+ *   不再停在末帧。
+ * - `once`：播完停在最后一帧。该能力保留给未来需要定格的状态；
+ *   当前内置图集没有 once 状态（done 已改为 loop）。
  */
 export function advanceFrames(
   frames: readonly SpriteFrame[],

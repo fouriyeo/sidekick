@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { clearBackHandlers, handleBack } from "@/mobile/system-back";
-import type { SessionSummary } from "@/protocol/messages";
+import type { SessionSummary, SessionTool } from "@/protocol/messages";
 import { SessionPanel } from "./session-panel";
 import { useSessionStore, visibleSessions } from "./session-store";
 
@@ -221,5 +221,104 @@ describe("SessionPanel 方向 B 视觉结构", () => {
       "size-11",
     );
     expect(screen.getByRole("button", { name: "展开会话列表" }).className).toContain("size-11");
+  });
+});
+
+describe("SessionPanel 工作中工具动作", () => {
+  const TOOL_CASES: Array<[SessionTool, string]> = [
+    ["bash", "正在运行命令"],
+    ["read", "正在阅读文件"],
+    ["edit", "正在修改文件"],
+    ["search", "正在搜索代码"],
+    ["web", "正在查资料"],
+    ["agent", "正在处理子任务"],
+    ["plan", "正在整理计划"],
+    ["tool", "正在使用工具"],
+  ];
+
+  it.each(TOOL_CASES)("working + %s 显示中文动作「%s」", (tool, text) => {
+    seed([session({ state: "working", tool })]);
+    render(<SessionPanel active />);
+
+    expect(screen.getByText(`${text} ·`)).toBeInTheDocument();
+    // 工作时行第二行不再展示「工作中」，避免和动作重复。
+    expect(screen.queryByText("工作中")).toBeNull();
+  });
+
+  it("working 行显示 spinner 与 pet-signal，时间仍保留在行尾", () => {
+    seed([session({ state: "working", tool: "bash", lastEventAt: Date.now() - 2 * 60 * 1000 })]);
+    const { container } = render(<SessionPanel active />);
+
+    const row = container.querySelector("li");
+    if (!(row instanceof HTMLElement)) throw new Error("会话行未渲染");
+    expect(row).toHaveAttribute("data-session-tool", "bash");
+    expect(row.textContent).toBe("修复登录正在运行命令 ·2 分钟前");
+
+    const spinner = container.querySelector("[data-session-spinner]");
+    if (!(spinner instanceof HTMLElement)) throw new Error("spinner 未渲染");
+    expect(spinner).toHaveAttribute("aria-hidden", "true");
+    expect(spinner.className).toContain("size-2.5");
+    expect(spinner.className).toContain("animate-spin");
+    expect(spinner.className).toContain("rounded-full");
+    expect(spinner.className).toContain("border-current");
+    expect(spinner.className).toContain("border-t-transparent");
+    // WebView 103 不支持 CSS translate 属性；spinner 只做旋转。
+    expect(spinner.className).not.toContain("translate");
+    // 动作与 spinner 共用 pet-signal 语义色。
+    expect(spinner.parentElement?.className).toContain("text-pet-signal");
+  });
+
+  it("working 没有工具类别时显示「正在思考」", () => {
+    seed([session({ state: "working", tool: null })]);
+    const { container } = render(<SessionPanel active />);
+
+    expect(screen.getByText("正在思考 ·")).toBeInTheDocument();
+    expect(container.querySelector("[data-session-spinner]")).not.toBeNull();
+    expect(container.querySelector("li")).toHaveAttribute("data-session-tool", "none");
+  });
+
+  it("asking / completed 行保持原状态文案，不显示工具动作与 spinner", () => {
+    seed(
+      [
+        session({ id: "s-1", title: "等你决定", state: "asking", askKind: "question", tool: null }),
+        session({
+          id: "s-2",
+          title: "写完了",
+          state: "idle",
+          completedAt: Date.now() - 1000,
+          tool: null,
+        }),
+      ],
+      true,
+    );
+    const { container } = render(<SessionPanel active />);
+
+    expect(screen.getByText(/等你决定 ·/)).toBeInTheDocument();
+    expect(screen.getByText(/已完成 ·/)).toBeInTheDocument();
+    expect(screen.queryByText(/正在/)).toBeNull();
+    expect(container.querySelector("[data-session-spinner]")).toBeNull();
+  });
+
+  it("展开态里 working 行同样显示动作与 spinner", () => {
+    seed(
+      [
+        session({ id: "s-1", title: "等你决定", state: "asking", askKind: "question" }),
+        session({ id: "s-2", title: "重构鉴权", state: "working", tool: "edit" }),
+      ],
+      true,
+    );
+    const { container } = render(<SessionPanel active />);
+
+    expect(screen.getByText("正在修改文件 ·")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-session-spinner]")).toHaveLength(1);
+    expect(container.querySelector('li[data-session-tool="edit"]')).not.toBeNull();
+  });
+
+  it("working 行缺省 tool 字段时回退「正在思考」", () => {
+    seed([session({ state: "working" })]);
+    const { container } = render(<SessionPanel active />);
+
+    expect(screen.getByText("正在思考 ·")).toBeInTheDocument();
+    expect(container.querySelector("li")).toHaveAttribute("data-session-tool", "none");
   });
 });

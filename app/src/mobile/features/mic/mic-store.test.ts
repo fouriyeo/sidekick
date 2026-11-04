@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
-import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { sendKeyRequest } from "@/shared/lib/tauri";
 import { useMicStore } from "./mic-store";
 
@@ -37,18 +36,15 @@ afterEach(() => {
 });
 
 describe("mic store", () => {
-  it("moves from arming to listening and begins pet feedback", () => {
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
+  it("moves from arming to listening", () => {
     useMicStore.getState().begin(SESSION);
     expect(useMicStore.getState().phase).toBe("arming");
-    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_START", now: expect.any(Number) });
 
     useMicStore.getState().markListening();
     expect(useMicStore.getState().phase).toBe("listening");
   });
 
   it("handles a copied result and clears after ten seconds", () => {
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
     useMicStore.getState().begin(SESSION);
     useMicStore.getState().markProcessing();
     useMicStore.getState().handleResult(result());
@@ -56,7 +52,6 @@ describe("mic store", () => {
     const state = useMicStore.getState();
     expect(state.phase).toBe("delivered");
     expect(state.result?.message).toContain("辅助功能");
-    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_SUCCESS", now: expect.any(Number) });
 
     vi.advanceTimersByTime(10_000);
     expect(useMicStore.getState().phase).toBe("idle");
@@ -64,7 +59,6 @@ describe("mic store", () => {
   });
 
   it("reports a cloud failure and ignores stale sessions", () => {
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
     useMicStore.getState().begin(SESSION);
     useMicStore
       .getState()
@@ -72,7 +66,6 @@ describe("mic store", () => {
 
     expect(useMicStore.getState().phase).toBe("error");
     expect(useMicStore.getState().error).toContain("百炼");
-    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_ERROR", now: expect.any(Number) });
 
     const stale = useMicStore.getState().phase;
     useMicStore
@@ -82,28 +75,23 @@ describe("mic store", () => {
   });
 
   it("fails after the ten second processing timeout", () => {
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
     useMicStore.getState().begin(SESSION);
     useMicStore.getState().markProcessing();
     vi.advanceTimersByTime(10_000);
 
     expect(useMicStore.getState().phase).toBe("error");
     expect(useMicStore.getState().error).toContain("电脑端没回应");
-    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_ERROR", now: expect.any(Number) });
   });
 
-  it("cancels and notifies the pet", () => {
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
+  it("cancels and resets local state", () => {
     useMicStore.getState().begin(SESSION);
     useMicStore.getState().cancel();
 
     expect(useMicStore.getState().phase).toBe("idle");
     expect(useMicStore.getState().session).toBeNull();
-    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_CANCEL", now: expect.any(Number) });
   });
 
   it("host cancel forces idle even when the local session differs", () => {
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
     useMicStore.getState().begin(SESSION);
     const nonce = useMicStore.getState().cancelNonce;
 
@@ -121,12 +109,10 @@ describe("mic store", () => {
     expect(state.session).toBeNull();
     expect(state.cancelNonce).toBe(nonce + 1);
     expect(state.cancelNotice).toBe("电脑端已取消录音。");
-    expect(dispatch).toHaveBeenCalledWith({ type: "MIC_CANCEL", now: expect.any(Number) });
   });
 
-  it("explains watchdog cancellation without double pet feedback", () => {
+  it("explains watchdog cancellation", () => {
     useMicStore.getState().reset();
-    const dispatch = vi.spyOn(usePetStore.getState(), "dispatch");
     const nonce = useMicStore.getState().cancelNonce;
 
     useMicStore.getState().handleCancel({
@@ -139,7 +125,6 @@ describe("mic store", () => {
 
     expect(useMicStore.getState().cancelNotice).toBe("录音超时，已自动停止。");
     expect(useMicStore.getState().cancelNonce).toBe(nonce + 1);
-    expect(dispatch).not.toHaveBeenCalledWith({ type: "MIC_CANCEL", now: expect.any(Number) });
   });
 });
 

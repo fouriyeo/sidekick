@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MANIFEST } from "./sprite-manifest";
 import { advanceFrames, fitCellSize } from "./sprite-player";
 
 const frames16 = Array.from({ length: 16 }, (_, col) => ({ col, duration: 100 }));
@@ -13,14 +14,14 @@ describe("advanceFrames", () => {
     expect(advanceFrames(frames16, 1650, "loop").index).toBe(0);
   });
 
-  it("once 播完停在最后一帧", () => {
+  it("once 播完停在最后一帧（能力保留给未来需要定格的状态）", () => {
     expect(advanceFrames(frames16, 1500, "once").index).toBe(15);
     expect(advanceFrames(frames16, 1600, "once").index).toBe(15);
     expect(advanceFrames(frames16, 99999, "once").index).toBe(15);
     expect(advanceFrames(frames16, 99999, "once").elapsedInFrame).toBe(100);
   });
 
-  it("支持不规则帧时长（如 done 末帧定格 1.5s）", () => {
+  it("支持不规则帧时长（如某状态末帧停留 1.5s）", () => {
     const frames = [
       { col: 0, duration: 100 },
       { col: 1, duration: 100 },
@@ -36,6 +37,18 @@ describe("advanceFrames", () => {
 
   it("空帧防御", () => {
     expect(advanceFrames([], 500, "loop")).toEqual({ index: 0, elapsedInFrame: 0 });
+  });
+
+  it("内置 done 在 completed 展示期内循环，不再末帧定格", () => {
+    if (!MANIFEST) throw new Error("内置 manifest 应该可用");
+    const done = MANIFEST.states.done;
+    if (!done) throw new Error("内置 manifest 缺少 done 状态");
+
+    expect(done.loop).toBe("loop");
+    const total = done.frames.reduce((sum, frame) => sum + frame.duration, 0);
+    // 走完一轮回到第 0 帧（旧 once 行为会停在最后一帧）。
+    expect(advanceFrames(done.frames, total, done.loop).index).toBe(0);
+    expect(advanceFrames(done.frames, total - 1, done.loop).index).toBe(done.frames.length - 1);
   });
 });
 

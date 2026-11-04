@@ -5,7 +5,7 @@ import type { PetPhase } from "./types";
  * App 语义 → 图集状态名。
  *
  * 图集可以有任意多行状态，这里只维护「候选链」：按优先级尝试，
- * 渲染器选第一个在图集里存在的状态。以后补了 sleeping / listening 等行，
+ * 渲染器选第一个在图集里存在的状态。以后补了 sleeping / celebrate 等行，
  * 只需要在图里加行、在 manifest 登记，不用改渲染器；若想改优先级才动本文件。
  */
 export const SPRITE_STATES = {
@@ -15,9 +15,7 @@ export const SPRITE_STATES = {
   done: "done",
   /** 以下为预留状态名：当前资产没有这些行，候选链会自动回落到 idle。 */
   sleeping: "sleeping",
-  listening: "listening",
   celebrate: "celebrate",
-  concerned: "concerned",
   away: "away",
 } as const;
 
@@ -37,19 +35,14 @@ function aiChain(ai: AiState): string[] {
 /**
  * 返回候选状态链（从左到右优先级递减）。
  *
- * - 倾听 / 庆祝 / 担心 / 离开：交互优先，AI 状态让位（与 hook SPEC §2 一致）。
+ * - 庆祝 / 离开：交互优先，AI 状态让位（与 hook SPEC §2 一致）。
  * - 睡觉：只在 AI 静态时生效；夜间正在进行 AI 任务时仍展示 AI 状态。
  * - 其余情况跟随 AI 四态。
  */
 export function spriteStateChain(phase: PetPhase, ai: AiState): string[] {
   switch (phase) {
-    case "listening":
-      // 不落到 attention：倾听是安静地听，不是「等你决定」的感叹号。
-      return [SPRITE_STATES.listening, SPRITE_STATES.idle];
     case "celebrating":
       return [SPRITE_STATES.celebrate, SPRITE_STATES.done, SPRITE_STATES.idle];
-    case "concerned":
-      return [SPRITE_STATES.concerned, SPRITE_STATES.idle];
     case "away":
       return [SPRITE_STATES.away, SPRITE_STATES.idle];
     case "sleeping":

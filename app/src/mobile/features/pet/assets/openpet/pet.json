@@ -142,12 +142,12 @@
         },
         {
           "col": 15,
-          "duration": 1500
+          "duration": 100
         }
       ],
       "row": 3,
       "loop": {
-        "mode": "once"
+        "mode": "loop"
       }
     },
     "idle": {

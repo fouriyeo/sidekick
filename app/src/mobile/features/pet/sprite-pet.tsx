@@ -34,7 +34,7 @@ function frameStyle(state: SpriteState, index: number, cell: number): string | n
  * OpenPets schema 2 图集播放器。
  *
  * 一列一帧，每状态最多 32 帧；状态由 `spriteStateChain` 解析成 manifest 里存在的名字，
- * 所以图集以后加行（sleeping / listening …）不用改这里。
+ * 所以图集以后加行（sleeping / celebrate …）不用改这里。
  */
 export function SpritePet({ ai, phase, night, active, reducedMotion }: SpritePetProps) {
   const rootRef = useRef<HTMLDivElement>(null);

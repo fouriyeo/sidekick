@@ -83,16 +83,14 @@ describe("pet store", () => {
     const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
     await store.getState().hydrate();
 
-    store.getState().dispatch({ type: "MIC_START", now });
-    store.getState().dispatch({ type: "MIC_ERROR", now });
-    expect(store.getState().bubble?.copyId).toBe("mic_error");
+    store.getState().dispatch({ type: "BOOT", now, save: null });
+    expect(store.getState().bubble?.copyId).toBe("first_meet");
 
     vi.advanceTimersByTime(4000);
     expect(store.getState().bubble).toBeNull();
 
     now += 4000;
-    store.getState().dispatch({ type: "MIC_START", now });
-    store.getState().dispatch({ type: "MIC_ERROR", now });
+    store.getState().dispatch({ type: "BOOT", now, save: null });
     expect(store.getState().bubble).toBeNull();
   });
 
@@ -108,6 +106,21 @@ describe("pet store", () => {
 
     vi.advanceTimersByTime(1200);
     expect(store.getState().heartBurst).toBeNull();
+  });
+
+  it("ends the naming celebration after its phase window, not on the 30s tick", async () => {
+    let now = NOW;
+    const save = { ...createDefaultSave(now), onboarded: true, name: "小满", lastSeenAt: now };
+    const storage = createStorage(save);
+    const store = createPetStore({ storage, haptics: createHaptics(), now: () => now });
+    await store.getState().hydrate();
+
+    store.getState().dispatch({ type: "NAME_SET", now, name: "小满", skipped: false });
+    expect(store.getState().pet.phase).toBe("celebrating");
+
+    now += 1600;
+    vi.advanceTimersByTime(1600);
+    expect(store.getState().pet.phase).toBe("idle");
   });
 
   it("saves a valid name and rejects an invalid one", async () => {

@@ -259,18 +259,11 @@ owner: design
 
 禁止：错误码、堆栈、“操作失败”、“请重试”（无下一步）、责怪用户。
 
-## 8. 宠物联动
+## 8. 宠物联动（已下线，2026-11-04）
 
-| 麦克风状态 | 宠物表现 |
-| --- | --- |
-| arming | 抬头、看向用户 |
-| listening | 竖耳、身体前倾、轻微呼吸；停止随机 idle |
-| processing | 安静等待、偶尔眨眼 |
-| delivered | 2 秒得意/开心 + 少量闪光；不出转写 |
-| cancelled | 眨眼回 idle；不表达失望 |
-| error | 歪头/耳朵下垂 1.5 秒；可出“没听清，再来一次？” |
+麦克风不再驱动宠物：录音全程（arming/listening/processing/delivered/cancelled/error）宠物的姿态、心情、气泡、触感都保持不变，不再有竖耳/得意/歪头等反应（D77）。麦克风 UI 自身的状态提示（arming/listening/processing/delivered/cancelled/error）、波形、计时、取消与结果卡片不受影响；录音期间仍通过 `micListening` 门禁静音 AI 音效/触感，避免和录音提示抢注意力。
 
-宠物不遮挡录音条、波形、计时、取消提示；录音中禁用宠物触摸。
+宠物仍不遮挡录音条、波形、计时、取消提示（布局约束保留）。
 
 ## 9. 无障碍
 
