@@ -3,7 +3,27 @@
 # 首次运行会在 ~/.sidekick/ 生成本地签名密钥（不提交、不分享）。
 set -euo pipefail
 
-export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 21)}"
+# JAVA_HOME：优先显式环境变量，其次系统 java_home，最后 Homebrew JDK。
+# macOS 的 /usr/libexec/java_home 不认 Homebrew 安装的 openjdk@21，
+# 直接用它会在 gradle 阶段报 “Unable to locate a Java Runtime”。
+if [[ -z "${JAVA_HOME:-}" ]]; then
+  JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+fi
+if [[ -z "${JAVA_HOME:-}" ]]; then
+  for candidate in \
+    /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+    /usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home; do
+    if [[ -x "$candidate/bin/java" ]]; then
+      JAVA_HOME="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "${JAVA_HOME:-}" ]]; then
+  echo "[android] 找不到 JDK 21，请安装 openjdk@21 或设置 JAVA_HOME" >&2
+  exit 1
+fi
+export JAVA_HOME
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export NDK_HOME="${NDK_HOME:-$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -1)}"
 export ANDROID_NDK_HOME="$NDK_HOME"
