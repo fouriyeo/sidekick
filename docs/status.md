@@ -1,6 +1,6 @@
 # 项目状态
 
-最后更新：2026-11-05
+最后更新：2026-11-06
 
 ## 时间线（2026-10-31）
 
@@ -48,6 +48,8 @@
 39. 手机干净版两页壳（2026-11-05，D80 / v16）：手机只留「宠物（根）/ 设置（二级）」两页，删除动态页与底部 tab；宠物页 = 顶栏（gear / 连接状态 / chat）→ 会话卡（折叠 1 行、展开 5 行、working wash、× 二次确认）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 24）；设置从 gear 进、左上返回、17/400 inline 标题、首用清单 banner、无底栏；结果卡弹窗三段（grabber + header 16「已输入」/ 12 时间 + content 13 单行 + footer 15「清空 / ↵ 回车」纯文字，44 热区，清空二次确认），总高约 125。新增 `.mobile-clean` 作用域令牌（`app/src/mobile/styles/clean.css`），只影响手机；旧 `stream` / `tab-bar` / `now-row` / 动态页组件删除；`app.tsx` / `ui-store` 去 `stream`，asking/chat/settings → pet，offline → 上一页。**字体（D81）**：真机实际渲染是 OPPO Sans Regular，偏宽偏厚；改为随包 MiSans Normal 400（3.9MB WOFF2），会话标题 15，设置说明行高 1.625→1.45；真机对比见 `docs/design/mobile-ui-v16/font-compare.png`。591 tests / tsc / lint / build 全绿；真机 Realme RMX3370 已验证宠物页 / 会话展开 / 设置页 / 返回键 / 深色 / MiSans，待补录音禁切页、结果卡清空二次确认、320 宽真机。
 40. 手机字体收敛（2026-11-05，D81）：用 CDP `CSS.getPlatformFontsForNode` 确认 Android WebView 把 `sans-serif` 解析为 `OPlusSans 3.1_GB18030`（OPPO Sans Regular），不是 PingFang；实测 OPPO Light 300 发虚、OPPO Regular 400 笨重。下载并真机对比 MiSans Normal/Regular、HarmonyOS Sans SC Regular/Light 后，选 **MiSans Normal 400**（随包 `app/src/mobile/assets/fonts/MiSans-Normal.woff2`），字重统一 400、标题 16→15、正文字号不动、设置说明行高 1.625→1.45；桌面端不加载。MiSans 免费商用但需注明，assets README 与设置「数据与关于」已加说明。
 
+41. Token 用量看板 V1（2026-11-06，D82–D84）：桌面新增第 6 一级页「用量」（⌘4；系统 ⌘5、设置 ⌘6），只读 `~/.dsh/storages/cost-meter/ledger.json`，提供今天 / 7 天 / 30 天 / 180 天区间、客户端 / 会话 / 模型三维分组、30 天花费柱阵、缓存环与 Token 构成；手机在「设置 › 用量」提供只读版本（断连保留最后快照、录音中禁切页）。新增 `usage.request` / `usage` 协议（带 `data` 包装，不含提示词/路径/cwd），模型 ID 是否下发受 D83「在手机显示模型分组」开关控制。模型价格能力参考 tokei：seed（OpenRouter 目录）+ `~/.sidekick/token_pricing.json` 缓存 + `~/.sidekick/token_pricing_overrides.json` 覆盖 + DeepSeek 官方峰谷 CNY 价；实际 `costCny` 优先，缺价才按价格表估算并标 ≈；打开用量页且缓存 >24h 自动刷新、失败保留上次。新增依赖 `reqwest`（rustls-no-provider，ring provider 与 ASR 共用 `tls.rs`）。
+
 ## 已验证（有实际证据）
 
 - 手机浏览器扫码可打开电脑 `http://<电脑IP>:<端口>/`（局域网 HTTP 通；当时固定 8848，现已改为 `47810` 起候选回退）；
@@ -68,6 +70,7 @@
 - **自动发现端到端已验证（2026-10-31）**：Realme 打开 App 后 logcat 出现 `[discovery] 扫描结束，发现 1 台电脑` → `[mobile] connecting to ws://<电脑IP>:47810/ws` → 已连接；聊天页显示「设备名 + 地址 + 已连接」，发消息桌面日志出现 `[ws] recv` 且手机收到回显。
 - **端口回退已验证（2026-10-31）**：先占用 47810，桌面日志显示 `端口 47810 绑定失败…尝试下一个候选端口` 后监听 47811；手机发现回包携带 `port=47811` 并自动连上。
 - **桌面面板已改版验证（2026-10-31）**：真实服务 + 浏览器 `?role=desktop` 通过 CDP 检查，默认无 canvas（无大二维码），地址显示真实端口，展开后出现 160px 二维码。
+- **Token 用量看板（2026-11-06，D82–D84）**：前端 `pnpm typecheck` / `pnpm lint` / `pnpm test`（74 files / **602 tests**）/ `pnpm build` 全绿；Rust `cargo fmt --check`、`cargo test`（**161 passed**）、`cargo clippy`（仅既有 warning，无 error）通过；`check-docs`、`check-boundaries`、`node --check scripts/update-pricing.mjs` 通过。真实账本只读冒烟（临时测试，已移除）：7 天区间 `tokens=2,174,514,477`、`costCny≈¥128.93`（128,929,334 微元）、`calls=9,715`、`sessions=76`（区间唯一会话 id 数），与独立 Python 直算一致（金额差 1 微元内）。浏览器无头验收：桌面 1180×760 / 960×640 深浅色、手机 390×844 / 320×640 深浅色均无横向滚动；价格 Sheet 可打开（刷新逻辑由前端组件测试覆盖）；手机模型开关关闭时模型 Tab 隐藏。真机 Realme、真实 Tauri 窗口命令调用与断网刷新尚未回归。
 - 自动化测试：`pnpm typecheck/lint/test/build` 全绿（103 前端用例）；`cargo test` 10 passed；`check-boundaries`、`check-docs` 通过。
 - 麦克风 spike：真机 5 秒长按生成约 143KB WAV，桌面收到并 whisper 转写；合成中文 WAV 得到 20 字文本；剪贴板 UTF-8 正确；自动粘贴因辅助功能权限返回 copied。
 - 麦克风 P0 后端：Python WS 客户端按正式二进制协议发送 3.9 秒中文，服务端返回 `mic.result(copied, accessibility_off)`；whisper-rs base 在模型预热后延迟约 0.2–0.3s；剪贴板 UTF-8 内容正确。
@@ -145,7 +148,8 @@
 - [ ] **会话列表真机回归**：宠物页会话卡折叠 1 行 / 展开 5 行、asking 直接 focus、清除二次确认与重现、断连快照、旧插件兼容（2026-11-03；2026-11-05 按 D80 改版，基础折叠/展开/返回已验证）。
 - [ ] **会话行工具动作验收**：工作行 spinner + 「正在…」、无工具/未知工具/旧插件回退、抓包确认无工具名原文/参数/路径/模型名（2026-11-04 代码完成，D78）。
 - [ ] **手机 D80 真机回归**：宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆麦克风；设置页返回；录音中禁切页；结果卡三段 + 清空二次确认；深色与 320 宽（2026-11-05 代码完成，基础页已真机验证）。
-- [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
+- [ ] **Token 用量看板验收**：真实 ledger 对账、空/损坏账本、价格联网/断网/覆盖文件、桌面 6 导航与 960 宽、手机 320 宽与模型开关、隐私抓包（2026-11-06 代码完成，待真机/对账）。
+- [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入（接入后用量页客户端分组从「未接入」变为真实数据）。
 - [x] **Release 打包**：`release/` 固定文件名 dmg（3.8MB）+ 签名 APK（7MB）+ 三个打包脚本（2026-11-03，D63）；待正式签名/公证。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
 - [ ] **配对与鉴权**：首次扫码配对、长期密钥、信道加密。
@@ -171,6 +175,9 @@
 - [ ] 麦克风：权限拒绝/辅助功能未开/窗口切换/密码框/上滑取消的降级路径
 - [ ] AI 联动：桌面安装/重启/连接；四态动作远看可区分；三音效默认关/录音静音；杀 DSH 15s 内静态；隐私审计通过
 - [ ] 会话卡：折叠 1 行 / 展开 5 行、working wash、× 二次确认；点 asking 唤起 DSH；清除后新事件重现；断连保留最后快照
-- [ ] 桌面壳：默认总览、状态条三段可点、⌘1–⌘5、辅助功能提示条外壳级、麦克风浮层全局、960×640 不溢出
+- [ ] 桌面壳：默认总览、状态条三段可点、⌘1–⌘6、辅助功能提示条外壳级、麦克风浮层全局、960×640 不溢出
+- [ ] 用量：真实账本对账、价格刷新/断网/覆盖、空态、手机模型开关、抓包无提示词/路径/cwd
 - [ ] 手机壳：默认宠物、顶栏 gear/连接/chat 可点、无底部 tab、结果卡三段、二级页返回层级、录音中禁切页、首用清单在设置 banner
 - [ ] 状态语言：连接 7 / AI 4 / 麦克风 9 两端同词；琥珀只给等你决定；工作行 spinner +「正在<动作>」/「正在思考」
+- [ ] 用量：桌面/手机区间切换与三维分组；数字与账本直算一致；空/损坏账本不造假；价格联网/断网/覆盖文件；手机模型开关；抓包无提示词/路径/cwd
+- [ ] 用量壳：桌面第 6 导航 ⌘4、系统 ⌘5、设置 ⌘6；手机设置 › 用量 → 返回设置；录音中禁切页；价格 Sheet 刷新与 stale

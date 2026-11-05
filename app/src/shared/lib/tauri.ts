@@ -8,9 +8,12 @@ import {
   isStatusState,
   type KeyAction,
   type MicStopReason,
+  type PricingStatus,
   type ServerInfo,
   type SessionSource,
   type StatusState,
+  type TokenUsageStats,
+  type UsageRange,
 } from "@/protocol/messages";
 
 export type AppRole = "desktop" | "mobile";
@@ -172,6 +175,12 @@ const COMMANDS = {
   dshHookSetEnabled: "dsh_hook_set_enabled",
   dshHookRemove: "dsh_hook_remove",
   dshHookTest: "dsh_hook_test",
+  sendUsageRequest: "send_usage_request",
+  tokenUsageStats: "token_usage_stats",
+  tokenPricingStatus: "token_pricing_status",
+  tokenPricingRefresh: "token_pricing_refresh",
+  tokenPricingSetAuto: "token_pricing_set_auto",
+  tokenPricingSetMobileModels: "token_pricing_set_mobile_models",
 } as const;
 
 const EVENTS = {
@@ -300,6 +309,11 @@ export function sendChat(text: string): Promise<void> {
   return invoke<void>(COMMANDS.sendChat, { text });
 }
 
+/** 手机请求一次用量快照；桌面回 `usage` 消息（不含提示词/路径）。 */
+export function sendUsageRequest(range: UsageRange): Promise<void> {
+  return invoke<void>(COMMANDS.sendUsageRequest, { range });
+}
+
 export function sendMicStart(session: string, sampleRate: number, frameMs: number): Promise<void> {
   return invoke<void>(COMMANDS.micStart, { session, sampleRate, frameMs });
 }
@@ -352,6 +366,27 @@ export function clearCloudAsr(): Promise<CloudAsrStatus> {
 
 export function getUsageStats(): Promise<UsageStats> {
   return invoke<UsageStats>(COMMANDS.asrUsageStats);
+}
+
+/** 桌面端 Token 用量看板：读取本机 DSH 账本并聚合。 */
+export function getTokenUsageStats(range: UsageRange): Promise<TokenUsageStats> {
+  return invoke<TokenUsageStats>(COMMANDS.tokenUsageStats, { range });
+}
+
+export function getTokenPricingStatus(): Promise<PricingStatus> {
+  return invoke<PricingStatus>(COMMANDS.tokenPricingStatus);
+}
+
+export function refreshTokenPricing(force: boolean): Promise<PricingStatus> {
+  return invoke<PricingStatus>(COMMANDS.tokenPricingRefresh, { force });
+}
+
+export function setTokenPricingAuto(enabled: boolean): Promise<PricingStatus> {
+  return invoke<PricingStatus>(COMMANDS.tokenPricingSetAuto, { enabled });
+}
+
+export function setTokenPricingMobileModels(enabled: boolean): Promise<PricingStatus> {
+  return invoke<PricingStatus>(COMMANDS.tokenPricingSetMobileModels, { enabled });
 }
 
 export function clearUsageStats(): Promise<UsageStats> {

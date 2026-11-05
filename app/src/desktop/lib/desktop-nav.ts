@@ -1,14 +1,21 @@
 import type { LucideIcon } from "lucide-react";
-import { Clipboard, LayoutGrid, ListChecks, Settings, SlidersHorizontal } from "lucide-react";
+import {
+  Clipboard,
+  Gauge,
+  LayoutGrid,
+  ListChecks,
+  Settings,
+  SlidersHorizontal,
+} from "lucide-react";
 
 /**
  * 电脑端「指挥舱」的导航模型。
  *
- * 一级只有 5 项（总览 / 会话 / 内容 / 系统 / 设置），配置与排障全部收进「系统」；
- * 聊天（消息）不再占一级，只作为「系统」的第 4 段存在。
+ * 一级 6 项（总览 / 会话 / 内容 / 用量 / 系统 / 设置），配置与排障全部收进「系统」；
+ * 聊天（消息）不再占一级，只作为「系统」的第 4 段存在。用量页为 D82 新增。
  */
 
-export type DesktopView = "overview" | "sessions" | "content" | "system" | "settings";
+export type DesktopView = "overview" | "sessions" | "content" | "usage" | "system" | "settings";
 
 export type SystemSection = "connection" | "voice" | "hook" | "chat";
 
@@ -34,8 +41,9 @@ export const DESKTOP_NAV: readonly DesktopNavItem[] = [
   { id: "overview", label: "总览", shortcut: "⌘1", icon: LayoutGrid },
   { id: "sessions", label: "会话", shortcut: "⌘2", icon: ListChecks },
   { id: "content", label: "内容", shortcut: "⌘3", icon: Clipboard },
-  { id: "system", label: "系统", shortcut: "⌘4", icon: SlidersHorizontal },
-  { id: "settings", label: "设置", shortcut: "⌘5", icon: Settings },
+  { id: "usage", label: "用量", shortcut: "⌘4", icon: Gauge },
+  { id: "system", label: "系统", shortcut: "⌘5", icon: SlidersHorizontal },
+  { id: "settings", label: "设置", shortcut: "⌘6", icon: Settings },
 ];
 
 /** 「系统」页内的 4 段；顺序固定为 连接 → 语音 → 联动 → 消息。 */
@@ -58,11 +66,12 @@ export const VIEW_TITLE: Record<DesktopView, string> = {
   overview: "总览",
   sessions: "会话",
   content: "内容",
+  usage: "用量",
   system: "系统",
   settings: "设置",
 };
 
-/** ⌘1–⌘5 → 一级视图；只认单个数字键。 */
+/** ⌘1–⌘6 → 一级视图；只认单个数字键。 */
 export function viewForShortcut(key: string): DesktopView | null {
   const index = Number(key) - 1;
   if (!Number.isInteger(index) || index < 0 || index >= DESKTOP_NAV.length) return null;
@@ -74,6 +83,7 @@ const VIEW_ALIASES: Record<string, DesktopRoute> = {
   overview: { view: "overview", section: "connection" },
   sessions: { view: "sessions", section: "connection" },
   content: { view: "content", section: "connection" },
+  usage: { view: "usage", section: "connection" },
   clipboard: { view: "content", section: "connection" },
   system: { view: "system", section: "connection" },
   settings: { view: "settings", section: "connection" },

@@ -4,6 +4,7 @@ import {
   isFocusResultMessage,
   isKeyResultMessage,
   isStatusMessage,
+  isUsageRange,
   normalizeSessionList,
   normalizeSessionTitle,
   parseFocusResult,
@@ -12,6 +13,7 @@ import {
   parseMicMessage,
   parseStatusMessage,
   parseSystemClients,
+  parseUsageMessage,
 } from "./messages";
 
 describe("parseMessage", () => {
@@ -386,5 +388,41 @@ describe("system clients", () => {
     expect(
       parseMessage('{"type":"system","text":"客户端已连接，当前 2 个","clients":2}', "desktop"),
     ).toEqual({ kind: "system", text: "客户端已连接，当前 2 个" });
+  });
+});
+
+describe("usage message", () => {
+  const data = {
+    type: "usage",
+    v: 1,
+    ts: 1730000000000,
+    data: {
+      range: "7d",
+      generatedAt: 1730000000000,
+      summary: { tokens: 1, costCnyMicros: 2 },
+      groups: { clients: [], sessions: [], models: [] },
+      pricing: { source: "seed", modelCount: 548, fxCnyPerUsd: 6.67 },
+      ledger: { available: true, reason: null },
+    },
+  };
+
+  it("parses usage snapshots with data wrapper", () => {
+    expect(parseUsageMessage(JSON.stringify(data))?.data.range).toBe("7d");
+  });
+
+  it("ignores malformed or old messages", () => {
+    expect(parseUsageMessage(JSON.stringify({ ...data, type: "status" }))).toBeNull();
+    expect(parseUsageMessage(JSON.stringify({ ...data, v: 2 }))).toBeNull();
+    expect(parseUsageMessage(JSON.stringify({ ...data, data: null }))).toBeNull();
+    expect(parseUsageMessage(JSON.stringify({ ...data, ts: "now" }))).toBeNull();
+    expect(parseUsageMessage("not-json")).toBeNull();
+  });
+
+  it("validates ranges", () => {
+    expect(isUsageRange("today")).toBe(true);
+    expect(isUsageRange("7d")).toBe(true);
+    expect(isUsageRange("30d")).toBe(true);
+    expect(isUsageRange("180d")).toBe(true);
+    expect(isUsageRange("365d")).toBe(false);
   });
 });

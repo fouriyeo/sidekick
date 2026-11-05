@@ -140,6 +140,7 @@
 | `shadcn` | 主题 CSS（`shadcn/tailwind.css`） | 首屏 | MIT | CLI 仍用 `pnpm dlx`；包只 import CSS |
 | `tw-animate-css` | shadcn 的 CSS 动效类 | 首屏 | MIT | 不是 JS 动画引擎 |
 | `qrcode` | 桌面二维码 | 桌面 entry | MIT | 现有依赖，保留 |
+| `reqwest` | 模型价格目录刷新（公开 GET） | Rust 桌面运行时 | MIT/Apache-2.0 | 0.13.x；`default-features=false`，features `json`/`gzip`/`rustls-no-provider`，rustls provider 与 ASR 共用 `tls.rs`（D84） |
 | `sonner` | Toast | 首屏（按需） | MIT | shadcn 推荐 |
 | `zod` 或 `valibot` | 协议边界校验 | 按需 | MIT | 二选一；只在边界用 |
 | `@biomejs/biome` | lint / format | 开发期 | MIT | 2.6.x |

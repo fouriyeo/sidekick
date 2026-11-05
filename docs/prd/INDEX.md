@@ -8,6 +8,7 @@ children:
   - pet/INDEX.md
   - mic/INDEX.md
   - hook/INDEX.md
+  - usage/INDEX.md
   - shell/INDEX.md
 ---
 
@@ -22,6 +23,7 @@ children:
 | 情绪宠物 | 竖屏手机里的黏土小宠物，纯陪伴 | 代码完成，真机待补 | [pet/INDEX.md](./pet/INDEX.md) |
 | 外设麦克风 | 按住手机说话，电脑本机转文字并输入 | P0 已实现，真机/自动粘贴待回归 | [mic/INDEX.md](./mic/INDEX.md) |
 | AI 联动（DSH） | 桌面开关把 AI 状态推给手机，宠物四态 + 三音效 | 开发中 | [hook/INDEX.md](./hook/INDEX.md) |
+| Token 用量看板 | 桌面第 6 页 + 手机设置二级页；客户端/会话/模型分组 + 价格表 | 开发中（2026-11-06，D82–D84） | [usage/INDEX.md](./usage/INDEX.md) |
 | 应用外壳（指挥舱） | 桌面 5 视图 + 手机 3 档 + 状态语言 + 首用清单 | 代码完成，待真机回归（2026-11-05，D79） | [shell/INDEX.md](./shell/INDEX.md) |
 
 ## 每个功能怎么读
@@ -60,3 +62,4 @@ INDEX.md（一页摘要 + 阅读地图）
 | 2026-11-04 | 宠物触摸互动下线（D69）：删除摸摸/戳/爱心/亲密度/`interacting` 与设置页无障碍入口，点击宠物无反应 |
 | 2026-11-05 | 新增应用外壳（指挥舱）PRD/SPEC/AC：桌面 5 视图 + 手机 3 档 + 状态语言 + 首用清单（D79） |
 | 2026-11-05 | 首次命名/改名下线：宠物固定显示「小跟班」，`onboarded` 只表示是否已见过面；删除 `name` 存档字段、`NAME_SET`/`celebrating`/`happy`/爱心，旧存档 `name` 忽略不迁移 |
+| 2026-11-06 | 新增 Token 用量看板 PRD/SPEC/AC：桌面第 6 导航「用量」+ 手机「设置 › 用量」+ 客户端/会话/模型分组 + 模型价格表（D82–D84） |

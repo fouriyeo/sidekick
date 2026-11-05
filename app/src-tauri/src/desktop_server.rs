@@ -29,6 +29,7 @@ use crate::desktop_mic::{self, FrontApp};
 use crate::discovery;
 use crate::dsh_hook::HookBridge;
 use crate::mic_protocol::{self, MicStartMessage, MicStopReason};
+use crate::token_usage::TokenUsageStore;
 
 static MOBILE_PAGE: &str = include_str!("../mobile/index.html");
 // 编译期嵌入的 Android 安装包（由 build.rs 生成；没打过安卓包时为 None）。
@@ -56,6 +57,7 @@ struct AppState {
     hook: Arc<HookBridge>,
     asr_cloud: Arc<AsrCloudState>,
     usage: Arc<UsageStore>,
+    token_usage: Arc<TokenUsageStore>,
     /// 「一键唤起电脑」的全局 1.5s 限频。
     focus_limiter: Arc<FocusLimiter>,
     /// 结果卡片手动按键：最近一次「插入成功」的目标窗口。
@@ -123,11 +125,7 @@ fn local_ip() -> String {
         .ok()
         .and_then(pick_lan_ip)
         .map(|ip| ip.to_string())
-        .or_else(|| {
-            local_ip_address::local_ip()
-                .ok()
-                .map(|ip| ip.to_string())
-        })
+        .or_else(|| local_ip_address::local_ip().ok().map(|ip| ip.to_string()))
         .unwrap_or_else(|| "127.0.0.1".to_string())
 }
 
@@ -262,7 +260,10 @@ async fn download_apk() -> Response {
 
     // 磁盘上都没有时用编译期嵌入的那份：换电脑 / 源码目录被移走也能下载。
     if let Some(bytes) = EMBEDDED_APK {
-        println!("[server] 下发 Android 安装包（编译期嵌入，{} 字节）", bytes.len());
+        println!(
+            "[server] 下发 Android 安装包（编译期嵌入，{} 字节）",
+            bytes.len()
+        );
         return apk_response(Body::from(bytes), bytes.len() as u64);
     }
 
@@ -290,12 +291,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     {
         println!("[ws] 发送 AI 状态快照失败，连接即将关闭");
     }
-    let _ = state
-        .tx
-        .send(system_message_with_clients(
-            format!("客户端已连接，当前 {count} 个"),
-            count,
-        ));
+    let _ = state.tx.send(system_message_with_clients(
+        format!("客户端已连接，当前 {count} 个"),
+        count,
+    ));
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(text) = rx.recv().await {
@@ -340,6 +339,34 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             let _ = recv_state.tx.send(recv_state.hook.snapshot_json());
                             continue;
                         }
+                        if kind == "usage.request" {
+                            // 手机用量页打开/切区间时请求一次；只广播聚合快照，
+                            // 不包含提示词、路径或 cwd。模型名按 D83 开关决定是否下发。
+                            let range = serde_json::from_str::<serde_json::Value>(&text)
+                                .ok()
+                                .and_then(|value| {
+                                    value
+                                        .get("range")
+                                        .and_then(|range| range.as_str())
+                                        .map(|range| range.to_string())
+                                })
+                                .unwrap_or_else(|| "7d".to_string());
+                            let store = recv_state.token_usage.clone();
+                            let tx = recv_state.tx.clone();
+                            tokio::task::spawn_blocking(move || {
+                                let snapshot = store.stats(&range).mobile_json();
+                                let _ = tx.send(
+                                    serde_json::json!({
+                                        "type": "usage",
+                                        "v": 1,
+                                        "ts": now_ms(),
+                                        "data": snapshot,
+                                    })
+                                    .to_string(),
+                                );
+                            });
+                            continue;
+                        }
                     }
                     println!("[ws] recv: {text}");
                     let _ = recv_state.tx.send(text);
@@ -361,12 +388,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     cleanup_session(&state, client_id);
     let count = state.clients.fetch_sub(1, Ordering::SeqCst) - 1;
     println!("[ws] client disconnected ({count} online)");
-    let _ = state
-        .tx
-        .send(system_message_with_clients(
-            format!("客户端断开，当前 {count} 个"),
-            count,
-        ));
+    let _ = state.tx.send(system_message_with_clients(
+        format!("客户端断开，当前 {count} 个"),
+        count,
+    ));
 }
 
 fn message_type(text: &str) -> Option<String> {
@@ -1051,6 +1076,7 @@ pub async fn start(
     hook: Arc<HookBridge>,
     asr_cloud: Arc<AsrCloudState>,
     usage: Arc<UsageStore>,
+    token_usage: Arc<TokenUsageStore>,
 ) {
     let state = AppState {
         tx: hook.sender(),
@@ -1061,6 +1087,7 @@ pub async fn start(
         hook,
         asr_cloud,
         usage,
+        token_usage,
         focus_limiter: Arc::new(FocusLimiter::focus()),
         keys: Arc::new(KeyRegistry::new()),
         key_limiter: Arc::new(IntervalLimiter::with_interval(

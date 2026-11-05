@@ -1,7 +1,7 @@
 # AGENTS.md — Sidekick 项目上下文
 
 > 面向 AI 编码代理：读完这一份就能接手。细节在 `docs/`，协议在 `protocol/`。
-> 最后更新：2026-11-05
+> 最后更新：2026-11-06
 
 ## 1. 项目是什么
 
@@ -24,6 +24,7 @@
 - ✅ **外观默认跟随系统 + 宠物舞台随主题**（2026-11-04，D76，supersede D71 的「默认深色」「舞台两套主题都深」）：`sidekick:theme` 缺失/非法一律 `system`，首次启动/无存档随系统亮暗，localStorage 不可用时静默回退深色；`--pet-*` 随主题——深色深海自发光，浅色换成「海玻璃舞台」（`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`）+ 新增 `--pet-coral-foreground`；始终深色的桌面麦克风浮层用 `.deep-sea-scope` 钉住深色 pet 令牌；鲸鱼图集不重绘、不加 filter，浅底对比度偏低是接受的代价。
 - ✅ **指挥舱 A 双端壳**（2026-11-05，D79，代码完成待真机）：桌面改为「总览 / 会话 / 内容 / 系统 / 设置」5 视图 + 顶部 48 全局状态条（服务 / 手机 / AI 三段可点）+ 72 图标导航（⌘1–⌘5）+ 56 页头；辅助功能提示条外壳级、麦克风浮层全局；聊天降级为「系统 › 消息」，系统页内 4 段（连接 / 语音 / 联动 / 消息）；960 单列（`lg:` 1024）/ 1180 两列。**手机部分已被 D80 取代**：不再有底部 3 档与动态页。状态语言统一（连接 7 态 / AI 4 态 / 麦克风 9 态；会话对象「已完成」、AI 聚合「完成」；D78 工作行 spinner + 「正在<动作>」/「正在思考」）。桌面手机数用 `system.clients - 1` 近似；旧 4 个平行 Tab、SettingsSheet、SessionPanel、ConnectionBar 已删除；产品规则 `docs/prd/shell/`，结构 `docs/frontend-architecture.md`；D80 后 591 tests / tsc / lint / build 全绿，真机待回归。
 - ✅ **手机干净版两页壳**（2026-11-05，D80，代码完成待真机）：手机只留「宠物（根）/ 设置（二级）」两页，删除动态页与底部 tab；宠物页 = 顶栏（gear / 连接状态 / chat）→ 会话卡（折叠 1 行、展开 5 行、working wash、× 二次确认）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 24）；设置从 gear 进、左上返回、17/400 inline 标题、首用清单 banner、无底栏；说完话结果卡为弹窗三段（grabber + header 16「已输入」/ 12 时间 + content 13 单行 + footer 15「清空 / ↵ 回车」纯文字，44 热区，清空二次确认），总高约 125。新增 `.mobile-clean` 作用域令牌（`app/src/mobile/styles/clean.css`），只影响手机；桌面端不变。**字体改用随包 MiSans Normal 400（3.9MB WOFF2，免费商用需注明）**，会话标题 15，设置说明行高 1.45；旧 `stream` / `tab-bar` / `now-row` / 动态页组件已删除；activity-store 已删除。591 tests / tsc / lint / build 全绿；真机 Realme RMX3370 已验证宠物页 / 会话展开 / 设置页 / 返回键 / 深色 / MiSans 字体，待补录音禁切页、结果卡清空二次确认、320 宽。
+- ✅ **Token 用量看板 V1**（2026-11-06，D82–D84，代码完成待验收）：桌面第 6 导航「用量」（⌘4；系统 ⌘5、设置 ⌘6）+ 手机「设置 › 用量」；只读本机 `~/.dsh/storages/cost-meter/ledger.json`，按客户端/会话/模型分组；`usage.request`/`usage` 协议带 `data` 包装（不含提示词/路径/cwd），模型 ID 按 D83 开关上手机；模型价格参考 tokei：seed + `~/.sidekick/token_pricing.json` 缓存 + overrides + DeepSeek 官方峰谷，实际 `costCny` 优先、缺价才估算（标 ≈）；新增 `reqwest`（rustls-no-provider，provider 在 `tls.rs`）。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
@@ -65,6 +66,7 @@
 | Tauri 命令 | `server_info` | 等就绪后返回 `{ip, port, url, discoveryPort}`，前端展示地址/发现状态/二维码 |
 | Tauri 命令 | `asr_cloud_status` / `asr_cloud_save` / `asr_cloud_test` / `asr_cloud_clear` | 百炼配置/状态/测试/清除；Key 存本地 `asr.json`（0600），状态只返回 `hasKey`/`keyMasked`，不读 Keychain |
 | Tauri 命令 | `asr_usage_stats` / `asr_usage_clear` | 今天/7/30/365 汇总 + 最近 365 天 `days`；清空只重置本地统计 |
+| Tauri 命令 | `token_usage_stats` / `token_pricing_status` / `token_pricing_refresh` / `token_pricing_set_auto` / `token_pricing_set_mobile_models` | Token 用量聚合与模型价格表；只读 DSH ledger，价格只 GET 公开目录 |
 
 ### 手机端接口
 
@@ -76,6 +78,7 @@
 | Tauri 命令 | `send_chat({text})` | 发送 `{"type":"chat","from":"phone",...}` |
 | Tauri 命令 | `send_focus_request({source,sessionId,requestId})` | 发送 `focus.request`；结果走 `chat` 事件里的 `focus.result` |
 | Tauri 命令 | `send_key_request({action,session,requestId})` | 发送 `key.request`（`enter`/`clear`）；结果走 `chat` 事件里的 `key.result`，只允许用户主动点按 |
+| Tauri 命令 | `send_usage_request({range})` | 请求一次 `usage` 快照（today/7d/30d/180d）；结果走 `chat` 事件的 `usage` 消息 |
 | Tauri 命令 | `set_keep_screen_on({enabled})` | 宠物页前台屏幕常亮：Android JNI 加/清 `FLAG_KEEP_SCREEN_ON`；iOS 暂为空实现 |
 | Tauri 事件 | `conn` / `chat` | `conn: {online, url}`；`chat: <JSON 字符串>`（含 status/sessionList/focus.result/mic.*/chat） |
 
@@ -224,6 +227,7 @@ sidekick/
 - **宠物触摸互动已下线**（2026-11-04，D69）：点击、长按、来回抚摸宠物都不产生任何反应，不再有 `POKE`/`PET_*`/`interacting`/手势识别/亲密度/触摸爱心；不要再加 pointer 手势或 `interacting` 状态。AI 四态、睡眠/变暗保留；**麦克风反应已下线（D77）**——录音时宠物姿态/气泡/触感不变，只保留 `micListening` 门禁静音 AI 音效/触感。变暗遮罩的点击唤醒是屏幕行为，不是宠物互动。
 - **宠物首次命名/改名已下线**（2026-11-05）：宠物固定显示「小跟班」，`first_meet` 文案是「你来了。我是小跟班。」；不要再加命名弹层、输入框、`NAME_SET`/`celebrating`/`happy`/爱心/`phaseUntil`/`schedulePhaseExpiry`/`setName`，也不要再给 `PetSaveV1` 加 `name`。`onboarded` 保留为「是否已见过面」，首次 BOOT 置 true；旧存档的 `name` 字段忽略、不迁移（version 仍 1，其他字段照常恢复）。手机「更多」页分组固定为 01 连接 / 02 外观 / 03 反馈 / 04 显示 / 05 数据与关于（含重置宠物）/ 06 消息通道，重置确认文案「要重置宠物吗？」。
 - **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。插件协议版本 `PLUGIN_VERSION = 3`（v2 加 `sessionList`，v3 加会话当前工具类别），桌面「系统 › 联动」页的「插件 v3」由 hello 上报动态渲染，不用改页面代码。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume/sessionList`（id、标题、状态、askKind、lastEventAt、completedAt、粗粒度工具类别 `tool`），**不要加提示词/回复/工具参数/路径/cwd/模型名/工具名原文**。`tool` 是插件本地归一后的固定枚举（bash/read/edit/search/web/agent/plan/tool），未知工具落 `tool`；Rust 桥 `SessionTool` 做第二道白名单、未知值折叠为通用 `tool`，不保留原文。标题是内容类外发字段：单行 ≤80 字符、不写日志、不落盘；`sessionList` 最多 50 条，旧客户端忽略（旧插件不报 `tool`，手机显示「正在思考」）。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
+- **用量看板**：只读 `$DSH_HOME/storages/cost-meter/ledger.json`（180 天、日粒度、costCny 实际记账）；金额人民币微元，总 Token 五个桶相加，缓存命中 = cacheRead/(input+cacheRead+cacheWrite)；缺 `costCny` 才按价格表估算并标 `≈`，未知模型不编造；百炼 ASR 费用不并入。`usage` 消息带 `data` 包装，不含提示词/路径/cwd；模型 ID 默认上手机（D83），关闭「在手机显示模型分组」后 `groups.models=[] + modelsHidden=true`。价格表 seed 由 `scripts/update-pricing.mjs` 更新，缓存/覆盖在 `~/.sidekick/`；刷新失败保留上次成功，禁止写零价。
 - **手机会话列表**：`sessionList` 随 `status` 广播（最多 50 条，标题 ≤80 字符，`tool` 仅 working 有值）；手机 `session-store` 用本地清除标记过滤（`lastEventAt <= cleared.through` 隐藏），标记存 `sidekick-sessions.json` 只含 id/at/through（7 天 TTL、最多 200 条），有新事件自动解除。会话卡在宠物页置顶：折叠 1 行 / 展开最多 5 行，标题 + 状态/相对时间 + ×（asking 二次确认）；不再有动态页。工作中行显示 spinner + 「正在<动作>」（运行命令/阅读文件/修改文件/搜索代码/查资料/处理子任务/整理计划/使用工具；无 `tool` 或未知值「正在思考」），行尾保留相对时间。点 asking 会话发 `focus.request`，桌面 `app_focus.rs` 只做 `open -a "DeepSeek Harness"`（1.5s 限频，错误只回错误码），**不接受手机传来的应用路径**。**已归档会话不下发**：桌面桥读 `$DSH_HOME/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存，文件缺失/异常按空）过滤列表，并按可见列表重算聚合态与 `sessions`，避免归档的 asking 让宠物一直停在「等你决定」；插件仍上报原始列表，旧桥忽略。改 `sessionList` 字段要同步 `protocol/README.md`、Rust 桥与手机解析三处。
 - **麦克风圆钮/胶囊**：单竖屏布局下空闲态是 56px 薄荷圆钮居中、距底 24；录音/处理时展开为 `min(90vw,420px)` 胶囊；实时文本/结果卡片在按钮上方独立绝对定位（`bottom-[68px]`），出现/消失不推动按钮。不要再加左下取消按钮，取消只保留上滑手势；不要用 `left-1/2 -translate-x-1/2` 居中（WebView 103 不支持 CSS translate）。
 - **结果卡片手动按键**：`key.request` 只接受「最近一次 `mic.result(inserted)`」的目标（owner+mic session），30 秒过期、成功一次即作废、桌面 500ms 限频；按键前重新核对前台应用、密码框、辅助功能，任一不符只回错误码、不按键。「清空」是 `⌘A`+`Delete`（两次确认），不是 ⌘Z；终端等非标准输入框可能不生效，**绝不能因此回退成回车**。日志不打文本/应用名/按键序列；结果卡片只在 `outcome=inserted` 时显示按钮。
@@ -231,7 +235,7 @@ sidekick/
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 - **`--accent` 与 `--whale` 分开（D71）**：`--accent` 是 shadcn 的 hover/选中面（语义 = `--wash` 薄荷薄层）；鲸蓝用新令牌 `--whale`。不要改 `--accent` 当品牌次色，否则所有 shadcn 组件 hover 会变蓝块。
 - **声呐环只做装饰且可暂停**：只剩桌面状态点 `.sonar-dot-ring` 5.6s（手机舞台背景环已删除，D77）；只动 `transform`/`opacity`，细描边、不发光、不叠 `filter`；`prefers-reduced-motion` 冻结；`useMotionPause` 在后台/窗口失焦写 `<html data-motion-paused>` 暂停。常驻窗口不要再加更多循环动画，也不要恢复手机舞台环。
-- **指挥舱壳体**：视图切换是组件状态（桌面 `route.view` / 手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘5 在输入框 / 下拉 / contentEditable 里不劫持。
+- **指挥舱壳体**：视图切换是组件状态（桌面 `route.view` / 手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框 / 下拉 / contentEditable 里不劫持。
 - **手机字体（D81）**：Android WebView 把 `sans-serif` 解析成 OEM 的 **OPlusSans 3.1（OPPO Sans Regular）**，字形比 PingFang 宽、笔画厚，15–16/400 会显「老年机」；**不要只靠 300 字重**（会发虚）。手机端随包 `app/src/mobile/assets/fonts/MiSans-Normal.woff2`（MiSans Normal 400，3.9MB，免费商用），`clean.css` `@font-face` + `.mobile-clean` 首选；系统字体做缺字回退。标题 15，正文 13，设置说明行高 1.45；全手机 400（`!important` 防合成粗体），桌面不加载。字体许可说明在 assets/README 与设置「数据与关于」。
 - **手机返回层级与录音**：settings / chat / asking → pet、offline → 上一页、scan → offline；新增全屏页必须接入返回处理，否则按返回会被根页面当成退出确认；没有底部 tab，录音中所有换页入口由 `ui-store.setView` 拦截，不弹「录音中 · 松手后再切页」（那是旧 3 档文案）。
 - **首用清单 / 设备数 / focus**：手机只本地判定「连接 + 麦克风（`micReady`）」，百炼与辅助功能只能标「在电脑上完成」，不得伪造完成；桌面「已连接 · N 台设备」= `system.clients - 1`（含本机窗口与网页预览），不显示设备名；浏览器 mock 无本地 WS，「在 DSH 打开」只能在 `pnpm tauri dev` / 真机验证。

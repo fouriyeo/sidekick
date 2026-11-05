@@ -202,6 +202,24 @@ pub fn send_chat(app: tauri::AppHandle, text: String) -> Result<(), String> {
     )
 }
 
+/// 手机端请求一次 Token 用量快照；桌面端收到后广播一条 usage。
+#[tauri::command]
+pub fn send_usage_request(app: tauri::AppHandle, range: String) -> Result<(), String> {
+    let range = match range.as_str() {
+        "today" | "7d" | "30d" | "180d" => range,
+        _ => return Err("用量区间无效".to_string()),
+    };
+    send_payload(
+        &app,
+        serde_json::json!({
+            "v": 1,
+            "type": "usage.request",
+            "range": range,
+            "ts": now_ms(),
+        }),
+    )
+}
+
 /// 手机端请求一次当前 AI 状态快照；桌面端收到后广播一条 status。
 #[tauri::command]
 pub fn send_status_request(app: tauri::AppHandle) -> Result<(), String> {

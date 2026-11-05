@@ -39,6 +39,7 @@ children:
 | 做桌面剪贴板 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) | 该篇 |
 | 做自动发现 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) | 该篇 |
 | 做 AI 联动 / DSH hook / 宠物四态 / 会话列表 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
+| 做 Token 用量看板 / 模型价格 / 三种分组 | [prd/usage/INDEX.md](./prd/usage/INDEX.md) | PRD / SPEC + [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
 | 改应用外壳 / 导航 / 状态词 / 首用清单 | [prd/shell/INDEX.md](./prd/shell/INDEX.md) | PRD / SPEC / AC |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
 | 查进度、环境、构建 | 直接读 | [status.md](./status.md) / [setup.md](./setup.md) |
@@ -68,6 +69,7 @@ docs/
 │  ├─ pet/                      # INDEX + PRD / SPEC / ACCEPTANCE
 │  ├─ mic/                      # INDEX + PRD / SPEC / ACCEPTANCE
 │  ├─ hook/                     # INDEX + PRD / SPEC / ACCEPTANCE（AI 联动）
+│  ├─ usage/                    # INDEX + PRD / SPEC / ACCEPTANCE（Token 用量看板）
 │  └─ shell/                    # INDEX + PRD / SPEC / ACCEPTANCE（指挥舱外壳）
 ├─ engineering/                 # 技术方案
 │  ├─ INDEX.md
@@ -76,11 +78,12 @@ docs/
 │  ├─ asr-model.md              # 百炼模型页、Token/费用统计
 │  ├─ clipboard-manager.md      # 桌面剪贴板历史与隐私过滤
 │  ├─ dsh-hook.md               # DSH 本地脚本注入、Rust 桥、四态协议
+│  ├─ token-usage-pricing.md   # Token 用量账本、聚合、模型价格表
 │  ├─ lan-discovery.md          # UDP 发现与动态端口
 │  ├─ pet-runtime.md            # 帧动画图集、状态机、持久化、性能
 │  └─ quality.md                # 测试矩阵、真机验收、发布门
-├─ design/                      # 设计归档（已落地的视觉稿）
-│  └─ mobile-ui-v16/            # INDEX + README / 定稿图 / 真机图 / 字体对比
+├─ design/                      # 设计归档（已落地：mobile-ui-v16 / token-dashboard-v1）
+│  ├─ mobile-ui-v16/            # INDEX + README / 定稿图 / 真机图 / 字体对比
 ├─ architecture.md              # 现有：系统架构与接口
 ├─ frontend-architecture.md     # 现有：前端目标架构与规范
 ├─ dependency-policy.md         # 现有：依赖准入与许可证
@@ -98,6 +101,7 @@ docs/
 - 已完成：首次命名/改名下线（2026-11-05）；D69/D77/D78 继续有效。
 - 已完成（代码，待真机回归）：**指挥舱 A 重设计**（D79，2026-11-05）——桌面 5 视图 + 手机 3 档 + 状态语言 + 首用清单；产品规则见 [prd/shell](./prd/shell/INDEX.md)，结构见 [frontend-architecture.md](./frontend-architecture.md)。
 - 进行中：**AI 联动（DSH hook）**——产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
+- 进行中（2026-11-06）：**Token 用量看板 V1**——桌面第 6 导航「用量」+ 手机「设置 › 用量」+ 模型价格表；产品规则见 [prd/usage](./prd/usage/INDEX.md)，技术方案见 [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md)（D82–D84）。
 - 未开始：手机回答 AI 提问、Claude Code / Qoder hook、配对鉴权、iOS。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 
@@ -119,6 +123,7 @@ docs/
 | 重大决策 | [decisions.md](./decisions.md) |
 | 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
 | AI 联动（DSH）产品规则 | [prd/hook/PRD.md](./prd/hook/PRD.md) |
+| Token 用量看板 / 模型价格 | [prd/usage/INDEX.md](./prd/usage/INDEX.md) / [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
 | 应用外壳：导航 / 页面归属 / 状态词 / 首用清单 | [prd/shell/INDEX.md](./prd/shell/INDEX.md) |
 | AI 四态动作/声音/桌面页 | [prd/hook/SPEC.md](./prd/hook/SPEC.md) |
 | DSH 脚本/桥/安装/协议 | [engineering/dsh-hook.md](./engineering/dsh-hook.md) |

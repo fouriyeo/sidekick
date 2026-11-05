@@ -383,6 +383,156 @@ export function installTauriMock(): void {
     return dshHookSnapshot();
   }
 
+  type MockUsageDay = {
+    date: string;
+    tokens: number;
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    costCnyMicros: number;
+    calls: number;
+  };
+  const mockUsageRanges: Record<string, number> = { today: 1, "7d": 7, "30d": 30, "180d": 180 };
+  let mockPricingUpdatedAt = Date.now() - 2 * 60 * 60 * 1000;
+  let mockPricingAuto = true;
+  let mockMobileModels = true;
+
+  function mockUsageStats(range: string) {
+    const days = mockUsageRanges[range] ?? 7;
+    const dayCount = Math.min(180, Math.max(1, days));
+    const daily: MockUsageDay[] = [];
+    for (let index = dayCount - 1; index >= 0; index -= 1) {
+      const date = new Date();
+      date.setDate(date.getDate() - index);
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      // 7 天约 4.8 亿 tokens / ¥29.84；长区间按同一日均放大。
+      const base = index === 0 ? 74_000_000 : 66_000_000 + ((index * 37) % 5) * 900_000;
+      daily.push({
+        date: `${date.getFullYear()}-${month}-${day}`,
+        tokens: base,
+        input: Math.round(base * 0.00626),
+        output: Math.round(base * 0.00259),
+        cacheRead: Math.round(base * 0.978),
+        cacheWrite: 0,
+        costCnyMicros: Math.round(base * 0.062),
+        calls: 220 + ((index * 17) % 60),
+      });
+    }
+    const total = (key: "tokens" | "input" | "output" | "cacheRead" | "costCnyMicros" | "calls") =>
+      daily.reduce((sum, day) => sum + day[key], 0);
+    const summary = {
+      tokens: total("tokens"),
+      input: total("input"),
+      output: total("output"),
+      cacheRead: total("cacheRead"),
+      cacheWrite: 0,
+      reasoning: 0,
+      costCnyMicros: total("costCnyMicros"),
+      estimatedCostMicros: 0,
+      costSource: "ledger",
+      calls: total("calls"),
+      sessions: Math.max(5, Math.round((15 * dayCount) / 7)),
+      cacheHitPct: 98.15,
+    };
+    const totalTokens = summary.tokens;
+    const rows = (prefix: string, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        key: `${prefix}-${index}`,
+        label:
+          prefix === "s"
+            ? [
+                "修复登录",
+                "生成看板",
+                "重构协议",
+                "跑验收测试",
+                "价格表接入",
+                "桌面导航",
+                "手机页面",
+                "其他会话",
+                "补充会话",
+              ][index % 9]
+            : [
+                `deepseek-v4.1-flash`,
+                `deepseek-flash`,
+                `deepseek-search-api`,
+                `deepseek-fetch-api`,
+              ][index % 4],
+        sub: prefix === "s" ? "最近 11-05 22:39 · 120 次调用" : "OpenCode Go · 缓存命中 97.2%",
+        tokens: Math.round(totalTokens / (index + 1.6)),
+        costCnyMicros: Math.round(summary.costCnyMicros / (index + 1.6)),
+        estimatedCostMicros: 0,
+        costSource: "ledger",
+        sharePct: 100 / (index + 1.6),
+        calls: Math.round(summary.calls / (index + 1.6)),
+        sessions: null,
+        cacheHitPct: 98.15 - index * 0.4,
+        modelId: prefix === "m" ? `deepseek-v4.1-flash-${index}` : null,
+        provider: prefix === "m" ? "OpenCode Go" : null,
+        tag: null,
+        price:
+          prefix === "m"
+            ? {
+                inputCnyPerM: 0.288,
+                outputCnyPerM: 0.067,
+                cacheReadCnyPerM: 0.227,
+                cacheWriteCnyPerM: 0,
+                source: "seed",
+              }
+            : null,
+      }));
+    return {
+      range,
+      generatedAt: Date.now(),
+      summary,
+      previous: {
+        ...summary,
+        tokens: Math.round(summary.tokens * 0.82),
+        costCnyMicros: Math.round(summary.costCnyMicros * 0.9),
+      },
+      days: daily,
+      groups: {
+        clients: [
+          {
+            key: "dsh",
+            label: "DeepSeek Harness",
+            sub: "本机 cost-meter · 已接入",
+            tokens: summary.tokens,
+            costCnyMicros: summary.costCnyMicros,
+            estimatedCostMicros: 0,
+            costSource: "ledger",
+            sharePct: 100,
+            calls: summary.calls,
+            sessions: summary.sessions,
+            cacheHitPct: 98.15,
+            modelId: null,
+            provider: null,
+            tag: null,
+            price: null,
+          },
+        ],
+        sessions: rows("s", 8),
+        models: mockMobileModels ? rows("m", 4) : [],
+        modelsHidden: !mockMobileModels,
+      },
+      pricing: {
+        source: "remote",
+        updatedAt: mockPricingUpdatedAt,
+        lastAttemptAt: mockPricingUpdatedAt,
+        lastError: null,
+        stale: false,
+        autoRefresh: mockPricingAuto,
+        modelCount: 548,
+        fxCnyPerUsd: 6.6723,
+        fxSource: "ledger",
+        mobileModels: mockMobileModels,
+      },
+      coverageDays: Math.min(dayCount, 6),
+      ledger: { available: true, reason: null as string | null },
+    };
+  }
+
   const internals: MockInternals = {
     async invoke(command, args) {
       if (command === "app_role") return role;
@@ -437,6 +587,46 @@ export function installTauriMock(): void {
       if (command === "send_status_request") {
         window.setTimeout(emitMockAiStatus, 50);
         return null;
+      }
+      if (command === "send_usage_request") {
+        const range = typeof args?.range === "string" ? args.range : "7d";
+        window.setTimeout(() => {
+          emit(
+            "chat",
+            JSON.stringify({ type: "usage", v: 1, ts: Date.now(), data: mockUsageStats(range) }),
+          );
+        }, 120);
+        return null;
+      }
+      if (command === "token_usage_stats") {
+        const range = typeof args?.range === "string" ? args.range : "7d";
+        // 浏览器验收空状态：?usage=empty
+        if (params.get("usage") === "empty") {
+          const empty = mockUsageStats(range);
+          empty.ledger = { available: false, reason: "ledger_missing" };
+          empty.summary.tokens = 0;
+          empty.summary.costCnyMicros = 0;
+          empty.groups.clients = [];
+          empty.groups.sessions = [];
+          empty.groups.models = [];
+          empty.days = [];
+          empty.coverageDays = 0;
+          return empty;
+        }
+        return mockUsageStats(range);
+      }
+      if (command === "token_pricing_status") return mockUsageStats("7d").pricing;
+      if (command === "token_pricing_refresh") {
+        mockPricingUpdatedAt = Date.now();
+        return mockUsageStats("7d").pricing;
+      }
+      if (command === "token_pricing_set_auto") {
+        mockPricingAuto = args?.enabled !== false;
+        return mockUsageStats("7d").pricing;
+      }
+      if (command === "token_pricing_set_mobile_models") {
+        mockMobileModels = args?.enabled !== false;
+        return mockUsageStats("7d").pricing;
       }
       if (command === "send_focus_request") {
         const requestId = typeof args?.requestId === "string" ? args.requestId : "";

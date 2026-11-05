@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-05 桌面按 D79 完成「指挥舱 A」5 视图壳；手机按 D80 完成干净版两页壳（宠物 + 设置，591 tests 全绿，真机已验证基础页，主题运行时见 §6）。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-05 桌面按 D79 完成「指挥舱 A」5 视图壳，2026-11-06 按 D82 增第 6 视图「用量」；手机按 D80 完成干净版两页壳（宠物 + 设置，591 tests 全绿，真机已验证基础页，主题运行时见 §6）。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)；壳与导航规则见 [prd/shell/](./prd/shell/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -9,7 +9,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-05 起桌面按 D79 采用「指挥舱 A」壳（5 视图），手机按 D80 改为两页壳（宠物 / 设置；无底栏），聊天降级为「系统 › 消息」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
+- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-05 起桌面按 D79 采用「指挥舱 A」壳（5 视图，D82 增「用量」为第 6 视图），手机按 D80 改为两页壳（宠物 / 设置；无底栏），聊天降级为「系统 › 消息」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -343,7 +343,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - 组件局部 UI 状态（展开/收起、输入草稿）留在组件内，不进全局 store。
 **壳与视图（D79）**
 
-- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | sessions | content | system | settings`、`SystemSection = connection | voice | hook | chat`、导航项与 ⌘1–⌘5；壳只维护「当前视图 + 系统分段」，不进 URL、不引路由。
+- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | sessions | content | usage | system | settings`、`SystemSection = connection | voice | hook | chat`、导航项与 ⌘1–⌘6；壳只维护「当前视图 + 系统分段」，不进 URL、不引路由。
 - 手机：`mobile/ui-store.ts` 的 `MobileView = pet | settings | chat | asking | offline` + `scanOpen`；根页面按 view 渲染宠物/设置/二级页，无底部 tab；返回栈在 `mobile/system-back.ts`。
 - 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopActivityStore`（最近事件）、`useDesktopVoiceStore`（最近一次语音）、`desktop-activity-events.ts`（事件→最近发生）；手机 `session-store`（会话卡 + 清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）；`activity-store` 暂留但不再渲染。
 - `status` 解析集中在数据 store；D78 的工具动作文案由 `shared/lib/sessions.ts` 统一派生，桌面与手机共用，不各写一套映射。
@@ -404,7 +404,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 ## 13. 迁移计划
 
-当前进度（2026-11-05）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动已落地。桌面按 D79 完成 5 视图壳；手机按 D80 完成两页壳（宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆形麦克风 / 结果卡弹窗；设置二级页 / 首用 banner / 返回层级），删除 `stream`、`tab-bar`、`now-row` 与动态页；`.mobile-clean` 令牌只作用于手机；全仓 591 tests / tsc / lint / build 全绿，真机 Realme 已验证宠物页/会话展开/设置/返回键，待补录音禁切页、结果卡清空、深色/320 真机。
+当前进度（2026-11-05）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动已落地。桌面按 D79 完成 5 视图壳、D82 增用量页；手机按 D80 完成两页壳（宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆形麦克风 / 结果卡弹窗；设置二级页 / 首用 banner / 返回层级），删除 `stream`、`tab-bar`、`now-row` 与动态页；`.mobile-clean` 令牌只作用于手机；全仓 591 tests / tsc / lint / build 全绿，真机 Realme 已验证宠物页/会话展开/设置/返回键，待补录音禁切页、结果卡清空、深色/320 真机。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
@@ -426,7 +426,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 - [ ] 桌面 `pnpm tauri dev` 正常启动，`[server] listening` 出现
 - [ ] 安卓 `scripts/build-android.sh && scripts/install-android.sh` 成功
 - [ ] 手机打开 App 自动发现并连接电脑，状态为「已连接」；无发现时可手动输入地址兜底
-- [ ] 桌面指挥舱壳：默认总览、状态条三段可点、⌘1–⌘5、辅助功能提示条外壳级、麦克风浮层全局
+- [ ] 桌面指挥舱壳：默认总览、状态条三段可点、⌘1–⌘6、辅助功能提示条外壳级、麦克风浮层全局
 - [ ] 手机两页壳：默认宠物、顶栏 gear/连接/chat 可点、无底部 tab、会话卡折叠展开、二级页返回层级正确、录音中禁切页、结果卡三段
 - [ ] 状态语言两端同词（连接 7 / AI 4 / 麦克风 9），琥珀只给「等你决定」，会话工作行显示 D78 工具动作
 - [ ] 双向聊天与现状一致，气泡方向正确

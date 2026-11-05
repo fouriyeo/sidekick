@@ -37,6 +37,12 @@ mod mic_protocol;
 #[cfg(mobile)]
 mod mobile_client;
 #[cfg(desktop)]
+mod tls;
+#[cfg(desktop)]
+mod token_pricing;
+#[cfg(desktop)]
+mod token_usage;
+#[cfg(desktop)]
 mod transcript;
 
 #[cfg(desktop)]
@@ -71,12 +77,20 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
+            // ASR 与模型价格抓取共用 ring CryptoProvider，必须在任何 TLS 握手前安装。
+            tls::ensure_crypto_provider();
 
             let asr_cloud = std::sync::Arc::new(asr_cloud::AsrCloudState::new());
             app.manage(asr_cloud.clone());
 
             let usage = std::sync::Arc::new(asr_usage::UsageStore::new());
             app.manage(usage.clone());
+
+            // Token 用量看板：价格表 + 本机账本聚合（只读，不写 DSH）。
+            let pricing = std::sync::Arc::new(token_pricing::PricingStore::new());
+            app.manage(pricing.clone());
+            let token_usage = std::sync::Arc::new(token_usage::TokenUsageStore::new(pricing));
+            app.manage(token_usage.clone());
 
             let clipboard =
                 std::sync::Arc::new(clipboard_manager::ClipboardManager::new(handle.clone()));
@@ -88,7 +102,13 @@ pub fn run() {
             app.manage(hook.clone());
             hook.start();
 
-            tauri::async_runtime::spawn(desktop_server::start(clipboard, hook, asr_cloud, usage));
+            tauri::async_runtime::spawn(desktop_server::start(
+                clipboard,
+                hook,
+                asr_cloud,
+                usage,
+                token_usage,
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -104,6 +124,11 @@ pub fn run() {
             asr_cloud::asr_cloud_clear,
             asr_usage::asr_usage_stats,
             asr_usage::asr_usage_clear,
+            token_usage::token_usage_stats,
+            token_pricing::token_pricing_status,
+            token_pricing::token_pricing_refresh,
+            token_pricing::token_pricing_set_auto,
+            token_pricing::token_pricing_set_mobile_models,
             clipboard_manager::clipboard_list,
             clipboard_manager::clipboard_status,
             clipboard_manager::clipboard_copy,
@@ -143,6 +168,7 @@ pub fn run() {
             mobile_client::mic_frame,
             mobile_client::mic_stop,
             mobile_client::send_status_request,
+            mobile_client::send_usage_request,
             mobile_client::send_focus_request,
             mobile_client::send_key_request
         ]);

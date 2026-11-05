@@ -6,10 +6,21 @@ import { micBusyNow } from "@/mobile/features/mic/mic-store";
  *
  * - 只有 `pet` 是根页面；没有底部三档；
  * - `settings` 从左上 gear 进入，`chat` 从右上 chat 进入，都是二级全屏页；
+ * - `usage` 从设置页「用量」进入，返回回设置（D82）；
  * - `asking` / `offline` 也是二级页，返回时按层级回 pet / 上一页；
  * - `offline` 记录打开它的视图，返回时回到原页面（「连接」是多入口的排障页）。
  */
-export type MobileView = "pet" | "settings" | "chat" | "asking" | "offline";
+export type MobileView = "pet" | "settings" | "chat" | "usage" | "asking" | "offline";
+
+/** 浏览器开发时可用 ?view=usage 直接打开二级页；生产恒为宠物根页。 */
+function initialView(): MobileView {
+  if (!import.meta.env.DEV || typeof window === "undefined") return "pet";
+  const requested = new URLSearchParams(window.location.search).get("view");
+  if (requested === "usage" || requested === "settings" || requested === "chat") {
+    return requested;
+  }
+  return "pet";
+}
 
 /** 可以打开连接页、且需要被记住的上一级视图。 */
 type OfflineReturnView = Exclude<MobileView, "offline">;
@@ -29,7 +40,7 @@ type UiState = {
 };
 
 export const useUiStore = create<UiState>((set, get) => ({
-  view: "pet",
+  view: initialView(),
   scanOpen: false,
   offlineReturnView: "pet",
 

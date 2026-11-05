@@ -8,11 +8,11 @@ type IconRailProps = {
 
 /**
  * 极窄导航（72）：图标 19 + 文字 9.5；选中 = wash 底 + 1px signal 边 + 左侧 2px 指示条。
- * 一级只有 5 项，设置与上面 4 项用分隔线分开。
+ * 一级 6 项（D82），设置与上面 5 项用分隔线分开。
  */
 export function IconRail({ view, onSelect }: IconRailProps) {
-  const primary = DESKTOP_NAV.slice(0, 4);
-  const settings = DESKTOP_NAV[4];
+  const primary = DESKTOP_NAV.slice(0, 5);
+  const settings = DESKTOP_NAV[5];
 
   return (
     <nav

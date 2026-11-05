@@ -14,6 +14,7 @@ children:
   - pet-runtime.md
   - quality.md
   - lan-discovery.md
+  - token-usage-pricing.md
 ---
 
 # 工程方案分支
@@ -31,6 +32,7 @@ children:
 | 桌面剪贴板历史与隐私过滤 | [clipboard-manager.md](./clipboard-manager.md) | M |
 | 做自动发现、端口冲突、桌面二维码 | [lan-discovery.md](./lan-discovery.md) | M |
 | 做 AI 联动：DSH 脚本注入、Rust 桥、四态协议 | [dsh-hook.md](./dsh-hook.md) | M |
+| 做 Token 用量看板、读 DSH 账本、模型价格与估算 | [token-usage-pricing.md](./token-usage-pricing.md) | M |
 | 做宠物：帧动画图集、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
 | 写测试、真机验收、发版 | [quality.md](./quality.md) | M |
 
@@ -39,6 +41,7 @@ children:
 - 麦克风（百炼云端唯一）已实现（二进制音频协议、云端流式、`mic.partial`、Keychain、失败直接报错）；模型页 + 用量统计已实现；真实账号/Keychain/真机/金额对账待验收；剪贴板 P1 辅助能力已实现。
 - 宠物 P0 代码已完成；局域网自动发现与动态端口已实现。
 - AI 联动（DSH）开发中：本地脚本注入 + 回环桥 + status 协议 + 手机四态/三音效；见 [dsh-hook.md](./dsh-hook.md)。
+- Token 用量看板（2026-11-06）：只读 DSH cost-meter 账本 + OpenRouter/DeepSeek 价格表 + 缺价估算；见 [token-usage-pricing.md](./token-usage-pricing.md)（D82–D84）。
 - 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
 - 云端识别：[asr-cloud-bailian.md](./asr-cloud-bailian.md)（桌面中转、Keychain、50ms partial、失败不降级）；模型页/用量见 [asr-model.md](./asr-model.md)。
 - 现有架构事实：[architecture.md](../architecture.md)、[frontend-architecture.md](../frontend-architecture.md)。

@@ -7,7 +7,6 @@
 //! 最终文本由 desktop_server 交给 desktop_mic 统一落字，保证“只插入一次”。
 
 use std::collections::BTreeMap;
-use std::sync::Once;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
@@ -426,20 +425,10 @@ fn finish_task_payload(task_id: &str) -> Value {
     })
 }
 
-static CRYPTO_PROVIDER: Once = Once::new();
-
 /// rustls 0.23 不再自动选择 CryptoProvider，必须在第一次 TLS 握手前显式安装。
-/// 此前 `reqwest` 通过 feature 合并提供了 provider；移除 `reqwest` 后必须由这里保证，
-/// 否则云端任务会在 TLS 建连时 panic，最终被误报成 `cloud_network`。
+/// 实际安装收敛到 `crate::tls`，与模型价格抓取共用 ring provider。
 pub fn ensure_crypto_provider() {
-    CRYPTO_PROVIDER.call_once(|| {
-        if rustls::crypto::ring::default_provider()
-            .install_default()
-            .is_err()
-        {
-            eprintln!("[asr-cloud] rustls CryptoProvider 已安装，跳过 ring provider");
-        }
-    });
+    crate::tls::ensure_crypto_provider();
 }
 
 async fn connect(config: &CloudSessionConfig) -> Result<Socket, CloudError> {

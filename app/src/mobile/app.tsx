@@ -12,6 +12,8 @@ import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { MorePage } from "@/mobile/features/settings/more-page";
+import { UsagePage } from "@/mobile/features/usage/usage-page";
+import { useMobileUsageStore } from "@/mobile/features/usage/usage-store";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import {
@@ -20,6 +22,7 @@ import {
   parseMessage,
   parseMicMessage,
   parseStatusMessage,
+  parseUsageMessage,
 } from "@/protocol/messages";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import {
@@ -101,7 +104,7 @@ export function MobileApp() {
   }, []);
 
   // App 启动时注册唯一的返回键监听；页面内弹层/确认态先由返回栈消费。
-  // 返回层级：scan → 上一页；settings/chat/asking → pet；offline → 上一页；
+  // 返回层级：scan → 上一页；settings/chat/usage/asking → pet 或设置；offline → 上一页；
   // 根页面 pet 走「再按一次退出」。
   const onSystemBack = useCallback(() => {
     if (micBusyNow()) return;
@@ -124,6 +127,9 @@ export function MobileApp() {
         case "chat":
         case "asking":
           ui.setView("pet");
+          break;
+        case "usage":
+          ui.setView("settings");
           break;
         case "offline":
           ui.closeOffline();
@@ -193,6 +199,9 @@ export function MobileApp() {
       connection.resumeRetry();
       // 回前台补一次状态快照；过期的 completed 会被 ai-status 的时钟检查忽略。
       requestStatusIfConnected();
+      if (useUiStore.getState().view === "usage") {
+        useMobileUsageStore.getState().request();
+      }
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -211,6 +220,13 @@ export function MobileApp() {
       const keyResult = parseKeyResult(raw);
       if (keyResult) {
         useMicStore.getState().handleKeyResult(keyResult);
+        return;
+      }
+
+      // 用量快照只驱动「设置 › 用量」，不进入聊天记录。
+      const usage = parseUsageMessage(raw);
+      if (usage) {
+        useMobileUsageStore.getState().apply(usage.data);
         return;
       }
 
@@ -248,6 +264,10 @@ export function MobileApp() {
       setOnline(event.online);
       if (event.online) {
         requestStatusIfConnected();
+        // 用量页打开时补拉一次；其它页面不主动请求，避免无谓广播。
+        if (useUiStore.getState().view === "usage") {
+          useMobileUsageStore.getState().request();
+        }
       }
       // 断连时保留最后一次会话快照（会话卡继续显示最后状态），不清空列表。
     });
@@ -262,6 +282,7 @@ export function MobileApp() {
     <>
       {view === "pet" && <PetPage />}
       {view === "settings" && <MorePage />}
+      {view === "usage" && <UsagePage />}
       {view === "chat" && <ChatPage />}
       {view === "asking" && <AskingPage />}
       {view === "offline" && <OfflinePage />}

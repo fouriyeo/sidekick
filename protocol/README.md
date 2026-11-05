@@ -2,7 +2,7 @@
 
 当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
 
-服务端把 `chat` / `system` / `status` / `mic.*` / `key.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；`focus.request` 由桌面处理并回 `focus.result`；`key.request` 由桌面校验后合成按键并回 `key.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
+服务端把 `chat` / `system` / `status` / `usage` / `mic.*` / `key.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；`focus.request` 由桌面处理并回 `focus.result`；`key.request` 由桌面校验后合成按键并回 `key.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
 ## 连接
 
@@ -95,6 +95,62 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 ```json
 { "type": "status.request" }
 ```
+
+### usage.request / usage
+
+手机用量页请求一份 Token 用量快照（桌面 → 手机）。桌面只读本机 DSH cost-meter 账本后广播聚合结果；不含提示词、回复、工具参数、文件路径、cwd。模型 ID 是否下发受「在手机显示模型分组」开关控制（D83）。
+
+```json
+{ "type": "usage.request", "v": 1, "range": "7d", "ts": 1730000000000 }
+{
+  "type": "usage",
+  "v": 1,
+  "ts": 1730000000000,
+  "data": {
+    "range": "7d",
+    "generatedAt": 1730000000000,
+    "summary": {
+      "tokens": 481854387, "input": 3017736, "output": 1247899,
+      "cacheRead": 471288704, "cacheWrite": 0, "reasoning": 0,
+      "costCnyMicros": 29842039, "estimatedCostMicros": 0,
+      "costSource": "ledger", "calls": 1939, "sessions": 15,
+      "cacheHitPct": 98.15
+    },
+    "previous": { "tokens": 0, "costCnyMicros": 0, "costSource": "unknown" },
+    "days": [
+      { "date": "2026-11-05", "tokens": 481854387, "input": 3017736,
+        "output": 1247899, "cacheRead": 471288704, "cacheWrite": 0,
+        "costCnyMicros": 29842039, "calls": 1939 }
+    ],
+    "groups": {
+      "clients": [ { "key": "dsh", "label": "DeepSeek Harness", "tokens": 481854387,
+        "costCnyMicros": 29842039, "sharePct": 100, "costSource": "ledger" } ],
+      "sessions": [],
+      "models": [ { "key": "opencode-go:deepseek-v4.1-flash",
+        "label": "deepseek-v4.1-flash", "tokens": 481000000,
+        "costCnyMicros": 29800000, "sharePct": 99.8,
+        "modelId": "deepseek-v4.1-flash", "provider": "OpenCode Go",
+        "price": { "inputCnyPerM": 0.288, "outputCnyPerM": 0.067,
+          "cacheReadCnyPerM": 0.227, "cacheWriteCnyPerM": 0, "source": "seed" } } ],
+      "modelsHidden": false
+    },
+    "pricing": {
+      "source": "remote", "updatedAt": 1730000000000, "lastAttemptAt": 1730000000000,
+      "lastError": null, "stale": false, "autoRefresh": true,
+      "modelCount": 548, "fxCnyPerUsd": 6.6723, "fxSource": "ledger",
+      "mobileModels": true
+    },
+    "coverageDays": 6,
+    "ledger": { "available": true, "reason": null }
+  }
+}
+```
+
+- `range`：`today` / `7d` / `30d` / `180d`；非法值按 `7d`。
+- `summary` / `days` / `groups` 字段与桌面 `token_usage_stats` 返回结构同构；金额单位人民币微元（1 元 = 1,000,000），`costSource` 为 `ledger` / `estimated` / `mixed` / `unknown`。
+- `previous` 是上一等长周期，用于对比；`coverageDays` 是区间内实际有数据的天数。
+- 关闭「在手机显示模型分组」时 `groups.models` 为空数组、`groups.modelsHidden = true`；`status.sessionList` 仍不含模型名（D78 不变）。
+- 旧手机忽略未知类型；旧桌面不发送 `usage`，不影响聊天/麦克风/状态。
 
 ### focus.request / focus.result
 

@@ -10,6 +10,9 @@ vi.mock("@/desktop/pages/sessions-page", () => ({
 vi.mock("@/desktop/pages/content-page", () => ({
   ContentPage: () => <div>content-page</div>,
 }));
+vi.mock("@/desktop/pages/usage-page", () => ({
+  UsagePage: () => <div>usage-page</div>,
+}));
 vi.mock("@/desktop/pages/system-page", () => ({
   SystemPage: ({ section }: { section: string }) => <div>system-page:{section}</div>,
 }));
@@ -57,18 +60,18 @@ function pressShortcut(key: string) {
 }
 
 describe("DesktopApp 指挥舱外壳", () => {
-  it("默认总览，一级导航只有 5 项", () => {
+  it("默认总览，一级导航 6 项", () => {
     render(<DesktopApp />);
 
     expect(screen.getByText("overview-page")).toBeInTheDocument();
-    for (const label of ["总览", "会话", "内容", "系统", "设置"]) {
+    for (const label of ["总览", "会话", "内容", "用量", "系统", "设置"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${label}（`) })).toBeInTheDocument();
     }
     expect(screen.queryByText("sessions-page")).toBeNull();
     expect(screen.queryByText("content-page")).toBeNull();
   });
 
-  it("点击导航切换总览 / 会话 / 内容 / 系统 / 设置", () => {
+  it("点击导航切换总览 / 会话 / 内容 / 用量 / 系统 / 设置", () => {
     render(<DesktopApp />);
 
     fireEvent.click(screen.getByRole("button", { name: /^会话（/ }));
@@ -76,6 +79,9 @@ describe("DesktopApp 指挥舱外壳", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^内容（/ }));
     expect(screen.getByText("content-page")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^用量（/ }));
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^系统（/ }));
     expect(screen.getByText("system-page:connection")).toBeInTheDocument();
@@ -87,7 +93,7 @@ describe("DesktopApp 指挥舱外壳", () => {
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
-  it("⌘1–⌘5 切换一级页", () => {
+  it("⌘1–⌘6 切换一级页", () => {
     render(<DesktopApp />);
 
     pressShortcut("2");
@@ -97,9 +103,12 @@ describe("DesktopApp 指挥舱外壳", () => {
     expect(screen.getByText("content-page")).toBeInTheDocument();
 
     pressShortcut("4");
-    expect(screen.getByText("system-page:connection")).toBeInTheDocument();
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
 
     pressShortcut("5");
+    expect(screen.getByText("system-page:connection")).toBeInTheDocument();
+
+    pressShortcut("6");
     expect(screen.getByText("settings-page")).toBeInTheDocument();
 
     pressShortcut("1");

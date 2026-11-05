@@ -117,7 +117,111 @@ export type FocusResultMessage = {
   ts: number;
 };
 
-export type IncomingMessage = ChatMessage | SystemMessage | StatusMessage;
+export type UsageRange = "today" | "7d" | "30d" | "180d";
+
+export type UsageCostSource = "ledger" | "estimated" | "mixed" | "unknown";
+
+/** Token 用量快照：由桌面从本机 DSH cost-meter 账本聚合，手机只读。 */
+export type TokenUsageSummary = {
+  tokens: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  reasoning: number;
+  costCnyMicros: number;
+  estimatedCostMicros: number;
+  costSource: UsageCostSource;
+  calls: number;
+  sessions: number;
+  cacheHitPct: number | null;
+};
+
+export type TokenUsageDay = {
+  date: string;
+  tokens: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  costCnyMicros: number;
+  calls: number;
+};
+
+export type UsagePrice = {
+  inputCnyPerM: number;
+  outputCnyPerM: number;
+  cacheReadCnyPerM: number;
+  cacheWriteCnyPerM: number;
+  source: string;
+};
+
+export type UsageRow = {
+  key: string;
+  label: string;
+  sub: string | null;
+  tokens: number;
+  costCnyMicros: number;
+  estimatedCostMicros: number;
+  costSource: UsageCostSource;
+  sharePct: number;
+  calls: number | null;
+  sessions: number | null;
+  cacheHitPct: number | null;
+  modelId: string | null;
+  provider: string | null;
+  tag: string | null;
+  price: UsagePrice | null;
+};
+
+export type UsageGroups = {
+  clients: UsageRow[];
+  sessions: UsageRow[];
+  models: UsageRow[];
+  /** D83 开关关闭时为 true，models 会为空。 */
+  modelsHidden?: boolean;
+};
+
+export type PricingStatus = {
+  source: "remote" | "seed" | "override" | "mixed";
+  updatedAt: number | null;
+  lastAttemptAt: number | null;
+  lastError: string | null;
+  stale: boolean;
+  autoRefresh: boolean;
+  modelCount: number;
+  fxCnyPerUsd: number;
+  fxSource: "override" | "env" | "ledger" | "fallback";
+  mobileModels: boolean;
+};
+
+export type TokenUsageStats = {
+  range: UsageRange;
+  generatedAt: number;
+  summary: TokenUsageSummary;
+  previous: TokenUsageSummary;
+  days: TokenUsageDay[];
+  groups: UsageGroups;
+  pricing: PricingStatus;
+  coverageDays: number;
+  ledger: { available: boolean; reason: string | null };
+};
+
+export type UsageMessage = {
+  type: "usage";
+  v: 1;
+  ts: number;
+  data: TokenUsageStats;
+};
+
+export type UsageRequestMessage = {
+  type: "usage.request";
+  v: 1;
+  range: UsageRange;
+  ts?: number;
+};
+
+export type IncomingMessage = ChatMessage | SystemMessage | StatusMessage | UsageMessage;
 
 export type ServerInfo = {
   ip: string;
@@ -276,6 +380,30 @@ export type KeyResultMessage = {
   error?: string | null;
   ts: number;
 };
+
+export function isUsageRange(value: unknown): value is UsageRange {
+  return value === "today" || value === "7d" || value === "30d" || value === "180d";
+}
+
+/** 宽松解析使用快照：只认 type/v/data，data 内部字段由 UI 做防御性读取。 */
+export function isUsageMessage(value: unknown): value is UsageMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const message = value as Record<string, unknown>;
+  if (message.type !== "usage" || message.v !== 1) return false;
+  if (typeof message.ts !== "number" || !Number.isFinite(message.ts)) return false;
+  if (typeof message.data !== "object" || message.data === null) return false;
+  return true;
+}
+
+export function parseUsageMessage(raw: string): UsageMessage | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return isUsageMessage(value) ? value : null;
+}
 
 export type ParsedMessage = {
   kind: "me" | "them" | "system";

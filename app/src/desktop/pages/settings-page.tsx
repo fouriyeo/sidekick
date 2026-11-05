@@ -181,7 +181,7 @@ export function SettingsPage() {
                   </li>
                 ))}
               </ul>
-              <CardHint>在任意页面按 ⌘1–⌘5 切换一级页；输入框里不会触发。</CardHint>
+              <CardHint>在任意页面按 ⌘1–⌘6 切换一级页；输入框里不会触发。</CardHint>
             </Card>
           </div>
         </div>

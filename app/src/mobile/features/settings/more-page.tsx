@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Check, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Gauge } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
@@ -313,7 +313,7 @@ function AboutCard({
  * 更多（设置）二级页（v16）：从左上 gear 进入，左上返回 + 17/400 inline 标题。
  *
  * 结构：页头 → 首用清单 banner（点开）→ 分组卡片
- * （连接 / 外观 / 反馈 / 显示 / 数据与关于 / 消息通道）→ 隐私一句。
+ * （连接 / 外观 / 反馈 / 显示 / 用量 / 数据与关于 / 消息通道）→ 隐私一句。
  * 无底部 tab；卡片 16 圆角 + 0.5 hairline，行 48–52，全站 400 字重。
  * 保留设置保存错误、重置二次确认与返回键（先收确认/清单，再交给根页面回宠物）。
  */
@@ -541,6 +541,25 @@ export function MorePage() {
               }))}
               onChange={(minutes) => void update({ dimMinutes: minutes })}
             />
+          </section>
+
+          <section aria-label="用量" className={CARD_CLASS}>
+            <button
+              type="button"
+              className="flex min-h-[52px] w-full items-center gap-2.5 px-3.5 text-left"
+              onClick={() => setView("usage")}
+            >
+              <span className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-wash text-signal">
+                <Gauge className="size-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base leading-5 text-foreground">用量</span>
+                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                  本机 DSH 账本 · Token 与花费
+                </span>
+              </span>
+              <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+            </button>
           </section>
 
           <AboutCard

@@ -14,13 +14,14 @@ import { OverviewPage } from "@/desktop/pages/overview-page";
 import { SessionsPage } from "@/desktop/pages/sessions-page";
 import { SettingsPage } from "@/desktop/pages/settings-page";
 import { SystemPage } from "@/desktop/pages/system-page";
+import { UsagePage } from "@/desktop/pages/usage-page";
 import { GlobalStatusBar } from "@/desktop/shell/global-status-bar";
 import { IconRail } from "@/desktop/shell/icon-rail";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import { Toaster } from "@/shared/ui/sonner";
 import { useDesktopConnection } from "./use-desktop-connection";
 
-/** 输入框 / 下拉里不劫持 ⌘1–⌘5（浏览器默认的标签切换也不抢）。 */
+/** 输入框 / 下拉里不劫持 ⌘1–⌘6（浏览器默认的标签切换也不抢）。 */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -30,9 +31,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
 /**
  * 电脑端「指挥舱」外壳。
  *
- * 结构固定：左侧 72 图标导航（5 项）→ 顶部 48 全局状态条（服务/手机/AI，三段可点）
+ * 结构固定：左侧 72 图标导航（6 项）→ 顶部 48 全局状态条（服务/手机/AI，三段可点）
  * → 外壳级辅助功能提示条 → 页面（56 页头 + 内容区）。麦克风浮层与 toast 是全局层。
- * ⌘1–⌘5 切换一级页；默认总览。
+ * ⌘1–⌘6 切换一级页；默认总览。
  */
 export function DesktopApp() {
   const connection = useDesktopConnection();
@@ -84,6 +85,7 @@ export function DesktopApp() {
           {route.view === "overview" && <OverviewPage connection={connection} nav={nav} />}
           {route.view === "sessions" && <SessionsPage connection={connection} nav={nav} />}
           {route.view === "content" && <ContentPage />}
+          {route.view === "usage" && <UsagePage />}
           {route.view === "system" && (
             <SystemPage
               connection={connection}

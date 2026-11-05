@@ -684,3 +684,43 @@
 - 放弃：仅调 300 字重（发虚、仍保留 OPPO 字形）；仅缩小到 14（会伤可读性且字形仍宽）；用系统 `system-ui`/`Noto Sans CJK`（Android 实际仍落 OEM 字体，不可控）；把 PingFang 打包（Apple 字体授权不允许）。
 - 代价：APK +3.9 MB；首次渲染有极短 `font-display: swap` 替换；MiSans 缺字时回退系统字体会混排；LICENSE 需随包/文档保留。
 - 规范：`app/src/mobile/assets/fonts/MiSans-Normal.woff2`、`app/src/mobile/styles/clean.css`、`app/src/mobile/features/sessions/session-row.tsx`、`app/src/mobile/features/settings/more-page.tsx`；真机字体对比截图见 `docs/design/mobile-ui-v16/font-compare.png`。
+
+## D82 · 新增 Token 用量看板：桌面第 6 导航「用量」+ 手机「设置 › 用量」（2026-11-06）
+
+- 背景：用户希望按客户端 / 会话 / 模型查看 Token 消耗，参考 tokei 但不要菜单栏常驻。V1「声呐总览」设计稿评审通过；桌面指挥舱需要新增一个承载页，手机需要从设置进入只读页。
+- 决策：
+  - 桌面新增第 6 个一级页「用量」，顺序 总览 / 会话 / 内容 / **用量** / 系统 / 设置；⌘1–⌘3 不变，用量 ⌘4、系统 ⌘5、设置 ⌘6。D79「一级只有 5 项」的导航部分由本条取代，其余 D79 结论继续有效。
+  - 用量页只读本机 `<DSH_HOME>/storages/cost-meter/ledger.json`；区间今天 / 7 天 / 30 天 / 180 天；分组为客户端 / 会话 / 模型（卡片内 Tab，默认会话）；默认页仍为总览。
+  - 手机新增「设置 › 用量」二级页，返回回设置；录音中由 `ui-store.setView` 拦截；不新增手机一级入口或底部导航。
+  - P0 不做：菜单栏/状态栏常驻、V2 预算与 5h 额度卡、V3 时间洞察、Claude Code / Codex 解析器、多设备同步、遥测。
+- 原因：现有桌面「系统 › 语音」里的 ASR 用量只覆盖语音费用，不是 AI Token；用量需要一个稳定的一级位置，同时保持「设置管配置、用量看数据」的分工。手机是 glance 场景，放在设置二级页足够。
+- 放弃：把用量塞进总览/系统 › 语音（与 ASR 费用混淆、信息密度过载）；手机新增底部 tab（D80 已收敛为两页）；菜单栏常驻（用户明确不要）。
+- 代价：一级导航从 5 项变 6 项，⌘4/⌘5 含义变化，需要同步 shell PRD/SPEC/AC/测试与文档；手机上多一次点击。
+- 规范：`app/src/desktop/{lib/desktop-nav.ts,shell/icon-rail.tsx,app.tsx,pages/usage-page.tsx,features/usage/**}`、`app/src/mobile/{ui-store.ts,app.tsx,features/usage/**,features/settings/more-page.tsx}`、`app/src/shared/lib/{tauri.ts,usage.ts}`、`app/src/protocol/messages.ts`、`app/src-tauri/src/{token_usage.rs,token_pricing.rs,desktop_server.rs,mobile_client.rs,lib.rs}`、`protocol/README.md`、`docs/prd/{shell,usage}/**`、`docs/engineering/token-usage-pricing.md`、`docs/prd/INDEX.md`、`docs/INDEX.md`、`docs/frontend-architecture.md`、`docs/status.md`、`AGENTS.md`。
+
+## D83 · usage 快照允许模型 ID 上手机（2026-11-06，限定补充 D78）
+
+- 背景：V1 手机页要展示「模型」分组，但 D78 规定 `status.sessionList` 不读取/外发模型名。需要在「用户要看的维度」与「隐私最小化」之间重新划线。
+- 决策：
+  - 新增的 `usage` 快照允许下发**模型 ID 与接入方**（如 `deepseek-v4.1-flash` / `OpenCode Go`）以及该模型的 token、花费、缓存命中、单价来源；这些是元数据，不是提示词/回复/路径/工具参数。
+  - `status.sessionList` 的 D78 口径**保持不变**：仍不含模型名、提示词、回复、工具参数、文件路径、cwd、工具名原文。
+  - 提供「在手机显示模型分组」开关（默认开）；关闭后 `usage.groups.models=[]` 且 `modelsHidden=true`，手机隐藏模型 Tab；桌面模型分组不受影响。
+  - `usage` 不含会话正文、路径、cwd；会话标题仍按既有规则（单行 ≤80 字符）处理。
+- 原因：模型维度是用户明确要的三种分组之一；只传模型 ID 与聚合用量，风险面远小于内容类字段，且手机已有会话标题。保留开关让隐私敏感用户可收窄。
+- 放弃：手机只显示「模型 A/B/C」脱敏分组（失去可读性，无法对照价格）；把模型名塞进 `status`（会改变现有隐私承诺与旧客户端行为）。
+- 代价：多一个协议字段与开关；D78 的隐私说明需要补充「usage 例外」，测试要覆盖开/关两种手机快照。
+- 规范：`protocol/README.md`（usage 节）、`app/src/protocol/messages.ts`、`app/src-tauri/src/{token_usage.rs,desktop_server.rs,token_pricing.rs}`、`app/src/mobile/features/usage/**`、`app/src/desktop/features/usage/pricing-sheet.tsx`、`docs/prd/usage/PRD.md`、`docs/standards/ux.md`。
+
+## D84 · 模型价格表：OpenRouter 公开目录 + DeepSeek 官方峰谷 + 本地覆盖 + 缺价估算（2026-11-06，新增 `reqwest` 运行时依赖）
+
+- 背景：DSH 账本已有 `costCny` 实际记账，但用户要求「参考 tokei 有获取模型价格的能力」；且未来 Claude Code / Codex 接入后需要按价格表估算。tokei 的做法：内置 pricing.json（OpenRouter 目录）+ 本地覆盖 + 每日刷新 + 官方价核对 + 实际成本优先 + 失败保留上次 + 过期标灰。Sidekick 需要同等能力但不能把用量外发。
+- 决策：
+  - 价格来源与优先级：本地 overrides > DeepSeek 官方 CNY 峰谷（仅 `deepseek-official` 接入方）> OpenRouter 公开目录（USD/1M × FX）> 内置 seed。实际 `costCny` 永远优先于估算；缺价行不估算、显示「缺价」，估算标 `≈`。
+  - 数据文件：seed `app/src-tauri/src/pricing_seed.json`（OpenRouter 快照，`include_str!`）；缓存 `~/.sidekick/token_pricing.json`（0600，原子写）；覆盖 `~/.sidekick/token_pricing_overrides.json`（模型价 + FX，支持 `"currency":"CNY"`）。刷新失败保留上次成功，绝不写空/零价。
+  - 刷新：打开用量页且缓存 >24h 时后台刷新；手动刷新最短 60s；失败 1h 内不自动重试；stale = 超过 7 天。只 GET `https://openrouter.ai/api/v1/models`，10s 超时、响应 ≤8MB、最多 3 次重定向且最终 host 必须是 openrouter.ai，UA `Sidekick/0.1`；不携带任何用量/模型名。
+  - 依赖：新增 `reqwest`（`default-features=false`，features `json`、`gzip`、`rustls-no-provider`），rustls provider 与 ASR 共用 `crate::tls::ensure_crypto_provider()`（ring）。这是运行时依赖，按依赖治理记录。
+  - 估算：输入 / 输出 / 缓存读 / 缓存写分别按单价计；DeepSeek 官方峰时 = UTC 工作日 1–4、6–10，其余谷时；无时间戳按谷时。价格只用于对照与缺价估算，不重算历史实际成本。
+- 原因：DSH 实际成本可信，价格表的价值在于透明单价、缺价兜底与未来多客户端；用公开目录 + 本地覆盖可以在不登录、不上传数据的前提下复刻 tokei 的核心能力。
+- 放弃：抓取 OpenAI 官方页面（P1，当前无 OpenAI 账本）；把 tokei 的整个 pricing.json 直接当运行时文件（seed 需可更新且带来源元数据）；历史事件重算（DSH 已记账，收益低）；调用第三方付费价格 API。
+- 代价：包体增加 seed（约 80KB）与 reqwest 编译/体积；价格目录可能滞后或与账单有汇率差，UI 必须标「以账单为准」；多一套缓存/覆盖文件需要维护。
+- 规范：`app/src-tauri/src/token_pricing.rs`、`app/src-tauri/src/pricing_seed.json`、`app/src-tauri/src/tls.rs`、`app/src-tauri/Cargo.toml`、`scripts/update-pricing.mjs`、`app/src/desktop/features/usage/pricing-sheet.tsx`、`docs/engineering/token-usage-pricing.md`、`docs/dependency-policy.md`。
