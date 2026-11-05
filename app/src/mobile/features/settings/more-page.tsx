@@ -1,23 +1,27 @@
 import { cn } from "cn";
-import { ChevronRight, MessageCircle, RotateCcw } from "lucide-react";
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
+import { useFirstUseStore } from "@/mobile/features/first-use/store";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { PET_SOUND_LABEL, type PetSoundKind, previewPetSound } from "@/mobile/features/pet/sound";
 import type { ReduceMotionSetting } from "@/mobile/features/pet/types";
 import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
-import { MobileTabBar } from "@/mobile/shell/tab-bar";
 import { pushBackHandler } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
-import { Button } from "@/shared/ui/button";
+import { setThemePreference, type ThemePreference, useTheme } from "@/shared/lib/theme";
 import { Label } from "@/shared/ui/label";
-import { SignalBars } from "@/shared/ui/signal-bars";
-import { ThemeOptions } from "@/shared/ui/theme-options";
 import { Toggle } from "./toggle";
 
-const REDUCE_OPTIONS: Array<{ value: ReduceMotionSetting; label: string }> = [
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
+  { value: "system", label: "跟随系统" },
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" },
+];
+
+const REDUCE_OPTIONS: ReadonlyArray<{ value: ReduceMotionSetting; label: string }> = [
   { value: "system", label: "跟随系统" },
   { value: "on", label: "开启" },
   { value: "off", label: "关闭" },
@@ -31,114 +35,317 @@ const KEEP_AWAKE_HOUR_OPTIONS = [1, 2, 4, 8, 0] as const;
 
 const SOUND_PREVIEWS: PetSoundKind[] = ["work-start", "ask", "complete"];
 
-/** 设置页分段选项：选中 = 薄荷水膜 + 1px 信号边，不用实色块。 */
-function optionClass(active: boolean): string {
-  return cn(
-    "h-11 min-w-0 rounded-[10px] border px-1 text-xs",
-    active
-      ? "border-signal bg-wash text-foreground"
-      : "border-border bg-transparent text-muted-foreground hover:bg-wash hover:text-foreground",
-  );
+/** 首用清单共 4 步；手机本地只验证前两步。 */
+const FIRST_USE_TOTAL = 4;
+
+/** 分组卡片：白底、16 圆角、0.5 hairline、无投影、无 1px 描边。 */
+const CARD_CLASS = "overflow-hidden rounded-2xl border-[0.5px] border-border bg-card";
+
+/** 卡片内分隔线：0.5 hairline，左侧留 14 与文字对齐。 */
+function Hairline() {
+  return <div aria-hidden="true" className="ml-3.5 h-[0.5px] bg-border" />;
 }
 
-/** 设置卡片：mono 章节号 + 中文标题，14px 圆角、1px 描边、无投影。 */
-function Section({
-  index,
-  title,
-  children,
+type Option<T extends string | number> = { value: T; label: string };
+
+/** 分段选择：13/400，选中是白卡片薄片；每段触控 ≥44。 */
+function Segmented<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
   className,
 }: {
-  index: string;
-  title: string;
-  children: ReactNode;
+  label: string;
+  value: T;
+  options: ReadonlyArray<Option<T>>;
+  onChange: (value: T) => void;
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-[14px] border border-border bg-card p-3.5", className)}>
-      <div className="flex items-baseline gap-2">
-        <span
-          aria-hidden="true"
-          className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground"
-        >
-          {index}
-        </span>
-        <h2 className="text-sm font-semibold">{title}</h2>
+    <fieldset
+      aria-label={label}
+      className={cn(
+        "m-0 grid shrink-0 grid-cols-3 gap-0.5 rounded-[10px] bg-muted p-0.5",
+        className,
+      )}
+    >
+      <legend className="sr-only">{label}</legend>
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            aria-pressed={active}
+            className={cn(
+              "flex min-h-11 min-w-0 items-center justify-center rounded-[8px] px-0 text-[13px] leading-[15px] font-normal whitespace-nowrap transition-colors",
+              active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
+            )}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+/** 多选一区块：标题 16/400 + 可选一句 13/400 + 三列分段（选项多时换行）。 */
+function ChoiceBlock<T extends string | number>({
+  title,
+  description,
+  value,
+  options,
+  onChange,
+}: {
+  title: string;
+  description?: string;
+  value: T;
+  options: ReadonlyArray<Option<T>>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="px-3.5 py-2.5">
+      <p className="m-0 text-base leading-5 text-foreground">{title}</p>
+      {description && (
+        <p className="mt-0.5 text-[13px] leading-[17px] text-muted-foreground">{description}</p>
+      )}
+      <div className="mt-2">
+        <Segmented label={title} value={value} options={options} onChange={onChange} />
       </div>
-      {children}
+    </div>
+  );
+}
+
+/** 首用清单 banner：默认一行「首用清单 · 还差 N 步」，点开才占空间。 */
+function FirstUseBanner({
+  expanded,
+  onExpandedChange,
+}: {
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}) {
+  const hydrated = useFirstUseStore((state) => state.hydrated);
+  const micReady = useFirstUseStore((state) => state.micReady);
+  const dismissed = useFirstUseStore((state) => state.dismissed);
+  const hydrate = useFirstUseStore((state) => state.hydrate);
+  const connected = useConnectionStore((state) => state.status === "connected");
+  const openOffline = useUiStore((state) => state.openOffline);
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  if (!hydrated || dismissed) return null;
+
+  const done = (connected ? 1 : 0) + (micReady ? 1 : 0);
+  const remaining = FIRST_USE_TOTAL - done;
+
+  // 内容即原 FirstUseCard 的四步（D79 / v16：从宠物首屏移到设置页 banner）；
+  // 手机只本地验证「连接 + 麦克风」，后两步明确写「在电脑上完成」，不伪造完成态。
+  const steps = [
+    {
+      key: "connect",
+      title: "连接电脑",
+      done: connected,
+      current: !connected,
+      desktop: false,
+      description: connected
+        ? "局域网直连；断线后会自动重连。"
+        : "手机和电脑连同一个 Wi-Fi，电脑端 Sidekick 保持打开。",
+    },
+    {
+      key: "mic",
+      title: "允许麦克风权限",
+      done: micReady,
+      current: connected && !micReady,
+      desktop: false,
+      description: micReady
+        ? "录音已经成功启动过一次；App 只在按住时录音。"
+        : "按住下方麦克风说话时会请求权限；不开启时按住说话会直接失败。",
+    },
+    {
+      key: "bailian",
+      title: "在电脑上配置百炼语音",
+      done: false,
+      current: false,
+      desktop: true,
+      description: "不配置时录音能开始，但一定转写失败；音频只发往电脑配置的百炼。",
+    },
+    {
+      key: "accessibility",
+      title: "在电脑上开启辅助功能",
+      done: false,
+      current: false,
+      desktop: true,
+      description: "不开只会复制到剪贴板，没有「回车 / 清空」，也不会自动输入。",
+    },
+  ] as const;
+
+  return (
+    <section aria-label="首用清单" className="mx-4 mt-3">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-label={`首用清单，已完成 ${done}/4，点按${expanded ? "收起" : "展开"}`}
+        className="flex min-h-11 w-full items-center justify-between gap-2 text-left"
+        onClick={() => onExpandedChange(!expanded)}
+      >
+        <span className="min-w-0 truncate text-[13px] leading-[18px] text-muted-foreground">
+          <span className="text-foreground">首用清单</span> · 还差 {remaining} 步
+        </span>
+        {expanded ? (
+          <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+        ) : (
+          <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 rounded-2xl border-[0.5px] border-border bg-card p-3.5">
+          <ul className="m-0 list-none p-0">
+            {steps.map((step, index) => (
+              <li
+                key={step.key}
+                className="flex gap-2.5 border-t-[0.5px] border-border py-2.5 first:border-t-0 first:pt-0"
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] leading-none text-muted-foreground",
+                    step.done && "border-success text-success",
+                    step.current && !step.done && "border-decide text-decide",
+                  )}
+                >
+                  {step.done ? <Check className="size-3" /> : index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[15px] leading-5 text-foreground">{step.title}</span>
+                    {step.done && <span className="text-[12px] text-success">已完成</span>}
+                    {step.current && <span className="text-[12px] text-decide">当前步骤</span>}
+                    {step.desktop && (
+                      <span className="text-[12px] text-muted-foreground">在电脑上完成</span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[13px] leading-[18px] text-muted-foreground">
+                    {step.description}
+                  </p>
+                  {step.key === "connect" && !connected && (
+                    <button
+                      type="button"
+                      className="mt-1 flex min-h-11 items-center text-[15px] text-primary"
+                      onClick={openOffline}
+                    >
+                      去连接
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
 
-/** 设置行：标题 + 副行 + 右侧控件；整行 ≥44。 */
-function SettingRow({
-  title,
-  description,
-  htmlFor,
-  children,
+/** 数据与关于卡片：本机说明、版本、重置宠物（二次确认）。 */
+function AboutCard({
+  resetConfirm,
+  onResetConfirmChange,
+  onReset,
 }: {
-  title: string;
-  description: string;
-  htmlFor?: string;
-  children: ReactNode;
+  resetConfirm: boolean;
+  onResetConfirmChange: (confirm: boolean) => void;
+  onReset: () => Promise<void>;
 }) {
   return (
-    <div className="mt-1 flex min-h-12 items-center justify-between gap-3 border-t border-border pt-1.5 first:border-t-0 first:pt-0">
-      <div className="min-w-0">
-        <Label htmlFor={htmlFor} className="text-sm">
-          {title}
-        </Label>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
-      </div>
-      <div className="shrink-0">{children}</div>
-    </div>
-  );
-}
-
-function ChoiceRow({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="mt-2 border-t border-border pt-2">
-      <p className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-        {title}
+    <section aria-label="数据与关于" className={CARD_CLASS}>
+      <p className="px-3.5 pt-3 text-[13px] leading-[18px] text-muted-foreground">
+        宠物数据只存在本机，无账号、无云同步，卸载会丢失。
       </p>
-      <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
-      <div className="mt-2 grid grid-cols-3 gap-1.5">{children}</div>
-    </div>
+      <p className="px-3.5 pt-1 pb-3 text-[13px] leading-[18px] text-muted-foreground">
+        版本 · Sidekick 0.1.0 · Android
+        <br />
+        字体 · MiSans（小米，免费商用）
+      </p>
+      <Hairline />
+      {resetConfirm ? (
+        <div className="px-3.5 py-2.5">
+          <p className="m-0 text-base leading-5 text-foreground">要重置宠物吗？</p>
+          <p className="mt-1 text-[13px] leading-[18px] text-muted-foreground">
+            外观、反馈与显示设置都会恢复默认；本机存档会被清空，且不能恢复。连接与语音配置不受影响。
+          </p>
+          <div className="mt-1 flex justify-end">
+            <button
+              type="button"
+              className="flex min-h-11 items-center px-2 text-[15px] leading-5 text-muted-foreground"
+              onClick={() => onResetConfirmChange(false)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="flex min-h-11 items-center px-2 text-[15px] leading-5 text-destructive"
+              onClick={() => void onReset()}
+            >
+              重置
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="flex min-h-12 w-full items-center px-3.5 text-left text-base leading-5 text-destructive"
+          onClick={() => onResetConfirmChange(true)}
+        >
+          重置宠物
+        </button>
+      )}
+    </section>
   );
 }
 
 /**
- * 更多（设置）页：底部第三档，整页非弹层。
+ * 更多（设置）二级页（v16）：从左上 gear 进入，左上返回 + 17/400 inline 标题。
  *
- * 分组顺序参照方向 A：连接 / 外观 / 反馈 / 显示 / 数据与关于（重置在这里）/ 消息通道。
- * 不再有宠物名字；所有可点控件 ≥44dp；断线沿连接页排障。
+ * 结构：页头 → 首用清单 banner（点开）→ 分组卡片
+ * （连接 / 外观 / 反馈 / 显示 / 数据与关于 / 消息通道）→ 隐私一句。
+ * 无底部 tab；卡片 16 圆角 + 0.5 hairline，行 48–52，全站 400 字重。
+ * 保留设置保存错误、重置二次确认与返回键（先收确认/清单，再交给根页面回宠物）。
  */
 export function MorePage() {
   const pet = usePetStore((state) => state.pet);
   const updateSettings = usePetStore((state) => state.updateSettings);
   const resetPet = usePetStore((state) => state.resetPet);
+  const { preference } = useTheme();
   const connection = useConnectionView();
   const openOffline = useUiStore((state) => state.openOffline);
   const setView = useUiStore((state) => state.setView);
 
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [firstUseOpen, setFirstUseOpen] = useState(false);
 
-  // 重置确认展开时先消费返回键收起确认，再交给根页面（返回宠物）。
+  // 返回键先收起重置确认 / 首用清单，再交给根页面（返回宠物）。
   const resetConfirmRef = useRef(resetConfirm);
   resetConfirmRef.current = resetConfirm;
+  const firstUseOpenRef = useRef(firstUseOpen);
+  firstUseOpenRef.current = firstUseOpen;
   useEffect(() => {
     return pushBackHandler(() => {
-      if (!resetConfirmRef.current) return false;
-      setResetConfirm(false);
-      return true;
+      if (resetConfirmRef.current) {
+        setResetConfirm(false);
+        return true;
+      }
+      if (firstUseOpenRef.current) {
+        setFirstUseOpen(false);
+        return true;
+      }
+      return false;
     });
   }, []);
 
@@ -157,227 +364,212 @@ export function MorePage() {
 
   return (
     <MobilePage aria-label="更多">
-      <PageHeader title="更多" sub="设置 · 只影响这台手机" />
+      <PageHeader
+        title="更多"
+        sub="设置 · 只影响这台手机"
+        onBack={() => setView("pet")}
+        backLabel="返回宠物"
+      />
 
-      <PageScroll className="pb-[calc(env(safe-area-inset-bottom)+80px)]">
+      <PageScroll className="px-0 pt-0 pb-[calc(env(safe-area-inset-bottom)+24px)]">
         {settingsError && (
           <p
             role="alert"
-            className="mb-2 rounded-[12px] border border-destructive bg-card px-3 py-2 text-sm text-destructive"
+            className="mx-4 mt-3 rounded-2xl border-[0.5px] border-destructive bg-card px-3.5 py-2.5 text-[13px] leading-[18px] text-destructive"
           >
             {settingsError}
           </p>
         )}
 
-        <Section index="01" title="连接">
-          <button
-            type="button"
-            aria-label={`连接状态：${connection.label}，点按查看连接`}
-            className="mt-1.5 flex min-h-12 w-full items-center gap-2 border-t border-border pt-1.5 text-left first:border-t-0 first:pt-0"
-            onClick={openOffline}
-          >
-            <SignalBars level={connection.level} tone={connection.tone} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground">
-                {connection.label}
-                {connection.detail ? ` · ${connection.detail}` : ""}
-              </span>
-              <span className="mt-0.5 block truncate font-mono text-[10.5px] text-muted-foreground">
-                局域网直连 · 断线自动重连
-              </span>
-            </span>
-            <span className="flex shrink-0 items-center gap-0.5 font-mono text-[10px] text-muted-foreground">
-              查看连接
-              <ChevronRight aria-hidden="true" className="size-3.5" />
-            </span>
-          </button>
-        </Section>
+        <FirstUseBanner expanded={firstUseOpen} onExpandedChange={setFirstUseOpen} />
 
-        <Section index="02" title="外观" className="mt-2.5">
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            平台默认跟随系统（D76）；宠物舞台一起跟随，浅色是海玻璃。
-          </p>
-          <ThemeOptions className="mt-2 [&_button]:h-11" />
-        </Section>
-
-        <Section index="03" title="反馈" className="mt-2.5">
-          <SettingRow
-            title="震动"
-            description="录音、反问与完成时轻震，跟随系统触感"
-            htmlFor="pet-haptics"
-          >
-            <Toggle
-              id="pet-haptics"
-              label="震动"
-              checked={pet.settings.haptics}
-              onCheckedChange={(checked) => void update({ haptics: checked })}
-            />
-          </SettingRow>
-          <SettingRow title="AI 音效" description="只在手机前台、未录音时播放" htmlFor="pet-sound">
-            <Toggle
-              id="pet-sound"
-              label="AI 音效"
-              checked={pet.settings.sound}
-              onCheckedChange={(checked) => void update({ sound: checked })}
-            />
-          </SettingRow>
-          <ChoiceRow title="试听 · SOUND" description="点按播放一次提示音">
-            {SOUND_PREVIEWS.map((kind) => (
-              <Button
-                key={kind}
-                type="button"
-                variant="outline"
-                className={optionClass(false)}
-                onClick={() => previewPetSound(kind)}
-              >
-                {PET_SOUND_LABEL[kind]}
-              </Button>
-            ))}
-          </ChoiceRow>
-          <ChoiceRow title="减少动效 · MOTION" description="平台开启后冻结宠物呼吸与循环动画">
-            {REDUCE_OPTIONS.map((option) => (
-              <Button
-                key={option.value}
-                type="button"
-                variant="outline"
-                className={optionClass(pet.settings.reduceMotion === option.value)}
-                aria-pressed={pet.settings.reduceMotion === option.value}
-                onClick={() => void update({ reduceMotion: option.value })}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </ChoiceRow>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            只在宠物页前台播放；录音时不响；系统静音/勿扰可能无法完全遵守。
-          </p>
-        </Section>
-
-        <Section index="04" title="显示" className="mt-2.5">
-          <SettingRow
-            title="屏幕常亮"
-            description="放在桌边时不自动熄屏，会更耗电"
-            htmlFor="pet-keep-awake"
-          >
-            <Toggle
-              id="pet-keep-awake"
-              label="屏幕常亮"
-              checked={pet.settings.keepAwake}
-              onCheckedChange={(checked) => void update({ keepAwake: checked })}
-            />
-          </SettingRow>
-          {pet.settings.keepAwake && (
-            <ChoiceRow
-              title="最长常亮 · KEEP AWAKE"
-              description="到点交给系统自动熄屏；回到宠物页重新计时"
-            >
-              {KEEP_AWAKE_HOUR_OPTIONS.map((hours) => (
-                <Button
-                  key={hours}
-                  type="button"
-                  variant="outline"
-                  className={optionClass(pet.settings.keepAwakeHours === hours)}
-                  aria-pressed={pet.settings.keepAwakeHours === hours}
-                  onClick={() => void update({ keepAwakeHours: hours })}
-                >
-                  {hours === 0 ? "不限" : `${hours} 小时`}
-                </Button>
-              ))}
-            </ChoiceRow>
-          )}
-          <ChoiceRow
-            title="无操作自动变暗 · DIM"
-            description="轻点屏幕恢复；只在宠物页生效，录音时不触发"
-          >
-            {DIM_OPTIONS.map((minutes) => (
-              <Button
-                key={minutes}
-                type="button"
-                variant="outline"
-                className={optionClass(pet.settings.dimMinutes === minutes)}
-                aria-pressed={pet.settings.dimMinutes === minutes}
-                onClick={() => void update({ dimMinutes: minutes })}
-              >
-                {minutes} 分钟
-              </Button>
-            ))}
-          </ChoiceRow>
-        </Section>
-
-        <Section index="05" title="数据与关于" className="mt-2.5">
-          <p className="mt-1.5 border-t border-border pt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            宠物数据只存在本机，无账号、无云同步，卸载会丢失。
-          </p>
-          <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">
-            版本 · Sidekick 0.1.0 · Android
-          </p>
-
-          {resetConfirm ? (
-            <div className="mt-2.5 border-t border-border pt-2">
-              <p className="text-sm font-medium text-foreground">要重置宠物吗？</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                外观、反馈与显示设置都会恢复默认；本机存档会被清空，且不能恢复。连接与语音配置不受影响。
-              </p>
-              <div className="mt-2 flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-11 hover:bg-wash"
-                  onClick={() => setResetConfirm(false)}
-                >
-                  取消
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="h-11"
-                  onClick={() => void confirmReset()}
-                >
-                  重置
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
+        <div className="mx-4 mt-3.5 flex flex-col gap-3.5">
+          <section aria-label="连接" className={CARD_CLASS}>
+            <button
               type="button"
-              variant="outline"
-              className="mt-2.5 h-11 w-full rounded-[12px] border-destructive text-destructive hover:bg-transparent hover:text-destructive"
-              onClick={() => setResetConfirm(true)}
+              aria-label={`连接状态：${connection.label}，点按查看连接`}
+              className="flex min-h-[52px] w-full items-center gap-2.5 px-3.5 text-left"
+              onClick={openOffline}
             >
-              <RotateCcw className="size-4" />
-              重置宠物
-            </Button>
-          )}
-        </Section>
-
-        <Section index="06" title="消息通道" className="mt-2.5">
-          <button
-            type="button"
-            className="mt-1.5 flex min-h-12 w-full items-center gap-2 border-t border-border pt-1.5 text-left"
-            onClick={() => setView("chat")}
-          >
-            <span
-              aria-hidden="true"
-              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border text-signal"
-            >
-              <MessageCircle className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-foreground">消息通道</span>
-              <span className="mt-0.5 block truncate font-mono text-[10.5px] text-muted-foreground">
-                和电脑互发的调试通道
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base leading-5 text-foreground">
+                  {connection.label}
+                  {connection.detail ? ` · ${connection.detail}` : ""}
+                </span>
+                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                  局域网直连 · 断线自动重连
+                </span>
               </span>
-            </span>
-            <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-          </button>
-          <p className="mt-2 border-t border-border pt-2 text-[11px] leading-relaxed text-muted-foreground">
-            手机端只做三件事：显示 AI
-            状态与会话标题、按住说话、和电脑互发消息。录音只在按住时采集，音频发往电脑配置的百炼，不保存；没有账号，也不上传其他数据。
-          </p>
-        </Section>
-      </PageScroll>
+              <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+            </button>
+          </section>
 
-      <MobileTabBar active="settings" />
+          <section aria-label="外观" className={CARD_CLASS}>
+            <div className="flex min-h-[52px] items-center gap-2.5 px-3.5">
+              <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+                外观
+              </span>
+              <Segmented
+                label="外观"
+                value={preference}
+                options={THEME_OPTIONS}
+                onChange={setThemePreference}
+                className="w-[180px]"
+              />
+            </div>
+          </section>
+
+          <section aria-label="反馈" className={CARD_CLASS}>
+            <div className="flex min-h-12 items-center gap-2.5 px-3.5">
+              <Label
+                htmlFor="pet-haptics"
+                className="min-w-0 flex-1 text-base leading-5 font-normal text-foreground"
+              >
+                震动
+              </Label>
+              <Toggle
+                id="pet-haptics"
+                label="震动"
+                checked={pet.settings.haptics}
+                onCheckedChange={(checked) => void update({ haptics: checked })}
+              />
+            </div>
+            <Hairline />
+            <div className="flex min-h-12 items-center gap-2.5 px-3.5">
+              <Label
+                htmlFor="pet-sound"
+                className="min-w-0 flex-1 text-base leading-5 font-normal text-foreground"
+              >
+                AI 音效
+              </Label>
+              <Toggle
+                id="pet-sound"
+                label="AI 音效"
+                checked={pet.settings.sound}
+                onCheckedChange={(checked) => void update({ sound: checked })}
+              />
+            </div>
+            <Hairline />
+            <div className="flex min-h-12 items-center gap-2.5 px-3.5">
+              <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+                试听
+              </span>
+              <span className="flex shrink-0 items-center gap-1">
+                {SOUND_PREVIEWS.map((kind, index) => (
+                  <Fragment key={kind}>
+                    {index > 0 && (
+                      <span
+                        aria-hidden="true"
+                        className="text-[13px] leading-[15px] text-muted-foreground"
+                      >
+                        ·
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="flex min-h-11 items-center px-0.5 text-[15px] leading-5 text-primary"
+                      onClick={() => previewPetSound(kind)}
+                    >
+                      {PET_SOUND_LABEL[kind]}
+                    </button>
+                  </Fragment>
+                ))}
+              </span>
+            </div>
+            <Hairline />
+            <div className="flex min-h-[52px] items-center gap-2.5 px-3.5">
+              <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+                减少动效
+              </span>
+              <Segmented
+                label="减少动效"
+                value={pet.settings.reduceMotion}
+                options={REDUCE_OPTIONS}
+                onChange={(value) => void update({ reduceMotion: value })}
+                className="w-[180px]"
+              />
+            </div>
+          </section>
+
+          <p className="mx-4 text-[13px] leading-[18px] text-muted-foreground">
+            录音时不响 · 系统静音或勿扰下可能无法完全遵守。
+          </p>
+
+          <section aria-label="显示" className={CARD_CLASS}>
+            <div className="flex min-h-[52px] items-center gap-2.5 px-3.5">
+              <span className="min-w-0 flex-1">
+                <Label
+                  htmlFor="pet-keep-awake"
+                  className="block text-base leading-5 font-normal text-foreground"
+                >
+                  屏幕常亮
+                </Label>
+                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                  放在桌边时不自动熄屏，会更耗电
+                </span>
+              </span>
+              <Toggle
+                id="pet-keep-awake"
+                label="屏幕常亮"
+                checked={pet.settings.keepAwake}
+                onCheckedChange={(checked) => void update({ keepAwake: checked })}
+              />
+            </div>
+            {pet.settings.keepAwake && (
+              <>
+                <Hairline />
+                <ChoiceBlock
+                  title="最长常亮"
+                  description="到点交给系统自动熄屏；回到宠物页重新计时"
+                  value={pet.settings.keepAwakeHours}
+                  options={KEEP_AWAKE_HOUR_OPTIONS.map((hours) => ({
+                    value: hours,
+                    label: hours === 0 ? "不限" : `${hours} 小时`,
+                  }))}
+                  onChange={(hours) => void update({ keepAwakeHours: hours })}
+                />
+              </>
+            )}
+            <Hairline />
+            <ChoiceBlock
+              title="无操作自动变暗"
+              description="只在宠物页生效，录音时不触发"
+              value={pet.settings.dimMinutes}
+              options={DIM_OPTIONS.map((minutes) => ({
+                value: minutes,
+                label: `${minutes} 分钟`,
+              }))}
+              onChange={(minutes) => void update({ dimMinutes: minutes })}
+            />
+          </section>
+
+          <AboutCard
+            resetConfirm={resetConfirm}
+            onResetConfirmChange={setResetConfirm}
+            onReset={confirmReset}
+          />
+
+          <section aria-label="消息通道" className={CARD_CLASS}>
+            <button
+              type="button"
+              className="flex min-h-[52px] w-full items-center gap-2.5 px-3.5 text-left"
+              onClick={() => setView("chat")}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base leading-5 text-foreground">消息通道</span>
+                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                  和电脑互发的调试通道
+                </span>
+              </span>
+              <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+            </button>
+          </section>
+        </div>
+
+        <p className="mx-4 mt-4 text-[13px] leading-[18px] text-muted-foreground">
+          录音只在按住时采集，音频不保存；没有账号，也不上传其他数据。
+        </p>
+      </PageScroll>
     </MobilePage>
   );
 }

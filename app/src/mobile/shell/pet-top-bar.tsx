@@ -1,47 +1,56 @@
+import { cn } from "cn";
 import { MessageCircle, Settings } from "lucide-react";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
 import { useUiStore } from "@/mobile/ui-store";
-import { StatusChip } from "@/shared/ui/status-chip";
-
-/**
- * 宠物页顶部 44 状态条：左设置、中间连接状态整块可点（→ 连接页）、右消息。
- *
- * 舞台用 `--pet-*` 令牌，所以把 StatusChip 依赖的壳层语义变量在本作用域里
- * 重新绑定到宠物令牌（深浅主题都成立，不写死颜色）。
- */
-const STAGE_VARS =
-  "[--card:var(--pet-surface)] [--border:var(--pet-border)] [--signal:var(--pet-signal)] [--muted-foreground:var(--pet-muted)] [--wash:var(--pet-wash)] [--decide:var(--pet-ask)] [--success:var(--pet-success)] [--destructive:var(--pet-danger)]";
+import type { SignalTone } from "@/shared/ui/signal-bars";
 
 const ICON_BUTTON =
-  "flex size-11 shrink-0 items-center justify-center rounded-full text-pet-muted transition-colors hover:bg-pet-wash hover:text-pet-text focus-visible:ring-2 focus-visible:ring-pet-signal focus-visible:ring-offset-2 focus-visible:ring-offset-pet-bg focus-visible:outline-none";
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--wash)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pet-bg)] focus-visible:outline-none";
 
+/** 连接状态只用一个 5px 点做第二线索：连上是薄荷，其它一律中性灰。 */
+const DOT_CLASS: Record<SignalTone, string> = {
+  signal: "bg-signal",
+  muted: "bg-muted-foreground",
+  decide: "bg-decide",
+  success: "bg-success",
+  danger: "bg-destructive",
+};
+
+/**
+ * 宠物页顶部 44 条（v16）：左 gear（线性 20 → 设置）/ 中连接状态（可点 → 连接页）/
+ * 右 chat（线性 20 → 消息）。不再套 StatusChip 胶囊，只用「小圆点 + 15/400 文案」。
+ */
 export function PetTopBar() {
   const setView = useUiStore((state) => state.setView);
   const openOffline = useUiStore((state) => state.openOffline);
   const connection = useConnectionView();
 
   return (
-    <header className="flex min-h-11 flex-none items-center gap-1 px-[calc(env(safe-area-inset-left)+6px)] pr-[calc(env(safe-area-inset-right)+6px)]">
+    <header className="flex h-11 flex-none items-center justify-between gap-1 px-3">
       <button
         type="button"
         aria-label="设置"
         className={ICON_BUTTON}
         onClick={() => setView("settings")}
       >
-        <Settings className="size-5" />
+        <Settings aria-hidden="true" className="size-5" strokeWidth={1.6} />
       </button>
 
-      <div className="flex min-w-0 flex-1 justify-center">
-        <StatusChip
-          label={connection.label}
-          detail={connection.detail ? `· ${connection.detail}` : undefined}
-          level={connection.level}
-          tone={connection.tone}
-          onClick={openOffline}
-          ariaLabel={`连接状态：${connection.label}，点按查看连接`}
-          className={`h-11 max-w-full border-0 bg-transparent px-1.5 hover:bg-pet-wash ${STAGE_VARS}`}
+      <button
+        type="button"
+        aria-label={`连接状态：${connection.label}，点按查看连接`}
+        className="flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[15px] leading-5 font-normal text-muted-foreground transition-colors hover:bg-[var(--wash)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pet-bg)] focus-visible:outline-none"
+        onClick={openOffline}
+      >
+        <span
+          aria-hidden="true"
+          className={cn("size-[5px] shrink-0 rounded-full", DOT_CLASS[connection.tone])}
         />
-      </div>
+        <span className="truncate">
+          {connection.label}
+          {connection.detail ? ` · ${connection.detail}` : ""}
+        </span>
+      </button>
 
       <button
         type="button"
@@ -49,7 +58,7 @@ export function PetTopBar() {
         className={ICON_BUTTON}
         onClick={() => setView("chat")}
       >
-        <MessageCircle className="size-5" />
+        <MessageCircle aria-hidden="true" className="size-5" strokeWidth={1.6} />
       </button>
     </header>
   );

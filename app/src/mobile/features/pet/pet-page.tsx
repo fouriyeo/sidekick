@@ -1,27 +1,30 @@
 import { cn } from "cn";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FirstUseCard } from "@/mobile/features/first-use/first-use-card";
 import { MicButton } from "@/mobile/features/mic/mic-button";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
-import { SessionRow } from "@/mobile/features/sessions/session-row";
+import { SessionFeed } from "@/mobile/features/sessions/session-feed";
 import {
   visibleSessions as selectVisibleSessions,
   useSessionStore,
 } from "@/mobile/features/sessions/session-store";
 import { MobilePage } from "@/mobile/shell/page";
 import { PetTopBar } from "@/mobile/shell/pet-top-bar";
-import { MobileTabBar } from "@/mobile/shell/tab-bar";
 import { useUiStore } from "@/mobile/ui-store";
-import { NowRow } from "./now-row";
 import styles from "./pet.module.css";
 import { PetStage } from "./pet-stage";
 import { usePetStore } from "./pet-store";
 
-/** 宠物页底部留给麦克风胶囊的空间（62 三档 + 12 间距 + 56 胶囊 - 62 已由三档占掉）。 */
-const MIC_SPACER_CLASS = "h-[68px] flex-none";
-const MIC_OFFSET_CLASS = "bottom-[calc(env(safe-area-inset-bottom)+74px)]";
+/** v16：56 圆钮居中、距底 24。 */
+const MIC_BOTTOM_CLASS = "bottom-[calc(env(safe-area-inset-bottom)+24px)]";
+/** 底部留给麦克风的空间（56 圆钮 + 24 距底），让鲸鱼在消息卡与麦克风之间居中。 */
+const MIC_SPACER_CLASS = "h-[calc(env(safe-area-inset-bottom)+80px)] flex-none";
 
-/** 宠物页：顶部 44 状态条 + 首用清单 + 舞台 + 现在 + 最近 1 条 + 麦克风胶囊 + 三档。 */
+/**
+ * 宠物页（v16）：顶部 44 条 → 消息卡 → 鲸鱼（无底色、居中偏下）→ 居中麦克风。
+ *
+ * 没有首用清单 / NowRow / 最近 1 条 / 底部三档；设置从左上 gear 进、消息从右上 chat 进。
+ * 保留：变暗遮罩、存档失败提示、录音中读屏、keep-awake（app 层统一处理）。
+ */
 export function PetPage() {
   const pet = usePetStore((state) => state.pet);
   const saveStatus = usePetStore((state) => state.saveStatus);
@@ -31,6 +34,8 @@ export function PetPage() {
   );
   const sessionRaw = useSessionStore((state) => state.raw);
   const sessionCleared = useSessionStore((state) => state.cleared);
+  const pendingClearId = useSessionStore((state) => state.pendingClearId);
+  const clearSession = useSessionStore((state) => state.clear);
   const setView = useUiStore((state) => state.setView);
   const openOffline = useUiStore((state) => state.openOffline);
 
@@ -38,7 +43,6 @@ export function PetPage() {
     () => selectVisibleSessions(sessionRaw, sessionCleared),
     [sessionRaw, sessionCleared],
   );
-  const recent = rows[0];
   const askingKey = useMemo(
     () =>
       rows
@@ -48,8 +52,10 @@ export function PetPage() {
     [rows],
   );
 
-  // 首用清单展开时让出气泡，避免把宠物压得太小。
-  const [firstUseExpanded, setFirstUseExpanded] = useState(false);
+  // 消息卡展开时鲸鱼收到 220。
+  const [feedExpanded, setFeedExpanded] = useState(false);
+
+  const openAsking = useCallback(() => setView("asking"), [setView]);
 
   // 无操作自动变暗：触摸任意位置恢复；「等你决定」会主动唤醒。
   const [dimmed, setDimmed] = useState(false);
@@ -81,10 +87,6 @@ export function PetPage() {
     if (askingKey) markActivity();
   }, [askingKey, markActivity]);
 
-  const openRecent = recent
-    ? () => setView(recent.display === "asking" ? "asking" : "stream")
-    : undefined;
-
   return (
     <MobilePage
       tone="stage"
@@ -95,35 +97,30 @@ export function PetPage() {
       onPointerDownCapture={markActivity}
     >
       <PetTopBar />
-      <FirstUseCard onExpandedChange={setFirstUseExpanded} />
 
-      <PetStage hideBubble={firstUseExpanded} />
+      <SessionFeed
+        rows={rows}
+        pendingClearId={pendingClearId}
+        onOpenAsking={openAsking}
+        onClear={clearSession}
+        onExpandedChange={setFeedExpanded}
+      />
 
-      <NowRow />
-
-      {recent && openRecent && (
-        <div className="mx-3 mt-2 flex-none overflow-hidden rounded-[14px] border border-pet-border bg-pet-surface [--background:var(--pet-surface)] [--border:var(--pet-border)] [--decide:var(--pet-ask)] [--foreground:var(--pet-text)] [--muted-foreground:var(--pet-muted)] [--signal:var(--pet-signal)] [--success:var(--pet-success)] [--wash:var(--pet-wash)]">
-          <ul className="list-none p-0" aria-label="最近会话">
-            <SessionRow row={recent} variant="compact" onOpen={openRecent} />
-          </ul>
-        </div>
-      )}
+      <PetStage compact={feedExpanded} />
 
       <div className={MIC_SPACER_CLASS} aria-hidden="true" />
 
-      <MobileTabBar active="pet" tone="stage" />
-
       <MicButton
         active
+        shape="circle"
+        bottomOffsetClassName={MIC_BOTTOM_CLASS}
         onOpenConnection={openOffline}
-        bottomOffsetClassName={MIC_OFFSET_CLASS}
-        overlayBottomClassName={recent ? "bottom-[124px]" : undefined}
       />
 
       {saveStatus === "error" && (
         <p
           role="status"
-          className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+140px)] z-30 mx-auto w-fit text-xs text-pet-muted"
+          className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+96px)] z-30 mx-auto w-fit text-xs text-pet-muted"
         >
           这次记不住，下次再试。
         </p>

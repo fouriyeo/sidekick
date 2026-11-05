@@ -9,6 +9,7 @@ children:
   - standards/INDEX.md
   - prd/INDEX.md
   - engineering/INDEX.md
+  - design/INDEX.md
 ---
 
 # Sidekick 文档总索引
@@ -78,6 +79,8 @@ docs/
 │  ├─ lan-discovery.md          # UDP 发现与动态端口
 │  ├─ pet-runtime.md            # 帧动画图集、状态机、持久化、性能
 │  └─ quality.md                # 测试矩阵、真机验收、发布门
+├─ design/                      # 设计归档（已落地的视觉稿）
+│  └─ mobile-ui-v16/            # INDEX + README / 定稿图 / 真机图 / 字体对比
 ├─ architecture.md              # 现有：系统架构与接口
 ├─ frontend-architecture.md     # 现有：前端目标架构与规范
 ├─ dependency-policy.md         # 现有：依赖准入与许可证

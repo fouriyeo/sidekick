@@ -2,13 +2,14 @@ import { create } from "zustand";
 import { micBusyNow } from "@/mobile/features/mic/mic-store";
 
 /**
- * 手机端一级/二级视图。
+ * 手机端视图（v16 干净版）。
  *
- * - `pet` / `stream` / `settings` 是底部三档（根页面是 pet）；
- * - `chat` / `asking` / `offline` 是二级全屏页，离开时按返回层级回到上一级；
+ * - 只有 `pet` 是根页面；没有底部三档；
+ * - `settings` 从左上 gear 进入，`chat` 从右上 chat 进入，都是二级全屏页；
+ * - `asking` / `offline` 也是二级页，返回时按层级回 pet / 上一页；
  * - `offline` 记录打开它的视图，返回时回到原页面（「连接」是多入口的排障页）。
  */
-export type MobileView = "pet" | "stream" | "settings" | "chat" | "asking" | "offline";
+export type MobileView = "pet" | "settings" | "chat" | "asking" | "offline";
 
 /** 可以打开连接页、且需要被记住的上一级视图。 */
 type OfflineReturnView = Exclude<MobileView, "offline">;
@@ -32,7 +33,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   scanOpen: false,
   offlineReturnView: "pet",
 
-  // 录音中禁切页：所有换页入口统一在这里拦截（底部三档另有禁用与提示）。
+  // 录音中禁切页：所有换页入口统一在这里拦截。
   setView: (view) => {
     if (micBusyNow()) return;
     set({ view });

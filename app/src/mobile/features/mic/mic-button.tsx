@@ -1,14 +1,5 @@
 import { cn } from "cn";
-import {
-  AlertCircle,
-  Check,
-  Copy,
-  CornerDownLeft,
-  Eraser,
-  Loader2,
-  Mic,
-  ShieldAlert,
-} from "lucide-react";
+import { AlertCircle, Check, Copy, CornerDownLeft, Loader2, Mic, ShieldAlert } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -44,6 +35,8 @@ import { VoiceWaveform } from "./voice-waveform";
 type MicButtonProps = {
   active: boolean;
   onOpenConnection?: () => void;
+  /** 胶囊（默认）或圆形主按钮；圆形只在空闲态生效，录音/处理仍用胶囊展开。 */
+  shape?: "pill" | "circle";
   /**
    * 胶囊距页面底部的定位类。默认按「无底部导航」布局（安全区 + 16）；
    * 宠物页有 62px 底部三档，传入升高后的值，覆盖层会一起上移。
@@ -62,9 +55,20 @@ const WARN_RECORDING_MS = 50_000;
 const CANCEL_ENTER_PX = 48;
 const CANCEL_EXIT_PX = 24;
 
+/** 结果卡右上角的相对时间（12/400）；不引入时间库、不造假时间。 */
+function relativeTime(at: number): string {
+  const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (seconds < 5) return "刚刚";
+  if (seconds < 60) return `${seconds} 秒前`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  return `${Math.floor(minutes / 60)} 小时前`;
+}
+
 export function MicButton({
   active,
   onOpenConnection,
+  shape = "pill",
   bottomOffsetClassName,
   overlayBottomClassName,
 }: MicButtonProps) {
@@ -650,6 +654,13 @@ export function MicButton({
   const listening = phase === "listening";
   const processing = phase === "processing";
   const showResult = (phase === "delivered" || phase === "error") && (result || error);
+  const failed = phase === "error" || result?.outcome === "failed";
+  const inserted = result?.outcome === "inserted";
+  const resultTitle = failed ? "没成功" : inserted ? MIC_COPY.inserted : "已复制";
+  const resultMessage = result?.message && result.message !== resultTitle ? result.message : null;
+  const metaText = keyError ?? keyNotice;
+  const resultAt = relativeTime(result?.at ?? Date.now());
+  const contentText = result?.text ?? error ?? result?.message ?? "";
 
   const timerText = formatDuration(elapsedMs);
   // 本机 whisper 已下线：录音/收尾只展示百炼云端来源。
@@ -696,92 +707,120 @@ export function MicButton({
             </span>
           )}
 
+          {/*
+            v16 结果卡：白底弹窗三段（grabber / header 16 / content 13 单行 / footer 15）。
+            用页面主题令牌（卡片、文字、hairline），不再套 deep-sea 深色作用域；
+            动作只留纯文字链接（44 热区），「清空」仍点两次才发。
+          */}
           {showResult && (
             <div
-              className={cn(
-                "pointer-events-auto w-full rounded-2xl border p-3 text-left",
-                deepSea.surface,
-                error ? "border-pet-danger" : "border-pet-border",
-              )}
+              data-testid="mic-result-card"
+              className="pointer-events-auto w-full overflow-hidden rounded-[20px] border-[0.5px] border-border bg-card text-left shadow-[0_12px_32px_-12px_rgba(20,30,35,0.18)]"
             >
-              <div className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
-                    deepSea.surface2,
-                    error ? "text-pet-danger" : "text-pet-success",
+              <div
+                aria-hidden="true"
+                data-testid="mic-result-grabber"
+                className="mx-auto mt-1.5 h-1 w-9 rounded-[2px] bg-[#d1d1d6]"
+              />
+
+              <div className="mt-0.5 flex h-10 items-center justify-between gap-2 border-b-[0.5px] border-border px-3.5">
+                <span className="flex min-w-0 items-center gap-2">
+                  {failed ? (
+                    <AlertCircle aria-hidden="true" className="size-5 shrink-0 text-destructive" />
+                  ) : (
+                    <Check aria-hidden="true" className="size-5 shrink-0 text-primary" />
                   )}
-                >
-                  {error ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5" />}
+                  <span
+                    className={cn(
+                      "truncate text-base leading-[21px] font-normal",
+                      failed ? "text-destructive" : "text-foreground",
+                    )}
+                  >
+                    {resultTitle}
+                  </span>
                 </span>
-                <p className="text-xs leading-relaxed text-pet-text">{error ?? result?.message}</p>
+                <span className="flex min-w-0 items-center justify-end gap-1">
+                  <span className="min-w-0 truncate text-[12px] leading-4 font-normal text-muted-foreground">
+                    {resultMessage && (
+                      <span className="hidden min-[360px]:inline">{resultMessage} · </span>
+                    )}
+                    {resultAt}
+                  </span>
+                  {result?.text && (
+                    <button
+                      type="button"
+                      aria-label={copyDone ? "已复制识别文本" : "复制识别文本"}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--wash)] hover:text-foreground"
+                      onClick={handleCopyResult}
+                    >
+                      {copyDone ? (
+                        <Check aria-hidden="true" className="size-3.5 text-success" />
+                      ) : (
+                        <Copy aria-hidden="true" className="size-3.5" />
+                      )}
+                    </button>
+                  )}
+                </span>
               </div>
 
-              {result?.text && (
-                <div className={cn("mt-2 rounded-[12px] px-2.5 py-2", deepSea.surface2)}>
-                  <p className="line-clamp-2 text-xs leading-relaxed text-pet-muted">
-                    {result.text}
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-1.5 inline-flex min-h-11 items-center gap-1 text-[11px] text-pet-signal"
-                    onClick={handleCopyResult}
+              <div className="flex h-[34px] items-center px-3.5">
+                <p
+                  className={cn(
+                    "min-w-0 truncate text-[13px] leading-[18px] font-normal whitespace-nowrap",
+                    failed && !result?.text ? "text-destructive" : "text-foreground",
+                  )}
+                  title={contentText}
+                >
+                  {contentText}
+                </p>
+              </div>
+
+              {metaText && (
+                <div className="flex min-h-7 items-center border-t-[0.5px] border-border px-3.5">
+                  <span
+                    aria-live="polite"
+                    className={cn(
+                      "min-w-0 flex-1 truncate text-[12px] leading-4 font-normal",
+                      keyError ? "text-destructive" : "text-success",
+                    )}
                   >
-                    {copyDone ? <Check className="size-3" /> : <Copy className="size-3" />}
-                    {copyDone ? MIC_COPY.copiedAction : MIC_COPY.copy}
-                  </button>
+                    {metaText}
+                  </span>
                 </div>
               )}
 
               {/*
                 只有真正插入成功才有可操作目标；「清空」会删掉整个输入框，
-                因此点两次才发送。按钮高 44px，符合触控目标规范。
+                因此点两次才发送。纯文字动作，44 热区，无实心底色。
               */}
-              {result?.outcome === "inserted" && (
-                <div className="mt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      aria-label="在电脑上按回车"
-                      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[12px] bg-pet-primary text-xs font-medium text-pet-primary-foreground disabled:opacity-50"
-                      disabled={keyPending !== null || keyNotice !== null || !connected}
-                      onClick={() => handleKeyAction("enter")}
-                    >
-                      <CornerDownLeft className="size-4" />
-                      {keyPending === "enter" ? MIC_COPY.keyWorking : MIC_COPY.keyEnter}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={keyArmedClear ? "再点一次清空电脑输入框" : "清空电脑输入框"}
-                      className={cn(
-                        "inline-flex h-11 items-center justify-center gap-1.5 rounded-[12px] border text-xs font-medium disabled:opacity-50",
-                        keyArmedClear
-                          ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
-                          : cn("border-pet-border text-pet-text", deepSea.surface2),
-                      )}
-                      disabled={keyPending !== null || keyNotice !== null || !connected}
-                      onClick={() => handleKeyAction("clear")}
-                    >
-                      <Eraser className="size-4" />
-                      {keyPending === "clear"
-                        ? MIC_COPY.keyWorking
-                        : keyArmedClear
-                          ? MIC_COPY.keyClearConfirm
-                          : MIC_COPY.keyClear}
-                    </button>
-                  </div>
-                  {(keyError || keyNotice) && (
-                    <p
-                      role="status"
-                      aria-live="polite"
-                      className={cn(
-                        "mt-1.5 text-[11px] leading-relaxed",
-                        keyError ? "text-pet-danger" : "text-pet-success",
-                      )}
-                    >
-                      {keyError ?? keyNotice}
-                    </p>
-                  )}
+              {inserted && (
+                <div className="flex h-11 items-center justify-end gap-5 border-t-[0.5px] border-border px-3.5">
+                  <button
+                    type="button"
+                    aria-label={keyArmedClear ? "再点一次清空电脑输入框" : "清空电脑输入框"}
+                    className={cn(
+                      "flex min-h-11 items-center px-0.5 text-[15px] leading-5 font-normal disabled:opacity-50",
+                      keyArmedClear ? "text-destructive" : "text-muted-foreground",
+                    )}
+                    disabled={keyPending !== null || keyNotice !== null || !connected}
+                    onClick={() => handleKeyAction("clear")}
+                  >
+                    {keyPending === "clear"
+                      ? MIC_COPY.keyWorking
+                      : keyArmedClear
+                        ? MIC_COPY.keyClearConfirm
+                        : MIC_COPY.keyClear}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="在电脑上按回车"
+                    className="flex min-h-11 items-center gap-1 px-0.5 text-[15px] leading-5 font-normal text-primary disabled:opacity-50"
+                    disabled={keyPending !== null || keyNotice !== null || !connected}
+                    onClick={() => handleKeyAction("enter")}
+                  >
+                    <CornerDownLeft aria-hidden="true" className="size-3.5" />
+                    {keyPending === "enter" ? MIC_COPY.keyWorking : MIC_COPY.keyEnter}
+                  </button>
                 </div>
               )}
             </div>
@@ -812,18 +851,24 @@ export function MicButton({
           aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
           aria-pressed={listening}
           className={cn(
-            "pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border px-5 text-sm font-medium transition-transform active:scale-[0.98]",
+            "pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border text-sm font-medium transition-transform active:scale-[0.98]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-signal focus-visible:ring-offset-2 focus-visible:ring-offset-pet-bg",
-            recording ? "w-[min(90vw,420px)]" : "w-[min(86vw,360px)]",
+            recording
+              ? "w-[min(90vw,420px)] px-5"
+              : shape === "circle"
+                ? "w-14 px-0"
+                : "w-[min(86vw,360px)] px-5",
             cancelZone
               ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
               : recording
                 ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
                 : processing
                   ? "border-pet-border text-pet-muted"
-                  : "border-pet-border text-pet-text",
-            !connected && !recording && "border-pet-border text-pet-muted",
-            !recording && !processing && deepSea.surface2,
+                  : shape === "circle"
+                    ? "border-0 bg-pet-primary text-pet-primary-foreground"
+                    : "border-pet-border text-pet-text",
+            !connected && !recording && shape !== "circle" && "border-pet-border text-pet-muted",
+            !recording && !processing && shape !== "circle" && deepSea.surface2,
           )}
           disabled={processing}
           onContextMenu={(event) => event.preventDefault()}
@@ -861,8 +906,17 @@ export function MicButton({
             </>
           ) : (
             <>
-              <Mic className={cn("size-5", connected ? "text-pet-signal" : "text-pet-muted")} />
-              <span>{label}</span>
+              <Mic
+                className={cn(
+                  "size-5",
+                  shape === "circle"
+                    ? "text-pet-primary-foreground"
+                    : connected
+                      ? "text-pet-signal"
+                      : "text-pet-muted",
+                )}
+              />
+              {shape === "pill" && <span>{label}</span>}
             </>
           )}
         </button>

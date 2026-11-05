@@ -12,11 +12,8 @@ import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { MorePage } from "@/mobile/features/settings/more-page";
-import { useMobileActivityStore } from "@/mobile/features/stream/activity-store";
-import { StreamPage } from "@/mobile/features/stream/stream-page";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
-import type { SessionSummary, StatusMessage } from "@/protocol/messages";
 import {
   parseFocusResult,
   parseKeyResult,
@@ -25,7 +22,6 @@ import {
   parseStatusMessage,
 } from "@/protocol/messages";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
-import { focusErrorText, sessionTitle } from "@/shared/lib/sessions";
 import {
   disableWebviewHaptics,
   exitApp,
@@ -51,41 +47,7 @@ function requestStatusIfConnected(): void {
   }
 }
 
-/** 从 status 快照里找当前最需要展示的标题；只读标题，不展开内容。 */
-function statusTitle(
-  list: readonly SessionSummary[] | undefined,
-  pick: (session: SessionSummary) => boolean,
-): string | null {
-  const session = list?.find(pick);
-  if (!session) return null;
-  return sessionTitle({ id: session.id, title: session.title });
-}
-
-/** 把 AI 状态切换写进「最近发生」；同一状态的重复快照不重复记。 */
-function recordAiActivity(message: StatusMessage, previous: string, next: string): void {
-  if (previous === next) return;
-  const record = useMobileActivityStore.getState().record;
-  const list = message.sessionList ?? [];
-
-  if (next === "asking") {
-    const title = statusTitle(list, (session) => session.state === "asking");
-    record({
-      kind: "ai",
-      title: title ? `${title} 进入「等你决定」` : "AI 在等你决定",
-      detail: "手机只负责提醒，到电脑上处理",
-    });
-    return;
-  }
-
-  if (next === "completed") {
-    const title = statusTitle(
-      list,
-      (session) => session.completedAt !== null && session.completedAt !== undefined,
-    );
-    record({ kind: "ai", title: title ? `${title} 完成` : "AI 完成了一件任务", detail: "已推送" });
-  }
-}
-
+/** 手机根：宠物页 + 设置/聊天/等你决定/连接二级页；没有底部 tab。 */
 export function MobileApp() {
   const append = useChatStore((state) => state.append);
   const bootstrap = useConnectionStore((state) => state.bootstrap);
@@ -98,7 +60,7 @@ export function MobileApp() {
 
   useMotionPause();
 
-  // 屏幕常亮只在宠物页（含首用清单/变暗层）生效；聊天/动态/设置与后台释放。
+  // 屏幕常亮只在宠物页（含变暗层）生效；聊天/设置与后台释放。
   // 常亮默认最多 2 小时，到点释放，避免放桌边整夜耗电（设置页可调，0 = 不限）。
   useKeepAwake(keepAwake && view === "pet", keepAwakeMs);
 
@@ -139,8 +101,8 @@ export function MobileApp() {
   }, []);
 
   // App 启动时注册唯一的返回键监听；页面内弹层/确认态先由返回栈消费。
-  // 返回层级：scan → 上一页；settings/stream/chat → pet；asking → stream；
-  // offline → 上一页；根页面 pet 走「再按一次退出」。
+  // 返回层级：scan → 上一页；settings/chat/asking → pet；offline → 上一页；
+  // 根页面 pet 走「再按一次退出」。
   const onSystemBack = useCallback(() => {
     if (micBusyNow()) return;
 
@@ -159,12 +121,9 @@ export function MobileApp() {
     if (ui.view !== "pet") {
       switch (ui.view) {
         case "settings":
-        case "stream":
         case "chat":
-          ui.setView("pet");
-          break;
         case "asking":
-          ui.setView("stream");
+          ui.setView("pet");
           break;
         case "offline":
           ui.closeOffline();
@@ -245,11 +204,6 @@ export function MobileApp() {
       const focusResult = parseFocusResult(raw);
       if (focusResult) {
         useSessionStore.getState().handleFocusResult(focusResult);
-        useMobileActivityStore.getState().record({
-          kind: "system",
-          title: focusResult.ok ? "已在电脑上打开 DeepSeek Harness" : "唤起电脑上的 AI 失败",
-          detail: focusResult.ok ? undefined : focusErrorText(focusResult.error),
-        });
         return;
       }
 
@@ -263,13 +217,11 @@ export function MobileApp() {
       // AI 状态要先于聊天解析：它不进入聊天记录，只驱动宠物四态与会话列表。
       const status = parseStatusMessage(raw);
       if (status) {
-        const previousAi = usePetStore.getState().ai.state;
         useSessionStore.getState().apply(status.sessionList ?? []);
         usePetStore.getState().applyAiStatus(status, {
           now: Date.now(),
           micListening: micListeningNow(),
         });
-        recordAiActivity(status, previousAi, usePetStore.getState().ai.state);
         return;
       }
 
@@ -278,26 +230,10 @@ export function MobileApp() {
         const store = useMicStore.getState();
         if (micMessage.type === "mic.result") {
           store.handleResult(micMessage);
-          const textLength = micMessage.text ? Array.from(micMessage.text).length : 0;
-          useMobileActivityStore.getState().record({
-            kind: "voice",
-            title:
-              micMessage.outcome === "inserted"
-                ? "语音输入已输入到电脑"
-                : micMessage.outcome === "copied"
-                  ? "语音已复制到电脑"
-                  : "语音转写失败",
-            detail: textLength > 0 ? `${textLength} 字` : undefined,
-          });
         } else if (micMessage.type === "mic.ready") {
           store.handleReady(micMessage);
           // 第一次成功录到音频：首用清单的麦克风步骤由本机状态确认。
           useFirstUseStore.getState().markMicReady();
-          useMobileActivityStore.getState().record({
-            kind: "voice",
-            title: "麦克风已就绪",
-            detail: "只在按住时录音",
-          });
         } else if (micMessage.type === "mic.partial") store.handlePartial(micMessage);
         else if (micMessage.type === "mic.state") store.handleState(micMessage);
         else if (micMessage.type === "mic.cancel") store.handleCancel(micMessage);
@@ -310,15 +246,10 @@ export function MobileApp() {
     });
     const unsubscribeConn = subscribeConn((event) => {
       setOnline(event.online);
-      useMobileActivityStore.getState().record({
-        kind: "connection",
-        title: event.online ? "已连接电脑" : "连接断了，正在自动重连",
-        detail: event.online ? "局域网直连" : undefined,
-      });
       if (event.online) {
         requestStatusIfConnected();
       }
-      // 断连时保留最后一次会话快照（动态页会标注「最后一次快照」），不清空列表。
+      // 断连时保留最后一次会话快照（会话卡继续显示最后状态），不清空列表。
     });
 
     return () => {
@@ -330,7 +261,6 @@ export function MobileApp() {
   return (
     <>
       {view === "pet" && <PetPage />}
-      {view === "stream" && <StreamPage />}
       {view === "settings" && <MorePage />}
       {view === "chat" && <ChatPage />}
       {view === "asking" && <AskingPage />}

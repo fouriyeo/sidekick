@@ -160,16 +160,87 @@ describe("MicButton 竖屏胶囊", () => {
     });
 
     const mic = renderButton();
-    const text = screen.getByText("测试转写文本");
-    const card = text.closest("div.rounded-2xl.border");
-    expect(card).not.toBeNull();
+    const card = screen.getByTestId("mic-result-card");
 
-    const overlay = card?.parentElement as HTMLElement;
+    const overlay = card.parentElement as HTMLElement;
     expect(overlay).not.toBe(mic.parentElement);
     expect(isPositioned(overlay)).toBe(true);
     expect(overlay.className).toContain("w-[min(86vw,380px)]");
-    expect((card as HTMLElement).className).toContain("w-full");
-    expect((card as HTMLElement).className).toContain("pointer-events-auto");
+    expect(card.className).toContain("w-full");
+    expect(card.className).toContain("pointer-events-auto");
+  });
+
+  it("结果卡是 v16 三段弹窗：grabber / header 16 / content 13 单行 / footer", () => {
+    useMicStore.setState({
+      phase: "delivered",
+      result: {
+        outcome: "inserted",
+        reason: null,
+        text: "把这段代码改成异步，然后提醒我跑测试",
+        truncated: false,
+        message: "已输入",
+        at: Date.now(),
+      },
+    });
+    renderButton();
+
+    // 卡片：白底、圆角 20、0.5 hairline、浮影；不再套 deep-sea 深色作用域。
+    const card = screen.getByTestId("mic-result-card");
+    expect(card.className).toContain("rounded-[20px]");
+    expect(card.className).toContain("border-[0.5px]");
+    expect(card.className).toContain("bg-card");
+    expect(card.className).toContain("shadow-[0_12px_32px_-12px_rgba(20,30,35,0.18)]");
+    expect(card.className).not.toMatch(/surface/);
+
+    // grabber 36×4，#D1D1D6，居中。
+    const grabber = screen.getByTestId("mic-result-grabber");
+    expect(grabber.className).toContain("w-9");
+    expect(grabber.className).toContain("h-1");
+    expect(grabber.className).toContain("bg-[#d1d1d6]");
+
+    // header：薄荷 check +「已输入」16/400 + 右侧时间 12/400。
+    const title = screen.getByText("已输入");
+    expect(title.className).toContain("text-base");
+    expect(title.className).toContain("font-normal");
+    const when = screen.getByText("刚刚");
+    expect(when.className).toContain("text-[12px]");
+
+    // content：正文 13/400、单行省略。
+    const body = screen.getByText("把这段代码改成异步，然后提醒我跑测试");
+    expect(body.className).toContain("text-[13px]");
+    expect(body.className).toContain("truncate");
+    expect(body.className).toContain("whitespace-nowrap");
+
+    // footer：15/400 纯文字动作，无实心底色/描边。
+    const enter = screen.getByRole("button", { name: "在电脑上按回车" });
+    const clear = screen.getByRole("button", { name: "清空电脑输入框" });
+    expect(enter.className).toContain("text-[15px]");
+    expect(clear.className).toContain("text-[15px]");
+    expect(enter.className).toContain("text-primary");
+    expect(clear.className).toContain("text-muted-foreground");
+    expect(enter.className).not.toMatch(/\bbg-/);
+    expect(clear.className).not.toMatch(/\bbg-/);
+    expect(enter.className).toContain("min-h-11");
+
+    // 复制按钮仍在（icon-only，44 热区在 header 右侧）。
+    expect(screen.getByRole("button", { name: "复制识别文本" })).toBeInTheDocument();
+  });
+
+  it("错误态用 destructive 文案，结构与成功态一致且没有按键动作", () => {
+    useMicStore.setState({
+      phase: "error",
+      session: "session-1",
+      error: "没听清，靠近一点再说一次。",
+      result: null,
+    });
+    renderButton();
+
+    expect(screen.getByTestId("mic-result-grabber")).toBeInTheDocument();
+    const title = screen.getByText("没成功");
+    expect(title.className).toContain("text-destructive");
+    expect(screen.getByText("没听清，靠近一点再说一次。").className).toContain("text-destructive");
+    expect(screen.queryByRole("button", { name: "在电脑上按回车" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "清空电脑输入框" })).toBeNull();
   });
 
   it("按下开始录音时中震一下，给「现在在录」的即时反馈", () => {

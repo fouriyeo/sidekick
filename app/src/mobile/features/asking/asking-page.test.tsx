@@ -47,7 +47,7 @@ function seed(list: SessionSummary[]) {
 }
 
 beforeEach(() => {
-  useUiStore.setState({ view: "asking", scanOpen: false, offlineReturnView: "stream" });
+  useUiStore.setState({ view: "asking", scanOpen: false, offlineReturnView: "pet" });
   useConnectionStore.setState({ status: "connected", addr: "192.168.1.5:47810" });
   useSessionStore.getState().clearAll();
   tauri.sendFocusRequest.mockReset();
@@ -118,19 +118,19 @@ describe("AskingPage", () => {
     expect(useUiStore.getState().view).toBe("offline");
   });
 
-  it("没有 asking 时回退动态页", () => {
+  it("没有 asking 时回退宠物页", () => {
     seed([session({ state: "working", askKind: null })]);
     render(<AskingPage />);
 
-    expect(useUiStore.getState().view).toBe("stream");
+    expect(useUiStore.getState().view).toBe("pet");
   });
 
-  it("返回按钮回动态页（返回层级 asking → stream）", () => {
+  it("返回按钮回宠物页（返回层级 asking → pet）", () => {
     seed([session()]);
     render(<AskingPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "返回动态" }));
-    expect(useUiStore.getState().view).toBe("stream");
+    fireEvent.click(screen.getByRole("button", { name: "返回宠物" }));
+    expect(useUiStore.getState().view).toBe("pet");
   });
 
   it("无剪贴板即可复制标题失败提示", () => {

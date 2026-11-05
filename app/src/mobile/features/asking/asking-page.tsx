@@ -19,7 +19,7 @@ const COPY_FEEDBACK_MS = 1600;
  * 等你决定页：AI 暂停时的一键处理页。
  *
  * 主行动只有一个「在电脑上继续」（focus.request）；手机不提供批准/拒绝。
- * 没有 asking 时回退动态页。
+ * 没有 asking 时回退宠物页。
  */
 export function AskingPage() {
   const raw = useSessionStore((state) => state.raw);
@@ -40,9 +40,9 @@ export function AskingPage() {
 
   const [copied, setCopied] = useState<string | null>(null);
 
-  // 没有 asking 可处理时回退动态页（例如在页内被清除或电脑上已处理）。
+  // 没有 asking 可处理时回退宠物页（例如在页内被清除或电脑上已处理）。
   useEffect(() => {
-    if (hydrated && askingRows.length === 0) setView("stream");
+    if (hydrated && askingRows.length === 0) setView("pet");
   }, [askingRows.length, hydrated, setView]);
 
   const copyTitle = useCallback(() => {
@@ -69,8 +69,8 @@ export function AskingPage() {
       <PageHeader
         title="等你决定"
         sub="DEEPSEEK HARNESS 已暂停"
-        onBack={() => setView("stream")}
-        backLabel="返回动态"
+        onBack={() => setView("pet")}
+        backLabel="返回宠物"
         right={<SignalBars level={1} tone="decide" />}
       />
 

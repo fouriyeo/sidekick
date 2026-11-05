@@ -1,0 +1,147 @@
+/* ============================================================================
+   干净版手机端令牌（v16）
+   ----------------------------------------------------------------------------
+   只挂在手机入口的 `.mobile-clean` 上，不影响桌面端。
+   浅色：近白底 + 白卡 + 一个薄荷 tint；深色：近黑底 + 深灰卡 + 亮薄荷。
+   字体：Android OEM 的 OPPO Sans（OPlusSans 3.1）Regular 字形偏宽、笔画偏厚，
+   16/400 会显「老年机」；手机端改用随包 MiSans Normal（现代、紧凑），
+   字重统一 400，标题 15，正文 13，只靠字号/颜色分层。
+   ========================================================================== */
+
+@font-face {
+  font-family: "MiSans";
+  src: url("../assets/fonts/MiSans-Normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+.mobile-clean {
+  font-family:
+    "MiSans", system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue",
+    sans-serif;
+  --background: #f7f8f8;
+  --foreground: #1c1c1e;
+  --card: #ffffff;
+  --card-foreground: #1c1c1e;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1e;
+  --primary: #0a7764;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f7;
+  --secondary-foreground: #1c1c1e;
+  --muted: #f2f2f7;
+  --muted-foreground: #6c6c70;
+  --tertiary: #aeaeb2;
+  --accent: #f0f7f5;
+  --accent-foreground: #1c1c1e;
+  --destructive: #b3483a;
+  --destructive-foreground: #ffffff;
+  --border: #e5e5ea;
+  --input: #c7c7cc;
+  --ring: #0a7764;
+
+  --signal: #0a7764;
+  --decide: #a66a16;
+  --whale: #28618c;
+  --wash: #f0f7f5;
+  --abyss: #0b0b0c;
+  --success: #1d7a4f;
+  --warning: #a66a16;
+  --chart-1: #0a7764;
+  --chart-2: #28618c;
+  --chart-3: #a66a16;
+  --chart-4: #b3483a;
+  --chart-5: #1d7a4f;
+
+  --pet-bg: #f7f8f8;
+  --pet-surface: #ffffff;
+  --pet-surface-2: #f2f2f7;
+  --pet-input: #c7c7cc;
+  --pet-wash: #f0f7f5;
+  --pet-text: #1c1c1e;
+  --pet-muted: #6c6c70;
+  --pet-border: #e5e5ea;
+  --pet-primary: #0a7764;
+  --pet-primary-foreground: #ffffff;
+  --pet-signal: #0a7764;
+  --pet-coral: #b3483a;
+  --pet-coral-foreground: #ffffff;
+  --pet-ask: #a66a16;
+  --pet-success: #1d7a4f;
+  --pet-danger: #b3483a;
+
+  color-scheme: light;
+}
+
+/* 深色：html 上的 .dark 由 theme.ts 同步，和 Tailwind dark: 变体一致。 */
+.dark .mobile-clean,
+html[data-theme="dark"] .mobile-clean {
+  --background: #0b0b0c;
+  --foreground: #f2f2f7;
+  --card: #1c1c1e;
+  --card-foreground: #f2f2f7;
+  --popover: #2c2c2e;
+  --popover-foreground: #f2f2f7;
+  --primary: #3fc4a0;
+  --primary-foreground: #04231c;
+  --secondary: #2c2c2e;
+  --secondary-foreground: #f2f2f7;
+  --muted: #2c2c2e;
+  --muted-foreground: #aeaeb2;
+  --tertiary: #636366;
+  --accent: #12312b;
+  --accent-foreground: #f2f2f7;
+  --destructive: #e6847a;
+  --destructive-foreground: #2b100c;
+  --border: #38383a;
+  --input: #48484a;
+  --ring: #3fc4a0;
+
+  --signal: #3fc4a0;
+  --decide: #eab173;
+  --whale: #8fb6e0;
+  --wash: #12312b;
+  --abyss: #000000;
+  --success: #64d9a4;
+  --warning: #eab173;
+  --chart-1: #3fc4a0;
+  --chart-2: #8fb6e0;
+  --chart-3: #eab173;
+  --chart-4: #e6847a;
+  --chart-5: #64d9a4;
+
+  --pet-bg: #0b0b0c;
+  --pet-surface: #1c1c1e;
+  --pet-surface-2: #2c2c2e;
+  --pet-input: #48484a;
+  --pet-wash: #12312b;
+  --pet-text: #f2f2f7;
+  --pet-muted: #aeaeb2;
+  --pet-border: #38383a;
+  --pet-primary: #3fc4a0;
+  --pet-primary-foreground: #04231c;
+  --pet-signal: #3fc4a0;
+  --pet-coral: #e6847a;
+  --pet-coral-foreground: #2b100c;
+  --pet-ask: #eab173;
+  --pet-success: #64d9a4;
+  --pet-danger: #e6847a;
+
+  color-scheme: dark;
+}
+
+/* ----------------------------------------------------------------------------
+   手机端字重统一 400（MiSans Normal）。
+   MiSans 的 Normal 已经比 OPPO Sans Regular 轻一档，不再用 300；
+   标题层级只靠字号/颜色，不再用 500/600，避免 Android 合成粗体。
+   -------------------------------------------------------------------------- */
+.mobile-clean,
+.mobile-clean * {
+  font-weight: 400 !important;
+}
+
+/* 设置页说明文字原先 leading-relaxed(1.625) 偏「老年机」，收到 1.45。 */
+.mobile-clean p.leading-relaxed {
+  line-height: 1.45;
+}

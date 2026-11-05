@@ -6,7 +6,6 @@ import { usePetStore } from "./pet-store";
 
 function setStageState(options: {
   ai?: "idle" | "working" | "asking" | "completed";
-  caption?: "ai_working" | "ai_asking" | "ai_completed" | null;
   reduceMotion?: "system" | "on" | "off";
   phase?: "idle" | "sleeping" | "away";
   onboarded?: boolean;
@@ -16,10 +15,6 @@ function setStageState(options: {
 
   usePetStore.setState((state) => ({
     hydrated: true,
-    bubble:
-      options.caption === null || options.caption === undefined
-        ? null
-        : { id: 99, copyId: "returning", text: "回来啦。" },
     ai: {
       ...createIdleAiStatus(),
       state: aiState,
@@ -27,13 +22,6 @@ function setStageState(options: {
       enteredAt: now,
       completedUntil: aiState === "completed" ? now + 3000 : null,
     },
-    aiCaption: options.caption
-      ? {
-          id: 7,
-          copyId: options.caption,
-          text: options.caption === "ai_asking" ? "等你决定" : "文案",
-        }
-      : null,
     pet: {
       ...state.pet,
       onboarded: options.onboarded ?? true,
@@ -85,34 +73,24 @@ describe("PetStage AI 联动展示", () => {
     expect(motionLayer).toHaveAttribute("data-ai-state", "working");
   });
 
-  it("asking 文案占用气泡槽位、优先于闲聊气泡，且可见文案 aria-hidden", () => {
-    setStageState({ ai: "asking", caption: "ai_asking" });
-    renderStage();
-
-    const caption = screen.getByText("等你决定");
-    expect(caption).toHaveAttribute("aria-hidden", "true");
-    expect(caption).toHaveAttribute("data-ai-caption", "ai_asking");
-    expect(screen.queryByText("回来啦。")).not.toBeInTheDocument();
-  });
-
   it("aria-live 播报四态文案：正在陪你工作/等你决定/完成", () => {
-    setStageState({ ai: "working", caption: "ai_working" });
+    setStageState({ ai: "working" });
     const working = renderStage();
     expect(screen.getByText("小跟班，正在陪你工作")).toBeInTheDocument();
     working.unmount();
 
-    setStageState({ ai: "asking", caption: "ai_asking" });
+    setStageState({ ai: "asking" });
     const asking = renderStage();
     expect(screen.getByText("小跟班，等你决定")).toBeInTheDocument();
     asking.unmount();
 
-    setStageState({ ai: "completed", caption: "ai_completed" });
+    setStageState({ ai: "completed" });
     renderStage();
     expect(screen.getByText("小跟班，完成")).toBeInTheDocument();
   });
 
   it("休息时 AI 姿态回到静态、不显示 AI 文案", () => {
-    setStageState({ ai: "asking", caption: "ai_asking", phase: "away" });
+    setStageState({ ai: "asking", phase: "away" });
     const { container } = renderStage();
 
     expect(stageSection(container)).toHaveAttribute("data-ai-state", "idle");
@@ -153,25 +131,33 @@ describe("PetStage D77 舞台红线", () => {
     expect(screen.queryByRole("button", { name: /摸摸|戳/ })).toBeNull();
   });
 
-  it("宠物名固定为「小跟班」，不渲染输入框", () => {
+  it("不再渲染品牌小字，也不渲染输入框", () => {
     renderStage();
 
-    expect(screen.getByText("小跟班 · Sidekick")).toBeInTheDocument();
+    expect(screen.queryByText("小跟班 · Sidekick")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 
-  it("状态文案 21px + mono 副行；asking 用琥珀，不用珊瑚", () => {
-    setStageState({ ai: "asking", caption: "ai_asking" });
-    renderStage();
+  it("减少动效设置反映到舞台标记", () => {
+    setStageState({ ai: "working", reduceMotion: "on" });
+    const { container } = renderStage();
 
-    const caption = screen.getByText("等你决定");
-    const card = caption.closest("p");
-    if (!(card instanceof HTMLElement)) throw new Error("状态卡未渲染");
-    expect(card.className).toContain("rounded-[14px]");
-    expect(card.className).toContain("border-pet-ask");
-    expect(card.className).not.toContain("border-pet-coral");
-    expect(caption.className).toContain("text-[21px]");
-    expect(screen.getByText("AWAITING")).toBeInTheDocument();
-    expect(screen.getByText("请到电脑上确认")).toBeInTheDocument();
+    expect(stageSection(container)).toHaveAttribute("data-reduced-motion", "true");
+  });
+
+  it("点击、长按、滑动宠物都没有任何反应、也不写存档", () => {
+    const { container } = renderStage();
+    const pet = container.querySelector("[data-sprite-state]");
+    if (!(pet instanceof HTMLElement)) throw new Error("宠物未渲染");
+
+    const before = usePetStore.getState();
+    fireEvent.pointerDown(pet, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(pet, { pointerId: 1, clientX: 40, clientY: 10 });
+    fireEvent.pointerMove(pet, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(pet, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(pet);
+
+    expect(usePetStore.getState().pet).toBe(before.pet);
+    expect(usePetStore.getState().bubble).toBeNull();
   });
 });

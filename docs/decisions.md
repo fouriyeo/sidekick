@@ -656,3 +656,31 @@
 - 放弃：方向 B「一条河」（时间线形态在事件变多时扩展性更好，但本轮用户选 A；B 的 AI 提问正文与手机剪贴板内容还踩了隐私红线）；跨端自适应（两端仍是独立固定布局）；用新协议字段补齐「语音是否配置」「精确手机台数」（P1，需要协议改动与旧客户端兼容验证）；桌面渲染宠物、手机剪贴板历史（违反平台矩阵与「手机是外设」）。
 - 代价：聊天（消息）多一次点击；「系统」内 4 段让首次找 AI 联动多一层；总览在 960 最小窗下的密度需要验收；动态页承担「会话 + 最近发生」两种内容；用户可能把「会话」误当成第二个消息（若真混淆，后续可改名或并回总览）；手机首用清单后两步（百炼 Key / 辅助功能）只能在电脑完成，手机不显示完成状态。
 - 规范：设计依据 `design-review/v2/version-a.notes.md`（只读，不作事实源）；产品规则 `docs/prd/shell/{INDEX,PRD,SPEC,ACCEPTANCE}.md`；交互规则 `docs/standards/ux.md`；前端结构 `docs/frontend-architecture.md`；进度 `docs/status.md`；实现落点 `app/src/desktop/**`、`app/src/mobile/**`、`app/src/shared/**`、`app/src/protocol/messages.ts`、`app/src-tauri/src/desktop_server.rs`；协议 `protocol/README.md`（`system.clients` 可选字段）。
+
+## D80 · 手机端干净版两页壳：删动态页 / 去底栏 / 会话置顶 / 弹窗结果卡（2026-11-05，取代 D79 的手机壳部分）
+
+- 背景：D79 的手机 3 档壳在真机/高保真复核中被用户连续否掉：底部 tab + 动态页让「宠物页什么都干、动态页又像第二个消息」；宠物页的首用清单、NowRow、最近 1 条、麦克风胶囊叠在一起，视觉「傻大粗」；结果卡用 14/400 两行正文 + 16/400 实心动作，既不像弹窗、脚又压过头。用户要求按 iOS 的「干净、一眼」重做：删掉动态页与底栏，会话置顶，麦克风居中，结果卡是明确的弹窗三段。
+- 决策：
+  - **手机只保留两页**：`pet`（根页）与 `settings`（更多，二级页）；删除 `stream` / 动态页与 `MobileTabBar`。`asking` / `chat` / `offline` / `scan` 仍是二级页。
+  - **宠物页结构**：顶部 44 条（左 gear → settings / 中连接状态 → offline / 右 chat → chat）→ 会话卡（置顶，折叠 1 行、展开最多 5 行；状态图标 spinner/check/琥珀点；working 行浅薄荷 wash；每行 28×28 ×，二次确认；footer「还有 N 条 / 收起」）→ 鲸鱼（无底色、无品牌小字、230 / 展开 220、居中偏下）→ 居中 56 薄荷圆麦克风（距底 24）。删除首用清单 / NowRow / 最近 1 条 / 底部三档；首用清单内容迁到设置页顶部 banner。
+  - **设置页**：从 gear 进，左上返回 + 17/400 inline 标题；分组白卡 16 圆角、0.5 hairline、无 01–06 编号/英文 eyebrow；首用 banner 在顶部；无底栏。
+  - **结果卡**：v16 弹窗三段——grabber（36×4）+ header 40（20 check +「已输入」16/400 + 右侧时间 12/400 + 复制 icon）+ content 34（正文 13/400 单行省略）+ footer 40（「清空」15/400 tertiary +「↵ 回车」15/400 薄荷，44 热区，纯文字，二次确认）。错误态同结构；卡片白底、20 圆角、0.5 hairline、浮影 `0 12 32 -12 rgba(20,30,35,.18)`；总高约 125。
+  - **视觉作用域**：新增 `app/src/mobile/styles/clean.css`，只挂手机入口 `.mobile-clean`；浅色 `#F7F8F8` 页 / `#FFF` 卡 / `#1C1C1E` 主文 / `#6C6C70` 次文 / `#E5E5EA` hairline / `#0A7764` 薄荷，深色一套对应值。桌面端不挂，不受影响。手机端字重 400（最多 500），不再用 21/600 气泡、28/34 大标题、mono 大写装饰。
+- 原因：手机上用户「大致看一眼」，信息层级应靠位置/尺寸/留白，而不是字号与卡片堆叠；两页 + 顶栏三件套把「宠物 / 连接 / 会话 / 设置 / 消息」压到一屏，动态页的职责由宠物页会话卡承接；结果卡三段让「头 / 内容 / 脚」一眼可读，13 单行正文符合 glance 场景，15 文字动作比 16 实心按钮轻。
+- 放弃：保留动态页但隐藏 tab（仍是两套会话 UI，维护面不降）；保留胶囊麦克风（用户要圆钮居中）；结果卡保留复制文案行（card 162px，脚重、盖宠物，改为 header 内 icon-only 复制）；全站改 tokens.css 换肤（会污染桌面，改为 mobile-scope 变量）。
+- 代价：动态页的「最近发生」活动流暂时没有 UI（activity-store 保留，未删）；设置多一次点击；结果卡正文单行可能截断，完整文本已在电脑插入/可在复制中取；旧的 3 档测试与文档需同步；真机未回归。
+- 验收：`pnpm typecheck` / `pnpm lint` / `pnpm test`（591 tests）/ `pnpm build` 全绿；浏览器 390×844、320×640、浅/深主题截图通过；桌面端无视觉变化。
+- 规范：`app/src/mobile/{app.tsx,ui-store.ts,styles/clean.css}`、`app/src/mobile/features/{pet,sessions,settings,mic}/**`、`app/src/entries/mobile.tsx`、`app/src/mobile/shell/{pet-top-bar,page-header}.tsx`、`docs/design/mobile-ui-v16/{IMPLEMENTATION.md,screens-v16.html}`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`docs/frontend-architecture.md`、`docs/status.md`、`AGENTS.md`。
+
+## D81 · 手机端改用 MiSans Normal + 收紧字号/行高（2026-11-05，取代 D80 中「全站 OPPO Sans / 400 字重」的字体部分）
+
+- 背景：D80 的 v16 在真机（Realme RMX3370）上仍被用户评价「字有点傻、很笨重、像老年机」。用 CDP `CSS.getPlatformFontsForNode` 查实际渲染字体：Android WebView 把 `sans-serif` 解析为 **OPlusSans 3.1_GB18030（OPPO Sans Regular）**，不是 PingFang/Noto；OPPO Sans Regular 的字形更宽、笔画更厚，同样 15–16/400 会显笨重。仅把字重改成 300（OPPO Sans Light）会变「发虚」，不是解法；问题主要在 **字体家族 + 字号/行高**，不是手机坏。
+- 决策：
+  - **随包 MiSans Normal（400）**：`app/src/mobile/assets/fonts/MiSans-Normal.woff2`（3.9 MB，由官方 TTF 转 WOFF2），`clean.css` `@font-face` + `.mobile-clean` 首选 `MiSans`，系统字体作为缺字回退；桌面端不加载。
+  - **字号**：会话卡标题 16→**15**；正文 13；结果卡正文 13/18、header 16、footer 15；设置页标题 17、卡片标题 16、说明 13。**字重统一 400**（不再用 300；MiSans Normal 已比 OPPO Regular 轻一档）。标题层级只靠字号/颜色，不用 500/600。
+  - **行高**：设置页说明 `leading-relaxed` 1.625→**1.45**；会话卡标题 20 / 副行 17；结果卡正文 18；页面标题 17/22。目标是把「大而松」压成「小而紧」，不是一味缩小。
+  - **字体说明**：MiSans 官方 FAQ 说明可免费商用、可嵌入软件，但需注明使用了 MiSans；`app/src/mobile/assets/fonts/README.md` 记录来源/许可；设置页「数据与关于」补一行字体说明（如需要）。
+- 原因：真机实测 OPPO Sans 的字面宽度/笔画厚度是「老年机」感的主要来源；MiSans Normal 更紧凑、现代，15 号标题比 16 号更接近 iOS 的视觉密度；300 的 OPPO Sans Light 太虚，不建议。行高从 1.625 收到 1.45 让设置页说明不再松垮。
+- 放弃：仅调 300 字重（发虚、仍保留 OPPO 字形）；仅缩小到 14（会伤可读性且字形仍宽）；用系统 `system-ui`/`Noto Sans CJK`（Android 实际仍落 OEM 字体，不可控）；把 PingFang 打包（Apple 字体授权不允许）。
+- 代价：APK +3.9 MB；首次渲染有极短 `font-display: swap` 替换；MiSans 缺字时回退系统字体会混排；LICENSE 需随包/文档保留。
+- 规范：`app/src/mobile/assets/fonts/MiSans-Normal.woff2`、`app/src/mobile/styles/clean.css`、`app/src/mobile/features/sessions/session-row.tsx`、`app/src/mobile/features/settings/more-page.tsx`；真机字体对比截图见 `docs/design/mobile-ui-v16/font-compare.png`。

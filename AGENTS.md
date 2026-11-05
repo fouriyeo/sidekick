@@ -22,7 +22,8 @@
 - ✅ **前端 Phase 1 已完成**（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）双 entry；`entries/desktop.tsx` / `entries/mobile.tsx`、`desktop/**`、`mobile/**`、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；连接/聊天 1:1 迁移，旧 `main.ts` / `styles.css` 已删除；桌面浏览器与安卓真机双向收发通过。
 - ✅ **视觉系统方向 B「深潜声呐」+ 双主题**（2026-11-04，D71）：`tokens.css` 重写为深海语义色板（全 hex）；深色「深海自发光」默认 + 浅色「海面雾光/海玻璃」两套手调主题；`sidekick:theme`（system/light/dark）、`index.html` 防闪脚本、`shared/lib/theme.ts`、`data-theme` + `.dark` 双写、Sonner 跟随；桌面/手机换皮与设置页「外观」三选一；宠物复用 OpenPets 图集不重绘、舞台两主题都深；`design-lab/` 评审稿按 D71 收口删除（不再作为事实源）。
 - ✅ **外观默认跟随系统 + 宠物舞台随主题**（2026-11-04，D76，supersede D71 的「默认深色」「舞台两套主题都深」）：`sidekick:theme` 缺失/非法一律 `system`，首次启动/无存档随系统亮暗，localStorage 不可用时静默回退深色；`--pet-*` 随主题——深色深海自发光，浅色换成「海玻璃舞台」（`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`）+ 新增 `--pet-coral-foreground`；始终深色的桌面麦克风浮层用 `.deep-sea-scope` 钉住深色 pet 令牌；鲸鱼图集不重绘、不加 filter，浅底对比度偏低是接受的代价。
-- ✅ **指挥舱 A 双端壳**（2026-11-05，D79，代码完成待真机）：桌面改为「总览 / 会话 / 内容 / 系统 / 设置」5 视图 + 顶部 48 全局状态条（服务 / 手机 / AI 三段可点）+ 72 图标导航（⌘1–⌘5）+ 56 页头；辅助功能提示条外壳级、麦克风浮层全局；聊天降级为「系统 › 消息」，系统页内 4 段（连接 / 语音 / 联动 / 消息）；960 单列（`lg:` 1024）/ 1180 两列。手机改为顶部 44 条 + 底部 3 档（宠物 / 动态 / 更多）+ 二级页 asking / chat / offline / scan，返回层级固定、录音中禁切页、完整会话搬到「动态」；首用清单 4 步只验连接 + 麦克风（后两步「在电脑上完成」）。状态语言统一（连接 7 态 / AI 4 态 / 麦克风 9 态；会话对象「已完成」、AI 聚合「完成」；D78 工作行 spinner + 「正在<动作>」/「正在思考」）。桌面手机数用 `system.clients - 1` 近似；旧 4 个平行 Tab、SettingsSheet、SessionPanel、ConnectionBar 已删除；产品规则 `docs/prd/shell/`，结构 `docs/frontend-architecture.md`；608 tests / tsc / lint / cargo 134 全绿，真机待回归。
+- ✅ **指挥舱 A 双端壳**（2026-11-05，D79，代码完成待真机）：桌面改为「总览 / 会话 / 内容 / 系统 / 设置」5 视图 + 顶部 48 全局状态条（服务 / 手机 / AI 三段可点）+ 72 图标导航（⌘1–⌘5）+ 56 页头；辅助功能提示条外壳级、麦克风浮层全局；聊天降级为「系统 › 消息」，系统页内 4 段（连接 / 语音 / 联动 / 消息）；960 单列（`lg:` 1024）/ 1180 两列。**手机部分已被 D80 取代**：不再有底部 3 档与动态页。状态语言统一（连接 7 态 / AI 4 态 / 麦克风 9 态；会话对象「已完成」、AI 聚合「完成」；D78 工作行 spinner + 「正在<动作>」/「正在思考」）。桌面手机数用 `system.clients - 1` 近似；旧 4 个平行 Tab、SettingsSheet、SessionPanel、ConnectionBar 已删除；产品规则 `docs/prd/shell/`，结构 `docs/frontend-architecture.md`；D80 后 591 tests / tsc / lint / build 全绿，真机待回归。
+- ✅ **手机干净版两页壳**（2026-11-05，D80，代码完成待真机）：手机只留「宠物（根）/ 设置（二级）」两页，删除动态页与底部 tab；宠物页 = 顶栏（gear / 连接状态 / chat）→ 会话卡（折叠 1 行、展开 5 行、working wash、× 二次确认）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 24）；设置从 gear 进、左上返回、17/400 inline 标题、首用清单 banner、无底栏；说完话结果卡为弹窗三段（grabber + header 16「已输入」/ 12 时间 + content 13 单行 + footer 15「清空 / ↵ 回车」纯文字，44 热区，清空二次确认），总高约 125。新增 `.mobile-clean` 作用域令牌（`app/src/mobile/styles/clean.css`），只影响手机；桌面端不变。**字体改用随包 MiSans Normal 400（3.9MB WOFF2，免费商用需注明）**，会话标题 15，设置说明行高 1.45；旧 `stream` / `tab-bar` / `now-row` / 动态页组件已删除；activity-store 已删除。591 tests / tsc / lint / build 全绿；真机 Realme RMX3370 已验证宠物页 / 会话展开 / 设置页 / 返回键 / 深色 / MiSans 字体，待补录音禁切页、结果卡清空二次确认、320 宽。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
@@ -31,7 +32,7 @@
 - ✅ **结果卡片手动「回车 / 清空」**（2026-11-04）：语音输入成功后，「已输入」卡片出现两个按钮——「回车」合成 Return，「清空」合成 `⌘A`+`Delete`（两次确认）；新增 `key.request`/`key.result` 协议，只作用于最近一次插入的目标窗口（30 秒时效、成功即作废、500ms 限频、密码框/未授权/非 macOS 拒绝），仍**不自动发送**。
 - ✅ **模型页 + 用量统计**（2026-11-02）：桌面「系统 › 语音」（2026-11-05 前为独立导航「模型」），上半部分配置百炼（完整地址/本地 `asr.json` 0600 保存 API Key/模型/语言/场景/热词/同意/测试/保存/清除 Key；无业务空间 ID 字段），下半部分区间切换（今天/近 7 天/近 1 个月/近 1 年；今天无明细、7/30 按天、1 年按月）+ 金额/Token/会话/时长（人民币微元，北京/新加坡价格估算）；`asr_usage.json` 0600、按天、最多 400 天；`asr_usage_stats()` 返回 365 天 `days`。
 - ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多 100 条；本地 `0600` JSON；唯一归属是桌面「内容」页（D79）。
-- 🚧 **AI 联动（DSH hook）开发中**（2026-11-02；2026-11-03 加会话列表；2026-11-04 会话行加粗粒度工具动作、插件 v3）：桌面「系统 › 联动」页 + 本地 `sidekick-hook.mjs` 注入 DSH profile + Rust 回环桥 + `status` 协议（含 `sessionList`）+ 手机四态动作/三音效 + 手机「动态」页完整会话列表 + 宠物页最近 1 条（标题/状态/当前工具动作）/本地清除/反问一键唤起 DSH；产品规则 `docs/prd/hook/`，技术方案 `docs/engineering/dsh-hook.md`；首次开启需重启 DSH 一次，之后热开关。
+- 🚧 **AI 联动（DSH hook）开发中**（2026-11-02；2026-11-03 加会话列表；2026-11-04 会话行加粗粒度工具动作、插件 v3）：桌面「系统 › 联动」页 + 本地 `sidekick-hook.mjs` 注入 DSH profile + Rust 回环桥 + `status` 协议（含 `sessionList`）+ 手机四态动作/三音效 + 手机宠物页会话卡（标题/状态/当前工具动作/清除/反问一键唤起 DSH）；产品规则 `docs/prd/hook/`，技术方案 `docs/engineering/dsh-hook.md`；首次开启需重启 DSH 一次，之后热开关。
 - ❌ 尚未开始：手机回答 AI 提问、文本消息、Claude Code / Qoder 接入、配对鉴权、正式签名包、iOS。
 
 ## 2.5 文档导航（懒加载）
@@ -94,7 +95,7 @@ sidekick/
 │  ├─ src/main.tsx      # createRoot + app_role 动态 import entry
 │  ├─ src/entries/      # desktop.tsx / mobile.tsx
 │  ├─ src/desktop/      # 桌面平台：shell/（状态条/导航/页头）、pages/（总览/会话/内容/系统/设置）、features/（各段 Section）
-│  ├─ src/mobile/       # 手机平台：shell/（顶部条/3 档）、features/（pet/stream/asking/chat/connect/settings/first-use/sessions/mic）
+│  ├─ src/mobile/       # 手机平台：shell/（顶部条/页头）、features/（pet/asking/chat/connect/settings/first-use/sessions/mic）
 │  ├─ src/protocol/     # messages.ts（chat/system/ServerInfo/ConnEvent + clients）+ discovery.ts（发现结果）
 │  ├─ src/shared/       # ui（signal-bars/status-chip 等）/ lib（tauri、status、sessions、activity）/ styles
 │  ├─ src/dev/          # 仅开发环境 Tauri mock（浏览器验证）
@@ -223,15 +224,16 @@ sidekick/
 - **宠物触摸互动已下线**（2026-11-04，D69）：点击、长按、来回抚摸宠物都不产生任何反应，不再有 `POKE`/`PET_*`/`interacting`/手势识别/亲密度/触摸爱心；不要再加 pointer 手势或 `interacting` 状态。AI 四态、睡眠/变暗保留；**麦克风反应已下线（D77）**——录音时宠物姿态/气泡/触感不变，只保留 `micListening` 门禁静音 AI 音效/触感。变暗遮罩的点击唤醒是屏幕行为，不是宠物互动。
 - **宠物首次命名/改名已下线**（2026-11-05）：宠物固定显示「小跟班」，`first_meet` 文案是「你来了。我是小跟班。」；不要再加命名弹层、输入框、`NAME_SET`/`celebrating`/`happy`/爱心/`phaseUntil`/`schedulePhaseExpiry`/`setName`，也不要再给 `PetSaveV1` 加 `name`。`onboarded` 保留为「是否已见过面」，首次 BOOT 置 true；旧存档的 `name` 字段忽略、不迁移（version 仍 1，其他字段照常恢复）。手机「更多」页分组固定为 01 连接 / 02 外观 / 03 反馈 / 04 显示 / 05 数据与关于（含重置宠物）/ 06 消息通道，重置确认文案「要重置宠物吗？」。
 - **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。插件协议版本 `PLUGIN_VERSION = 3`（v2 加 `sessionList`，v3 加会话当前工具类别），桌面「系统 › 联动」页的「插件 v3」由 hello 上报动态渲染，不用改页面代码。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume/sessionList`（id、标题、状态、askKind、lastEventAt、completedAt、粗粒度工具类别 `tool`），**不要加提示词/回复/工具参数/路径/cwd/模型名/工具名原文**。`tool` 是插件本地归一后的固定枚举（bash/read/edit/search/web/agent/plan/tool），未知工具落 `tool`；Rust 桥 `SessionTool` 做第二道白名单、未知值折叠为通用 `tool`，不保留原文。标题是内容类外发字段：单行 ≤80 字符、不写日志、不落盘；`sessionList` 最多 50 条，旧客户端忽略（旧插件不报 `tool`，手机显示「正在思考」）。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
-- **手机会话列表**：`sessionList` 随 `status` 广播（最多 50 条，标题 ≤80 字符，`tool` 仅 working 有值）；手机 `session-store` 用本地清除标记过滤（`lastEventAt <= cleared.through` 隐藏），标记存 `sidekick-sessions.json` 只含 id/at/through（7 天 TTL、最多 200 条），有新事件自动解除。完整列表在手机「动态」页固定最多 5 行（无展开/收起/自动展开），宠物页只显示最近 1 条（asking 优先）；完成态保留到清除或下一轮。工作中行显示 spinner + 「正在<动作>」（运行命令/阅读文件/修改文件/搜索代码/查资料/处理子任务/整理计划/使用工具；无 `tool` 或未知值「正在思考」），行尾保留相对时间。点 asking 会话发 `focus.request`，桌面 `app_focus.rs` 只做 `open -a "DeepSeek Harness"`（1.5s 限频，错误只回错误码），**不接受手机传来的应用路径**。**已归档会话不下发**：桌面桥读 `$DSH_HOME/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存，文件缺失/异常按空）过滤列表，并按可见列表重算聚合态与 `sessions`，避免归档的 asking 让宠物一直停在「等你决定」；插件仍上报原始列表，旧桥忽略。改 `sessionList` 字段要同步 `protocol/README.md`、Rust 桥与手机解析三处。
-- **麦克风胶囊**：单竖屏布局下麦克风是 56px 高、`min(86vw,360px)` 宽胶囊；录音/处理状态在胶囊内，实时文本/结果卡片在胶囊上方独立绝对定位（`bottom-[68px]`），出现/消失不推动按钮。不要再加左下取消按钮，取消只保留上滑手势；不要用 `left-1/2 -translate-x-1/2` 居中（WebView 103 不支持 CSS translate）。
+- **手机会话列表**：`sessionList` 随 `status` 广播（最多 50 条，标题 ≤80 字符，`tool` 仅 working 有值）；手机 `session-store` 用本地清除标记过滤（`lastEventAt <= cleared.through` 隐藏），标记存 `sidekick-sessions.json` 只含 id/at/through（7 天 TTL、最多 200 条），有新事件自动解除。会话卡在宠物页置顶：折叠 1 行 / 展开最多 5 行，标题 + 状态/相对时间 + ×（asking 二次确认）；不再有动态页。工作中行显示 spinner + 「正在<动作>」（运行命令/阅读文件/修改文件/搜索代码/查资料/处理子任务/整理计划/使用工具；无 `tool` 或未知值「正在思考」），行尾保留相对时间。点 asking 会话发 `focus.request`，桌面 `app_focus.rs` 只做 `open -a "DeepSeek Harness"`（1.5s 限频，错误只回错误码），**不接受手机传来的应用路径**。**已归档会话不下发**：桌面桥读 `$DSH_HOME/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存，文件缺失/异常按空）过滤列表，并按可见列表重算聚合态与 `sessions`，避免归档的 asking 让宠物一直停在「等你决定」；插件仍上报原始列表，旧桥忽略。改 `sessionList` 字段要同步 `protocol/README.md`、Rust 桥与手机解析三处。
+- **麦克风圆钮/胶囊**：单竖屏布局下空闲态是 56px 薄荷圆钮居中、距底 24；录音/处理时展开为 `min(90vw,420px)` 胶囊；实时文本/结果卡片在按钮上方独立绝对定位（`bottom-[68px]`），出现/消失不推动按钮。不要再加左下取消按钮，取消只保留上滑手势；不要用 `left-1/2 -translate-x-1/2` 居中（WebView 103 不支持 CSS translate）。
 - **结果卡片手动按键**：`key.request` 只接受「最近一次 `mic.result(inserted)`」的目标（owner+mic session），30 秒过期、成功一次即作废、桌面 500ms 限频；按键前重新核对前台应用、密码框、辅助功能，任一不符只回错误码、不按键。「清空」是 `⌘A`+`Delete`（两次确认），不是 ⌘Z；终端等非标准输入框可能不生效，**绝不能因此回退成回车**。日志不打文本/应用名/按键序列；结果卡片只在 `outcome=inserted` 时显示按钮。
 - **麦克风会话/中断（2026-11-04，D70）**：手机 `mic-button` 的手势结束必须看 ref（`heldRef`/`pointerIdRef`）而不是渲染期 `phase`；一次只允许一个 in-flight start（`startingRef` + `lifecycleRef` token），否则 `sessionIdRef`/`startSentRef` 会被并发 start 覆盖，出现「手指已抬起但电脑端一直正在听」。服务端同端重复 `mic.start` 以最新会话为准、异端仍 `session_busy`；`mic.stop` 必须 owner+session 匹配；每个会话 `maxMs+3s` 看门狗；新增 `mic.cancel`（桌面 UI 请求 → 服务端广播 `reason=desktop|timeout`），手机收到后**不校验本地 session** 强制停本地采集。桌面浮层「倾听中」右侧有「取消录音」。改 `mic.cancel` 要同步 `protocol/README.md`、`protocol-audio.md`、Rust `handle_mic_cancel` 与双端解析。
 - **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
 - **`--accent` 与 `--whale` 分开（D71）**：`--accent` 是 shadcn 的 hover/选中面（语义 = `--wash` 薄荷薄层）；鲸蓝用新令牌 `--whale`。不要改 `--accent` 当品牌次色，否则所有 shadcn 组件 hover 会变蓝块。
 - **声呐环只做装饰且可暂停**：只剩桌面状态点 `.sonar-dot-ring` 5.6s（手机舞台背景环已删除，D77）；只动 `transform`/`opacity`，细描边、不发光、不叠 `filter`；`prefers-reduced-motion` 冻结；`useMotionPause` 在后台/窗口失焦写 `<html data-motion-paused>` 暂停。常驻窗口不要再加更多循环动画，也不要恢复手机舞台环。
 - **指挥舱壳体**：视图切换是组件状态（桌面 `route.view` / 手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘5 在输入框 / 下拉 / contentEditable 里不劫持。
-- **手机返回层级与录音**：settings/stream → pet、asking → stream、chat → pet、offline → 上一页、scan → offline；新增全屏页必须接入返回处理，否则按返回会被根页面当成退出确认；录音中 3 档禁用并提示「录音中 · 松手后再切页」。
+- **手机字体（D81）**：Android WebView 把 `sans-serif` 解析成 OEM 的 **OPlusSans 3.1（OPPO Sans Regular）**，字形比 PingFang 宽、笔画厚，15–16/400 会显「老年机」；**不要只靠 300 字重**（会发虚）。手机端随包 `app/src/mobile/assets/fonts/MiSans-Normal.woff2`（MiSans Normal 400，3.9MB，免费商用），`clean.css` `@font-face` + `.mobile-clean` 首选；系统字体做缺字回退。标题 15，正文 13，设置说明行高 1.45；全手机 400（`!important` 防合成粗体），桌面不加载。字体许可说明在 assets/README 与设置「数据与关于」。
+- **手机返回层级与录音**：settings / chat / asking → pet、offline → 上一页、scan → offline；新增全屏页必须接入返回处理，否则按返回会被根页面当成退出确认；没有底部 tab，录音中所有换页入口由 `ui-store.setView` 拦截，不弹「录音中 · 松手后再切页」（那是旧 3 档文案）。
 - **首用清单 / 设备数 / focus**：手机只本地判定「连接 + 麦克风（`micReady`）」，百炼与辅助功能只能标「在电脑上完成」，不得伪造完成；桌面「已连接 · N 台设备」= `system.clients - 1`（含本机窗口与网页预览），不显示设备名；浏览器 mock 无本地 WS，「在 DSH 打开」只能在 `pnpm tauri dev` / 真机验证。
 
 ## 9. 协作约定
@@ -246,14 +248,14 @@ sidekick/
 
 ## 10. 下一步路线（按优先级）
 
-> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；手机自动发现电脑已落地；宠物 P0 代码完成（帧动画图集；触摸互动已下线；真机与扩展状态行待补）；麦克风 P0 与桌面剪贴板 P1 代码完成，真机/辅助功能待回归；指挥舱 A 双端壳代码完成（2026-11-05，D79），真机待回归。
+> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；手机自动发现电脑已落地；宠物 P0 代码完成（帧动画图集；触摸互动已下线；真机与扩展状态行待补）；麦克风 P0 与桌面剪贴板 P1 代码完成，真机/辅助功能待回归；手机 D80 两页壳代码完成并完成基础真机验证（2026-11-05）。
 
 1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
 2. 情绪宠物 P0：代码已完成（帧动画图集 + poster 降级、单竖屏布局、plugin-store 存档）；真机 60fps/存档跨重启、扩展状态行（睡眠）待补；触摸互动、麦克风联动与首次命名均已下线（D69/D77/2026-11-05）。
 3. ✅ 外设麦克风（百炼云端唯一）：二进制协议、云端流式、`mic.partial`、手机 UI、桌面浮层已完成；结果卡片手动回车/清空已完成（2026-11-04）；下一步 macOS 辅助功能自动粘贴与真机 60 秒/断连/密码框/按键焦点矩阵。
 4. ✅ 模型页 + 用量统计：百炼配置（无业务空间 ID）、本地 Key 元数据、区间切换（今天/7/30/365，1 年按月）、清空统计已完成（2026-11-02）；下一步真实账号/本地 Key 迁移/金额对账与真机验收。
 5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
-6. ✅ 指挥舱 A 双端壳（2026-11-05，D79）：桌面 5 视图 + 全局状态条 + ⌘1–⌘5 + 系统 4 段；手机 3 档 + 二级页 + 首用清单 + 返回层级；状态语言统一（D78 工作行保留）。代码完成、608 tests 全绿；下一步真机回归（focus 链路 / 返回键 / 录音禁切页 / 双主题）。
+6. ✅ 手机干净版两页壳（2026-11-05，D80；取代 D79 的手机 3 档）：宠物页（顶栏 / 会话卡 / 鲸鱼 / 居中圆麦克风）+ 设置二级页，删动态页与底栏；结果卡弹窗三段；代码完成、591 tests 全绿；下一步真机回归（返回键 / 录音禁切页 / 双主题 / 320 宽 / 结果卡清空二次确认）。
 7. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效 + 会话列表/清除/反问唤起 + 会话行工具动作（插件 v3）；代码开发中，待真机/隐私验收（2026-11-04）。
 8. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
 9. 配对鉴权 + 正式签名/公证/开机自启（`release/` 固定产物与打包脚本已完成 2026-11-03，仍是本地密钥/未签名）。

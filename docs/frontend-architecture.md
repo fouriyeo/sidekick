@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-05 按 D79 完成「指挥舱 A」两端壳（桌面 5 视图 / 手机 3 档；608 tests 全绿，真机待回归），主题运行时见 §6。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-05 桌面按 D79 完成「指挥舱 A」5 视图壳；手机按 D80 完成干净版两页壳（宠物 + 设置，591 tests 全绿，真机已验证基础页，主题运行时见 §6）。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)；壳与导航规则见 [prd/shell/](./prd/shell/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -9,7 +9,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-05 起按 D79 采用「指挥舱 A」壳：桌面 5 视图（总览/会话/内容/系统/设置）、手机 3 档（宠物/动态/更多），聊天降级为「系统 › 消息」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
+- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-05 起桌面按 D79 采用「指挥舱 A」壳（5 视图），手机按 D80 改为两页壳（宠物 / 设置；无底栏），聊天降级为「系统 › 消息」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -42,7 +42,7 @@ app/
 │  ├─ main.tsx                # app_role → 动态 import 对应 entry
 │  ├─ entries/
 │  │  ├─ desktop.tsx          # 挂载桌面指挥舱壳（`desktop/app.tsx`）
-│  │  └─ mobile.tsx           # 挂载手机 3 档壳（`mobile/app.tsx`）
+│  │  └─ mobile.tsx           # 挂载手机两页壳（`mobile/app.tsx` + `.mobile-clean`）
 │  ├─ desktop/                # 桌面专属（指挥舱壳，固定窗口布局）
 │  │  ├─ app.tsx              # 桌面根：外壳 + 视图切换 + 全局层（辅助功能条/麦克风浮层）
 │  │  ├─ shell/               # icon-rail / global-status-bar / page-header / page-shell / page-chips / card / system-segments
@@ -51,15 +51,14 @@ app/
 │  │  ├─ lib/                 # desktop-nav、status/clients/activity/voice store、activity-events、ws-client
 │  │  └─ components/          # 跨页小组件（EmptyState 等）
 │  ├─ mobile/                 # 手机专属（只做竖屏）
-│  │  ├─ app.tsx              # 手机根：3 档壳 + 二级页 + 返回栈
-│  │  ├─ shell/               # page / page-header / pet-top-bar / tab-bar
+│  │  ├─ app.tsx              # 手机根：宠物 + 设置/二级页 + 返回栈
+│  │  ├─ shell/               # page / page-header / pet-top-bar
 │  │  ├─ features/
-│  │  │  ├─ pet/              # 首屏：气泡、舞台、现在行、最近 1 条、pet-name
-│  │  │  ├─ stream/           # 动态：会话列表 + 最近发生（activity-store 内存）
+│  │  │  ├─ pet/              # 首屏：舞台、鲸鱼、会话卡容器
 │  │  │  ├─ asking/           # 等你决定页
-│  │  │  ├─ first-use/        # 首用清单（4 步；本地只验前两步）
-│  │  │  ├─ sessions/         # 会话行渲染、清除标记与 D78 工具动作
-│  │  │  ├─ mic/              # 按住说话、胶囊、权限、结果
+│  │  │  ├─ first-use/        # 首用清单（4 步；本地只验前两步；设置页 banner 复用）
+│  │  │  ├─ sessions/         # 会话卡 / 会话行 / 清除标记 / D78 工具动作
+│  │  │  ├─ mic/              # 按住说话、圆钮/胶囊、权限、结果卡
 │  │  │  ├─ connect/          # 连接页、扫码、重连（connection-view）
 │  │  │  ├─ chat/             # 消息页（通道调试）
 │  │  │  └─ settings/         # 更多：设置整页（页面化）
@@ -345,8 +344,8 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 **壳与视图（D79）**
 
 - 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | sessions | content | system | settings`、`SystemSection = connection | voice | hook | chat`、导航项与 ⌘1–⌘5；壳只维护「当前视图 + 系统分段」，不进 URL、不引路由。
-- 手机：`mobile/ui-store.ts` 的 `MobileView = pet | stream | settings | chat | asking | offline` + `scanOpen`；根页面按 view 渲染 3 档与二级页，返回栈在 `mobile/system-back.ts`。
-- 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopActivityStore`（最近事件）、`useDesktopVoiceStore`（最近一次语音）、`desktop-activity-events.ts`（事件→最近发生）；手机 `useMobileActivityStore`（动态页「最近发生」，cap 20）、`session-store`（清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）。
+- 手机：`mobile/ui-store.ts` 的 `MobileView = pet | settings | chat | asking | offline` + `scanOpen`；根页面按 view 渲染宠物/设置/二级页，无底部 tab；返回栈在 `mobile/system-back.ts`。
+- 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopActivityStore`（最近事件）、`useDesktopVoiceStore`（最近一次语音）、`desktop-activity-events.ts`（事件→最近发生）；手机 `session-store`（会话卡 + 清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）；`activity-store` 暂留但不再渲染。
 - `status` 解析集中在数据 store；D78 的工具动作文案由 `shared/lib/sessions.ts` 统一派生，桌面与手机共用，不各写一套映射。
 - Android 返回键统一从 `shared/lib/tauri.ts` 的 `subscribeBackButton` 进入（App 启动注册一次）；「更多」页往 `mobile/system-back.ts` 的返回栈压处理函数，其它二级页由 `MobileApp` 按视图层级处理，根页面兜底「再按一次退出」（2 秒窗口，之后调 `exitApp`）。规则见 [standards/ux.md](./standards/ux.md) §4.1。
 
@@ -405,7 +404,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 ## 13. 迁移计划
 
-当前进度（2026-11-05）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动已落地。2026-11-05 按 D79 完成「指挥舱 A」：桌面 5 视图壳（状态条 / 导航 / 页头 / 总览 / 会话 / 系统 4 段 / 设置 / 麦克风浮层 / 辅助功能提示条）与手机 3 档壳（顶部条 / 宠物 / 动态 / 更多 / 二级页 / 首用清单 / 返回层级）；共享底座（`shared/lib/status.ts`、`shared/lib/sessions.ts`、`shared/ui/signal-bars.tsx`、`status-chip.tsx`）与协议可选 `clients` 字段先行落地；全仓 608 tests / tsc / lint 全绿，浏览器 QA 15 屏无 console error，真机待回归。
+当前进度（2026-11-05）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动已落地。桌面按 D79 完成 5 视图壳；手机按 D80 完成两页壳（宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆形麦克风 / 结果卡弹窗；设置二级页 / 首用 banner / 返回层级），删除 `stream`、`tab-bar`、`now-row` 与动态页；`.mobile-clean` 令牌只作用于手机；全仓 591 tests / tsc / lint / build 全绿，真机 Realme 已验证宠物页/会话展开/设置/返回键，待补录音禁切页、结果卡清空、深色/320 真机。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
@@ -428,7 +427,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 - [ ] 安卓 `scripts/build-android.sh && scripts/install-android.sh` 成功
 - [ ] 手机打开 App 自动发现并连接电脑，状态为「已连接」；无发现时可手动输入地址兜底
 - [ ] 桌面指挥舱壳：默认总览、状态条三段可点、⌘1–⌘5、辅助功能提示条外壳级、麦克风浮层全局
-- [ ] 手机 3 档壳：默认宠物、顶部条三段可点、底部 3 档切换、二级页返回层级正确、录音中禁切页
+- [ ] 手机两页壳：默认宠物、顶栏 gear/连接/chat 可点、无底部 tab、会话卡折叠展开、二级页返回层级正确、录音中禁切页、结果卡三段
 - [ ] 状态语言两端同词（连接 7 / AI 4 / 麦克风 9），琥珀只给「等你决定」，会话工作行显示 D78 工具动作
 - [ ] 双向聊天与现状一致，气泡方向正确
 - [ ] 构建产物中两个 entry 分 chunk，运行时只加载对应角色的一份

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 type PageHeaderProps = {
   title: string;
-  /** mono 副标：一句上下文，不重复标题。 */
+  /** 一行 13/400 说明；不再用 mono 大写英文副标。 */
   sub?: string;
   onBack?: () => void;
   backLabel?: string;
@@ -14,8 +14,11 @@ type PageHeaderProps = {
 };
 
 /**
- * 二级页页头 44：返回 44 热区 + 居中标题（15–17/600）+ mono 副标；右侧最多一个动作。
- * 底部三档里的「动态 / 更多」没有返回按钮（返回键仍回宠物），布局用等宽占位保持标题居中。
+ * 二级页页头 44（v16）：返回 44 热区 + 居中 inline 标题 17/400，
+ * 可选一行 13/400 说明；右侧最多一个动作（44dp）。
+ *
+ * 标题绝对居中，不因返回键/右侧动作的宽度偏移；标题层不拦截指针，
+ * 返回与右侧动作仍可点。一级页面自己的顶栏不走这个组件。
  */
 export function PageHeader({
   title,
@@ -26,17 +29,12 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <header
-      className={cn(
-        "flex min-h-11 flex-none items-center gap-1 px-[calc(env(safe-area-inset-left)+6px)] pr-[calc(env(safe-area-inset-right)+6px)]",
-        className,
-      )}
-    >
+    <header className={cn("relative flex min-h-11 flex-none items-center px-5", className)}>
       {onBack ? (
         <button
           type="button"
           aria-label={backLabel}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-wash hover:text-foreground focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+          className="relative z-10 -ml-2.5 flex size-11 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
           onClick={onBack}
         >
           <ArrowLeft className="size-5" />
@@ -45,18 +43,20 @@ export function PageHeader({
         <span aria-hidden="true" className="size-11 shrink-0" />
       )}
 
-      <div className="min-w-0 flex-1 text-center">
-        <h1 className="truncate text-[15px] leading-tight font-semibold tracking-[-0.01em]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex min-h-11 flex-col items-center justify-center px-14 text-center">
+        <h1 className="max-w-full truncate text-[17px] leading-[22px] font-normal text-foreground">
           {title}
         </h1>
         {sub && (
-          <span className="mt-0.5 block truncate font-mono text-[9.5px] tracking-[0.14em] text-muted-foreground uppercase">
+          <span className="mt-0.5 block max-w-full truncate text-[13px] leading-[18px] font-normal text-muted-foreground">
             {sub}
           </span>
         )}
       </div>
 
-      <span className="flex size-11 shrink-0 items-center justify-center">{right}</span>
+      <span className="relative z-10 ml-auto flex size-11 shrink-0 items-center justify-center text-muted-foreground">
+        {right}
+      </span>
     </header>
   );
 }

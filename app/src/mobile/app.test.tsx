@@ -8,7 +8,6 @@ import { createIdleAiStatus } from "@/mobile/features/pet/ai-status";
 import { defaultPetState } from "@/mobile/features/pet/persistence";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
-import { useMobileActivityStore } from "@/mobile/features/stream/activity-store";
 import { clearBackHandlers } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import type { SessionSummary } from "@/protocol/messages";
@@ -153,7 +152,6 @@ beforeEach(() => {
   useUiStore.setState({ view: "pet", scanOpen: false, offlineReturnView: "pet" });
   useFirstUseStore.setState({ micReady: false, dismissed: false, hydrated: false });
   useSessionStore.getState().clearAll();
-  useMobileActivityStore.getState().reset();
   usePetStore.setState({
     pet: defaultPetState(Date.now()),
     hydrated: true,
@@ -223,40 +221,42 @@ function pressBack() {
 }
 
 describe("MobileApp 壳", () => {
-  it("默认落在宠物页（底部三档选中「宠物」）", async () => {
+  it("默认落在宠物页：没有底部三档，顶栏设置/消息可用", async () => {
     await renderApp();
 
-    expect(screen.getByText("首用清单")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "宠物" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "消息" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+    expect(screen.queryByText("首用清单")).not.toBeInTheDocument();
   });
 
-  it("底部三档切换页面", async () => {
+  it("设置从左上 gear 进入，返回回到宠物", async () => {
     await renderApp();
 
-    fireEvent.click(screen.getByRole("button", { name: "动态" }));
-    expect(screen.getByRole("heading", { level: 1, name: "动态" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "动态" })).toHaveAttribute("aria-current", "page");
-
-    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
     expect(screen.getByRole("heading", { level: 1, name: "更多" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "宠物" }));
-    expect(screen.getByText("首用清单")).toBeInTheDocument();
+    pressBack();
+    expect(useUiStore.getState().view).toBe("pet");
   });
 
-  it("录音中禁止切页：tab 禁用并提示，顶部导航也被拦截", async () => {
+  it("消息从右上 chat 进入，返回回到宠物", async () => {
+    await renderApp();
+
+    fireEvent.click(screen.getByRole("button", { name: "消息" }));
+    expect(useUiStore.getState().view).toBe("chat");
+
+    pressBack();
+    expect(useUiStore.getState().view).toBe("pet");
+  });
+
+  it("录音中禁止切页：gear / chat 都被拦截", async () => {
     await renderApp();
 
     act(() => useMicStore.setState({ phase: "listening" }));
 
-    expect(screen.getByText("录音中 · 松手后再切页")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "动态" })).toBeDisabled();
-
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "消息" }));
-    fireEvent.click(screen.getByRole("button", { name: "更多" }));
     expect(useUiStore.getState().view).toBe("pet");
   });
 });
@@ -264,21 +264,12 @@ describe("MobileApp 壳", () => {
 describe("MobileApp 返回层级", () => {
   it("settings → pet", async () => {
     await renderApp();
-    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
 
     pressBack();
 
     expect(useUiStore.getState().view).toBe("pet");
     expect(tauri.exitApp).not.toHaveBeenCalled();
-  });
-
-  it("stream → pet", async () => {
-    await renderApp();
-    fireEvent.click(screen.getByRole("button", { name: "动态" }));
-
-    pressBack();
-
-    expect(useUiStore.getState().view).toBe("pet");
   });
 
   it("chat → pet", async () => {
@@ -290,7 +281,7 @@ describe("MobileApp 返回层级", () => {
     expect(useUiStore.getState().view).toBe("pet");
   });
 
-  it("asking → stream", async () => {
+  it("asking → pet", async () => {
     seedSessions([session()]);
     usePetStore.setState((state) => ({
       ai: { ...state.ai, state: "asking", resume: "asking", enteredAt: Date.now() },
@@ -300,7 +291,7 @@ describe("MobileApp 返回层级", () => {
 
     pressBack();
 
-    expect(useUiStore.getState().view).toBe("stream");
+    expect(useUiStore.getState().view).toBe("pet");
   });
 
   it("offline → 上一页（记住来源）", async () => {
@@ -356,16 +347,19 @@ describe("MobileApp 返回层级", () => {
 });
 
 describe("MobileApp 屏幕常亮", () => {
-  it("只在宠物页请求常亮，切到动态/更多释放", async () => {
+  it("只在宠物页请求常亮，进设置/消息后释放", async () => {
     await renderApp();
 
     expect(tauri.setKeepScreenOn).toHaveBeenCalledWith(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "动态" }));
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
     expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "宠物" }));
+    pressBack();
     expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "消息" }));
+    expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(false);
   });
 
   it("关闭屏幕常亮设置后不再请求常亮", async () => {
@@ -416,7 +410,6 @@ describe("MobileApp 协议消息", () => {
       );
     });
     expect(usePetStore.getState().ai.state).toBe("asking");
-    expect(useMobileActivityStore.getState().events[0]?.kind).toBe("ai");
   });
 
   it("过期的 completed 快照被忽略", async () => {
@@ -436,14 +429,13 @@ describe("MobileApp 协议消息", () => {
     expect(usePetStore.getState().ai.state).toBe("asking");
   });
 
-  it("conn 事件更新连接状态并写入活动流；断连保留最后快照", async () => {
+  it("conn 事件更新连接状态；断连保留最后快照", async () => {
     seedSessions([session()]);
     await renderApp();
 
     act(() => tauri.connHandler?.({ online: true }));
     expect(useConnectionStore.getState().status).toBe("connected");
     expect(tauri.sendStatusRequest).toHaveBeenCalledTimes(1);
-    expect(useMobileActivityStore.getState().events[0]?.title).toBe("已连接电脑");
     expect(useSessionStore.getState().raw).toHaveLength(1);
 
     act(() => tauri.connHandler?.({ online: false }));

@@ -1,11 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
+import { useFirstUseStore } from "@/mobile/features/first-use/store";
 import { defaultPetState } from "@/mobile/features/pet/persistence";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { clearBackHandlers, handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
-import { THEME_STORAGE_KEY } from "@/shared/lib/local-storage";
+import { FIRST_USE_KEY, THEME_STORAGE_KEY } from "@/shared/lib/local-storage";
 import { MorePage } from "./more-page";
 
 vi.mock("@/mobile/features/pet/tauri-pet-storage", () => ({
@@ -27,6 +28,7 @@ beforeEach(() => {
     saveStatus: "idle",
     bubble: null,
   });
+  useFirstUseStore.setState({ hydrated: false, micReady: false, dismissed: false });
   document.documentElement.dataset.theme = "dark";
 });
 
@@ -43,26 +45,94 @@ function pressBack(): boolean {
   return handled;
 }
 
-describe("MorePage 结构", () => {
-  it("分组顺序：连接/外观/反馈/显示/数据与关于/消息通道，且不再有名字", () => {
-    render(<MorePage />);
+/** 页面里除根 section（aria-label="更多"）与首用 banner 以外的分组卡。 */
+function groupLabels(container: HTMLElement): Array<string | null> {
+  return [...container.querySelectorAll("section[aria-label]")]
+    .map((element) => element.getAttribute("aria-label"))
+    .filter((label) => label !== "更多" && label !== "首用清单");
+}
 
-    const headings = screen
-      .getAllByRole("heading", { level: 2 })
-      .map((heading) => heading.textContent);
-    expect(headings).toEqual(["连接", "外观", "反馈", "显示", "数据与关于", "消息通道"]);
+describe("MorePage 二级页结构", () => {
+  it("是二级页：17/400 inline 标题 + 返回键，无页内大标题、无底部 tab", () => {
+    const { container } = render(<MorePage />);
 
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.queryByText(/改名|昵称|自定义名字/)).not.toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "主导航" })).toBeInTheDocument();
+    const title = screen.getByRole("heading", { level: 1, name: "更多" });
+    expect(title.className).toContain("text-[17px]");
+    expect(title.className).toContain("font-normal");
+    expect(screen.queryByRole("navigation", { name: "主导航" })).toBeNull();
+    expect(container.querySelector("section[aria-label='更多']")).not.toBeNull();
+
+    // 页头说明保留一行 13/400，不是 mono 大写英文副标。
+    const sub = screen.getByText("设置 · 只影响这台手机");
+    expect(sub.className).toContain("text-[13px]");
+    expect(sub.className).not.toContain("font-mono");
+    expect(sub.className).not.toContain("uppercase");
+  });
+
+  it("分组卡顺序：连接/外观/反馈/显示/数据与关于/消息通道", () => {
+    const { container } = render(<MorePage />);
+
+    expect(groupLabels(container)).toEqual([
+      "连接",
+      "外观",
+      "反馈",
+      "显示",
+      "数据与关于",
+      "消息通道",
+    ]);
+    expect(screen.queryByText(/^0[1-6]$/)).toBeNull();
+    expect(screen.queryByText(/SOUND|MOTION|KEEP AWAKE|DIM/)).toBeNull();
     expect(screen.getByText(/Sidekick 0\.1\.0/)).toBeInTheDocument();
   });
 
-  it("是整页而不是弹层（没有 dialog/modal 角色）", () => {
+  it("全站 400 字重：页面里不出现 semibold/bold/medium", () => {
     const { container } = render(<MorePage />);
+    expect(container.innerHTML).not.toMatch(/font-(semibold|bold|medium)/);
+  });
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(container.querySelector("section[aria-label='更多']")).not.toBeNull();
+  it("返回键回宠物页", () => {
+    render(<MorePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "返回宠物" }));
+    expect(useUiStore.getState().view).toBe("pet");
+  });
+});
+
+describe("MorePage 首用清单 banner", () => {
+  it("一行「首用清单 · 还差 N 步」，点开才展开四步", () => {
+    render(<MorePage />);
+
+    expect(screen.getByText(/还差 3 步/)).toBeInTheDocument();
+    expect(screen.queryByText("允许麦克风权限")).toBeNull();
+
+    const banner = screen.getByRole("button", { name: /首用清单，已完成 1\/4/ });
+    fireEvent.click(banner);
+    expect(banner.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("允许麦克风权限")).toBeInTheDocument();
+    expect(screen.getAllByText("在电脑上完成")).toHaveLength(2);
+
+    fireEvent.click(banner);
+    expect(screen.queryByText("允许麦克风权限")).toBeNull();
+  });
+
+  it("返回键先收起展开的清单", () => {
+    render(<MorePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /首用清单，已完成 1\/4/ }));
+    expect(pressBack()).toBe(true);
+    expect(screen.queryByText("允许麦克风权限")).toBeNull();
+  });
+
+  it("麦克风已用过时还差 2 步；已收起时整条 banner 不渲染", () => {
+    localStorage.setItem(FIRST_USE_KEY, JSON.stringify({ micReady: true, dismissed: false }));
+    const first = render(<MorePage />);
+    expect(screen.getByText(/还差 2 步/)).toBeInTheDocument();
+    first.unmount();
+
+    localStorage.setItem(FIRST_USE_KEY, JSON.stringify({ micReady: true, dismissed: true }));
+    useFirstUseStore.setState({ hydrated: false, micReady: false, dismissed: false });
+    render(<MorePage />);
+    expect(screen.queryByText(/首用清单/)).toBeNull();
   });
 });
 
@@ -77,7 +147,8 @@ describe("MorePage 设置项", () => {
   it("外观三选一即时生效并只写本机", () => {
     render(<MorePage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "深色" }));
+    const themeGroup = screen.getByRole("group", { name: "外观" });
+    fireEvent.click(within(themeGroup).getByRole("button", { name: "深色" }));
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
@@ -101,13 +172,24 @@ describe("MorePage 设置项", () => {
     }
   });
 
+  it("反馈：减少动效三选一写入宠物设置", async () => {
+    render(<MorePage />);
+
+    const group = screen.getByRole("group", { name: "减少动效" });
+    fireEvent.click(within(group).getByRole("button", { name: "开启" }));
+    await waitFor(() => expect(usePetStore.getState().pet.settings.reduceMotion).toBe("on"));
+
+    fireEvent.click(within(group).getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(usePetStore.getState().pet.settings.reduceMotion).toBe("off"));
+  });
+
   it("显示：屏幕常亮关闭后隐藏最长时长选项", async () => {
     render(<MorePage />);
 
-    expect(screen.getByText("最长常亮 · KEEP AWAKE")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "最长常亮" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "屏幕常亮" }));
     await waitFor(() => expect(usePetStore.getState().pet.settings.keepAwake).toBe(false));
-    expect(screen.queryByText("最长常亮 · KEEP AWAKE")).toBeNull();
+    expect(screen.queryByRole("group", { name: "最长常亮" })).toBeNull();
   });
 
   it("显示：最长时长与变暗等待可调", async () => {
@@ -116,7 +198,8 @@ describe("MorePage 设置项", () => {
     fireEvent.click(screen.getByRole("button", { name: "4 小时" }));
     await waitFor(() => expect(usePetStore.getState().pet.settings.keepAwakeHours).toBe(4));
 
-    fireEvent.click(screen.getByRole("button", { name: "10 分钟" }));
+    const dimGroup = screen.getByRole("group", { name: "无操作自动变暗" });
+    fireEvent.click(within(dimGroup).getByRole("button", { name: "10 分钟" }));
     await waitFor(() => expect(usePetStore.getState().pet.settings.dimMinutes).toBe(10));
   });
 });

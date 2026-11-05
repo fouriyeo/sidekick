@@ -27,7 +27,7 @@ const LAPTOP = {
 beforeEach(() => {
   localStorage.clear();
   window.localStorage.clear();
-  useUiStore.setState({ view: "offline", scanOpen: false, offlineReturnView: "stream" });
+  useUiStore.setState({ view: "offline", scanOpen: false, offlineReturnView: "pet" });
   useConnectionStore.setState({
     addr: "",
     status: "disconnected",
@@ -152,7 +152,7 @@ describe("OfflinePage 状态与排障", () => {
     render(<OfflinePage />);
 
     fireEvent.click(screen.getByRole("button", { name: "返回上一页" }));
-    expect(useUiStore.getState().view).toBe("stream");
+    expect(useUiStore.getState().view).toBe("pet");
   });
 
   it("已连接时显示当前地址", () => {
