@@ -49,6 +49,11 @@ type MicButtonProps = {
    * 宠物页有 62px 底部三档，传入升高后的值，覆盖层会一起上移。
    */
   bottomOffsetClassName?: string;
+  /**
+   * 结果/提示覆盖层距胶囊容器的定位类。默认 68（胶囊上方）；
+   * 宠物页有「最近 1 条会话」行时传更大的值，避免卡片盖住该行。
+   */
+  overlayBottomClassName?: string;
 };
 
 const MIN_RECORDING_MS = 300;
@@ -57,7 +62,12 @@ const WARN_RECORDING_MS = 50_000;
 const CANCEL_ENTER_PX = 48;
 const CANCEL_EXIT_PX = 24;
 
-export function MicButton({ active, onOpenConnection, bottomOffsetClassName }: MicButtonProps) {
+export function MicButton({
+  active,
+  onOpenConnection,
+  bottomOffsetClassName,
+  overlayBottomClassName,
+}: MicButtonProps) {
   const connectionStatus = useConnectionStore((state) => state.status);
   const phase = useMicStore((state) => state.phase);
   const result = useMicStore((state) => state.result);
@@ -667,7 +677,12 @@ export function MicButton({ active, onOpenConnection, bottomOffsetClassName }: M
           覆盖层（临时提示 / 结果卡片 / 实时文本）固定在胶囊上方：
           它不参与外层宽度计算，出现/消失都不会推动按钮。
         */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-[68px] mx-auto flex w-[min(86vw,380px)] flex-col items-center gap-2">
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-x-0 mx-auto flex w-[min(86vw,380px)] flex-col items-center gap-2",
+            overlayBottomClassName ?? "bottom-[68px]",
+          )}
+        >
           {message && (
             <span
               role="status"

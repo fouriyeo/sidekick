@@ -63,7 +63,7 @@ export function FirstUseCard({ onExpandedChange }: FirstUseCardProps) {
       done: micReady,
       current: connected && !micReady,
       description: micReady
-        ? "已经成功录过一次音；App 只在按住时录音。"
+        ? "录音已经成功启动过一次；App 只在按住时录音。"
         : "按住下方麦克风说话时会请求权限；不开启时按住说话会直接失败。",
       desktop: false,
     },

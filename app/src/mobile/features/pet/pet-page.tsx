@@ -113,7 +113,12 @@ export function PetPage() {
 
       <MobileTabBar active="pet" tone="stage" />
 
-      <MicButton active onOpenConnection={openOffline} bottomOffsetClassName={MIC_OFFSET_CLASS} />
+      <MicButton
+        active
+        onOpenConnection={openOffline}
+        bottomOffsetClassName={MIC_OFFSET_CLASS}
+        overlayBottomClassName={recent ? "bottom-[124px]" : undefined}
+      />
 
       {saveStatus === "error" && (
         <p

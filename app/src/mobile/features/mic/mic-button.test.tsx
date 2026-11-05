@@ -132,6 +132,15 @@ describe("MicButton 竖屏胶囊", () => {
     expect(inFlow).toEqual([mic]);
   });
 
+  it("宠物页有最近会话时可把覆盖层再上移，避免盖住该行", () => {
+    setMicIdle();
+    render(<MicButton active overlayBottomClassName="bottom-[124px]" />);
+    const mic = screen.getByRole("button", { name: /按住说话/ });
+    const overlay = overlayOf(mic);
+    expect(overlay.className).toContain("bottom-[124px]");
+    expect(overlay.className).not.toContain("bottom-[68px]");
+  });
+
   it("没有任何「取消录音」按钮，取消只靠上滑手势", () => {
     renderButton();
     expect(screen.queryByRole("button", { name: "取消录音" })).toBeNull();
