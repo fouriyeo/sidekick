@@ -10,10 +10,12 @@
 ## 重新打包（覆盖同名文件）
 
 ```bash
-scripts/package-release.sh    # 桌面 + 安卓
+scripts/package-release.sh    # 安卓 + 桌面（顺序已固定，见下）
 scripts/package-desktop.sh    # 只打桌面端
 scripts/package-android.sh    # 只打安卓端（release + 自动签名）
 ```
+
+> **顺序要求**：桌面端 `build.rs` 会把 `release/Sidekick-Android.apk` 编译期嵌进二进制，DMG 里的安装包取决于**编译时磁盘上的那份**。所以必须**先打安卓、再打桌面**（`package-release.sh` 已按此顺序）；单独跑 `package-desktop.sh` 前先确认 APK 是最新的，否则手机扫码下载到的还是旧包（2026-11-06 踩过）。
 
 ## 约定
 
@@ -22,4 +24,4 @@ scripts/package-android.sh    # 只打安卓端（release + 自动签名）
 - **从 debug 包换过来要先卸载**：这个 APK 用 `~/.sidekick` 的 release 密钥签名，和之前 `scripts/build-android.sh` 的 debug 签名不同，覆盖安装会报签名不一致；先 `adb uninstall dev.sidekick.app` 或手动卸载（App 内数据会清空），之后同一密钥的包可以正常覆盖升级。
 - **Android 签名密钥**：`~/.sidekick/android-release.jks` 与 `~/.sidekick/android-signing.properties`（0600，首次运行脚本自动生成），**不要提交或分享**；密钥丢失后新包无法覆盖安装升级（需要先卸载旧版）。
 - **macOS 未签名/未公证**：正式签名待做；Gatekeeper 拦截时右键 → 打开。
-- **Git 说明**：这两个文件提交在 `main`。Git 对每次提交的二进制都会保留历史副本，固定文件名只保证工作区里只有一份，**推一次仓库历史大约 +11MB**（dmg ≈3.8MB + apk ≈7MB）；仓库明显变大时，改走 GitHub Release 或独立 release 分支。
+- **Git 说明**：这两个文件提交在 `main`。Git 对每次提交的二进制都会保留历史副本，固定文件名只保证工作区里只有一份，**推一次仓库历史大约 +27MB**（dmg ≈16MB + apk ≈11MB）；仓库明显变大时，改走 GitHub Release 或独立 release 分支。

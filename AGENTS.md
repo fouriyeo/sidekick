@@ -184,6 +184,7 @@ sidekick/
 - **compileSdk 37**：SDK 包名是 `platforms;android-37.0`，不是 `android-37`。
 - **debug APK 很大**（约 120–240MB，含未剥离调试符号），属正常；release 需签名，体积预计 10–20MB。`release/` 只放 release 包：debug 包超过 GitHub 单文件 100MB 上限，推不上去。
 - **release/ 固定产物**：`scripts/package-release.sh` 生成 `release/Sidekick-macOS.dmg`（未签名）与 `release/Sidekick-Android.apk`（release + 本地 keystore 签名，首次运行自动生成 `~/.sidekick/android-release.jks`）；文件名固定、每次覆盖，不要改成带版本号。Git 会为每次提交保留二进制历史副本，固定文件名只让工作区保持一份（仓库历史仍随每次推送增长）。
+- **打包顺序（2026-11-06）**：桌面端 `build.rs` 会把 `release/Sidekick-Android.apk` **编译期嵌进二进制**，DMG 里带的安装包取决于编译那一刻磁盘上的那份；必须**先 `package-android.sh` 再 `package-desktop.sh`**（`package-release.sh` 已按此顺序）。单独打桌面端时先确认 APK 是最新的，否则手机扫码下载到的还是旧包；验证方法：在 `target/release/desktop` 里搜 APK 头 64 字节能命中、且整段与 `release/Sidekick-Android.apk` 一致。
 - **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore；克隆后必须先 `pnpm tauri android init` 再构建。
 - **直接跑 debug 二进制会白屏**：`cargo build`（不加 `tauri/custom-protocol`）产出的 debug 程序是 dev 模式，启动时加载 `http://localhost:1420`，没有 Vite dev server 就白屏（2026-11-03 踩过）。要独立运行用 `scripts/run-desktop.sh`（先 `pnpm build`，再 `cargo build --features tauri/custom-protocol`），日常改前端用 `pnpm tauri dev`；两者不要混。
 - **macOS 防火墙**：第一次接受局域网连接会弹「允许传入网络连接」，必须允许，否则手机连不上。

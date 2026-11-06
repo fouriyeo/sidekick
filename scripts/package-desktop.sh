@@ -7,6 +7,15 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$ROOT_DIR/app"
 RELEASE_DIR="$ROOT_DIR/release"
 OUT="$RELEASE_DIR/Sidekick-macOS.dmg"
+EMBED_APK="$RELEASE_DIR/Sidekick-Android.apk"
+
+# 桌面端 build.rs 会把下面这个 APK 编译期嵌进二进制：单独打桌面包前先确认它是最新的，
+# 否则扫码下载到的是上一次的安卓包。
+if [[ -f "$EMBED_APK" ]]; then
+  echo "[desktop] 将嵌入 $EMBED_APK（$(ls -lh "$EMBED_APK" | awk '{print $5}')，$(date -r "$EMBED_APK" '+%Y-%m-%d %H:%M')）"
+else
+  echo "[desktop] 警告：release/Sidekick-Android.apk 不存在，桌面端不会嵌入安装包" >&2
+fi
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
