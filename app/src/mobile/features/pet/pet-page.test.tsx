@@ -110,12 +110,12 @@ describe("PetPage v16 结构", () => {
     expect(screen.queryByText("小跟班 · Sidekick")).not.toBeInTheDocument();
   });
 
-  it("麦克风是居中圆形（shape=circle），距底 24", () => {
+  it("麦克风是居中圆形（shape=circle），距底 56（原来 24 太贴屏幕下沿）", () => {
     render(<PetPage />);
 
     const mic = screen.getByTestId("mic");
     expect(mic).toHaveAttribute("data-shape", "circle");
-    expect(mic.getAttribute("data-offset")).toContain("+24px");
+    expect(mic.getAttribute("data-offset")).toContain("+56px");
   });
 });
 

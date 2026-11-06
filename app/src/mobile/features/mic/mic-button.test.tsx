@@ -252,7 +252,25 @@ describe("MicButton 竖屏胶囊", () => {
     expect(tauri.haptic).toHaveBeenCalledWith("medium");
   });
 
-  it("按住上滑 60px 进入「松手取消」珊瑚态，松手回到 idle", async () => {
+  it("手指轻微上移（40px）不进取消区，松手照常发送", async () => {
+    setMicIdle();
+    const mic = renderButton();
+
+    fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
+    await waitFor(() => expect(useMicStore.getState().phase).toBe("listening"));
+
+    fireEvent.pointerMove(mic, { pointerId: 1, clientX: 196, clientY: 760 });
+    expect(mic.textContent).toContain("上滑取消");
+    expect(mic.textContent).not.toContain("松手取消");
+
+    fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 760 });
+    await waitFor(() =>
+      expect(vi.mocked(sendMicStop)).toHaveBeenCalledWith("session-test", "release"),
+    );
+    expect(useMicStore.getState().phase).toBe("processing");
+  });
+
+  it("刻意上滑 100px 才进入「松手取消」，松手回到 idle", async () => {
     setMicIdle();
     const mic = renderButton();
 
@@ -261,11 +279,11 @@ describe("MicButton 竖屏胶囊", () => {
     expect(mic.textContent).toContain("上滑取消");
     expect(mic.className).toContain("w-[min(90vw,420px)]");
 
-    fireEvent.pointerMove(mic, { pointerId: 1, clientX: 196, clientY: 740 });
+    fireEvent.pointerMove(mic, { pointerId: 1, clientX: 196, clientY: 700 });
     await waitFor(() => expect(mic.textContent).toContain("松手取消"));
     expect(mic.className).toContain("bg-pet-coral");
 
-    fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 740 });
+    fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 700 });
     await waitFor(() => expect(useMicStore.getState().phase).toBe("idle"));
     await waitFor(() => expect(screen.getByText("已取消，没有发送。")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "取消录音" })).toBeNull();
@@ -286,18 +304,29 @@ describe("MicButton 流式识别回显", () => {
     expect(screen.getByText(/百炼 · 音频上传中/)).toBeInTheDocument();
   });
 
-  it("云端收尾时胶囊内显示进度，并保留最后一段实时文本", () => {
+  it("收尾时圆钮里只转 spinner，不写字、不撑宽（「云端收尾…/百炼」已移除）", () => {
     useMicStore.setState({
       phase: "processing",
       session: "session-1",
       partialText: "帮我把这段异步的注释改成中文",
       partialRev: 4,
     });
-    renderButton();
+    render(<MicButton active shape="circle" />);
 
-    expect(screen.getByText("云端收尾…")).toBeInTheDocument();
-    expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
+    const mic = screen.getByRole("button", { name: "正在转写，请稍候" });
+    expect(mic).toBeDisabled();
+    expect(mic.className).toContain("w-14");
+    expect(mic.className).toContain("h-14");
+    expect(mic.className).toContain("bg-pet-primary");
+
+    // 圆钮里只有一个 spinner，没有任何文字/徽标（文字会撑出 56 圆钮，看起来像圆盘变形）。
+    expect(mic.textContent).toBe("");
+    expect(mic.querySelectorAll("span")).toHaveLength(0);
+    expect(mic.querySelector("svg")?.getAttribute("class")).toContain("animate-spin");
+
+    // 最后一段实时文本仍在按钮上方的独立覆盖层里，来源徽标也留在覆盖层。
     expect(screen.getByText("帮我把这段异步的注释改成中文")).toBeInTheDocument();
+    expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
   });
 });
 

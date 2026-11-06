@@ -14,7 +14,6 @@ export const MIC_COPY = {
   idleDisconnected: "先连接电脑",
   arming: "准备中…",
   listening: "正在听",
-  cloudProcessing: "云端收尾…",
   cloudConnecting: "云端连接中…",
   audioUploading: "音频上传中",
   engineCloud: "百炼",

@@ -14,10 +14,10 @@ import styles from "./pet.module.css";
 import { PetStage } from "./pet-stage";
 import { usePetStore } from "./pet-store";
 
-/** v16：56 圆钮居中、距底 24。 */
-const MIC_BOTTOM_CLASS = "bottom-[calc(env(safe-area-inset-bottom)+24px)]";
-/** 底部留给麦克风的空间（56 圆钮 + 24 距底），让鲸鱼在消息卡与麦克风之间居中。 */
-const MIC_SPACER_CLASS = "h-[calc(env(safe-area-inset-bottom)+80px)] flex-none";
+/** 56 圆钮居中、距底 56：原 24 贴着手势条/屏幕下沿，按住不舒服。 */
+const MIC_BOTTOM_CLASS = "bottom-[calc(env(safe-area-inset-bottom)+56px)]";
+/** 底部留给麦克风的空间（56 圆钮 + 56 距底），让鲸鱼在消息卡与麦克风之间居中。 */
+const MIC_SPACER_CLASS = "h-[calc(env(safe-area-inset-bottom)+112px)] flex-none";
 
 /**
  * 宠物页（v16）：顶部 44 条 → 消息卡 → 鲸鱼（无底色、居中偏下）→ 居中麦克风。
@@ -120,7 +120,7 @@ export function PetPage() {
       {saveStatus === "error" && (
         <p
           role="status"
-          className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+96px)] z-30 mx-auto w-fit text-xs text-pet-muted"
+          className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+128px)] z-30 mx-auto w-fit text-xs text-pet-muted"
         >
           这次记不住，下次再试。
         </p>

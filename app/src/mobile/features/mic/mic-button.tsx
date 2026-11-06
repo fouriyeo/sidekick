@@ -52,8 +52,12 @@ type MicButtonProps = {
 const MIN_RECORDING_MS = 300;
 const MAX_RECORDING_MS = 60_000;
 const WARN_RECORDING_MS = 50_000;
-const CANCEL_ENTER_PX = 48;
-const CANCEL_EXIT_PX = 24;
+/**
+ * 上滑进入取消区的距离。48 在真机上太灵敏：按住时手指自然一滚（约 1cm）就会被判成
+ * 「松手取消」，所以放宽到 80（约 1.4cm 的刻意上滑）；滑回 32 以内退出取消区。
+ */
+const CANCEL_ENTER_PX = 80;
+const CANCEL_EXIT_PX = 32;
 
 /** 结果卡右上角的相对时间（12/400）；不引入时间库、不造假时间。 */
 function relativeTime(at: number): string {
@@ -663,18 +667,15 @@ export function MicButton({
   const contentText = result?.text ?? error ?? result?.message ?? "";
 
   const timerText = formatDuration(elapsedMs);
-  // 本机 whisper 已下线：录音/收尾只展示百炼云端来源。
-  const processingLabel = MIC_COPY.cloudProcessing;
+  // 本机 whisper 已下线：录音只展示百炼云端来源；收尾态只转圈、不写字（字会撑出圆钮）。
   const recordingEngineLabel = `${MIC_COPY.engineCloud} · ${MIC_COPY.audioUploading}`;
   const processingEngineLabel = MIC_COPY.engineCloud;
 
   const label = !connected
     ? MIC_COPY.idleDisconnected
-    : processing
-      ? processingLabel
-      : phase === "arming"
-        ? MIC_COPY.arming
-        : MIC_COPY.idle;
+    : phase === "arming"
+      ? MIC_COPY.arming
+      : MIC_COPY.idle;
 
   return (
     <>
@@ -848,8 +849,11 @@ export function MicButton({
 
         <button
           type="button"
-          aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
+          aria-label={
+            processing ? "正在转写，请稍候" : listening ? "松开结束录音" : "按住说话，麦克风"
+          }
           aria-pressed={listening}
+          aria-busy={processing}
           className={cn(
             "press-spring pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border text-sm font-medium",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-signal focus-visible:ring-offset-2 focus-visible:ring-offset-pet-bg",
@@ -863,7 +867,9 @@ export function MicButton({
               : recording
                 ? "border-pet-coral bg-pet-coral text-pet-coral-foreground"
                 : processing
-                  ? "border-pet-border text-pet-muted"
+                  ? shape === "circle"
+                    ? "border-0 bg-pet-primary text-pet-primary-foreground"
+                    : "border-pet-border text-pet-muted"
                   : shape === "circle"
                     ? "border-0 bg-pet-primary text-pet-primary-foreground"
                     : "border-pet-border text-pet-text",
@@ -878,13 +884,8 @@ export function MicButton({
           onPointerCancel={onPointerCancel}
         >
           {processing ? (
-            <>
-              <Loader2 className="size-5 animate-spin" />
-              <span>{processingLabel}</span>
-              <span className="rounded-full border border-current px-1.5 py-0.5 text-[10px] font-normal opacity-70">
-                {processingEngineLabel}
-              </span>
-            </>
+            // 收尾只保留 spinner：圆钮内不放「云端收尾…/百炼」，否则文字会撑出圆盘。
+            <Loader2 aria-hidden="true" className="size-5 animate-spin" />
           ) : recording ? (
             <>
               <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-current" />
