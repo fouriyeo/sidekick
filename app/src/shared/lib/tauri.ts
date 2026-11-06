@@ -30,6 +30,7 @@ export type CloudAsrConfig = {
   vadModel: "near_meeting_16k" | "far_field_meeting_16k";
   maxSentenceSilenceMs: number;
   heartbeat: boolean;
+  /** 关键词列表（一行一个词）；录音时作为即时热词发送。 */
   vocabulary: string[];
 };
 
@@ -159,6 +160,7 @@ const COMMANDS = {
   asrCloudSave: "asr_cloud_save",
   asrCloudTest: "asr_cloud_test",
   asrCloudClear: "asr_cloud_clear",
+  asrKeywordsSave: "asr_keywords_save",
   asrUsageStats: "asr_usage_stats",
   asrUsageClear: "asr_usage_clear",
   clipboardList: "clipboard_list",
@@ -362,6 +364,11 @@ export function testCloudAsr(input: {
 
 export function clearCloudAsr(): Promise<CloudAsrStatus> {
   return invoke<CloudAsrStatus>(COMMANDS.asrCloudClear);
+}
+
+/** 只保存关键词，不触碰同意状态、API Key 与其他识别参数。 */
+export function saveCloudKeywords(keywords: string[]): Promise<CloudAsrStatus> {
+  return invoke<CloudAsrStatus>(COMMANDS.asrKeywordsSave, { keywords });
 }
 
 export function getUsageStats(): Promise<UsageStats> {

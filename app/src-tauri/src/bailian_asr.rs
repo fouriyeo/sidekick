@@ -19,6 +19,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
+use crate::asr_config::KEYWORD_WEIGHT;
 use crate::transcript::normalize_transcript;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -40,7 +41,7 @@ pub struct CloudSessionConfig {
     pub vad_model: String,
     pub max_sentence_silence_ms: u32,
     pub heartbeat: bool,
-    pub vocabulary: Vec<String>,
+    pub keywords: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Default)]
@@ -180,9 +181,10 @@ async fn run_session(
 
     let first_partial_at = connect_started.elapsed().as_millis();
     println!(
-        "[asr-cloud] session={} model={} started={}ms buffered_frames={}",
+        "[asr-cloud] session={} model={} keywords={} started={}ms buffered_frames={}",
         short_session(&session),
         config.model,
+        config.keywords.len(),
         first_partial_at,
         buffered.len()
     );
@@ -389,11 +391,16 @@ fn run_task_payload(config: &CloudSessionConfig, task_id: &str) -> Value {
     if !config.language_hints.is_empty() {
         parameters["language_hints"] = json!(config.language_hints);
     }
-    if !config.vocabulary.is_empty() {
-        let mut vocabulary = serde_json::Map::new();
-        for word in &config.vocabulary {
-            vocabulary.insert(word.clone(), json!(5));
+    // 关键词统一权重 4；为空时不带该键。
+    let mut vocabulary = serde_json::Map::new();
+    for keyword in &config.keywords {
+        let text = keyword.trim();
+        if text.is_empty() {
+            continue;
         }
+        vocabulary.insert(text.to_string(), json!(KEYWORD_WEIGHT));
+    }
+    if !vocabulary.is_empty() {
         parameters["vocabulary"] = Value::Object(vocabulary);
     }
 
@@ -670,7 +677,7 @@ mod tests {
             vad_model: "near_meeting_16k".to_string(),
             max_sentence_silence_ms: 800,
             heartbeat: true,
-            vocabulary: vec!["异步".to_string()],
+            keywords: vec!["异步".to_string(), "函数".to_string()],
         }
     }
 
@@ -686,8 +693,18 @@ mod tests {
         assert_eq!(payload["payload"]["parameters"]["format"], "pcm");
         assert_eq!(payload["payload"]["parameters"]["sample_rate"], 16000);
         assert_eq!(payload["payload"]["parameters"]["language_hints"][0], "zh");
-        assert_eq!(payload["payload"]["parameters"]["vocabulary"]["异步"], 5);
+        // 统一权重 4（官方推荐普通词起始值）。
+        assert_eq!(payload["payload"]["parameters"]["vocabulary"]["异步"], 4);
+        assert_eq!(payload["payload"]["parameters"]["vocabulary"]["函数"], 4);
         assert_eq!(payload["payload"]["input"], json!({}));
+    }
+
+    #[test]
+    fn omits_vocabulary_when_no_keywords() {
+        let mut config = config();
+        config.keywords.clear();
+        let payload = run_task_payload(&config, "task-2");
+        assert!(payload["payload"]["parameters"].get("vocabulary").is_none());
     }
 
     #[test]

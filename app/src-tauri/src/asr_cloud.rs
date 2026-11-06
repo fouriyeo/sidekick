@@ -121,6 +121,17 @@ impl AsrCloudState {
         Ok(self.status())
     }
 
+    /// 保存关键词：只替换 `bailian.vocabulary`，不碰 consent / apiKey /
+    /// keyPresent / keyHint 与其他 bailian 字段。
+    pub fn save_keywords(&self, keywords: Vec<String>) -> Result<CloudAsrStatus, String> {
+        asr_config::validate_keywords(&keywords)?;
+        let mut next = self.snapshot();
+        next.bailian.vocabulary = keywords;
+        next.normalize();
+        self.persist(next)?;
+        Ok(self.status())
+    }
+
     pub fn clear(&self) -> Result<CloudAsrStatus, String> {
         let _ = asr_keychain::delete_key();
         self.persist(AsrSettings::default())?;
@@ -170,7 +181,7 @@ impl AsrCloudState {
             vad_model: settings.bailian.vad_model.clone(),
             max_sentence_silence_ms: settings.bailian.max_sentence_silence_ms,
             heartbeat: settings.bailian.heartbeat,
-            vocabulary: settings.bailian.vocabulary.clone(),
+            keywords: settings.bailian.vocabulary.clone(),
         })
     }
 
@@ -218,7 +229,7 @@ impl AsrCloudState {
             vad_model: draft.bailian.vad_model.clone(),
             max_sentence_silence_ms: draft.bailian.max_sentence_silence_ms,
             heartbeat: draft.bailian.heartbeat,
-            vocabulary: draft.bailian.vocabulary.clone(),
+            keywords: draft.bailian.vocabulary.clone(),
         };
 
         match bailian_asr::probe(&session).await {
@@ -291,6 +302,14 @@ pub fn asr_cloud_save(
 }
 
 #[tauri::command]
+pub fn asr_keywords_save(
+    state: State<'_, Arc<AsrCloudState>>,
+    keywords: Vec<String>,
+) -> Result<CloudAsrStatus, String> {
+    state.save_keywords(keywords)
+}
+
+#[tauri::command]
 pub async fn asr_cloud_test(
     state: State<'_, Arc<AsrCloudState>>,
     config: Option<BailianConfig>,
@@ -339,23 +358,97 @@ mod tests {
         assert_eq!(config.model, asr_config::DEFAULT_MODEL);
     }
 
+    /// 测试写盘用独立临时目录，避免污染真实 `~/.sidekick`。
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn temp_data_dir(label: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQUENCE: AtomicU64 = AtomicU64::new(1);
+        let dir = std::env::temp_dir().join(format!(
+            "sidekick-asr-cloud-{label}-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
-    fn status_uses_local_api_key_without_keychain() {
+    fn session_config_uses_keywords() {
         let mut settings = AsrSettings::default();
         settings.consent_cloud.granted = true;
-        settings.api_key = Some("sk-1234567890cdef".to_string());
+        settings.api_key = Some("sk-local-test-123456".to_string());
+        settings.bailian.vocabulary = vec![" 异步 ".to_string(), "函数".to_string()];
         settings.normalize();
 
-        let status = status_from_settings(&settings);
-        assert!(status.configured);
+        let state = AsrCloudState {
+            settings: Mutex::new(settings),
+        };
+        let config = state.session_config().unwrap();
+        assert_eq!(config.keywords, vec!["异步".to_string(), "函数".to_string()]);
+    }
+
+    #[test]
+    fn saves_keywords_without_touching_consent_or_key() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = temp_data_dir("save");
+        // SAFETY: 测试内独占环境变量（ENV_LOCK 串行化），不影响生产代码。
+        unsafe { std::env::set_var("SIDEKICK_DATA_DIR", &dir) };
+
+        let mut settings = AsrSettings::default();
+        settings.consent_cloud = CloudConsent {
+            granted: true,
+            at: 12345,
+        };
+        settings.api_key = Some("sk-local-test-123456".to_string());
+        settings.normalize();
+        let state = AsrCloudState {
+            settings: Mutex::new(settings),
+        };
+
+        let keywords = vec!["异步".to_string(), "函数".to_string()];
+        let status = state.save_keywords(keywords.clone()).unwrap();
+        assert_eq!(status.config.vocabulary, keywords);
+        assert!(status.consent);
         assert!(status.has_key);
-        assert_eq!(status.key_masked.as_deref(), Some("sk-••••cdef"));
+        assert_eq!(status.key_masked.as_deref(), Some("sk-••••3456"));
 
-        settings.api_key = None;
+        // 落盘后再读回：关键词生效，consent / Key 原样保留。
+        let saved = asr_config::load();
+        assert_eq!(saved.bailian.vocabulary, keywords);
+        assert!(saved.consent_cloud.granted);
+        assert_eq!(saved.api_key.as_deref(), Some("sk-local-test-123456"));
+
+        // SAFETY: 同上，测试串行化后恢复环境变量。
+        unsafe { std::env::remove_var("SIDEKICK_DATA_DIR") };
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_invalid_keywords_without_persisting() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = temp_data_dir("invalid");
+        // SAFETY: 测试内独占环境变量（ENV_LOCK 串行化），不影响生产代码。
+        unsafe { std::env::set_var("SIDEKICK_DATA_DIR", &dir) };
+
+        let mut settings = AsrSettings::default();
+        settings.consent_cloud.granted = true;
+        settings.api_key = Some("sk-local-test-123456".to_string());
         settings.normalize();
-        let status = status_from_settings(&settings);
-        assert!(!status.configured);
-        assert!(!status.has_key);
-        assert!(status.key_masked.is_none());
+        let state = AsrCloudState {
+            settings: Mutex::new(settings),
+        };
+
+        let bad = vec!["一二三四五六七八九十一二三四五六".to_string()];
+        let error = state.save_keywords(bad).unwrap_err();
+        assert!(error.contains("太长"), "{error}");
+
+        assert!(!asr_config::config_path().exists());
+        assert!(state.status().config.vocabulary.is_empty());
+
+        // SAFETY: 同上，测试串行化后恢复环境变量。
+        unsafe { std::env::remove_var("SIDEKICK_DATA_DIR") };
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

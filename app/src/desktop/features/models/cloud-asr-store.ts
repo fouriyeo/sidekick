@@ -6,6 +6,7 @@ import {
   getCloudAsrStatus,
   normalizeError,
   saveCloudAsr,
+  saveCloudKeywords,
   testCloudAsr,
 } from "@/shared/lib/tauri";
 
@@ -28,18 +29,11 @@ export type CloudDraft = {
   keepDialect: boolean;
   vadModel: CloudVadModel;
   maxSentenceSilenceMs: number;
-  vocabularyText: string;
   consent: boolean;
   apiKey: string;
 };
 
-export type CloudField =
-  | "endpoint"
-  | "model"
-  | "apiKey"
-  | "maxSentenceSilenceMs"
-  | "vocabulary"
-  | "consent";
+export type CloudField = "endpoint" | "model" | "apiKey" | "maxSentenceSilenceMs" | "consent";
 
 export type CloudFieldErrors = Partial<Record<CloudField, string>>;
 
@@ -64,6 +58,7 @@ type CloudState = {
   save: () => Promise<void>;
   runTest: () => Promise<void>;
   clearKey: () => Promise<void>;
+  saveKeywords: (keywords: string[]) => Promise<CloudAsrStatus>;
   clearMessages: () => void;
   reset: () => void;
 };
@@ -130,19 +125,6 @@ function isLocalHost(host: string): boolean {
   );
 }
 
-/** 每行一个热词；trim、去空行、去重，保留原始顺序。 */
-export function parseVocabulary(text: string): string[] {
-  const seen = new Set<string>();
-  const values: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const value = raw.trim();
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    values.push(value);
-  }
-  return values;
-}
-
 export function validateCloudDraft(
   draft: CloudDraft,
   status: CloudAsrStatus | null,
@@ -172,11 +154,6 @@ export function validateCloudDraft(
     fieldErrors.maxSentenceSilenceMs = "静音断句需在 200–6000ms 之间";
   }
 
-  const vocabulary = parseVocabulary(draft.vocabularyText);
-  if (vocabulary.length > 50) {
-    fieldErrors.vocabulary = "热词最多 50 个";
-  }
-
   if (!status?.hasKey && !draft.apiKey.trim()) {
     fieldErrors.apiKey = "请填写百炼 API Key";
   }
@@ -194,7 +171,7 @@ export function validateCloudDraft(
       vadModel: draft.vadModel,
       maxSentenceSilenceMs: silence,
       heartbeat: status?.config.heartbeat ?? true,
-      vocabulary,
+      vocabulary: status?.config.vocabulary ?? [],
     },
     fieldErrors: {},
   };
@@ -208,7 +185,6 @@ export function draftFromStatus(status: CloudAsrStatus): CloudDraft {
     keepDialect: status.config.keepDialect,
     vadModel: status.config.vadModel,
     maxSentenceSilenceMs: status.config.maxSentenceSilenceMs,
-    vocabularyText: status.config.vocabulary.join("\n"),
     consent: status.consent,
     apiKey: "",
   };
@@ -340,6 +316,17 @@ export const useCloudAsrStore = create<CloudState>((set, get) => ({
     } catch (cause) {
       set({ saving: false, error: `清除 Key 失败：${normalizeError(cause)}` });
     }
+  },
+
+  saveKeywords: async (keywords) => {
+    const saved = await saveCloudKeywords(keywords);
+    const { draft } = get();
+    set({
+      status: saved,
+      draft: draft ?? draftFromStatus(saved),
+      error: null,
+    });
+    return saved;
   },
 
   clearMessages: () => set({ error: null, fieldErrors: {}, testResult: null, savedNotice: null }),

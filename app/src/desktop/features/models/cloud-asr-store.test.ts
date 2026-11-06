@@ -5,7 +5,6 @@ import {
   hintsToLanguage,
   languageToHints,
   normalizeEndpoint,
-  parseVocabulary,
   validateCloudDraft,
 } from "./cloud-asr-store";
 
@@ -47,7 +46,7 @@ describe("normalizeEndpoint", () => {
   });
 });
 
-describe("language helpers / vocabulary", () => {
+describe("language helpers", () => {
   it("language hints 互转", () => {
     expect(languageToHints("zh")).toEqual(["zh"]);
     expect(languageToHints("auto")).toEqual([]);
@@ -55,10 +54,6 @@ describe("language helpers / vocabulary", () => {
     expect(hintsToLanguage([])).toBe("auto");
     expect(hintsToLanguage(["zh", "en"])).toBe("zh-en");
     expect(hintsToLanguage(["zh"])).toBe("zh");
-  });
-
-  it("热词 trim、去空行、去重并保序", () => {
-    expect(parseVocabulary("  异步 \n\n注释\r\n异步\n  ")).toEqual(["异步", "注释"]);
   });
 });
 
@@ -83,12 +78,10 @@ describe("validateCloudDraft", () => {
     expect(result.fieldErrors.maxSentenceSilenceMs).toBeTruthy();
   });
 
-  it("热词超过 50 个时报错", () => {
+  it("保存配置时原样带回关键词，避免覆盖关键词页的修改", () => {
     const status = makeStatus();
-    const vocabularyText = Array.from({ length: 51 }, (_, index) => `词${index}`).join("\n");
-    const result = validateCloudDraft({ ...draftFromStatus(status), vocabularyText }, status);
-    expect(result.config).toBeNull();
-    expect(result.fieldErrors.vocabulary).toBeTruthy();
+    const result = validateCloudDraft(draftFromStatus(status), status);
+    expect(result.config?.vocabulary).toEqual(["异步"]);
   });
 
   it("未保存 Key 时必须临时输入 Key", () => {

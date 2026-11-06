@@ -1,21 +1,10 @@
-import {
-  Clipboard,
-  Info,
-  Keyboard,
-  MessageCircle,
-  Mic,
-  Palette,
-  Plug,
-  Smartphone,
-} from "lucide-react";
+import { Clipboard, Info, Keyboard, MessageCircle, Palette, Plug, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ChatSection } from "@/desktop/features/chat/components/chat-section";
 import { useClipboardStore } from "@/desktop/features/clipboard/clipboard-store";
 import { ConnectionSection } from "@/desktop/features/connect/components/connection-section";
 import { HookSection } from "@/desktop/features/hook/components/hook-section";
 import { describeHookStatus, useHookStore } from "@/desktop/features/hook/hook-store";
-import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
-import { ModelsSection } from "@/desktop/features/models/models-section";
 import { AccessibilityCard } from "@/desktop/features/settings/components/accessibility-card";
 import {
   DESKTOP_NAV,
@@ -49,7 +38,7 @@ type SettingsPageProps = {
 /**
  * 设置：一张 iOS 分组列表，点进二级页再返回。
  *
- * 首页只放「会改的东西」：外观、自动输入、手机连接、语音输入、AI 联动、剪贴板、关于；
+ * 首页只放「会改的东西」：外观、自动输入、手机连接、AI 联动、剪贴板、关于；
  * 每一项右侧只有一个短值，不放解释性长句。二级页共用同一个返回壳。
  */
 export function SettingsPage({ connection, section, onSectionChange, nav }: SettingsPageProps) {
@@ -64,7 +53,6 @@ export function SettingsPage({ connection, section, onSectionChange, nav }: Sett
       <PageBody>
         <div key={section} className="flex flex-col gap-6">
           {section === "connection" && <ConnectionSettings connection={connection} />}
-          {section === "voice" && <ModelsSection />}
           {section === "hook" && <HookSection />}
           {section === "clipboard" && <ClipboardSettings />}
           {section === "accessibility" && <AccessibilityCard showHeading={false} />}
@@ -93,20 +81,16 @@ function SettingsRoot({
 }) {
   const snapshot = useClipboardStore((state) => state.snapshot);
   const refreshClipboard = useClipboardStore((state) => state.refresh);
-  const cloudStatus = useCloudAsrStore((state) => state.status);
-  const loadCloud = useCloudAsrStore((state) => state.load);
   const hookStatus = useHookStore((state) => state.status);
 
   useEffect(() => {
     void refreshClipboard();
-    void loadCloud();
-  }, [refreshClipboard, loadCloud]);
+  }, [refreshClipboard]);
 
   const connected = connection.status === "connected";
   const address = connection.info ? `${connection.info.ip}:${connection.info.port}` : null;
   const enabled = snapshot?.enabled ?? true;
   const count = snapshot?.items.length ?? 0;
-  const configured = cloudStatus?.configured ?? false;
   const hookLabel = describeHookStatus(hookStatus).label;
 
   return (
@@ -139,14 +123,6 @@ function SettingsRoot({
             mono={connected}
             chevron
             onClick={() => onSectionChange("connection")}
-          />
-          <ListRow
-            icon={<Mic aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
-            iconTone="orange"
-            title="语音输入"
-            meta={configured ? "百炼" : "未配置"}
-            chevron
-            onClick={() => onSectionChange("voice")}
           />
           <ListRow
             icon={<Plug aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}

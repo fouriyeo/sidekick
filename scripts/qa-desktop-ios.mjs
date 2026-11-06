@@ -7,7 +7,7 @@
  * 输出：artifacts/desktop-ios-qa/*.png + qa.json
  *
  * 检查：控制台错误、横向溢出、视口、浅/深两套主题、1180 与 960 两个宽度、
- * 4 个一级页 + 设置二级页。只读，不改代码。
+ * 5 个一级页 + 语音/设置二级页。只读，不改代码。
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -25,11 +25,14 @@ const noShots = process.argv.includes("--no-shots");
 /** 一级页与设置二级页：url 参数即 dev mock 的初始路由。 */
 const PAGES = [
   { name: "overview", view: "", label: "概览", query: "&ai=asking" },
+  { name: "voice", view: "voice", label: "语音" },
   { name: "content", view: "content", label: "内容" },
   { name: "usage", view: "usage", label: "用量" },
   { name: "settings", view: "settings", label: "设置" },
+  { name: "voice-config", view: "voice", pane: "config", label: "连接与识别" },
+  { name: "voice-keywords", view: "voice", pane: "keywords", label: "关键词" },
+  { name: "voice-usage", view: "voice", pane: "usage", label: "语音用量" },
   { name: "settings-connection", view: "connection", label: "手机连接" },
-  { name: "settings-voice", view: "models", label: "语音输入" },
   { name: "settings-hook", view: "hook", label: "AI 联动" },
   { name: "settings-accessibility", view: "accessibility", label: "自动输入" },
   { name: "settings-clipboard", view: "clipboard", label: "剪贴板" },
@@ -160,7 +163,8 @@ async function navigate(cdp, url) {
 
 function urlFor(page) {
   const view = page.view ? `&view=${page.view}` : "";
-  return `${BASE}/?role=desktop${view}${page.query ?? ""}`;
+  const pane = page.pane ? `&pane=${page.pane}` : "";
+  return `${BASE}/?role=desktop${view}${pane}${page.query ?? ""}`;
 }
 
 async function snapshot(cdp, name, meta, theme) {
@@ -208,7 +212,7 @@ async function main() {
     for (const theme of ["dark", "light"]) {
       await setViewport(cdp, 960, 640);
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
-      for (const entry of PAGES.slice(0, 4)) {
+      for (const entry of PAGES.slice(0, 5)) {
         await navigate(cdp, urlFor(entry));
         report.desktop.push(await snapshot(cdp, `960-${entry.name}`, { view: entry.label }, theme));
       }
@@ -224,7 +228,7 @@ async function main() {
     for (const theme of ["dark", "light"]) {
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
       for (const dialog of dialogs) {
-        await navigate(cdp, urlFor({ view: dialog.view }));
+        await navigate(cdp, urlFor({ view: dialog.view, pane: dialog.pane }));
         const opened = await js(
           cdp,
           `(() => {
@@ -254,7 +258,7 @@ async function main() {
     // 滚动后：验证 sticky 玻璃工具栏 + 紧凑标题（内容从玻璃下经过）
     for (const theme of ["dark", "light"]) {
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
-      for (const view of ["", "content", "usage", "settings"]) {
+      for (const view of ["", "voice", "content", "usage", "settings"]) {
         await navigate(cdp, urlFor({ view }));
         await js(
           cdp,

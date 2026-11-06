@@ -82,7 +82,7 @@ function FieldRow({
 }
 
 /**
- * 设置 › 语音输入 › 百炼：一张分组列表装下状态、地址、模型、语言、场景、高级与 Key。
+ * 语音 › 连接与识别：一张分组列表装下状态、地址、模型、语言、场景、高级与 Key。
  *
  * 行高 52 / 标题 15 / 说明 13 与 iOS 分组列表一致；「高级」用 Motion 做高度过渡。
  * 说明句只保留三类（必填提示 / 隐私承诺 / 危险操作），保存是这一页唯一的实心按钮。
@@ -249,30 +249,6 @@ export function CloudAsrForm() {
                 />
                 <span className="text-[13px] text-muted-foreground">ms</span>
               </FieldRow>
-
-              <div className="dsl-row">
-                <div className="flex w-full flex-col gap-2">
-                  <Label
-                    htmlFor="cloud-vocabulary"
-                    className="text-[13px] leading-none font-normal text-muted-foreground"
-                  >
-                    热词 · 每行一个，最多 50 个
-                  </Label>
-                  <textarea
-                    id="cloud-vocabulary"
-                    className="min-h-24 w-full"
-                    value={draft.vocabularyText}
-                    placeholder={"异步\n注释\n剪贴板"}
-                    aria-invalid={Boolean(fieldErrors.vocabulary)}
-                    onChange={(event) => setDraft({ vocabularyText: event.target.value })}
-                  />
-                  {fieldErrors.vocabulary && (
-                    <p role="alert" className="text-[13px] leading-[1.4] text-destructive">
-                      {fieldErrors.vocabulary}
-                    </p>
-                  )}
-                </div>
-              </div>
 
               <ListRow
                 title="保留方言"

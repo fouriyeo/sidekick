@@ -1,6 +1,7 @@
 import { cn } from "cn";
-import { Clipboard, Gauge, LayoutGrid, Settings } from "lucide-react";
+import { AudioLines, Clipboard, Gauge, LayoutGrid, Settings } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import {
   deviceCountFromClients,
   useDesktopClientsStore,
@@ -14,6 +15,7 @@ import { SignalDot, type SignalStatus } from "@/shared/ui/signal-dot";
 
 const PRIMARY_NAV = [
   { id: "overview", label: "概览", icon: LayoutGrid },
+  { id: "voice", label: "语音", icon: AudioLines },
   { id: "content", label: "内容", icon: Clipboard },
   { id: "usage", label: "用量", icon: Gauge },
 ] as const satisfies ReadonlyArray<{ id: DesktopView; label: string; icon: typeof LayoutGrid }>;
@@ -28,12 +30,13 @@ type SidebarProps = {
 
 /**
  * 侧栏（224）：Liquid Glass 导航层 —— 顶部 38 留给 mac 交通灯，
- * 下面 logo + 3 个一级入口（白色滑块用 spring 在入口之间 morph），
+ * 下面 logo + 4 个一级入口（白色滑块用 spring 在入口之间 morph），
  * 底部设置 + 三行状态摘要。内容层不进入玻璃。
  */
 export function Sidebar({ view, section, onSelect, onOpenSettings, connection }: SidebarProps) {
   const clients = useDesktopClientsStore((state) => state.clients);
   const status = useDesktopStatusStore((state) => state.status);
+  const cloudStatus = useCloudAsrStore((state) => state.status);
   const devices = deviceCountFromClients(clients);
   const connected = connection.status === "connected";
   const port = connection.info?.port;
@@ -58,6 +61,7 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
             shortcut={DESKTOP_NAV.find((nav) => nav.id === item.id)?.shortcut}
             icon={<item.icon aria-hidden="true" className="size-[17px]" strokeWidth={2.1} />}
             active={view === item.id}
+            badge={item.id === "voice" && cloudStatus !== null && !cloudStatus.configured}
             onClick={() => onSelect(item.id)}
           />
         ))}
@@ -103,12 +107,14 @@ function NavItem({
   shortcut,
   icon,
   active,
+  badge = false,
   onClick,
 }: {
   label: string;
   shortcut?: string;
   icon: React.ReactNode;
   active: boolean;
+  badge?: boolean;
   onClick: () => void;
 }) {
   const reduced = useReducedMotion();
@@ -117,7 +123,7 @@ function NavItem({
     <button
       type="button"
       aria-current={active ? "page" : undefined}
-      title={shortcut ? `${label} · ${shortcut}` : label}
+      title={`${shortcut ? `${label} · ${shortcut}` : label}${badge ? " · 未配置" : ""}`}
       onClick={onClick}
       data-active={active ? "true" : "false"}
       className="dsl-nav-item"
@@ -133,6 +139,12 @@ function NavItem({
         {icon}
       </span>
       <span className="relative z-10 truncate">{label}</span>
+      {badge && (
+        <span
+          aria-hidden="true"
+          className="relative z-10 ml-auto size-[6px] shrink-0 rounded-full bg-[var(--ios-orange)]"
+        />
+      )}
     </button>
   );
 }

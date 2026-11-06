@@ -45,7 +45,7 @@ export function installTauriMock(): void {
   let nextId = 1;
   let nextStoreId = 1000;
 
-  // 云端 ASR（浏览器 mock）：只用于模型页/浮层预览，不联网。
+  // 云端 ASR（浏览器 mock）：只用于语音页/浮层预览，不联网。
   const cloudConfig = {
     endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
     model: "qwen-audio-3.1-asr-flash-streaming",
@@ -54,7 +54,7 @@ export function installTauriMock(): void {
     vadModel: "near_meeting_16k" as const,
     maxSentenceSilenceMs: 800,
     heartbeat: true,
-    vocabulary: [] as string[],
+    vocabulary: ["异步", "剪贴板", "小跟班"] as string[],
   };
   let cloudConsent = false;
   let cloudKeyMasked: string | null = null;
@@ -729,6 +729,11 @@ export function installTauriMock(): void {
         cloudConsent = false;
         cloudKeySet = false;
         cloudKeyMasked = null;
+        return cloudSnapshot();
+      }
+      if (command === "asr_keywords_save") {
+        const keywords = (args?.keywords ?? []) as string[];
+        cloudConfig.vocabulary = keywords.map((keyword) => String(keyword));
         return cloudSnapshot();
       }
       if (command === "asr_usage_stats") return usageSnapshot();

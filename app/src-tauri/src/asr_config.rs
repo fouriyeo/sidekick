@@ -7,9 +7,32 @@ use crate::app_paths;
 
 pub const DEFAULT_ENDPOINT: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/inference";
 pub const DEFAULT_MODEL: &str = "qwen-audio-3.1-asr-flash-streaming";
-pub const MAX_VOCABULARY: usize = 50;
 pub const MAX_SENTENCE_SILENCE_MS: u32 = 6_000;
 pub const MIN_SENTENCE_SILENCE_MS: u32 = 200;
+
+/// 单个会话最多发送的关键词数量。
+pub const MAX_KEYWORDS: usize = 2_000;
+/// 含非 ASCII 字符的关键词按字符数限制。
+pub const MAX_WORD_CHARS: usize = 15;
+/// 纯 ASCII 关键词按空白切分的段数限制。
+pub const MAX_ASCII_SEGMENTS: usize = 7;
+/// 所有关键词统一使用的即时热词权重（官方推荐普通词用 4）。
+pub const KEYWORD_WEIGHT: u8 = 4;
+
+/// 2026-11-06 中间版本写下的 `dictionaries` 只用于迁移，不再序列化。
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyWord {
+    #[serde(default)]
+    pub text: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyDictionary {
+    #[serde(default)]
+    pub words: Vec<LegacyWord>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +44,12 @@ pub struct BailianConfig {
     pub vad_model: String,
     pub max_sentence_silence_ms: u32,
     pub heartbeat: bool,
+    /// 关键词列表（一行一个词），是唯一事实源。
+    #[serde(default)]
     pub vocabulary: Vec<String>,
+    /// 中间版本遗留的分组词典；读取一次后平铺进 `vocabulary`，不再写回。
+    #[serde(default, rename = "dictionaries", skip_serializing)]
+    pub legacy_dictionaries: Vec<LegacyDictionary>,
 }
 
 impl Default for BailianConfig {
@@ -35,8 +63,123 @@ impl Default for BailianConfig {
             max_sentence_silence_ms: 800,
             heartbeat: true,
             vocabulary: Vec::new(),
+            legacy_dictionaries: Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum KeywordProblem {
+    Empty,
+    Newline,
+    TooLong,
+    TooManySegments,
+}
+
+fn keyword_problem(text: &str) -> Option<KeywordProblem> {
+    if text.is_empty() {
+        return Some(KeywordProblem::Empty);
+    }
+    if text.contains('\n') || text.contains('\r') {
+        return Some(KeywordProblem::Newline);
+    }
+    if text.chars().any(|ch| !ch.is_ascii()) {
+        if text.chars().count() > MAX_WORD_CHARS {
+            return Some(KeywordProblem::TooLong);
+        }
+    } else if text.split_whitespace().count() > MAX_ASCII_SEGMENTS {
+        return Some(KeywordProblem::TooManySegments);
+    }
+    None
+}
+
+/// 错误信息里展示词内容时只取前 10 个字符，避免把整句关键词回显到 UI/日志。
+fn short_word(text: &str) -> String {
+    let mut chars = text.chars();
+    let short: String = chars.by_ref().take(10).collect();
+    if chars.next().is_some() {
+        format!("{short}…")
+    } else {
+        short
+    }
+}
+
+/// 加载期容错：平铺遗留分组、trim/去重/丢弃非法词，最多保留 2000 个。
+/// 不打印词内容，只打印被丢弃的数量。
+fn normalize_keywords(bailian: &mut BailianConfig) {
+    if bailian.vocabulary.is_empty() && !bailian.legacy_dictionaries.is_empty() {
+        bailian.vocabulary = std::mem::take(&mut bailian.legacy_dictionaries)
+            .into_iter()
+            .flat_map(|dictionary| dictionary.words)
+            .map(|word| word.text)
+            .collect();
+    } else {
+        bailian.legacy_dictionaries.clear();
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut words = Vec::new();
+    let mut dropped = 0usize;
+    for raw in std::mem::take(&mut bailian.vocabulary) {
+        let text = raw.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if keyword_problem(text).is_some() {
+            dropped += 1;
+            continue;
+        }
+        if !seen.insert(text.to_string()) {
+            continue;
+        }
+        if words.len() >= MAX_KEYWORDS {
+            continue;
+        }
+        words.push(text.to_string());
+    }
+    if dropped > 0 {
+        eprintln!("[asr-config] 丢弃 {dropped} 个不合法关键词（加载期容错）");
+    }
+    bailian.vocabulary = words;
+}
+
+/// 保存前校验关键词；错误信息直接展示给用户（中文）。
+pub fn validate_keywords(keywords: &[String]) -> Result<(), String> {
+    if keywords.len() > MAX_KEYWORDS {
+        return Err(format!(
+            "关键词最多 {} 个（当前 {}）",
+            MAX_KEYWORDS,
+            keywords.len()
+        ));
+    }
+    for (index, raw) in keywords.iter().enumerate() {
+        let position = index + 1;
+        let text = raw.trim();
+        match keyword_problem(text) {
+            Some(KeywordProblem::Empty) => {
+                return Err(format!("第 {position} 个关键词不能为空"));
+            }
+            Some(KeywordProblem::Newline) => {
+                return Err(format!("第 {position} 个关键词不能包含换行"));
+            }
+            Some(KeywordProblem::TooLong) => {
+                return Err(format!(
+                    "第 {position} 个关键词「{}」太长：中文等最多 {} 个字符",
+                    short_word(text),
+                    MAX_WORD_CHARS
+                ));
+            }
+            Some(KeywordProblem::TooManySegments) => {
+                return Err(format!(
+                    "第 {position} 个关键词「{}」空格分段太多：英文最多 {} 段",
+                    short_word(text),
+                    MAX_ASCII_SEGMENTS
+                ));
+            }
+            None => {}
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -142,21 +285,7 @@ impl AsrSettings {
             self.bailian.max_sentence_silence_ms = defaults.max_sentence_silence_ms;
         }
 
-        let mut seen = std::collections::BTreeSet::new();
-        let mut vocabulary = Vec::new();
-        for word in &self.bailian.vocabulary {
-            let word = word.trim();
-            if word.is_empty() || word.chars().count() > 64 {
-                continue;
-            }
-            if seen.insert(word.to_string()) {
-                vocabulary.push(word.to_string());
-            }
-            if vocabulary.len() >= MAX_VOCABULARY {
-                break;
-            }
-        }
-        self.bailian.vocabulary = vocabulary;
+        normalize_keywords(&mut self.bailian);
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -368,7 +497,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_defaults_and_clamps() {
+    fn normalizes_defaults_keywords_and_clamps() {
         let mut settings = AsrSettings {
             bailian: BailianConfig {
                 endpoint: " ".to_string(),
@@ -389,5 +518,98 @@ mod tests {
         );
         assert_eq!(settings.bailian.vad_model, "near_meeting_16k");
         assert_eq!(settings.bailian.vocabulary, vec!["异步".to_string()]);
+        assert!(settings.bailian.legacy_dictionaries.is_empty());
+    }
+
+    #[test]
+    fn flattens_legacy_dictionaries_into_keywords() {
+        let mut settings = AsrSettings::default();
+        settings.bailian.legacy_dictionaries = vec![
+            LegacyDictionary {
+                words: vec![
+                    LegacyWord {
+                        text: " 异步 ".to_string(),
+                    },
+                    LegacyWord {
+                        text: "函数".to_string(),
+                    },
+                ],
+            },
+            LegacyDictionary {
+                words: vec![
+                    LegacyWord {
+                        text: "异步".to_string(),
+                    },
+                    LegacyWord {
+                        text: "".to_string(),
+                    },
+                ],
+            },
+        ];
+        settings.normalize();
+        assert_eq!(
+            settings.bailian.vocabulary,
+            vec!["异步".to_string(), "函数".to_string()]
+        );
+        assert!(settings.bailian.legacy_dictionaries.is_empty());
+    }
+
+    #[test]
+    fn normalize_keywords_drops_invalid_and_duplicates() {
+        let mut settings = AsrSettings::default();
+        settings.bailian.vocabulary = vec![
+            " 异步 ".to_string(),
+            "异步".to_string(),
+            "".to_string(),
+            "a\nb".to_string(),
+            "一二三四五六七八九十一二三四五六".to_string(),
+            "a b c d e f g h".to_string(),
+            " good word ".to_string(),
+        ];
+        settings.normalize();
+        assert_eq!(
+            settings.bailian.vocabulary,
+            vec!["异步".to_string(), "good word".to_string()]
+        );
+    }
+
+    #[test]
+    fn validates_valid_keywords() {
+        let keywords = vec![
+            "异步".to_string(),
+            "good word".to_string(),
+            "a b c d e f g".to_string(),
+        ];
+        assert!(validate_keywords(&keywords).is_ok());
+    }
+
+    #[test]
+    fn rejects_more_than_two_thousand_keywords() {
+        let keywords: Vec<String> = (0..MAX_KEYWORDS + 1)
+            .map(|index| format!("w{index}"))
+            .collect();
+        let error = validate_keywords(&keywords).unwrap_err();
+        assert!(error.contains("2000"), "{error}");
+    }
+
+    #[test]
+    fn rejects_overlong_non_ascii_word() {
+        let keywords = vec!["一二三四五六七八九十一二三四五六".to_string()];
+        let error = validate_keywords(&keywords).unwrap_err();
+        assert!(error.contains("太长"), "{error}");
+        assert!(error.contains("15"), "{error}");
+    }
+
+    #[test]
+    fn rejects_ascii_word_with_too_many_segments() {
+        let keywords = vec!["a b c d e f g h".to_string()];
+        let error = validate_keywords(&keywords).unwrap_err();
+        assert!(error.contains("7"), "{error}");
+    }
+
+    #[test]
+    fn rejects_empty_keyword() {
+        let error = validate_keywords(&["  ".to_string()]).unwrap_err();
+        assert!(error.contains("不能为空"), "{error}");
     }
 }

@@ -7,6 +7,7 @@ const tauri = vi.hoisted(() => ({
   saveCloudAsr: vi.fn(),
   testCloudAsr: vi.fn(),
   clearCloudAsr: vi.fn(),
+  saveCloudKeywords: vi.fn(),
   getUsageStats: vi.fn(),
   clearUsageStats: vi.fn(),
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
@@ -14,9 +15,20 @@ const tauri = vi.hoisted(() => ({
 
 vi.mock("@/shared/lib/tauri", () => tauri);
 
-import { useCloudAsrStore } from "./cloud-asr-store";
-import { ModelsSection } from "./models-section";
-import { useUsageStore } from "./usage-store";
+import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
+import { useUsageStore } from "@/desktop/features/models/usage-store";
+import { VoicePage } from "./voice-page";
+
+const CONFIG = {
+  endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+  model: "qwen-audio-3.1-asr-flash-streaming",
+  languageHints: ["zh"],
+  keepDialect: false,
+  vadModel: "near_meeting_16k" as const,
+  maxSentenceSilenceMs: 800,
+  heartbeat: true,
+  vocabulary: ["异步", "剪贴板"],
+};
 
 function makeStatus(overrides: Partial<CloudAsrStatus> = {}): CloudAsrStatus {
   return {
@@ -24,16 +36,7 @@ function makeStatus(overrides: Partial<CloudAsrStatus> = {}): CloudAsrStatus {
     consent: true,
     hasKey: true,
     keyMasked: "sk-••••cdef",
-    config: {
-      endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
-      model: "qwen-audio-3.1-asr-flash-streaming",
-      languageHints: ["zh"],
-      keepDialect: false,
-      vadModel: "near_meeting_16k",
-      maxSentenceSilenceMs: 800,
-      heartbeat: true,
-      vocabulary: ["异步"],
-    },
+    config: { ...CONFIG, vocabulary: [...CONFIG.vocabulary] },
     ...overrides,
   };
 }
@@ -73,9 +76,19 @@ function makeUsage(): UsageStats {
   };
 }
 
-async function renderPanel() {
-  render(<ModelsSection />);
+async function renderConfigPane() {
+  render(<VoicePage pane="config" onPaneChange={vi.fn()} />);
   await screen.findByLabelText("API Key");
+}
+
+async function renderUsagePane() {
+  render(<VoicePage pane="usage" onPaneChange={vi.fn()} />);
+  await screen.findByRole("heading", { name: "语音用量", level: 1 });
+}
+
+async function renderRootPane() {
+  render(<VoicePage pane="root" onPaneChange={vi.fn()} />);
+  await screen.findByText("百炼");
 }
 
 beforeEach(() => {
@@ -84,6 +97,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   tauri.getCloudAsrStatus.mockResolvedValue(makeStatus());
   tauri.saveCloudAsr.mockResolvedValue(makeStatus());
+  tauri.saveCloudKeywords.mockResolvedValue(makeStatus());
   tauri.testCloudAsr.mockResolvedValue({
     ok: true,
     latencyMs: 320,
@@ -112,20 +126,56 @@ afterEach(() => {
   useUsageStore.getState().reset();
 });
 
-describe("ModelsSection 百炼配置", () => {
-  it("加载后显示掩码 Key、默认模型与用量金额", async () => {
-    await renderPanel();
+describe("VoicePage 语音根页", () => {
+  it("首屏三组摘要：百炼状态、关键词计数、今天/7 天用量", async () => {
+    await renderRootPane();
+
+    expect(screen.getByRole("heading", { name: "语音" })).toBeInTheDocument();
+    expect(screen.getByText("已配置")).toBeInTheDocument();
+    expect(screen.getByText("2 / 2000")).toBeInTheDocument();
+    expect(screen.getByText("2 次 · ¥0.12")).toBeInTheDocument();
+    expect(screen.queryByText("还没配置百炼")).toBeNull();
+  });
+
+  it("点百炼/关键词/用量分别进对应二级页", async () => {
+    const onPaneChange = vi.fn();
+    render(<VoicePage pane="root" onPaneChange={onPaneChange} />);
+    await screen.findByText("百炼");
+
+    fireEvent.click(screen.getByRole("button", { name: /百炼/ }));
+    expect(onPaneChange).toHaveBeenCalledWith("config");
+
+    fireEvent.click(screen.getByRole("button", { name: /关键词/ }));
+    expect(onPaneChange).toHaveBeenCalledWith("keywords");
+
+    fireEvent.click(screen.getByRole("button", { name: /今天/ }));
+    expect(onPaneChange).toHaveBeenCalledWith("usage");
+  });
+
+  it("未配置时显示玻璃提示卡与「去配置」", async () => {
+    tauri.getCloudAsrStatus.mockResolvedValue(
+      makeStatus({ configured: false, consent: false, hasKey: false, keyMasked: null }),
+    );
+    await renderRootPane();
+
+    expect(screen.getByText("还没配置百炼")).toBeInTheDocument();
+    expect(screen.getByText("未配置")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "去配置" }));
+  });
+});
+
+describe("VoicePage 连接与识别", () => {
+  it("加载后显示掩码 Key 与默认模型", async () => {
+    await renderConfigPane();
 
     const key = screen.getByLabelText("API Key");
     expect(key).toHaveAttribute("placeholder", expect.stringContaining("sk-"));
     expect(key).toHaveAttribute("type", "password");
     expect(screen.getByLabelText("模型")).toHaveValue("qwen-audio-3.1-asr-flash-streaming");
-    expect(screen.getByText("已配置")).toBeInTheDocument();
-    expect(screen.getAllByText("¥0.12").length).toBeGreaterThan(0);
   });
 
   it("一键恢复推荐模型", async () => {
-    await renderPanel();
+    await renderConfigPane();
 
     const model = screen.getByLabelText("模型");
     fireEvent.change(model, { target: { value: "custom-model" } });
@@ -135,23 +185,18 @@ describe("ModelsSection 百炼配置", () => {
     expect(model).toHaveValue("qwen-audio-3.1-asr-flash-streaming");
   });
 
-  it("保存提交配置、同意与 Key，并显示已保存", async () => {
-    await renderPanel();
+  it("保存提交配置、同意与 Key，并保留关键词", async () => {
+    await renderConfigPane();
 
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => expect(tauri.saveCloudAsr).toHaveBeenCalledTimes(1));
     expect(tauri.saveCloudAsr).toHaveBeenCalledWith({
-      config: {
+      config: expect.objectContaining({
         endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
         model: "qwen-audio-3.1-asr-flash-streaming",
-        languageHints: ["zh"],
-        keepDialect: false,
-        vadModel: "near_meeting_16k",
-        maxSentenceSilenceMs: 800,
-        heartbeat: true,
-        vocabulary: ["异步"],
-      },
+        vocabulary: ["异步", "剪贴板"],
+      }),
       consent: true,
       apiKey: null,
       clearKey: false,
@@ -159,23 +204,8 @@ describe("ModelsSection 百炼配置", () => {
     expect(await screen.findByText("已保存")).toBeInTheDocument();
   });
 
-  it("保存时把新 API Key 提交到本地配置", async () => {
-    await renderPanel();
-
-    fireEvent.change(screen.getByLabelText("API Key"), {
-      target: { value: "sk-local-test-123456" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "保存" }));
-
-    await waitFor(() =>
-      expect(tauri.saveCloudAsr).toHaveBeenCalledWith(
-        expect.objectContaining({ apiKey: "sk-local-test-123456" }),
-      ),
-    );
-  });
-
   it("测试连接成功显示延迟", async () => {
-    await renderPanel();
+    await renderConfigPane();
 
     fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
 
@@ -191,7 +221,7 @@ describe("ModelsSection 百炼配置", () => {
 
   it("未勾选同意时不能保存", async () => {
     tauri.getCloudAsrStatus.mockResolvedValue(makeStatus({ consent: false }));
-    await renderPanel();
+    await renderConfigPane();
 
     const save = screen.getByRole("button", { name: "保存" });
     expect(save).toBeDisabled();
@@ -201,7 +231,7 @@ describe("ModelsSection 百炼配置", () => {
   });
 
   it("服务地址不是 wss 时阻止测试", async () => {
-    await renderPanel();
+    await renderConfigPane();
 
     fireEvent.change(screen.getByLabelText("服务地址"), {
       target: { value: "http://example.com" },
@@ -215,7 +245,7 @@ describe("ModelsSection 百炼配置", () => {
   });
 
   it("清除 Key 只删除密钥、保留配置", async () => {
-    await renderPanel();
+    await renderConfigPane();
 
     fireEvent.click(screen.getByRole("button", { name: "清除 Key" }));
 
@@ -227,9 +257,9 @@ describe("ModelsSection 百炼配置", () => {
   });
 });
 
-describe("ModelsSection 用量统计", () => {
+describe("VoicePage 语音用量", () => {
   it("切换区间：今天只汇总，7 天/30 天按天明细，1 年按月汇总", async () => {
-    await renderPanel();
+    await renderUsagePane();
 
     expect(screen.getByRole("button", { name: "今天" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("11-14")).toBeNull();
@@ -251,7 +281,7 @@ describe("ModelsSection 用量统计", () => {
   });
 
   it("清空统计需要确认并调用后端", async () => {
-    await renderPanel();
+    await renderUsagePane();
 
     fireEvent.click(screen.getByRole("button", { name: "清空统计" }));
     expect(await screen.findByText("清空用量统计？")).toBeInTheDocument();

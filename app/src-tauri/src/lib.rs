@@ -141,6 +141,7 @@ pub fn run() {
             asr_cloud::asr_cloud_save,
             asr_cloud::asr_cloud_test,
             asr_cloud::asr_cloud_clear,
+            asr_cloud::asr_keywords_save,
             asr_usage::asr_usage_stats,
             asr_usage::asr_usage_clear,
             token_usage::token_usage_stats,

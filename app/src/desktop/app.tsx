@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHookStore } from "@/desktop/features/hook/hook-store";
 import { MicStatusOverlay } from "@/desktop/features/mic-receiver/mic-status-overlay";
+import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import {
   type DesktopNav,
   type DesktopView,
   initialRoute,
   type SettingsSection,
+  type VoicePane,
   viewForShortcut,
 } from "@/desktop/lib/desktop-nav";
 import { ContentPage } from "@/desktop/pages/content-page";
 import { OverviewPage } from "@/desktop/pages/overview-page";
 import { SettingsPage } from "@/desktop/pages/settings-page";
 import { UsagePage } from "@/desktop/pages/usage-page";
+import { VoicePage } from "@/desktop/pages/voice-page";
 import { Sidebar } from "@/desktop/shell/sidebar";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import { Toaster } from "@/shared/ui/sonner";
 import "@/desktop/styles/ios.css";
 import { useDesktopConnection } from "./use-desktop-connection";
 
-/** 输入框 / 下拉里不劫持 ⌘1–⌘4（浏览器默认的标签切换也不抢）。 */
+/** 输入框 / 下拉里不劫持 ⌘1–⌘5（浏览器默认的标签切换也不抢）。 */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -38,11 +41,15 @@ export function DesktopApp() {
   useMotionPause();
 
   const go = useCallback((view: DesktopView) => {
-    setRoute((current) => ({ ...current, view }));
+    setRoute({ view, section: "root", pane: "root" });
   }, []);
 
   const goSettings = useCallback((section: SettingsSection) => {
-    setRoute({ view: "settings", section });
+    setRoute({ view: "settings", section, pane: "root" });
+  }, []);
+
+  const openVoicePane = useCallback((pane: VoicePane) => {
+    setRoute((current) => ({ ...current, view: "voice", pane }));
   }, []);
 
   const nav = useMemo<DesktopNav>(() => ({ go, goSettings }), [go, goSettings]);
@@ -60,6 +67,11 @@ export function DesktopApp() {
     void useHookStore.getState().refresh();
   }, []);
 
+  // 侧栏「语音」未配置圆点需要状态，所以在壳层先读一次本地 asr.json。
+  useEffect(() => {
+    void useCloudAsrStore.getState().load();
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
@@ -67,7 +79,7 @@ export function DesktopApp() {
       const view = viewForShortcut(event.key);
       if (!view) return;
       event.preventDefault();
-      setRoute({ view, section: "root" });
+      setRoute({ view, section: "root", pane: "root" });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -86,6 +98,7 @@ export function DesktopApp() {
       <main className="dsl-main flex min-h-0 min-w-0 flex-1 flex-col">
         {route.view === "overview" && <OverviewPage connection={connection} nav={nav} />}
         {route.view === "content" && <ContentPage />}
+        {route.view === "voice" && <VoicePage pane={route.pane} onPaneChange={openVoicePane} />}
         {route.view === "usage" && <UsagePage />}
         {route.view === "settings" && (
           <SettingsPage
