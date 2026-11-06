@@ -776,3 +776,18 @@
 - 放弃：整窗全透明（内容可读性崩、文字飘在桌面上）；用 CSS 模拟「桌面模糊」（没有真实桌面内容可模糊）；把透明配置写进基础 `tauri.conf.json`（Android 也会透明）；自绘一套假颗粒纹理冒充材质（D86 的 grain 只是点缀）。
 - 代价：用了 macOS Private API（`macOSPrivateApi`），正式分发/签名前要回归；窗口合成成本略升；**无头环境验证不了真实材质**，必须人工 `pnpm tauri dev` 目检（透明侧栏、失焦变暗、深浅主题、缩放、拖动）。
 - 规范：`app/src-tauri/tauri.macos.conf.json`、`app/index.html`、`app/src/desktop/app.tsx`（`.dsl-main`）、`app/src/desktop/styles/ios.css`（`.dsl-vibrancy` 段）、`scripts/qa-desktop-ios.mjs`（检测表达式 + CSS 契约校验）、`docs/engineering/desktop-ios-ui.md`。
+
+## D88 · 电脑端菜单栏常驻：关窗隐藏 + Dock 图标隐藏 + 右键退出（2026-11-06，取代「关窗即退出」）
+
+- 背景：用户要求「评估电脑端做一个后台常驻、显示到状态栏的功能」。评估中发现这不是装饰性需求——现状关窗即退出会把 HTTP 服务（47810+）、UDP 发现（47820）、DSH hook 回环桥（47815–47819）一起带走，用户关窗后手机连不上、AI 状态断更。菜单栏图标是把桌面端变成「常驻服务」的入口。
+- 决策（用户明确选择 v1 形态）：
+  - **只显示图标**：菜单栏不放文字/状态标题，v1 不做「等你回答」换图标；图标是 36×36 单色模板图（猫头剪影 + 眼睛镂空，`icon_as_template(true)` 自动适配浅/深菜单栏）。
+  - **不保留 Dock 图标**：`ActivationPolicy::Accessory`，App 不出现在 Dock 与 Cmd+Tab，也没有 App 菜单（⌘Q 不可用）。
+  - **不做设置开关**：默认就常驻，不加「关窗时隐藏」设置项，避免设置页与持久化成本。
+  - **退出只在菜单栏**：左键图标显示/激活主窗口，**右键菜单**提供「显示主窗口 / 退出 Sidekick」；窗口关闭按钮 = 隐藏窗口（`CloseRequested` → `prevent_close` + `hide`）。
+  - 回退：托盘创建失败时 `TRAY_READY=false`，关闭按钮退回「关窗即退出」，绝不让用户进入「无窗口、无图标、无退出入口」的死局。
+- 实现：`app/src-tauri/src/tray.rs`（托盘/菜单/点击/`show_main_window`）、`lib.rs`（setup 设 Accessory、建托盘、首次把窗口叫前台；`on_window_event` 拦 `CloseRequested`；单实例回调复用 `show_main_window`）、`Cargo.toml` 仅在桌面目标开 `tauri` 的 `tray-icon` + `image-png` feature（Android 不带 tray 依赖）、`app/src-tauri/icons/tray.png`、`scripts/gen-tray-icon.py`（从 `brand/logo-favicon.svg` 几何重生成）。
+- 原因：常驻后手机连接、AI 状态、剪贴板监听、语音/价格后台任务在窗口关掉后继续可用；菜单栏图标是 Accessory 应用唯一可见入口，所以必须先有它再隐藏 Dock。
+- 放弃：保留 Dock + 只加托盘（用户明确不要 Dock）；菜单栏显示状态文字（占空间、v1 只放图标）；关窗时弹「仍在后台运行」提示（多余）；用彩色 logo 当托盘图标（模板图下变纯色块）；用 `LSUIElement` 写 Info.plist（Tauri 侧 `set_activation_policy` 即可，打包配置不用改）。
+- 代价：没有 ⌘Q / Cmd+Tab / App 菜单，退出只能右键菜单；隐藏窗口的 WebView 仍占内存（约 100–200MB）；**无头环境截不到菜单栏与模板图反色，必须人工 `pnpm tauri dev` 目检**。
+- 规范：`docs/engineering/desktop-tray.md`、`app/src-tauri/src/tray.rs`、`app/src-tauri/src/lib.rs`、`app/src-tauri/Cargo.toml`、`scripts/gen-tray-icon.py`、`AGENTS.md`（关窗行为与已知坑）。

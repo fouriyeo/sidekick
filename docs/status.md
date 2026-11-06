@@ -50,6 +50,8 @@
 
 41. Token 用量看板 V1（2026-11-06，D82–D84）：桌面新增第 6 一级页「用量」（⌘4；系统 ⌘5、设置 ⌘6），只读 `~/.dsh/storages/cost-meter/ledger.json`，提供今天 / 7 天 / 30 天 / 180 天区间、客户端 / 会话 / 模型三维分组、30 天花费柱阵、缓存环与 Token 构成；手机在「设置 › 用量」提供只读版本（断连保留最后快照、录音中禁切页）。新增 `usage.request` / `usage` 协议（带 `data` 包装，不含提示词/路径/cwd），模型 ID 是否下发受 D83「在手机显示模型分组」开关控制。模型价格能力参考 tokei：seed（OpenRouter 目录）+ `~/.sidekick/token_pricing.json` 缓存 + `~/.sidekick/token_pricing_overrides.json` 覆盖 + DeepSeek 官方峰谷 CNY 价；实际 `costCny` 优先，缺价才按价格表估算并标 ≈；打开用量页且缓存 >24h 自动刷新、失败保留上次。新增依赖 `reqwest`（rustls-no-provider，ring provider 与 ASR 共用 `tls.rs`）。
 
+42. 电脑端菜单栏常驻（2026-11-06，D88）：电脑端从「窗口应用」变「常驻服务 + 菜单栏图标」——关闭按钮 = 隐藏窗口（`CloseRequested` → `prevent_close` + `hide`），HTTP 服务 / UDP 发现 / DSH hook 桥 / 剪贴板监听在窗口关掉后继续跑；`ActivationPolicy::Accessory` 隐藏 Dock 图标（Cmd+Tab 不出现）；菜单栏 36×36 单色模板图标（猫头剪影 + 眼睛镂空，`scripts/gen-tray-icon.py` 从 `brand/logo-favicon.svg` 生成），左键显示并激活主窗口、右键菜单「显示主窗口 / 退出 Sidekick」是唯一退出入口；托盘创建失败自动退回「关窗即退出」，避免窗口/图标/退出入口全丢。`tauri` 的 `tray-icon` + `image-png` feature 只在桌面目标启用（Android 包不受影响）。**已验证（2026-11-06，dev 二进制无头冒烟）**：启动日志 `[tray] 菜单栏图标已就绪`，47810/47820/47815 同时监听，`lsappinfo` 返回 `ApplicationType="UIElement"`（Accessory 生效），单实例二次启动秒退、杀进程后端口释放；`cargo check` / `cargo fmt --check` / `cargo tree --target aarch64-linux-android -i tray-icon`（无输出）通过；592 前端测试 + tsc + Biome + 文档检查全绿。菜单栏观感/反色、关窗→隐藏、左键唤回、右键退出仍待人工 `pnpm tauri dev` 目检（契约与清单见 [engineering/desktop-tray.md](./engineering/desktop-tray.md) §5）。
+
 ## 已验证（有实际证据）
 
 - 手机浏览器扫码可打开电脑 `http://<电脑IP>:<端口>/`（局域网 HTTP 通；当时固定 8848，现已改为 `47810` 起候选回退）；

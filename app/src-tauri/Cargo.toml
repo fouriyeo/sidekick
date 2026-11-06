@@ -27,6 +27,8 @@ tauri-plugin-store = "2.5.0"
 base64 = "0.22"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# 菜单栏常驻（D88）：托盘/菜单 API 只在桌面目标编译，Android 构建不带这两个 feature。
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 # 单实例保护：第二个进程只把已有窗口叫到前台再退出。桌面端跑两个实例会争抢
 # UDP 47820 发现端口、互相覆盖 DSH hook 端点（见 docs/decisions.md D60）。
 tauri-plugin-single-instance = "2"

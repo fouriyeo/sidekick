@@ -44,6 +44,8 @@ mod token_pricing;
 mod token_usage;
 #[cfg(desktop)]
 mod transcript;
+#[cfg(desktop)]
+mod tray;
 
 #[cfg(desktop)]
 #[tauri::command]
@@ -68,11 +70,8 @@ pub fn run() {
         // 两个桌面实例会争抢 UDP 47820 发现端口、互相覆盖 DSH hook 端点，结果手机
         // 连到那个收不到 AI 状态的进程，宠物一直是 idle（D60）。
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            // 托盘常驻后窗口可能只是被隐藏，二次启动要把主窗口叫回前台（D88）。
+            tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
@@ -109,7 +108,27 @@ pub fn run() {
                 usage,
                 token_usage,
             ));
+
+            // 菜单栏常驻（D88）：隐藏 Dock 图标，入口只在菜单栏。
+            #[cfg(target_os = "macos")]
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            if let Err(err) = tray::init(&handle) {
+                // 托盘建不起来就退回「关窗即退出」，不能留下没有退出入口的隐藏窗口。
+                eprintln!("[tray] 初始化失败，保持关窗即退出行为: {err}");
+            }
+            // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
+            tray::show_main_window(&handle);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 关窗只隐藏（D88）：HTTP 服务、UDP 发现、DSH hook 桥继续跑，
+            // 手机连接与 AI 状态不因用户关窗而断掉。退出走菜单栏右键菜单。
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && tray::ready() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             app_role,

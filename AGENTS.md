@@ -26,6 +26,7 @@
 - ✅ **电脑端「Liquid Glass · iOS 26」重做**（2026-11-06，D85 结构 + D86 质感，代码完成、待真机目检）：电脑端只留 **4 个一级页——概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 设置 ⌘4**；左侧 **224 玻璃侧栏**（顶部 38 交通灯区、3 个入口、底部设置、三行状态摘要「服务端口 / 手机台数 / AI 状态」）；页面是 **sticky 玻璃工具栏**（滚动 >6px 变玻璃胶囊、淡入 17/600 紧凑标题 + 内容从玻璃下滚过、顶部有 scroll-edge 模糊渐隐）+ **34/600 大标题** + 不透明白卡（730 单列 / 28 边距 / 16 圆角 / 行 54 / 15 号标题 / 分隔线内缩 16 或 60）。**删除**：会话列表页、系统页 4 段、48 全局状态条、72 图标导航、56 页头、页脚、mono 大写与解释性文案；AI 只出现在「概览 › 当前会话」。**设置是 iOS push**（二级页从右侧推入、左上「‹ 设置」返回）。质感层（D86，依据 Apple HIG › Materials + Liquid Glass）：玻璃**只做导航/控件层**（侧栏、工具栏、`dsl-action-group` 动作组、`dsl-glass` 提示卡与聊天输入栏），内容层保持不透明；彩色图标块 30×30/圆角 10（iOS system colors）、胶囊按钮 36/30/26、胶囊分段控件（spring 滑块）、40×24 开关、38 高输入、20 圆角弹层；侧栏选中滑块与分段滑块用 Motion spring morph、页面进入 fade / 二级页 push、按压 0.997、弹层 300ms 入场；还有 specular 高光、2.6% grain、极淡环境光；全部尊重 `prefers-reduced-motion` 与 `prefers-reduced-transparency`。令牌在 `app/src/desktop/styles/ios.css`（`.desktop-ios` 同时挂根 div 与 `<html>`，弹层 portal 才吃得到），手机 `.mobile-clean` 不受影响；窗口 `titleBarStyle: Overlay` + `hiddenTitle`；列表基元 `desktop/shell/list.tsx`、分段 `shell/segmented-control.tsx`、页头 `shell/page-header.tsx`。契约 `docs/engineering/desktop-ios-ui.md`（v2），决策 D85/D86/D87（D87 为窗口级 macOS 材质：透明窗口 + NSVisualEffectView，`.dsl-vibrancy` + `sidekick:vibrancy=off` 回退）。**72 files / 592 tests / tsc / lint / build / docs 全绿**；浏览器 QA `scripts/qa-desktop-ios.mjs` 46 张截图（含滚动态/弹层/vibrancy）无溢出/报错，真机窗口（交通灯/拖动）待目检。
 - ✅ **手机干净版两页壳**（2026-11-05，D80，代码完成待真机）：手机只留「宠物（根）/ 设置（二级）」两页，删除动态页与底部 tab；宠物页 = 顶栏（gear / 连接状态 / chat）→ 会话卡（折叠 1 行、展开 5 行、working wash、× 二次确认）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 24）；设置从 gear 进、左上返回、17/400 inline 标题、首用清单 banner、无底栏；说完话结果卡为弹窗三段（grabber + header 16「已输入」/ 12 时间 + content 13 单行 + footer 15「清空 / ↵ 回车」纯文字，44 热区，清空二次确认），总高约 125。新增 `.mobile-clean` 作用域令牌（`app/src/mobile/styles/clean.css`），只影响手机；桌面端不变。**字体改用随包 MiSans Normal 400（3.9MB WOFF2，免费商用需注明）**，会话标题 15，设置说明行高 1.45；旧 `stream` / `tab-bar` / `now-row` / 动态页组件已删除；activity-store 已删除。591 tests / tsc / lint / build 全绿；真机 Realme RMX3370 已验证宠物页 / 会话展开 / 设置页 / 返回键 / 深色 / MiSans 字体，待补录音禁切页、结果卡清空二次确认、320 宽。
 - ✅ **Token 用量看板 V1**（2026-11-06，D82–D84，代码完成待验收；**桌面导航位置已由 D85 改为第 3 个入口「用量 ⌘3」**）：桌面一级「用量」+ 手机「设置 › 用量」；只读本机 `~/.dsh/storages/cost-meter/ledger.json`，按客户端/会话/模型分组；`usage.request`/`usage` 协议带 `data` 包装（不含提示词/路径/cwd），模型 ID 按 D83 开关上手机；模型价格参考 tokei：seed + `~/.sidekick/token_pricing.json` 缓存 + overrides + DeepSeek 官方峰谷，实际 `costCny` 优先、缺价才估算（标 ≈）；新增 `reqwest`（rustls-no-provider，provider 在 `tls.rs`）。
+- ✅ **电脑端菜单栏常驻**（2026-11-06，D88，代码完成待人工目检）：关窗只隐藏窗口，HTTP 服务（47810+）/ UDP 发现（47820）/ DSH hook 桥（47815–47819）/ 剪贴板监听继续跑——手机连接与 AI 状态不再随关窗中断；`ActivationPolicy::Accessory` 隐藏 Dock 图标（Cmd+Tab 不出现、无 App 菜单、⌘Q 不可用）；菜单栏 36×36 单色模板图标（猫头剪影 + 眼睛镂空，`scripts/gen-tray-icon.py` 从 `brand/logo-favicon.svg` 生成，`icon_as_template` 自动适配浅/深菜单栏）；**左键图标显示并激活主窗口，右键菜单「显示主窗口 / 退出 Sidekick」是唯一退出入口**；托盘建失败自动退回「关窗即退出」（`TRAY_READY` 守卫），不留「无窗口/无图标/无退出」死局；`tray-icon` + `image-png` feature 只在桌面目标启用（Android 包不受影响）。契约 `docs/engineering/desktop-tray.md`。
 - 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
 - ✅ 品牌 logo 与全平台图标已落地（2026-10-31）：源文件在 `brand/`，Web favicon 与 Tauri 桌面/Android/iOS 图标已替换。
 - ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
@@ -104,6 +105,8 @@ sidekick/
 │  ├─ src/shared/       # ui（button/input/switch/dialog/sheet/signal-dot 等）/ lib（tauri、status、sessions、activity）/ styles
 │  ├─ src/dev/          # 仅开发环境 Tauri mock（浏览器验证）
 │  ├─ src-tauri/src/lib.rs        # 桌面 axum 服务 + 手机 WS 客户端（cfg 分流；动态端口/连接串行化）
+│  ├─ src-tauri/src/tray.rs       # 菜单栏常驻：托盘图标/右键菜单/关窗隐藏/Accessory（D88）
+│  ├─ src-tauri/icons/tray.png    # 36×36 单色模板图标（`scripts/gen-tray-icon.py` 生成）
 │  ├─ src-tauri/src/desktop_keys.rs # 结果卡片手动 Enter/⌘A+Delete（安全闸门/目标注册表）
 │  ├─ src-tauri/src/discovery.rs  # UDP 局域网发现（探测/回包/响应器/扫描）
 │  ├─ src-tauri/mobile/index.html # 手机浏览器落地页（含下载按钮）
@@ -175,6 +178,7 @@ sidekick/
 4. 双向发消息，桌面日志应出现 `[ws] recv: {...}`；
 5. 电脑端改界面后：`node scripts/qa-desktop-ios.mjs`（视觉/溢出/弹层令牌/滚动玻璃工具栏），再 `pnpm tauri dev` 目检窗口（交通灯位置、拖动区、滚动时的玻璃过渡、深浅主题）；
 6. 无头验证（推荐 AI 用）：见 `docs/setup.md`「WebView 远程调试」，用 CDP 调 Tauri 命令并用 `adb exec-out screencap -p` 截图确认。
+7. 电脑端菜单栏（D88，只能人工目检）：`pnpm tauri dev` 后确认终端出现 `[tray] 菜单栏图标已就绪` 且菜单栏有猫头剪影；点关闭按钮 → 窗口消失但 `lsof -nP -iTCP:47810` 仍监听、手机仍「已连接」；左键图标窗口回来；右键菜单「退出 Sidekick」才结束进程（`lsof` 端口释放）。细节见 `docs/engineering/desktop-tray.md` §5。
 
 ## 8. 已知坑（踩过的都在这）
 
@@ -194,7 +198,7 @@ sidekick/
 - **手机与电脑需同一局域网**；开发机 IP 会变，一般不用手填（自动发现），发现失败时再手动输入桌面窗口显示的地址。
 - **自动发现的三个前提**：同一网段、路由器不拦广播/无 AP 隔离、macOS 防火墙允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。
 - **端口被占用是正常的**：`47810` 被占会自动顺延到 `47811`…，桌面日志与窗口地址显示真实端口；手机发现回包也带真实端口。
-- **关窗即退出**：Tauri 默认关闭最后一个窗口就结束进程，HTTP（47810+）与 UDP 发现（47820）一起停。手机此时的表现是「发现 0 台电脑」→「connecting to ws://<旧地址>」→「Connection refused」，约 31s 重试一次；不是自动发现坏了，先把桌面窗口重新打开。没有菜单栏驻留模式。
+- **关窗 = 隐藏窗口，不是退出**（2026-11-06，D88）：Tauri 现在被 `tray.rs` 拦截 `CloseRequested` → `prevent_close` + `hide()`；HTTP（47810+）、UDP 发现（47820）、hook 桥（47815–47819）继续跑，手机保持「已连接」、AI 状态继续推。**唯一退出入口是菜单栏图标右键菜单「退出 Sidekick」**；Dock 图标隐藏（Accessory），关窗后 ⌘Q / Cmd+Tab 都不可用，不要按旧经验「关掉窗口就当退出」。托盘创建失败时会自动退回旧行为（`TRAY_READY=false`），此时关窗仍然退出。排查「手机连不上」时先看菜单栏图标在不在、`lsof -nP -iTCP:47810` 有没有监听，而不是找窗口。
 - **桌面 IP 不写死**：`server_info` 每次按网卡实时选 IPv4（`desktop_server::pick_lan_ip`：en* 优先，跳过 utun/bridge/awdl/anpi 等虚拟接口，防 VPN 地址进二维码）；手机连接地址来自 UDP **源 IP** + 发现回包里的真实端口，换网段/换 IP 不需要改代码。
 - **手动输入在连接页**：手机顶部连接状态 → 连接页 →「手动输入地址」；扫码是连接页的主按钮。发现失败的空状态卡片里也有入口。桌面窗口显示的 `IP:端口` 即要填的地址（自动发现失败时才需要）。
 - **桌面端单实例（防多开）**：`tauri-plugin-single-instance` 在 `Builder` 最先注册，第二个进程只把已有窗口叫到前台然后退出（D60）。多开的代价很隐蔽：后启动实例会把 `~/.dsh/sidekick/config.json` 的 `endpoint` 改成它的回环端口（47816），它退出后 DSH hook 的上报全部打空，剩下那个实例的桥永远 idle；而手机发现只认持有 UDP 47820 的先启动实例，于是「AI 在工作、宠物是 idle」。状态不更新时先查 `lsof -nP -iTCP:47815-47819`、config.json 的 endpoint 是否指向活着的进程（`curl -s -o /dev/null -w '%{http_code}' -X POST <endpoint>`）。
@@ -273,10 +277,11 @@ sidekick/
 5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
 6. ✅ 手机干净版两页壳（2026-11-05，D80；取代 D79 的手机 3 档）：宠物页（顶栏 / 会话卡 / 鲸鱼 / 居中圆麦克风）+ 设置二级页，删动态页与底栏；结果卡弹窗三段；代码完成、591 tests 全绿；下一步真机回归（返回键 / 录音禁切页 / 双主题 / 320 宽 / 结果卡清空二次确认）。
 7. ✅ 电脑端「Liquid Glass · iOS 26」（2026-11-06，D85 结构 + D86 质感，取代 D79 指挥舱桌面壳 / D82 桌面导航顺序）：4 入口 + 224 玻璃侧栏 + sticky 玻璃工具栏（滚动淡入紧凑标题）+ 34/600 大标题 + 不透明白卡（16 圆角 / 行 54）+ 彩色图标块 + 胶囊按钮/分段/搜索 + 设置 push + spring 动效 / specular / grain / scroll-edge；删除会话列表页、系统页、状态条、图标 rail；**72 files / 592 tests / tsc / lint / build / docs 全绿**，浏览器 46 张截图（含滚动态/vibrancy）通过；**下一步 `pnpm tauri dev` 目检窗口**（真实材质/交通灯/拖动区/滚动玻璃过渡/深浅主题/960 宽）。
-8. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效 + 会话列表/清除/反问唤起 + 会话行工具动作（插件 v3）；代码完成，待真机/隐私验收（2026-11-04）。
-9. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
-10. 配对鉴权 + 正式签名/公证/开机自启（`release/` 固定产物与打包脚本已完成 2026-11-03，仍是本地密钥/未签名）。
-11. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
-12. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
-13. P2：系统级虚拟麦克风、云同步/多语言。
-14. 视觉系统双主题回归（2026-11-04，D71/D76；桌面已由 D85 改为 iOS 令牌，回归时以 `desktop-ios-qa` 截图为准）：逐页检查深/浅两套主题的对比度与层级、浅色海玻璃舞台与页面的衔接、深色浮层 `.deep-sea-scope` 不被浅色主题漂白、桌面状态点声呐环在 reduced-motion/后台失焦下的暂停；之后每个新组件都要双主题验收。
+8. ✅ 电脑端菜单栏常驻（2026-11-06，D88）：关窗隐藏窗口 + `Accessory` 隐藏 Dock + 菜单栏模板图标；左键显示窗口、右键菜单退出；HTTP/发现/hook 桥在关窗后继续跑；`cargo check` 通过，菜单栏观感/反色/端口存活/单实例唤醒待人工 `pnpm tauri dev` 目检；契约 `docs/engineering/desktop-tray.md`。
+9. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效 + 会话列表/清除/反问唤起 + 会话行工具动作（插件 v3）；代码完成，待真机/隐私验收（2026-11-04）。
+10. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
+11. 配对鉴权 + 正式签名/公证/开机自启（`release/` 固定产物与打包脚本已完成 2026-11-03，仍是本地密钥/未签名）。
+12. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
+13. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
+14. P2：系统级虚拟麦克风、云同步/多语言。
+15. 视觉系统双主题回归（2026-11-04，D71/D76；桌面已由 D85 改为 iOS 令牌，回归时以 `desktop-ios-qa` 截图为准）：逐页检查深/浅两套主题的对比度与层级、浅色海玻璃舞台与页面的衔接、深色浮层 `.deep-sea-scope` 不被浅色主题漂白、桌面状态点声呐环在 reduced-motion/后台失焦下的暂停；之后每个新组件都要双主题验收。

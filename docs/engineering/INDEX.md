@@ -2,10 +2,11 @@
 doc: engineering/INDEX
 title: 工程方案分支索引
 status: active
-updated: 2026-11-02
+updated: 2026-11-06
 load: on-demand
 children:
   - desktop-ios-ui.md
+  - desktop-tray.md
   - audio-pipeline.md
   - protocol-audio.md
   - asr-model.md
@@ -35,6 +36,7 @@ children:
 | 做 AI 联动：DSH 脚本注入、Rust 桥、四态协议 | [dsh-hook.md](./dsh-hook.md) | M |
 | 做 Token 用量看板、读 DSH 账本、模型价格与估算 | [token-usage-pricing.md](./token-usage-pricing.md) | M |
 | 改电脑端界面（简约 iOS 结构 / 导航 / 列表 / 文案红线） | [desktop-ios-ui.md](./desktop-ios-ui.md) | S |
+| 做菜单栏常驻 / 关窗隐藏 / Dock 图标 / 退出入口 | [desktop-tray.md](./desktop-tray.md) | S |
 | 做宠物：帧动画图集、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
 | 写测试、真机验收、发版 | [quality.md](./quality.md) | M |
 
@@ -45,6 +47,7 @@ children:
 - AI 联动（DSH）开发中：本地脚本注入 + 回环桥 + status 协议 + 手机四态/三音效；见 [dsh-hook.md](./dsh-hook.md)。
 - Token 用量看板（2026-11-06）：只读 DSH cost-meter 账本 + OpenRouter/DeepSeek 价格表 + 缺价估算；见 [token-usage-pricing.md](./token-usage-pricing.md)（D82–D84）。
 - 电脑端「简约 iOS」壳（2026-11-06，D85）：4 个一级入口 + 224 侧栏 + iOS 分组列表 + 设置二级页；同日 D86 第二轮升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏 / 彩色图标块 / 胶囊控件 / spring 动效，玻璃只做控件层）；实现契约见 [desktop-ios-ui.md](./desktop-ios-ui.md)。
+- 电脑端菜单栏常驻（2026-11-06，D88）：关窗只隐藏窗口，HTTP/发现/hook 桥继续跑；Dock 图标隐藏（Accessory），左键图标显示窗口、右键菜单退出；见 [desktop-tray.md](./desktop-tray.md)。
 - 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
 - 云端识别：[asr-cloud-bailian.md](./asr-cloud-bailian.md)（桌面中转、Keychain、50ms partial、失败不降级）；模型页/用量见 [asr-model.md](./asr-model.md)。
 - 现有架构事实：[architecture.md](../architecture.md)、[frontend-architecture.md](../frontend-architecture.md)。
@@ -65,4 +68,5 @@ children:
 - Opus/BLE 何时引入？当前 PCM16 已跑通。
 - 自动粘贴对哪些 macOS 应用不兼容？需继续扩充真机矩阵。
 - 桌面独立 always-on-top 浮窗是否值得从应用内浮层升级？
-- 剪贴板全局快捷键/菜单栏入口的优先级。
+- 菜单栏图标是否升级成状态化（等你回答时换图标/加文字）？v1 按 D88 只放静态图标。
+- 剪贴板全局快捷键的优先级（菜单栏入口已由 D88 提供）。
