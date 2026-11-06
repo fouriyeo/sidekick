@@ -1,6 +1,8 @@
 import { cn } from "cn";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createHaptics } from "@/mobile/features/pet/haptics";
+import { usePetStore } from "@/mobile/features/pet/pet-store";
 import type { SessionRow as SessionRowData } from "@/shared/lib/sessions";
 import { SessionRow } from "./session-row";
 
@@ -15,13 +17,11 @@ const TERTIARY_TEXT = "text-[color:var(--tertiary,var(--muted-foreground))]";
  * - header 40：「会话」13/400 + 计数 12 + 右侧 14 薄荷 chevron（可点折叠/展开）；
  * - 行高 52，working 行铺 --wash；展开最多 5 行；
  * - 折叠 1 行 + footer「还有 N 条」，展开 + footer「收起」；
- * - 每行右侧 × 走 onClear，pendingClearId 命中时显示「再点」；
+ * - 行左滑露出「清除」按钮（D95），一次只开一行；
  * - 空列表整卡不渲染。
  */
 type SessionFeedProps = {
   rows: readonly SessionRowData[];
-  /** 二次确认态的会话 id（来自 session-store.pendingClearId）。 */
-  pendingClearId?: string | null;
   /** 只有 asking 行可点开；其他行保持只读，不扩大行为。 */
   onOpenAsking?: (row: SessionRowData) => void;
   onClear?: (id: string) => void;
@@ -52,29 +52,55 @@ function PiledDots() {
 
 export function SessionFeed({
   rows,
-  pendingClearId = null,
   onOpenAsking,
   onClear,
   onExpandedChange,
   className,
 }: SessionFeedProps) {
   const [expanded, setExpanded] = useState(false);
+  /** 当前左滑展开的行；null = 全部收起。 */
+  const [openId, setOpenId] = useState<string | null>(null);
   const canExpand = rows.length > 1;
   const isExpanded = expanded && canExpand;
 
+  // 触感跟随宠物设置里的「震动」开关；getter 避免把旧值闭包进来。
+  const haptics = useMemo(
+    () => createHaptics({ enabled: () => usePetStore.getState().pet.settings.haptics }),
+    [],
+  );
+
   // 列表缩到 1 条时自动回到折叠态，避免留下一个打不开的展开态。
   useEffect(() => {
-    if (!canExpand) setExpanded(false);
+    if (canExpand) return;
+    setExpanded(false);
+    setOpenId(null);
   }, [canExpand]);
 
   useEffect(() => {
     onExpandedChange?.(isExpanded);
   }, [isExpanded, onExpandedChange]);
 
+  // 行消失（清除 / 已完成自动隐藏）时，开合状态跟着清掉。
+  useEffect(() => {
+    if (openId === null) return;
+    if (rows.some((row) => row.id === openId)) return;
+    setOpenId(null);
+  }, [rows, openId]);
+
   if (rows.length === 0) return null;
 
   const shown = isExpanded ? rows.slice(0, SESSION_FEED_MAX_ROWS) : rows.slice(0, 1);
-  const toggle = () => setExpanded((value) => !value);
+  const toggle = () => {
+    // 展开/收起时收起已滑开的行（行可能被折叠隐藏）。
+    setOpenId(null);
+    setExpanded((value) => !value);
+  };
+
+  const handleClear = (id: string) => {
+    setOpenId(null);
+    haptics.success();
+    onClear?.(id);
+  };
 
   const headerLabel = (
     <span className="flex items-baseline gap-[5px]">
@@ -116,9 +142,11 @@ export function SessionFeed({
           <SessionRow
             key={row.id}
             row={row}
-            pendingClear={pendingClearId === row.id}
+            open={openId === row.id}
+            onOpenChange={(next) => setOpenId(next ? row.id : null)}
+            onReveal={() => haptics.light()}
             onOpen={row.display === "asking" && onOpenAsking ? () => onOpenAsking(row) : undefined}
-            onClear={onClear ? () => onClear(row.id) : undefined}
+            onClear={onClear ? () => handleClear(row.id) : undefined}
           />
         ))}
       </ul>

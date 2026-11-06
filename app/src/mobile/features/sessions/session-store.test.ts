@@ -44,7 +44,6 @@ function resetStore() {
     noticeId: 0,
     pendingFocusId: null,
     pendingRequestId: null,
-    pendingClearId: null,
   });
   storage.load.mockReset();
   storage.load.mockResolvedValue({});
@@ -101,17 +100,13 @@ describe("session-store", () => {
     ).toHaveLength(1);
   });
 
-  it("asks for a second tap before clearing an asking session", () => {
+  it("clears an asking session immediately (no second tap)", () => {
     const store = useSessionStore.getState();
     store.apply([session({ id: "s-1", state: "asking" })]);
 
     store.clear("s-1");
-    expect(useSessionStore.getState().cleared).toEqual({});
-    expect(useSessionStore.getState().pendingClearId).toBe("s-1");
-
-    store.clear("s-1");
     expect(useSessionStore.getState().cleared["s-1"]?.through).toBe(1000);
-    expect(useSessionStore.getState().pendingClearId).toBeNull();
+    expect(useSessionStore.getState().notice).toContain("已清除");
   });
 
   it("hydrates cleared markers and filters matching sessions", async () => {

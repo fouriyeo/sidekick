@@ -836,3 +836,57 @@
 - 放弃：只改文案/不把 ③④ 计入步数（手机仍无法回答「到底配了没有」）；靠手机端「录音成功过一次」反推 ③（要等用户先录一次，且无法覆盖 ④；只作为旧桌面兜底也不如直接上报准确）；把整个 `asr.json` 配置或 Key 掩码发上手机（隐私红线，且手机不需要）。
 - 代价：协议多一种消息（旧手机忽略、旧桌面不发，双向兼容）；辅助功能在 TCC 里变化后要等下一次快照才更新（不实时，接受）。
 - 规范：`protocol/README.md`（desktop.status）、`app/src-tauri/src/desktop_server.rs`、`app/src/protocol/messages.ts`、`app/src/mobile/features/first-use/store.ts`、`app/src/mobile/app.tsx`、`app/src/mobile/features/settings/more-page.tsx`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`。
+
+## D93 · 手机顶栏重排：连接状态收成信号塔图标 + 今日用量上顶栏（2026-11-06，调整 D80 顶栏三件套与 D82 的手机用量入口）
+
+- 背景：用户在真机上觉得顶栏「已连接 · 局域网」字号大、占位多，连接状态并不是宠物页的主要信息；同时 Token 用量藏在「设置 › 用量」里太深，看今天花了多少要先点 gear 再点用量。
+- 决策：
+  - 顶栏从「gear / 连接状态 / chat」三件套改为四件套：左 gear + **连接状态信号塔图标**（lucide `RadioTower` 20，薄荷 `--signal`；连上只显示图标、不写文字，44 热区 → 连接页）；右侧 **今日用量数字**（13/400 tabular，今天花费 `¥x.xx` / 估算 `≈¥x.xx`；无快照 / 账本缺失 / 缺价退回 `Gauge` 图标，44 热区 → 用量页）+ chat。
+  - 没连上时图标旁补最短状态词（连接中 / 重连中 / 重连 Ns / 未连接）；**完整固定文案**（已连接 · 局域网、还没连上电脑、N 秒后重连…）保留在 `aria-label` 与连接页，读屏可达、状态词表不丢。
+  - 用量入口从「设置 › 用量」上移为顶栏数字；设置页删除该分组（不保留双入口）；用量页返回从「回设置」改为「回宠物」，Android 返回键同步 `usage → pet`。
+  - `usage-store` 新增独立 `today` 快照与静默 `requestToday()`：连上、回前台各拉一次 `usage.request(today)`，与用量页当前区间互不影响；请求失败 / 超时只保持图标态，不弹错、不显示假数字。
+- 原因：连接状态是「不出事就不用看」的信息，图标 + 颜色（薄荷 / 中性灰）足够；Token 花费是用户高频想瞄一眼的数字，放在宠物页顶栏一眼可见，点一下就是完整看板。
+- 放弃：连接状态只换小字不换图标（仍占横向空间、仍不是主信息）；顶栏只放用量图标不显示数字（看不出「今天花了多少」，还要多点一次）；设置页保留用量入口（两个入口冗余，且用户明确说「太深」）；用量数字放宠物舞台 / 会话卡（会被鲸鱼和会话卡挤，且不随页面常驻）。
+- 代价：顶栏从 3 个热区变 4 个，320 宽下右侧更满（实测用量数字最宽约 92px 截断，390/320 均无横向溢出）；「已连接」不再有可见文字，色弱用户只能靠图标形状 + `aria-label`（连接页仍有完整文字），可接受；用量数字只代表「今天」且不实时刷新（连接 / 回前台各一次）。
+- 规范：`app/src/mobile/shell/pet-top-bar.tsx`、`app/src/mobile/features/connect/connection-view.ts`（`shortLabel`）、`app/src/mobile/features/usage/{usage-store,usage-page}.ts(x)`、`app/src/mobile/app.tsx`、`app/src/mobile/features/settings/more-page.tsx`、`app/src/mobile/ui-store.ts`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/prd/usage/*`、`docs/standards/{ux,visual}.md`、`AGENTS.md`。
+
+## D94 · 语音提升为一级页 + 关键词列表（2026-11-06，取代 D85 的「4 个一级入口」与「语音在设置」部分）
+
+- 背景：用户反馈语音配置埋在「设置 › 语音输入」二级页太深，要求挪到左侧 tab 栏并重新设计，让功能更显现；同时想输入领域关键词提升识别率。官方即时热词 `parameters.vocabulary` 最多 2000 个，普通词权重官方推荐 4。
+- 决策：
+  - 一级导航改为 **5 个：概览 ⌘1 / 语音 ⌘2 / 内容 ⌘3 / 用量 ⌘4 / 设置 ⌘5**，设置仍固定在侧栏底部；语音未配置时导航项右侧一颗 6px 琥珀点。
+  - 语音根页只做枢纽：未配置玻璃提示卡（可选）+ 百炼状态（模型 · 语言）、关键词计数（`N / 2000`）、今天/近 7 天用量；**配置表单不占首屏**。配置、关键词、语音用量分别用 `PageShell transition="push"` 进二级页（返回「‹ 语音」）。
+  - 关键词是**单一扁平列表**：页面一行一个词，点「加一行」增加一行、点「保存」写入 `bailian.vocabulary`；不做分组/启停/权重/导入导出。所有关键词统一按即时热词权重 `4` 发送；最多 2000 个；含非 ASCII 字符 ≤15 字、纯 ASCII 按空格 ≤7 段。
+  - 存储仍在 `~/.sidekick/asr.json`（0600）的 `bailian.vocabulary`，version 仍为 1；2026-11-06 中间版本写下的 `bailian.dictionaries` 只在读取时平铺进 `vocabulary`，随后丢弃。
+  - 新增命令 `asr_keywords_save` 只替换关键词，不触碰同意状态、API Key 与其他识别参数；空列表时 `run-task` 不带 `vocabulary`。
+  - 设置首页删除「语音输入」行，`SettingsSection` 去掉 `voice`；原 `ModelsSection` 删除，`CloudAsrForm` 与 `UsageStatsPanel` 直接挂在语音二级页。
+- 原因：语音是本产品核心动作，状态/关键词/费用应当一级可见；用户明确要「一行一个词 + 加号加行」的简单表单，不需要词典分组。
+- 放弃：多词典分组/启停/权重 UI（用户明确不要，后端也不保留）；预编译热词表 `vocabulary_id`（单机没必要）；`input.context` 上下文增强（计输入 token，后置）；按前台应用自动切换关键词（后续做）。
+- 代价：⌘2/⌘3 从「内容/用量」迁移到「语音/内容」，一次性刷新文档与测试；5 个一级页比 4 个更满；2000 词会增大 run-task 首包，需实测会话启动延迟；`language_hints` 只含 `zh` 时英文关键词可能被官方过滤（文档提示，不做自动改语言）。
+- 规范：`app/src/desktop/{lib/desktop-nav.ts,pages/voice-page.tsx,shell/sidebar.tsx,pages/settings-page.tsx}`、`app/src/desktop/features/models/{keywords.ts,keywords-page.tsx,cloud-asr-form.tsx,usage-stats.tsx,cloud-asr-store.ts}`、`app/src-tauri/src/{asr_config.rs,bailian_asr.rs,asr_cloud.rs,lib.rs}`、`app/src/shared/lib/tauri.ts`、`app/src/dev/tauri-mock.ts`、`scripts/qa-desktop-ios.mjs`、`docs/engineering/{desktop-ios-ui.md,asr-model.md,asr-cloud-bailian.md}`、`docs/prd/mic/*`、`docs/prd/shell/*`。
+
+## D95 · 手机会话清除改为「左滑露出清除按钮」：移除 ×、去掉 asking 二次确认（2026-11-06，取代 D80 的「每行右侧 ×」）
+
+- 背景：用户在真机上觉得会话行右侧 28×28 的 × 又小又贴行主区域，非 asking 行点一次就直接清除，误触成本高；想要 iOS/微信式「左滑 → 露出删除按钮 → 点按钮清除」。
+- 决策：
+  - **移除视觉 ×**；行内容左滑 72px，露出右侧 72×52 的红色「清除」按钮（`bg-destructive`），点按钮才清除。一次只开一行；点行外、展开/收起列表、该行消失（含自动隐藏）时自动收起；行展开时点行内容先收起、不触发 asking 跳转。
+  - **去掉 asking 行的「再点一次」二次确认**：左滑 + 点按钮已经是两步，`session-store` 的 `pendingClearId` / 3 秒确认定时器一并删除。
+  - 手势自己写（`use-swipe-row.ts`），不引第三方库：Pointer Events + `transform: translate3d`，拖动期间直接改 DOM style、不走 setState；水平位移超过 8px 才 `setPointerCapture`，避免 Chrome 把 click 重定向到捕获元素；位移 > 8px 后吞掉本次 click；松手按「最终位移 ≥ 40% 或快速左滑」吸附；`prefers-reduced-motion` 时去掉过渡。
+  - 清除按钮常驻 DOM 且可聚焦（`aria-label="清除会话 {标题}"`），TalkBack/键盘聚焦时自动展开，作为滑动手势的无障碍兜底；文案用「清除」不是「删除」（只清手机端状态，新事件会再出现）。
+- 原因：滑动 + 点按钮比单点 × 更不容易误触，72×52 也补上了 × 28×28 低于 44px 热区的问题；行尾更干净。
+- 放弃：`react-swipeable-list`（MIT、ESM 约 7.3KB gzip，但 2024-10 后未更新、单维护者，且 `import PropTypes from "prop-types"` 却没声明依赖，项目里也没有 prop-types）；`react-swipeable` / `@use-gesture/react`（只做手势识别，位移/开合/点击抑制仍要自己写）；Motion（D89 已明确手机不引，72KB gzip + WebView 103 rAF 风险）；CSS scroll-snap（开合状态与点击抑制更难控）；全滑直接删除（没有撤销，危险）；保留 × 作为兜底（视觉重复，且与「左滑」两条路径）。
+- 代价：可发现性变差（本次不做首次提示，后续可补）；TalkBack 左右滑是读屏导航手势，只能靠聚焦兜底；Android 10+ 从屏幕右边缘向内滑 = 返回，行最右侧起手可能被系统抢（真机验证，必要时再评估原生 `setSystemGestureExclusionRects`，本次不做）。
+- 规范：`app/src/mobile/features/sessions/{use-swipe-row.ts,session-row.tsx,session-feed.tsx,session-store.ts}`、`app/src/mobile/features/pet/pet-page.tsx`、`app/src/mobile/styles/clean.css`、`app/src/shared/lib/sessions.ts`、相关测试、`docs/prd/hook/{PRD,SPEC,ACCEPTANCE}.md`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`docs/design/mobile-ui-v16/README.md`、`AGENTS.md`。
+
+## D96 · 已完成会话 2 小时无新事件自动隐藏（2026-11-06）
+
+- 背景：用户要求「已经完成的会话，如果 2 个小时没有操作，就自动清除掉」——完成的会话不必一直占着宠物页会话卡。
+- 决策：
+  - 只对 `display === "completed"` 的会话生效；从 `completedAt`（缺失时回退 `lastEventAt`）起算，`now - completedAt >= 2h` 即隐藏（正好 2 小时算超时）；working / asking / idle 永不被自动隐藏。
+  - **按快照派生过滤，不写 `cleared` 标记、不落盘、不弹提示、不触感**：`visibleSessions` 增加可选参数 `{ now, autoClearCompletedAfterMs }`，手机宠物页传 2 小时；桌面调用不传，保持「完成态一直保留到手动清除」的旧行为。
+  - 刷新：`useSessionClock` 每 60 秒更新 `now`，回前台（`visibilitychange`）立即刷新；宠物页挂载时立即计算，所以最多延迟 1 分钟感知到期。重启/断连后按快照重新计算，不依赖内存计时。
+  - 有新事件（状态变 working/asking，或 completedAt 更新）后自然重新出现；再次完成从新的 `completedAt` 重新计时。
+- 原因：不落盘避免 `sidekick-sessions.json` 的 7 天标记 TTL、持久化写入与重启后不一致；派生规则可重复计算、无副作用；只影响手机列表，不改变电脑端会话或宠物 AI 聚合态。
+- 放弃：写清除标记（TTL/落盘副作用、还要处理自动清除提示）；桌面桥过滤（会影响桌面概览）；为每个会话排精确 `setTimeout`（后台节流、快照更新时重排，复杂度不值）；做成设置项（用户明确要固定 2 小时，先固定）。
+- 代价：最多 60 秒延迟；只隐藏手机列表，电脑端仍保留该会话；后台定时器被节流时靠回前台刷新兜底。
+- 规范：`app/src/shared/lib/sessions.ts`、`app/src/mobile/features/sessions/{session-store.ts,use-session-clock.ts}`、`app/src/mobile/features/pet/pet-page.tsx`、`app/src/shared/lib/sessions.test.ts`、`app/src/mobile/features/pet/pet-page.test.tsx`、`docs/prd/hook/{PRD,SPEC,ACCEPTANCE}.md`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`AGENTS.md`。

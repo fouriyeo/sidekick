@@ -1,12 +1,53 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SessionSummary } from "@/protocol/messages";
 import { type SessionRow, visibleSessions } from "@/shared/lib/sessions";
 import { SessionFeed } from "./session-feed";
 
+// jsdom 没有 PointerEvent，用 MouseEvent 顶替（照 mic-button.test.tsx 的写法）。
+beforeAll(() => {
+  Object.defineProperty(window, "PointerEvent", {
+    configurable: true,
+    value: window.MouseEvent,
+  });
+});
+
 afterEach(() => {
   cleanup();
 });
+
+function swipe(element: Element, fromX = 240, toX = 120, durationMs = 200) {
+  // 控制 performance.now，让速度可预期（jsdom 里两次事件间隔几乎是 0，会被当成快速滑动）。
+  let clock = 1_000;
+  const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => clock);
+  try {
+    fireEvent.pointerDown(element, {
+      pointerId: 1,
+      clientX: fromX,
+      clientY: 20,
+      pointerType: "touch",
+    });
+    clock += durationMs;
+    fireEvent.pointerMove(element, {
+      pointerId: 1,
+      clientX: toX,
+      clientY: 20,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(element, {
+      pointerId: 1,
+      clientX: toX,
+      clientY: 20,
+      pointerType: "touch",
+    });
+  } finally {
+    nowSpy.mockRestore();
+  }
+}
+
+function contents(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>("[data-swipe-content]"));
+}
 
 function session(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -78,8 +119,8 @@ describe("SessionFeed 折叠与展开", () => {
   });
 });
 
-describe("SessionFeed 清除", () => {
-  it("每行 × 回调会话 id", () => {
+describe("SessionFeed 左滑清除", () => {
+  it("点清除按钮回调会话 id", () => {
     const onClear = vi.fn();
     render(<SessionFeed rows={rows(2)} onClear={onClear} />);
 
@@ -88,12 +129,35 @@ describe("SessionFeed 清除", () => {
     expect(onClear).toHaveBeenCalledWith("s-1");
   });
 
-  it("pendingClearId 命中时显示「再点」并变 destructive", () => {
-    render(<SessionFeed rows={rows(1)} pendingClearId="s-1" onClear={vi.fn()} />);
+  it("一次只开一行：打开第二行时第一行自动收起", () => {
+    const { container } = render(<SessionFeed rows={rows(2)} onClear={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "展开会话列表" }));
 
-    const clear = screen.getByRole("button", { name: "确认清除会话 会话 1" });
-    expect(clear).toHaveTextContent("再点");
-    expect(clear.className).toContain("text-destructive");
+    const [first, second] = contents(container);
+    if (!first || !second) throw new Error("会话行未渲染");
+
+    swipe(first);
+    expect(first.style.transform).toBe("translate3d(-72px, 0, 0)");
+
+    swipe(second);
+    expect(second.style.transform).toBe("translate3d(-72px, 0, 0)");
+    expect(first.style.transform).toBe("translate3d(0px, 0, 0)");
+  });
+
+  it("展开/收起列表时收起已滑开的行", () => {
+    const { container } = render(<SessionFeed rows={rows(3)} onClear={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "展开会话列表" }));
+
+    const [first] = contents(container);
+    if (!first) throw new Error("会话行未渲染");
+    swipe(first);
+    expect(first.style.transform).toBe("translate3d(-72px, 0, 0)");
+
+    fireEvent.click(screen.getByRole("button", { name: "收起会话列表" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开会话列表" }));
+    const [firstAgain] = contents(container);
+    if (!firstAgain) throw new Error("会话行未渲染");
+    expect(firstAgain.style.transform).toBe("translate3d(0px, 0, 0)");
   });
 });
 

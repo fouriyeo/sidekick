@@ -20,7 +20,7 @@ related:
 ## 关键规格
 
 - 手机只有两页：宠物（根）/ 设置（二级）。顶栏 gear / 连接状态 / chat；无底部 tab。
-- 宠物页：会话卡置顶（折叠 1 行 / 展开 5 行、working wash、× 二次确认）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 56）。
+- 宠物页：会话卡置顶（折叠 1 行 / 展开 5 行、working wash、左滑清除、已完成 2h 自动隐藏）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 56）。
 - 结果卡：弹窗三段 grabber + header 16「已输入」+ content 13 单行 + footer 15「清空 / ↵ 回车」；总高约 125；清空二次确认。
 - 令牌：`app/src/mobile/styles/clean.css`（`.mobile-clean`，浅/深两套，只作用手机）。
 - 字体：HarmonyOS Sans SC Regular 400（随包原始 TTF，D91；D81 时期为 MiSans）；会话标题 15；设置说明行高 19；正文 13。

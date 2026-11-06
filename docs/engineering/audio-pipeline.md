@@ -103,7 +103,7 @@ owner: engineering
 - `task-finished` 的 usage 先记入 `asr_usage.json`，再插入；即使插入失败/空结果也计费。
 - 失败：`mic.result(failed, cloud_*)` 或启动时 `mic.error`；不插入、不重试。
 - Key 存 macOS Keychain；`asr.json` 0600 且不含 Key；未同意不上传。
-- 完整方案、模型页与用量口径见 [asr-cloud-bailian.md](./asr-cloud-bailian.md) / [asr-model.md](./asr-model.md)。
+- 完整方案、语音页/关键词与用量口径见 [asr-cloud-bailian.md](./asr-cloud-bailian.md) / [asr-model.md](./asr-model.md)。
 
 ## 7. 文本输入（macOS）
 
@@ -180,7 +180,7 @@ owner: engineering
 - 原始音频只在内存；转写完成/失败/取消后立即释放。
 - 不写临时文件、不做录音缓存、不做后台重试队列。
 - 日志只记阶段、错误码、时长、tokens；不记音频、全文、剪贴板、目标应用名、API Key。
-- 音频直达用户配置的百炼地域，不经 Sidekick 服务器；使用前必须在模型页勾选同意。
+- 音频直达用户配置的百炼地域，不经 Sidekick 服务器；使用前必须在「语音 › 连接与识别」勾选同意。
 - Key 只存 Keychain；配置/用量文件 0600 且不含 Key。
 - 录音时手机端始终有可见指示；App 后台立即停止。
 - 当前局域网无鉴权/加密：仅可信网络；公共 Wi-Fi 明确警告；P1 做配对与加密。
@@ -211,7 +211,7 @@ owner: engineering
 - 稳定性：连续 20 次录音、60 秒长录音、录音中切后台/来电/断网。
 - 输入安全：密码框、无输入框、目标窗口切换、全屏应用、终端/编辑器/浏览器。
 - 隐私：应用目录无音频文件；抓包只连用户配置的百炼地址；无 Key/全文日志。
-- 用量：每次返回 usage 的会话在模型页 +1；清空统计不影响配置。
+- 用量：每次返回 usage 的会话在语音用量页 +1；清空统计不影响配置。
 - 电量：30 分钟混合使用掉电/温度。
 - 详见 [quality.md](./quality.md)。
 
@@ -232,5 +232,5 @@ owner: engineering
 - 用量：`asr_usage.json` 按本机日期汇总；`asr_usage_stats/clear`；金额按北京/新加坡价格估算。
 - 输入：`arboard` 写剪贴板；`core-graphics` 合成 Cmd+V；未授权/目标变化/安全输入只复制；不自动发送回车。
 - 手动按键：结果卡片「回车/清空」→ `key.request` → `desktop_keys` 安全闸门 → Return / ⌘A+Delete；30 秒时效、成功即作废、500ms 限频（2026-11-04）。
-- 桌面：「系统 › 语音」（模型页）配置百炼 + 查看用量；应用内语音浮层；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
+- 桌面：「语音」一级页配置百炼、管理关键词、查看用量；应用内语音浮层；剪贴板历史见 [clipboard-manager.md](./clipboard-manager.md)。
 - 待验证：真实百炼账号/Keychain 授权/真机流式与失败路径、用量统计准确性、辅助功能自动粘贴、60 秒/断连、30 句准确率、结果卡片回车/清空的真机与焦点切换矩阵。

@@ -207,6 +207,17 @@ html[data-theme="dark"] .mobile-clean {
   animation-delay: 96ms;
 }
 
+/* 会话行左滑：拖动时直接跟手（data-dragging），松手走回弹过渡（D95） */
+.mobile-clean .ms-swipe-content {
+  touch-action: pan-y;
+  transition: transform 320ms var(--spring-back);
+}
+
+.mobile-clean .ms-swipe-content[data-dragging="true"] {
+  transition: none;
+  will-change: transform;
+}
+
 /* 麦克风圆钮：按下快速压扁，松手弹回（原来靠 active:scale-*，WebView 103 上不生效） */
 .mobile-clean .press-spring {
   transition: transform 320ms var(--spring-back);
@@ -226,6 +237,7 @@ html[data-theme="dark"] .mobile-clean {
 @media (prefers-reduced-motion: reduce) {
   .mobile-clean .mic-result-card,
   .mobile-clean .ms-row,
+  .mobile-clean .ms-swipe-content,
   .mobile-clean .press-spring,
   .mobile-clean .toggle-knob {
     animation: none;

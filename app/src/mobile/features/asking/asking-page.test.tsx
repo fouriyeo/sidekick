@@ -42,7 +42,6 @@ function seed(list: SessionSummary[]) {
     noticeId: 0,
     pendingFocusId: null,
     pendingRequestId: null,
-    pendingClearId: null,
   });
 }
 

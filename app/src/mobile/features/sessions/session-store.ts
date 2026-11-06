@@ -11,10 +11,11 @@ export { displayStateOf, focusErrorText, visibleSessions } from "@/shared/lib/se
 
 const FOCUS_TIMEOUT_MS = 3000;
 const NOTICE_MS = 3200;
+/** 已完成会话超过该时长没有新事件，就从手机列表隐藏（D96）。 */
+export const COMPLETED_AUTO_CLEAR_MS = 2 * 60 * 60 * 1000;
 
 let focusTimer: ReturnType<typeof setTimeout> | null = null;
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
-let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 let requestSeq = 0;
 
 function clearFocusTimer() {
@@ -31,13 +32,6 @@ function clearNoticeTimer() {
   }
 }
 
-function clearClearConfirmTimer() {
-  if (clearConfirmTimer !== null) {
-    clearTimeout(clearConfirmTimer);
-    clearConfirmTimer = null;
-  }
-}
-
 type SessionStoreState = {
   /** 最近一次 status.sessionList 快照；断连时保留，动态页标注「最后一次快照」。 */
   raw: SessionSummary[];
@@ -47,7 +41,6 @@ type SessionStoreState = {
   noticeId: number;
   pendingFocusId: string | null;
   pendingRequestId: string | null;
-  pendingClearId: string | null;
   hydrate: () => Promise<void>;
   apply: (list: readonly SessionSummary[]) => void;
   clear: (id: string) => void;
@@ -79,7 +72,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
     noticeId: 0,
     pendingFocusId: null,
     pendingRequestId: null,
-    pendingClearId: null,
 
     hydrate: async () => {
       const cleared = await loadCleared();
@@ -96,12 +88,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
         if (marker && session.lastEventAt > marker.through) delete cleared[session.id];
       }
 
-      const pendingClearId =
-        state.pendingClearId && raw.some((session) => session.id === state.pendingClearId)
-          ? state.pendingClearId
-          : null;
-
-      set({ raw, cleared, pendingClearId });
+      set({ raw, cleared });
 
       const clearedIds = Object.keys(cleared);
       const previousIds = Object.keys(state.cleared);
@@ -118,23 +105,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
       const session = state.raw.find((item) => item.id === id);
       if (!session) return;
 
-      if (session.state === "asking" && state.pendingClearId !== id) {
-        clearClearConfirmTimer();
-        set({ pendingClearId: id });
-        clearConfirmTimer = setTimeout(() => {
-          clearConfirmTimer = null;
-          if (get().pendingClearId === id) set({ pendingClearId: null });
-        }, NOTICE_MS);
-        showNotice("这个会话正在等你决定，再点一次清除。");
-        return;
-      }
-
       const cleared: ClearedMap = {
         ...state.cleared,
         [id]: { at: Date.now(), through: session.lastEventAt },
       };
-      clearClearConfirmTimer();
-      set({ cleared, pendingClearId: null });
+      set({ cleared });
       persist(cleared);
       showNotice("已清除；这个会话有新动静会再出现。");
     },
@@ -142,13 +117,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => {
     clearAll: () => {
       clearFocusTimer();
       clearNoticeTimer();
-      clearClearConfirmTimer();
       set({
         raw: [],
         notice: null,
         pendingFocusId: null,
         pendingRequestId: null,
-        pendingClearId: null,
       });
     },
 

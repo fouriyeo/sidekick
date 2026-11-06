@@ -45,7 +45,6 @@ function seedSessions(list: SessionSummary[]) {
     noticeId: 0,
     pendingFocusId: null,
     pendingRequestId: null,
-    pendingClearId: null,
   });
 }
 
@@ -143,7 +142,7 @@ describe("PetPage v16 消息卡", () => {
     expect(useUiStore.getState().view).toBe("asking");
   });
 
-  it("× 清除行；没有会话时整卡隐藏", () => {
+  it("点清除按钮清除行；没有会话时整卡隐藏", () => {
     seedSessions([session({ id: "s-1", title: "待清除会话" })]);
     const { rerender } = render(<PetPage />);
 
@@ -153,5 +152,54 @@ describe("PetPage v16 消息卡", () => {
     seedSessions([]);
     rerender(<PetPage />);
     expect(screen.queryByText("会话")).not.toBeInTheDocument();
+  });
+
+  it("已完成会话超过 2 小时自动隐藏，未超过仍显示", () => {
+    const now = Date.now();
+    seedSessions([
+      session({
+        id: "s-stale",
+        title: "三小时前完成",
+        state: "idle",
+        completedAt: now - 3 * 60 * 60 * 1000,
+        lastEventAt: now - 3 * 60 * 60 * 1000,
+      }),
+      session({
+        id: "s-fresh",
+        title: "一小时前完成",
+        state: "idle",
+        completedAt: now - 60 * 60 * 1000,
+        lastEventAt: now - 60 * 60 * 1000,
+      }),
+    ]);
+    render(<PetPage />);
+
+    expect(screen.queryByText("三小时前完成")).toBeNull();
+    expect(screen.getByText("一小时前完成")).toBeInTheDocument();
+  });
+
+  it("宠物页停留时，已完成会话到 2 小时自动消失", () => {
+    vi.useFakeTimers();
+    try {
+      const now = Date.now();
+      seedSessions([
+        session({
+          id: "s-1",
+          title: "快到两小时",
+          state: "idle",
+          completedAt: now - 119 * 60 * 1000,
+          lastEventAt: now - 119 * 60 * 1000,
+        }),
+      ]);
+      render(<PetPage />);
+      expect(screen.getByText("快到两小时")).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(2 * 60 * 1000);
+      });
+      expect(screen.queryByText("快到两小时")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

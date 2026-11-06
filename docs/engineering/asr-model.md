@@ -14,9 +14,9 @@ owner: engineering
 ## 1. 结论
 
 - 语音识别**只使用百炼云端**；本机 whisper 已下线，不再下载/选择/删除本机模型。
-- 模型页只填**完整服务地址**、模型、Key 和识别参数；不再有“业务空间 ID”字段，也不发 `X-DashScope-WorkSpace`。
-- API Key **只存在本机 `asr.json`（0600）**，不再读写系统钥匙串；打开模型页、测试连接、录音都不会弹系统密码。
-- 每次百炼返回 usage 都会按本机日期记入 `asr_usage.json`；模型页用区间切换查看今天/近 7 天/近 1 个月/近 1 年。
+- 语音 › 连接与识别只填**完整服务地址**、模型、Key 和识别参数；不再有“业务空间 ID”字段，也不发 `X-DashScope-WorkSpace`。
+- API Key **只存在本机 `asr.json`（0600）**，不再读写系统钥匙串；打开连接与识别、测试连接、录音都不会弹系统密码。
+- 每次百炼返回 usage 都会按本机日期记入 `asr_usage.json`；语音 › 语音用量用区间切换查看今天/近 7 天/近 1 个月/近 1 年。
 
 ## 2. 模型与默认参数
 
@@ -27,11 +27,11 @@ owner: engineering
 | 语言 | `zh`（中文） | 可选自动、中英混说 |
 | 场景 | `near_meeting_16k` | 近场（手机贴嘴）；可选远场 |
 | 静音断句 | 800ms | 200–6000ms |
-| 热词 | 空 | 每行一个，最多 50 个，权重固定 5 |
+| 关键词 | 空 | 一行一个词；录音时作为即时热词（权重 4）发送，最多 2000 个 |
 | 心跳 | 开 | `heartbeat=true` |
 
 - 服务地址：北京 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；新加坡 `wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`。
-- 模型推荐并默认 `qwen-audio-3.1-asr-flash-streaming`；模型页“使用推荐模型”可一键恢复，不静默覆盖自定义值。
+- 模型推荐并默认 `qwen-audio-3.1-asr-flash-streaming`；连接与识别页“使用推荐模型”可一键恢复，不静默覆盖自定义值。
 - 3.1 是流式模型：`result-generated` 的 `sentence_end=false` 会按句实时更新到手机，松手后只插入最终文本。
 - 用业务空间专属域名时，直接把完整 URL 粘贴到服务地址，例如 `wss://ws-123.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference`（新加坡把 region 换成 `ap-southeast-1`）。把 `{WorkspaceId}` 换成真实 ID；未替换会报“请填写完整服务地址…”。
 - 代码会把 `https://`→`wss://`、`http://`→`ws://`，缺路径补 `/api-ws/v1/inference`；但业务空间占位符不会自动替换。
@@ -66,7 +66,7 @@ owner: engineering
     "vadModel": "near_meeting_16k",
     "maxSentenceSilenceMs": 800,
     "heartbeat": true,
-    "vocabulary": []
+    "vocabulary": ["异步", "剪贴板"]
   }
 }
 ```
@@ -76,18 +76,28 @@ owner: engineering
 - `asr.json`、`asr_usage.json` 均临时文件 + rename 原子写，权限 `0600`。
 - 支持 `SIDEKICK_DATA_DIR` 覆盖数据目录（测试/排障）。
 
-## 4. 配置（模型页）
+## 4. 配置（语音 › 连接与识别）
 
-位置（D79）：桌面「系统 › 语音」（模型页）。模型页上半部分是百炼配置：
+位置（D94）：桌面左侧一级页「语音 › 连接与识别」；同级还有「关键词」与「语音用量」。连接与识别页 = 百炼配置：
 
 - 隐私同意：未勾选不能保存。
 - 服务地址：北京/新加坡快捷按钮；业务空间直接粘贴完整 URL（无独立 ID 字段）。
 - API Key：密码框；已保存时只显示掩码；`清除 Key` 删除本地 Key（并尝试清理旧钥匙串条目）。
-- 模型、语言、场景、静音断句、热词（高级）。
+- 模型、语言、场景、静音断句、保留方言（高级）；关键词已独立成「语音 › 关键词」，不再塞在表单里。
 - `测试连接`：握手 + 320ms 静音，显示延迟/模型/错误；`保存` 原子写 `asr.json`。
 - 打开页面只读本地 `asr.json`；不再访问 Keychain，因此不会弹密码。旧版本钥匙串里的 Key 需重新粘贴一次。
+- 该页保存配置时会把 `status.config.vocabulary` 原样带回，不会覆盖关键词页的修改。
 
 设置整页只保留“自动输入权限 + 剪贴板”，不再有语音识别/本机模型入口。
+
+### 4.1 关键词
+
+- 根页「关键词」显示 `N / 2000`；进入「关键词」二级页 = 一行一个词的扁平列表。
+- 页面：每行一个输入框，行尾 × 删除；卡尾「加一行」；页头「保存」。保存成功后保留末尾一个空行，方便继续输入。
+- 保存：trim、去空行、保序去重；每个词含非 ASCII 字符 ≤15 字、纯 ASCII 按空格 ≤7 段；最多 2000 个；失败给出行号，不写盘。
+- 发送：整份列表作为 `parameters.vocabulary` 的键，统一权重 `4`；空列表不传该键。
+- 保存走 `asr_keywords_save`，只替换 `bailian.vocabulary`，不动同意状态/Key/地址等字段。
+- `language_hints` 只含 `zh` 时，英文关键词可能被官方过滤；文档提示，不自动改语言。
 
 ## 5. 用量统计口径
 
@@ -114,7 +124,7 @@ owner: engineering
 - 最多保留 400 天，超出删最旧日期。
 - 清空统计只把 `asr_usage.json` 重写为空汇总（文件保留）并清空内存，不影响配置/Key/剪贴板。
 
-### 5.3 模型页区间切换
+### 5.3 语音 › 语音用量区间切换
 
 - segmented control：今天 / 近 7 天 / 近 1 个月（30 天）/ 近 1 年（365 天）。
 - 只展示当前选中区间的一张汇总卡（金额、总/输入/输出 Token、会话、音频时长），不再同时展示四张。
@@ -141,7 +151,7 @@ owner: engineering
 
 | 操作 | 读取位置 |
 | --- | --- |
-| 打开模型页 / `asr_cloud_status()` | 只读 `apiKey` 派生的 `keyPresent`/`keyHint`（对外 `hasKey`/`keyMasked`） |
+| 打开连接与识别 / `asr_cloud_status()` | 只读 `apiKey` 派生的 `keyPresent`/`keyHint`（对外 `hasKey`/`keyMasked`） |
 | 保存配置（不改 Key） | 只读 `asr.json`，不写 Key |
 | 保存新 Key / 清除 Key | 写/清 `asr.json` 的 `apiKey` |
 | 测试连接 / 录音建会话 | 读 `asr.json` 的 `apiKey` |
@@ -152,10 +162,10 @@ owner: engineering
 
 ## 7. 验收
 
-- 模型页可保存/测试百炼配置；`asr.json` 无 `workspaceId`，含 `apiKey`；`keyPresent`/`keyHint` 正确。
-- 打开模型页、测试连接、录音都不弹 Keychain；Key 从本地 `asr.json` 读取。
+- 连接与识别页可保存/测试百炼配置；`asr.json` 无 `workspaceId`，含 `apiKey`；`keyPresent`/`keyHint` 正确。
+- 打开连接与识别、测试连接、录音都不弹 Keychain；Key 从本地 `asr.json` 读取。
 - 未替换 `{WorkspaceId}` 的服务地址保存时报“请填写完整服务地址…”。
-- 未配置时手机录音收到 `mic.error(cloud_not_configured)`，明确提示去模型页重新粘贴 Key。
+- 未配置时手机录音收到 `mic.error(cloud_not_configured)`，明确提示去「语音 › 连接与识别」重新粘贴 Key。
 - 每次成功/失败但百炼返回 usage 的会话，统计都 +1；今天/7/30/365 数字随测试数据正确变化。
 - 区间切换：今天无明细；7 天 7 行、30 天 30 行、1 年按月约 12 行；缺失日期为 0。
 - 金额按北京/新加坡价格换算正确；清空统计后汇总与明细归零，配置文件与 Key 不受影响。

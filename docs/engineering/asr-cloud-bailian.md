@@ -9,7 +9,7 @@ owner: engineering
 
 # 百炼云端流式语音识别方案
 
-> 回答“云端识别怎么接、音频怎么走、Key 放哪、失败怎么办、费用怎么看”。产品规则见 [mic PRD](../prd/mic/PRD.md)，模型页与用量口径见 [asr-model.md](./asr-model.md)，协议字段见 [protocol-audio.md](./protocol-audio.md)。
+> 回答“云端识别怎么接、音频怎么走、Key 放哪、失败怎么办、费用怎么看”。产品规则见 [mic PRD](../prd/mic/PRD.md)，语音页/关键词与用量口径见 [asr-model.md](./asr-model.md)，协议字段见 [protocol-audio.md](./protocol-audio.md)。
 > 状态：代码已实现（2026-11-02）；真实百炼账号、本地 Key、真机流式/用量统计验收待补。
 
 ## 1. 目标、范围与非目标
@@ -20,7 +20,7 @@ owner: engineering
 - 手机按住说话时，桌面把 16k PCM16 实时转发到百炼，中间结果实时回显到手机与桌面浮层。
 - 松手后只把最终文本插入一次；失败直接报错，不再回退本机。
 - Key 存在本机 `asr.json`（0600），不写日志、不上传；安全性低于系统钥匙串。
-- 桌面「模型」页配置百炼并查看按天 Token/费用统计。
+- 桌面「语音 › 连接与识别」配置百炼，「语音 › 关键词」管理关键词，「语音 › 语音用量」查看按天 Token/费用统计。
 
 **范围**
 
@@ -41,7 +41,7 @@ owner: engineering
 2. **云端唯一**：本机 whisper 已下线，配置、协议、UI 都不再有 `engine`/`fallback`；未配置就直接失败。
 3. **流式只做可见反馈**：中间结果实时展示，但只有最终文本进入剪贴板/自动粘贴，避免重复、乱序、撤销栈污染。
 4. **失败不降级**：连接/鉴权/收尾失败都回 `mic.error`/`mic.result(failed)`，不插入、不切换引擎。
-5. **费用必须可解释**：每次 task-finished 的 usage 都按本机日期入账，模型页用区间切换展示今天/7/30/365；只估算，以百炼账单为准。
+5. **费用必须可解释**：每次 task-finished 的 usage 都按本机日期入账，语音用量页用区间切换展示今天/7/30/365；只估算，以百炼账单为准。
 
 | 取舍 | 决定 | 理由 |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ owner: engineering
   ├─ 云端会话：PCM 缓冲（等 task-started）→ wss 百炼 → 中间结果
   │     ├─ mic.partial（50ms 节流）→ 手机 + 桌面浮层
   │     └─ task-finished → 记用量 → mic.result（最终文本）→ 剪贴板 + Cmd+V
-  └─ 模型页：asr_cloud_* 命令 + asr_usage_* 命令
+  └─ 语音页：asr_cloud_* / asr_keywords_save 命令 + asr_usage_* 命令
 ```
 
 - 手机仍按现有 `mic.start` → 音频帧 → `mic.stop` 工作；桌面把帧追加到会话 PCM 缓冲并转发给云端会话。
@@ -121,15 +121,15 @@ idle
       "max_sentence_silence": 800,
       "heartbeat": true,
       "language_hints": ["zh"],
-      "vocabulary": { "异步": 5, "剪贴板": 5 }
+      "vocabulary": { "异步": 4, "剪贴板": 4 }
     },
     "input": {}
   }
 }
 ```
 
-- `language_hints` 为空时不传；`vocabulary` 为空时不传，非空时每项权重固定 5，最多 50 个。
-- `keep_dialect=false` 表示方言转普通话；`vad_model` 默认近场，可在模型页改远场。
+- `language_hints` 为空时不传；`vocabulary` 为空时不传。关键词页保存的整份列表在会话开始时原样发送，每个词统一权重 `4`（官方推荐普通词起始值）；最多 2000 个，去重后保序。
+- `keep_dialect=false` 表示方言转普通话；`vad_model` 默认近场，可在「语音 › 连接与识别」改远场。
 - 收到 `task-started` 前不得发送音频；发送的是**二进制 PCM16**，不是 JSON。
 
 ### 5.3 finish-task
@@ -174,19 +174,20 @@ idle
     "vadModel": "near_meeting_16k",
     "maxSentenceSilenceMs": 800,
     "heartbeat": true,
-    "vocabulary": []
+    "vocabulary": ["异步", "剪贴板"]
   }
 }
 ```
 
 - 只有 `{version, consentCloud, apiKey, keyPresent, keyHint, bailian}`；旧版 `engine` / `fallbackToLocal` 字段会被忽略。
+- `bailian.vocabulary` 是关键词唯一事实源（一行一个词，最多 2000 个）；2026-11-06 中间版本写下的 `bailian.dictionaries` 只在读取时平铺进 `vocabulary` 后丢弃，新代码不再写入。
 - `apiKey` 是明文 Key；`keyPresent`/`keyHint` 由它派生，只用于状态展示，不返回完整 Key。
 - 读取失败/坏 JSON 用默认值并打日志，不阻断启动。
 - 文件含明文 Key，权限 `0600`；不要分享 `asr.json`、日志或备份。
 
 ### 6.2 本地 Key 存储
 - Key 存在 `asr.json` 的 `apiKey` 字段（`0600`）；启动、状态、测试、录音都只读这个文件，**不访问 Keychain**，所以不会再弹系统密码。
-- 升级前存在 Keychain 的 Key 不会自动迁移（读旧条目会弹 macOS 登录密码），需要在模型页重新粘贴一次；清除 Key 时会顺手尝试删除旧钥匙串条目。
+- 升级前存在 Keychain 的 Key 不会自动迁移（读旧条目会弹 macOS 登录密码），需要在「语音 › 连接与识别」重新粘贴一次；清除 Key 时会顺手尝试删除旧钥匙串条目。
 - 代价：明文 Key 只靠文件权限保护，安全性低于 Keychain；跨平台直接可用（Windows/Linux 无 Keychain 实现也能用）。
 
 ### 6.3 地址解析
@@ -203,6 +204,7 @@ idle
 | `asr_cloud_save({ input })` | `{ config, consent, apiKey?, clearKey? }`；写入本地 `asr.json`（0600），不再写 Keychain |
 | `asr_cloud_test({ config, apiKey? })` | 草稿或已存配置握手 + 320ms 静音测试；返回 `{ok, latencyMs, model, errorCode, message}` |
 | `asr_cloud_clear()` | 删除本地 Key、重置配置；并尝试清理旧钥匙串条目 |
+| `asr_keywords_save({ keywords })` | 只替换 `bailian.vocabulary`；校验后原子写 `asr.json`，不碰同意状态/Key/其他字段 |
 | `asr_usage_stats()` | 今天/7/30/365 汇总 + 最近 365 天 `days` + `priceNote` |
 | `asr_usage_clear()` | 把 `asr_usage.json` 重置为空汇总并返回空统计 |
 
@@ -224,7 +226,7 @@ idle
 - 每次 `task-finished` 拿到 `usage` 后**先记账**，再插入；即使插入失败/空结果也计费。`total_tokens` 取 `total_tokens` 与 `input+output` 的较大值；全零且无时长则跳过。
 - 按本机时区（`chrono::Local`）切天；最多保留 400 天，超出删最旧。
 - `UsageStats`：`today` / `last7Days` / `last30Days` / `last365Days` 汇总 + `days`（最近 365 天，今天起倒序，缺失补 0）+ `priceNote`。
-- 模型页区间切换：今天（无明细）、近 7 天（7 行）、近 1 个月（30 行）、近 1 年（按自然月约 12 行）；只展示当前区间一张汇总卡。
+- 语音用量页区间切换：今天（无明细）、近 7 天（7 行）、近 1 个月（30 行）、近 1 年（按自然月约 12 行）；只展示当前区间一张汇总卡。
 - 金额：人民币微元（1 元 = 1,000,000）；按 endpoint 判断地域：
   - 北京：输入 ¥6/百万、输出 ¥4.5/百万 → 6,000,000 / 4,500,000 微元。
   - 新加坡（含 `dashscope-intl` / `ap-southeast-1` / `singapore`）：输入 ¥6.781/百万、输出 ¥5.104/百万 → 6,781,000 / 5,104,000 微元。
@@ -264,24 +266,25 @@ idle
 | `cloud_cancelled` | 内部取消（不面向用户） | 已取消 |
 
 - 错误文案集中在 `app/src/shared/lib/mic-status-copy.ts`。
-- 模型页测试连接直接显示 `errorCode` + 中文原因。
+- 连接与识别页测试连接直接显示 `errorCode` + 中文原因。
 
 ## 12. 隐私与安全
 
-- 语音识别只走百炼；使用前必须在模型页勾选“录音会发送到阿里云百炼”。
+- 语音识别只走百炼；使用前必须在「语音 › 连接与识别」勾选“录音会发送到阿里云百炼”。
 - 音频从电脑直达用户配置的百炼地域，不经过 Sidekick 服务器；不落盘、不写历史。
 - Key 只在本机 `asr.json`（0600）；日志、状态接口、手机端都没有完整 Key。
+- 关键词属于用户内容：只存本机 `asr.json`（0600），日志只打数量、不打词；只在录音 `run-task` 时发送给用户配置的百炼地址。
 - 日志只记模型/连接耗时/首条 partial/收尾耗时/字节数/tokens/错误码；不记文本、音频、Key。
 - 取消/断线立即 abort 云端；不补发、不重试。
 - 用量文件只存每日数字，不含文本/Key/音频。
 
-## 13. 模型页（桌面）
+## 13. 语音页（桌面）
 
-桌面「系统 › 语音」（模型页）：上半部分百炼配置，下半部分用量统计；设置整页只保留自动输入权限、剪贴板与关于（D79）。字段、统计口径与展示格式见 [asr-model.md](./asr-model.md)。
+桌面一级「语音 ⌘2」（D94）：根页 = 百炼状态 / 关键词计数 / 今天与近 7 天用量；「连接与识别」二级页 = 百炼配置与试连；「关键词」二级页 = 一行一个词的列表；「语音用量」二级页 = 区间统计。设置整页只保留外观、自动输入、手机连接、AI 联动、剪贴板与关于。字段、统计口径与展示格式见 [asr-model.md](./asr-model.md)。
 
 ## 14. 测试与验收
 
-- Rust 单测：载荷/地址解析/句子组装/usage/错误映射/价格换算/区间汇总/365 天补零/400 天裁剪。
+- Rust 单测：载荷（关键词权重 4）/地址解析/句子组装/usage/错误映射/价格换算/区间汇总/365 天补零/400 天裁剪；关键词迁移（旧 vocabulary / 中间版本 dictionaries）/校验（2000、15 字、7 段）/`asr_keywords_save` 不碰 Key。
 - Rust 集成：mock WS 断言 partial、最终文本、`task-started` 前不发音频、usage 入账。
 - 手工/验收：正确/错误 Key、业务空间完整 URL/占位符、断网、本地 Key 缺失、取消、60 秒、统计清空、跨天；见 [ACCEPTANCE.md](../prd/mic/ACCEPTANCE.md) 的 CLOUD-1..12 与 MODEL-1..11。
 - 指标：首条 partial 延迟、松手→插入 p95、失败率、单次 tokens/费用；只本地记录。
@@ -296,6 +299,6 @@ idle
 
 ## 16. 代码映射
 
-核心：`asr_config.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`、`desktop_server.rs`、`desktop_mic.rs`、`transcript.rs`（`asr_keychain.rs` 仅保留清理旧条目）；桌面模型页在 `desktop/features/models`，协议在 `protocol/messages.ts` 与 `shared/lib/tauri.ts`。
+核心：`asr_config.rs`（含关键词模型/迁移/合并/校验）、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`、`desktop_server.rs`、`desktop_mic.rs`、`transcript.rs`（`asr_keychain.rs` 仅保留清理旧条目）；桌面前端在 `desktop/pages/voice-page.tsx` + `desktop/features/models/`（`keywords.ts` / `keywords-page.tsx`），协议在 `protocol/messages.ts` 与 `shared/lib/tauri.ts`。
 
-外部参考：[模型页](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-3-1-asr-flash-streaming)、[WebSocket 接入指南](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-websocket-api)、[客户端事件](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-client-events)、[服务端事件](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-server-events)。
+外部参考：[模型说明](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-3-1-asr-flash-streaming)、[WebSocket 接入指南](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-websocket-api)、[客户端事件](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-client-events)、[服务端事件](https://www.alibabacloud.com/help/zh/model-studio/qwen-audio-asr-streaming-server-events)。

@@ -75,17 +75,36 @@ export function displayStateOf(session: SessionSummary): SessionDisplayState {
   return "idle";
 }
 
-/** 可见会话：过滤「已清除且之后没有新事件」的项，并按优先级排序。 */
+export type VisibleSessionsOptions = {
+  /** 计算「已完成多久」用的当前时间；缺省取 `Date.now()`。 */
+  now?: number;
+  /**
+   * 手机端：已完成会话超过该时长自动隐藏（0/缺省 = 不自动隐藏）。
+   * 桌面端不传，保持「完成态一直保留到手动清除」的旧行为。
+   */
+  autoClearCompletedAfterMs?: number;
+};
+
+/** 可见会话：过滤「已清除 / 已完成超时」的项，并按优先级排序。 */
 export function visibleSessions(
   list: readonly SessionSummary[],
   cleared: SessionClearMap,
+  options: VisibleSessionsOptions = {},
 ): SessionRow[] {
+  const now = options.now ?? Date.now();
+  const autoClearAfterMs = options.autoClearCompletedAfterMs ?? 0;
+
   return list
+    .map((session) => ({ ...session, display: displayStateOf(session) }))
     .filter((session) => {
       const marker = cleared[session.id];
-      return !marker || session.lastEventAt > marker.through;
+      if (marker && session.lastEventAt <= marker.through) return false;
+      if (autoClearAfterMs > 0 && session.display === "completed") {
+        const completedAt = session.completedAt ?? session.lastEventAt;
+        if (now - completedAt >= autoClearAfterMs) return false;
+      }
+      return true;
     })
-    .map((session) => ({ ...session, display: displayStateOf(session) }))
     .sort((left, right) => {
       const byState = DISPLAY_ORDER[left.display] - DISPLAY_ORDER[right.display];
       if (byState !== 0) return byState;

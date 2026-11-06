@@ -4,9 +4,11 @@ import { MicButton } from "@/mobile/features/mic/mic-button";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { SessionFeed } from "@/mobile/features/sessions/session-feed";
 import {
+  COMPLETED_AUTO_CLEAR_MS,
   visibleSessions as selectVisibleSessions,
   useSessionStore,
 } from "@/mobile/features/sessions/session-store";
+import { useSessionClock } from "@/mobile/features/sessions/use-session-clock";
 import { MobilePage } from "@/mobile/shell/page";
 import { PetTopBar } from "@/mobile/shell/pet-top-bar";
 import { useUiStore } from "@/mobile/ui-store";
@@ -34,14 +36,19 @@ export function PetPage() {
   );
   const sessionRaw = useSessionStore((state) => state.raw);
   const sessionCleared = useSessionStore((state) => state.cleared);
-  const pendingClearId = useSessionStore((state) => state.pendingClearId);
   const clearSession = useSessionStore((state) => state.clear);
   const setView = useUiStore((state) => state.setView);
   const openOffline = useUiStore((state) => state.openOffline);
 
+  // 已完成会话完成后 2 小时没有新事件就自动隐藏；60s 时钟驱动到期刷新。
+  const now = useSessionClock();
   const rows = useMemo(
-    () => selectVisibleSessions(sessionRaw, sessionCleared),
-    [sessionRaw, sessionCleared],
+    () =>
+      selectVisibleSessions(sessionRaw, sessionCleared, {
+        now,
+        autoClearCompletedAfterMs: COMPLETED_AUTO_CLEAR_MS,
+      }),
+    [sessionRaw, sessionCleared, now],
   );
   const askingKey = useMemo(
     () =>
@@ -100,7 +107,6 @@ export function PetPage() {
 
       <SessionFeed
         rows={rows}
-        pendingClearId={pendingClearId}
         onOpenAsking={openAsking}
         onClear={clearSession}
         onExpandedChange={setFeedExpanded}

@@ -70,6 +70,59 @@ test("清除标记隐藏旧事件，但新事件会重新出现", () => {
   expect(visibleSessions([session({ lastEventAt: NOW - 30_000 })], cleared)).toHaveLength(1);
 });
 
+test("已完成会话超过自动隐藏时长后不可见，其他状态不受影响", () => {
+  const twoHours = 2 * 60 * 60_000;
+  const list = [
+    session({
+      id: "fresh",
+      state: "idle",
+      completedAt: NOW - 60 * 60_000,
+      lastEventAt: NOW - 60 * 60_000,
+    }),
+    session({
+      id: "stale",
+      state: "idle",
+      completedAt: NOW - 3 * 60 * 60_000,
+      lastEventAt: NOW - 3 * 60 * 60_000,
+    }),
+    session({ id: "working", state: "working", lastEventAt: NOW - 5 * 60 * 60_000 }),
+    session({ id: "asking", state: "asking", lastEventAt: NOW - 5 * 60 * 60_000 }),
+    session({ id: "idle", state: "idle", completedAt: null, lastEventAt: NOW - 5 * 60 * 60_000 }),
+  ];
+
+  const rows = visibleSessions(list, {}, { now: NOW, autoClearCompletedAfterMs: twoHours });
+  expect(rows.map((row) => row.id).sort()).toEqual(["asking", "fresh", "idle", "working"]);
+});
+
+test("自动隐藏正好 2 小时算超时，未来时间戳保持可见", () => {
+  const twoHours = 2 * 60 * 60_000;
+  const at = (completedAt: number) =>
+    session({ state: "idle", completedAt, lastEventAt: completedAt });
+
+  expect(
+    visibleSessions([at(NOW - twoHours)], {}, { now: NOW, autoClearCompletedAfterMs: twoHours }),
+  ).toHaveLength(0);
+  expect(
+    visibleSessions(
+      [at(NOW - twoHours + 1)],
+      {},
+      { now: NOW, autoClearCompletedAfterMs: twoHours },
+    ),
+  ).toHaveLength(1);
+  expect(
+    visibleSessions([at(NOW + 60_000)], {}, { now: NOW, autoClearCompletedAfterMs: twoHours }),
+  ).toHaveLength(1);
+});
+
+test("不传自动隐藏选项时保持旧行为（桌面）", () => {
+  const old = session({
+    state: "idle",
+    completedAt: NOW - 10 * 60 * 60_000,
+    lastEventAt: NOW - 10 * 60 * 60_000,
+  });
+  expect(visibleSessions([old], {})).toHaveLength(1);
+});
+
 test("会话文案与兜底", () => {
   expect(displayStateText({ display: "asking", askKind: "approval" })).toBe("等你审批");
   expect(displayStateText({ display: "asking", askKind: "question" })).toBe("等你决定");

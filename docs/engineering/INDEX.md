@@ -42,11 +42,11 @@ children:
 
 ## 当前状态
 
-- 麦克风（百炼云端唯一）已实现（二进制音频协议、云端流式、`mic.partial`、Keychain、失败直接报错）；模型页 + 用量统计已实现；真实账号/Keychain/真机/金额对账待验收；剪贴板 P1 辅助能力已实现。
+- 麦克风（百炼云端唯一）已实现（二进制音频协议、云端流式、`mic.partial`、Keychain、失败直接报错）；语音页/关键词 + 用量统计已实现；真实账号/Keychain/真机/金额对账待验收；剪贴板 P1 辅助能力已实现。
 - 宠物 P0 代码已完成；局域网自动发现与动态端口已实现。
 - AI 联动（DSH）开发中：本地脚本注入 + 回环桥 + status 协议 + 手机四态/三音效；见 [dsh-hook.md](./dsh-hook.md)。
 - Token 用量看板（2026-11-06）：只读 DSH cost-meter 账本 + OpenRouter/DeepSeek 价格表 + 缺价估算；见 [token-usage-pricing.md](./token-usage-pricing.md)（D82–D84）。
-- 电脑端「简约 iOS」壳（2026-11-06，D85）：4 个一级入口 + 224 侧栏 + iOS 分组列表 + 设置二级页；同日 D86 第二轮升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏 / 彩色图标块 / 胶囊控件 / spring 动效，玻璃只做控件层）；实现契约见 [desktop-ios-ui.md](./desktop-ios-ui.md)。
+- 电脑端「简约 iOS」壳（2026-11-06，D85；D94 扩为 5 个一级入口：概览/语音/内容/用量/设置）+ 224 侧栏 + iOS 分组列表 + 语音/设置二级页；同日 D86 第二轮升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏 / 彩色图标块 / 胶囊控件 / spring 动效，玻璃只做控件层）；实现契约见 [desktop-ios-ui.md](./desktop-ios-ui.md)。
 - 电脑端菜单栏常驻（2026-11-06，D88）：关窗只隐藏窗口，HTTP/发现/hook 桥继续跑；Dock 图标隐藏（Accessory），左键图标显示窗口、右键菜单退出；见 [desktop-tray.md](./desktop-tray.md)。
 - 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
 - 云端识别：[asr-cloud-bailian.md](./asr-cloud-bailian.md)（桌面中转、Keychain、50ms partial、失败不降级）；模型页/用量见 [asr-model.md](./asr-model.md)。

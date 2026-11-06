@@ -292,7 +292,7 @@ idle
 | `app/src-tauri/src/desktop_mic.rs`、`transcript.rs` | 文本插入、截断/空白归一、`post_key` 按键合成 |
 | `app/src-tauri/src/desktop_keys.rs` | 按键动作解析/计划/安全闸门/目标注册表、`key.result` |
 | `app/src-tauri/src/mobile_client.rs` | `Outbound::Text/Binary`、`mic_start/mic_frame/mic_stop/send_key_request` |
-| 桌面 `desktop/features/models` | 模型页：百炼配置 + 用量统计 |
+| 桌面 `desktop/features/models` | 语音页：连接与识别 + 关键词 + 语音用量 |
 | 桌面 `desktop/features/mic-receiver` | 应用内语音状态浮层 |
 | 手机 `mobile/features/mic` | 录音、波形、手势、权限、结果卡片、回车/清空按钮 |
 | `app/src/protocol/messages.ts`、`audio-frame.ts` | 前端类型与帧测试工具 |
