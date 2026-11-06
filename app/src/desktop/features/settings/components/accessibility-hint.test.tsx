@@ -30,20 +30,20 @@ describe("AccessibilityHint 外壳级提示条", () => {
     const onOpenSettings = vi.fn();
     render(<AccessibilityHint onOpenSettings={onOpenSettings} />);
 
-    expect(await screen.findByText("自动输入还没开启")).toBeInTheDocument();
-    expect(screen.getByText(/只能复制到剪贴板/)).toBeInTheDocument();
+    expect(await screen.findByText("自动输入未开启")).toBeInTheDocument();
+    expect(screen.getByText("语音结果只会复制到剪贴板")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "去开启" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("「知道了」收起提示条", async () => {
+  it("关闭按钮收起提示", async () => {
     render(<AccessibilityHint onOpenSettings={vi.fn()} />);
 
-    await screen.findByText("自动输入还没开启");
-    fireEvent.click(screen.getByRole("button", { name: "知道了" }));
+    await screen.findByText("自动输入未开启");
+    fireEvent.click(screen.getByRole("button", { name: "关闭提示" }));
 
-    expect(screen.queryByText("自动输入还没开启")).toBeNull();
+    expect(screen.queryByText("自动输入未开启")).toBeNull();
   });
 
   it("已授权时不占位置", async () => {
@@ -51,7 +51,7 @@ describe("AccessibilityHint 外壳级提示条", () => {
     render(<AccessibilityHint onOpenSettings={vi.fn()} />);
 
     await Promise.resolve();
-    expect(screen.queryByText("自动输入还没开启")).toBeNull();
+    expect(screen.queryByText("自动输入未开启")).toBeNull();
   });
 
   it("命令不可用（非 macOS）时静默不显示", async () => {
@@ -59,6 +59,6 @@ describe("AccessibilityHint 外壳级提示条", () => {
     render(<AccessibilityHint onOpenSettings={vi.fn()} />);
 
     await Promise.resolve();
-    expect(screen.queryByText("自动输入还没开启")).toBeNull();
+    expect(screen.queryByText("自动输入未开启")).toBeNull();
   });
 });

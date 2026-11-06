@@ -1,33 +1,96 @@
-import { KeyRound, Loader2, ShieldCheck, TestTube2 } from "lucide-react";
+import { cn } from "cn";
+import { Cloud, Loader2, TestTube2 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { type ReactNode, useState } from "react";
+import { ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
+import { SegmentedControl } from "@/desktop/shell/segmented-control";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { SignalDot } from "@/shared/ui/signal-dot";
+import { Switch } from "@/shared/ui/switch";
 import {
   CLOUD_ENDPOINT_PRESETS,
   type CloudLanguage,
+  type CloudVadModel,
   DEFAULT_CLOUD_MODEL,
   useCloudAsrStore,
 } from "./cloud-asr-store";
 
-const selectClass =
-  "h-10 w-full rounded-[10px] border border-input bg-popover px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
+const LANGUAGE_OPTIONS: ReadonlyArray<{ value: CloudLanguage; label: string }> = [
+  { value: "zh", label: "中文" },
+  { value: "auto", label: "自动识别" },
+  { value: "zh-en", label: "中英混说" },
+];
 
-const textareaClass =
-  "min-h-20 w-full rounded-[10px] border border-input bg-popover px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
+const VAD_OPTIONS: ReadonlyArray<{ value: CloudVadModel; label: string }> = [
+  { value: "near_meeting_16k", label: "近场" },
+  { value: "far_field_meeting_16k", label: "远场" },
+];
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
+const ENDPOINT_OPTIONS = [
+  { value: "beijing", label: "北京" },
+  { value: "singapore", label: "新加坡" },
+] as const;
+
+type EndpointPreset = (typeof ENDPOINT_OPTIONS)[number]["value"];
+
+/** 展开/收起：高度 + 透明度过渡；reduce-motion 下直接出现。 */
+const EXPAND_TRANSITION = { duration: 0.22, ease: [0.2, 0.9, 0.25, 1] } as const;
+
+/** 当前地址属于哪个预设；业务空间专属域名返回空串，两个预设都不高亮。 */
+function endpointPreset(endpoint: string): EndpointPreset | "" {
+  if (endpoint === CLOUD_ENDPOINT_PRESETS.beijing) return "beijing";
+  if (endpoint === CLOUD_ENDPOINT_PRESETS.singapore) return "singapore";
+  return "";
+}
+
+/**
+ * 表单行：标题 15 在左、控件在右，复用 `.dsl-row` 的 52 高与内缩分隔线；
+ * 错误信息放在控件下方，不额外画边框（避免卡中卡）。
+ */
+function FieldRow({
+  id,
+  label,
+  wide = false,
+  error,
+  children,
+}: {
+  id: string;
+  label: string;
+  wide?: boolean;
+  error?: string;
+  children: ReactNode;
+}) {
   return (
-    <p className="mt-1 text-[11px] text-destructive" role="alert">
-      {message}
-    </p>
+    <div className="dsl-row">
+      <Label
+        htmlFor={id}
+        className="w-[64px] shrink-0 text-[15px] leading-none font-normal text-foreground"
+      >
+        {label}
+      </Label>
+      <div className={cn("flex min-w-0 flex-col gap-1", wide ? "flex-1" : "ml-auto items-end")}>
+        <div className={cn("flex items-center gap-2", wide && "w-full")}>{children}</div>
+        {error && (
+          <p role="alert" className="text-[13px] leading-[1.4] text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
+/**
+ * 设置 › 语音输入 › 百炼：一张分组列表装下状态、地址、模型、语言、场景、高级与 Key。
+ *
+ * 行高 52 / 标题 15 / 说明 13 与 iOS 分组列表一致；「高级」用 Motion 做高度过渡。
+ * 说明句只保留三类（必填提示 / 隐私承诺 / 危险操作），保存是这一页唯一的实心按钮。
+ */
 export function CloudAsrForm() {
   const status = useCloudAsrStore((state) => state.status);
   const draft = useCloudAsrStore((state) => state.draft);
+  const loading = useCloudAsrStore((state) => state.loading);
   const fieldErrors = useCloudAsrStore((state) => state.fieldErrors);
   const saving = useCloudAsrStore((state) => state.saving);
   const testing = useCloudAsrStore((state) => state.testing);
@@ -38,16 +101,18 @@ export function CloudAsrForm() {
   const runTest = useCloudAsrStore((state) => state.runTest);
   const save = useCloudAsrStore((state) => state.save);
   const clearKey = useCloudAsrStore((state) => state.clearKey);
+  const reduced = useReducedMotion();
+
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   if (!status || !draft) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-xs text-muted-foreground">正在读取百炼配置…</p>
+        <ListGroup title="百炼">
+          <ListEmpty>{loading ? "正在读取配置…" : "读取配置失败"}</ListEmpty>
+        </ListGroup>
         {error && (
-          <p
-            role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
-          >
+          <p role="alert" className="px-1 text-[13px] leading-[1.4] text-destructive">
             {error}
           </p>
         )}
@@ -56,299 +121,267 @@ export function CloudAsrForm() {
   }
 
   const busy = saving || testing;
+  const preset = endpointPreset(draft.endpoint);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <SignalDot
-            status={status.configured ? "connected" : "idle"}
-            pulse={false}
-            className="mt-1"
+    <div className="flex flex-col gap-2">
+      <ListGroup title="百炼">
+        <ListRow
+          icon={<Cloud aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+          iconTone={status.configured ? "green" : "gray"}
+          title="状态"
+          meta={status.configured ? "已配置" : "未配置"}
+          tone={status.configured ? "signal" : "muted"}
+        />
+
+        <ListRow
+          title="服务区域"
+          control={
+            <SegmentedControl<EndpointPreset | "">
+              label="服务区域"
+              className="w-[136px]"
+              value={preset}
+              options={ENDPOINT_OPTIONS}
+              onChange={(next) => {
+                if (!next) return;
+                setDraft({ endpoint: CLOUD_ENDPOINT_PRESETS[next] });
+              }}
+            />
+          }
+        />
+
+        <FieldRow id="cloud-endpoint" label="服务地址" wide error={fieldErrors.endpoint}>
+          <Input
+            id="cloud-endpoint"
+            value={draft.endpoint}
+            placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+            aria-invalid={Boolean(fieldErrors.endpoint)}
+            onChange={(event) => setDraft({ endpoint: event.target.value })}
           />
-          <div className="min-w-0">
-            <p className="text-xs font-medium">
-              {status.configured ? "已配置" : "未配置"}
-              {status.configured && (
-                <span className="ml-2 rounded-full border border-signal/50 px-1.5 py-0.5 text-[10px] text-signal">
-                  云端识别
-                </span>
-              )}
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {status.configured
-                ? `${status.config.model}${status.hasKey ? ` · ${status.keyMasked ?? "Key 已保存"}` : ""}`
-                : "填好地址和 API Key，测试连接后保存即可使用"}
-            </p>
-          </div>
-        </div>
-      </div>
+        </FieldRow>
 
-      <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-xs leading-relaxed">
-        <input
-          type="checkbox"
-          className="mt-0.5 size-3.5 shrink-0 accent-primary"
-          checked={draft.consent}
-          onChange={(event) => setDraft({ consent: event.target.checked })}
-        />
-        <span>
-          <span className="flex items-center gap-1 font-medium">
-            <ShieldCheck className="size-3.5 text-muted-foreground" />
-            我了解使用语音识别时录音会发送到阿里云百炼
-          </span>
-          <span className="mt-1 block text-muted-foreground">
-            电脑直连百炼，不经过 Sidekick 服务器；录音不保存。未勾选不能保存。
-          </span>
-        </span>
-      </label>
-      <FieldError message={fieldErrors.consent} />
-
-      <div>
-        <Label htmlFor="cloud-endpoint" className="text-xs">
-          服务地址
-        </Label>
-        <Input
-          id="cloud-endpoint"
-          value={draft.endpoint}
-          placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/inference"
-          aria-invalid={Boolean(fieldErrors.endpoint)}
-          className="mt-1.5"
-          onChange={(event) => setDraft({ endpoint: event.target.value })}
-        />
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <FieldRow id="cloud-model" label="模型" wide error={fieldErrors.model}>
+          <Input
+            id="cloud-model"
+            list="cloud-model-presets"
+            value={draft.model}
+            aria-invalid={Boolean(fieldErrors.model)}
+            onChange={(event) => setDraft({ model: event.target.value })}
+          />
+          <datalist id="cloud-model-presets">
+            <option value={DEFAULT_CLOUD_MODEL} />
+          </datalist>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="xs"
-            onClick={() => setDraft({ endpoint: CLOUD_ENDPOINT_PRESETS.beijing })}
+            className="shrink-0"
+            onClick={() => setDraft({ model: DEFAULT_CLOUD_MODEL })}
           >
-            北京
+            使用推荐模型
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => setDraft({ endpoint: CLOUD_ENDPOINT_PRESETS.singapore })}
-          >
-            新加坡
-          </Button>
-        </div>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          默认北京；可换成新加坡；如使用业务空间专属域名，请直接粘贴完整地址并把 WorkspaceId
-          占位符换成真实 ID。必须使用 wss://。
-        </p>
-        <FieldError message={fieldErrors.endpoint} />
-      </div>
+        </FieldRow>
 
-      <div>
-        <Label htmlFor="cloud-api-key" className="text-xs">
-          API Key
-        </Label>
-        <div className="mt-1.5 flex items-center gap-1.5">
+        <FieldRow id="cloud-language" label="语言">
+          <select
+            id="cloud-language"
+            className="w-[136px]"
+            value={draft.language}
+            onChange={(event) => setDraft({ language: event.target.value as CloudLanguage })}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </FieldRow>
+
+        <FieldRow id="cloud-vad" label="场景">
+          <select
+            id="cloud-vad"
+            className="w-[136px]"
+            value={draft.vadModel}
+            onChange={(event) => setDraft({ vadModel: event.target.value as CloudVadModel })}
+          >
+            {VAD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </FieldRow>
+
+        <ListRow
+          title="高级"
+          meta={advancedOpen ? "收起" : "展开"}
+          chevron
+          onClick={() => setAdvancedOpen((open) => !open)}
+        />
+
+        <AnimatePresence initial={false}>
+          {advancedOpen && (
+            <motion.div
+              key="advanced"
+              initial={reduced ? false : { height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={reduced ? { duration: 0 } : EXPAND_TRANSITION}
+              className="overflow-hidden"
+            >
+              <FieldRow
+                id="cloud-silence"
+                label="静音断句"
+                error={fieldErrors.maxSentenceSilenceMs}
+              >
+                <Input
+                  id="cloud-silence"
+                  type="number"
+                  min={200}
+                  max={6000}
+                  step={100}
+                  value={draft.maxSentenceSilenceMs}
+                  aria-invalid={Boolean(fieldErrors.maxSentenceSilenceMs)}
+                  className="w-[76px] text-right"
+                  onChange={(event) =>
+                    setDraft({ maxSentenceSilenceMs: Number(event.target.value) })
+                  }
+                />
+                <span className="text-[13px] text-muted-foreground">ms</span>
+              </FieldRow>
+
+              <div className="dsl-row">
+                <div className="flex w-full flex-col gap-2">
+                  <Label
+                    htmlFor="cloud-vocabulary"
+                    className="text-[13px] leading-none font-normal text-muted-foreground"
+                  >
+                    热词 · 每行一个，最多 50 个
+                  </Label>
+                  <textarea
+                    id="cloud-vocabulary"
+                    className="min-h-24 w-full"
+                    value={draft.vocabularyText}
+                    placeholder={"异步\n注释\n剪贴板"}
+                    aria-invalid={Boolean(fieldErrors.vocabulary)}
+                    onChange={(event) => setDraft({ vocabularyText: event.target.value })}
+                  />
+                  {fieldErrors.vocabulary && (
+                    <p role="alert" className="text-[13px] leading-[1.4] text-destructive">
+                      {fieldErrors.vocabulary}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <ListRow
+                title="保留方言"
+                control={
+                  <Switch
+                    aria-label="保留方言"
+                    checked={draft.keepDialect}
+                    onCheckedChange={(checked) => setDraft({ keepDialect: checked })}
+                  />
+                }
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <FieldRow id="cloud-api-key" label="API Key" wide error={fieldErrors.apiKey}>
           <Input
             id="cloud-api-key"
             type="password"
             autoComplete="off"
             value={draft.apiKey}
             placeholder={
-              status.hasKey ? `已保存 ${status.keyMasked ?? "Key"}；输入新 Key 可替换` : "sk-..."
+              status.hasKey ? `已保存 ${status.keyMasked ?? "Key"}，输入新 Key 可替换` : "sk-..."
             }
             aria-invalid={Boolean(fieldErrors.apiKey)}
             onChange={(event) => setDraft({ apiKey: event.target.value })}
           />
           <Button
             type="button"
-            variant="outline"
-            size="sm"
+            variant="destructive"
+            size="xs"
             className="shrink-0"
             disabled={!status.hasKey || busy}
             onClick={() => void clearKey()}
           >
             清除 Key
           </Button>
+        </FieldRow>
+
+        <label className="dsl-row">
+          <input
+            type="checkbox"
+            className="size-4 shrink-0 accent-primary"
+            checked={draft.consent}
+            onChange={(event) => setDraft({ consent: event.target.checked })}
+          />
+          <span className="min-w-0 flex-1 text-[15px] leading-[1.45]">
+            同意录音实时发送到阿里云百炼
+          </span>
+        </label>
+
+        <div className="dsl-row">
+          {!draft.consent && (
+            <span className="mr-auto text-[13px] text-muted-foreground">先同意才能保存</span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void runTest()}
+            >
+              {testing ? (
+                <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+              ) : (
+                <TestTube2 aria-hidden="true" className="size-3.5" />
+              )}
+              测试连接
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || !draft.consent}
+              onClick={() => void save()}
+            >
+              {saving && <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />}
+              保存
+            </Button>
+          </div>
         </div>
-        <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-          <KeyRound className="size-3" />
-          只保存在本机 asr.json（0600），不写日志、不上传；安全性低于系统钥匙串。
+      </ListGroup>
+
+      <div className="flex flex-col gap-1 px-1.5">
+        <p className="text-[13px] leading-[1.45] text-muted-foreground">
+          Key 只存本机 asr.json（0600），不写日志、不上传。
         </p>
-        {!status.hasKey && (
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            之前在系统钥匙串保存过的话，请重新粘贴一次 Key；之后只从本地配置读取，不再弹密码。
+        {testResult && (
+          <p
+            role="status"
+            className={cn(
+              "text-[13px] leading-[1.45]",
+              testResult.ok ? "text-signal" : "text-destructive",
+            )}
+          >
+            {testResult.ok
+              ? `连接成功 · ${testResult.latencyMs ?? "?"}ms${testResult.model ? ` · ${testResult.model}` : ""}`
+              : (testResult.message ?? "连接失败，请检查地址、Key 与网络。")}
           </p>
         )}
-        <FieldError message={fieldErrors.apiKey} />
-      </div>
-
-      <div>
-        <Label htmlFor="cloud-model" className="text-xs">
-          模型
-        </Label>
-        <Input
-          id="cloud-model"
-          list="cloud-model-presets"
-          value={draft.model}
-          aria-invalid={Boolean(fieldErrors.model)}
-          className="mt-1.5 font-mono text-xs"
-          onChange={(event) => setDraft({ model: event.target.value })}
-        />
-        <datalist id="cloud-model-presets">
-          <option value={DEFAULT_CLOUD_MODEL} />
-        </datalist>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => setDraft({ model: DEFAULT_CLOUD_MODEL })}
-          >
-            使用推荐模型
-          </Button>
-          <span className="text-[11px] text-muted-foreground">
-            实时流式，推荐 {DEFAULT_CLOUD_MODEL}
-          </span>
-        </div>
-        <FieldError message={fieldErrors.model} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <Label htmlFor="cloud-language" className="text-xs">
-            语言
-          </Label>
-          <select
-            id="cloud-language"
-            className={`${selectClass} mt-1.5`}
-            value={draft.language}
-            onChange={(event) => setDraft({ language: event.target.value as CloudLanguage })}
-          >
-            <option value="zh">中文（推荐）</option>
-            <option value="auto">自动识别</option>
-            <option value="zh-en">中英混说</option>
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="cloud-vad" className="text-xs">
-            场景
-          </Label>
-          <select
-            id="cloud-vad"
-            className={`${selectClass} mt-1.5`}
-            value={draft.vadModel}
-            onChange={(event) =>
-              setDraft({ vadModel: event.target.value as typeof draft.vadModel })
-            }
-          >
-            <option value="near_meeting_16k">近场（手机贴嘴）</option>
-            <option value="far_field_meeting_16k">远场</option>
-          </select>
-        </div>
-      </div>
-
-      <details className="rounded-lg border border-border bg-card p-3">
-        <summary className="cursor-pointer text-xs font-medium">高级</summary>
-        <div className="mt-3 flex flex-col gap-3">
-          <div>
-            <Label htmlFor="cloud-silence" className="text-xs">
-              静音断句（ms）
-            </Label>
-            <Input
-              id="cloud-silence"
-              type="number"
-              min={200}
-              max={6000}
-              step={100}
-              value={draft.maxSentenceSilenceMs}
-              aria-invalid={Boolean(fieldErrors.maxSentenceSilenceMs)}
-              className="mt-1.5 w-32"
-              onChange={(event) => setDraft({ maxSentenceSilenceMs: Number(event.target.value) })}
-            />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              默认 800ms；越大越不容易把一句话切断。
-            </p>
-            <FieldError message={fieldErrors.maxSentenceSilenceMs} />
-          </div>
-
-          <div>
-            <Label htmlFor="cloud-vocabulary" className="text-xs">
-              热词（每行一个，最多 50 个）
-            </Label>
-            <textarea
-              id="cloud-vocabulary"
-              className={`${textareaClass} mt-1.5`}
-              value={draft.vocabularyText}
-              placeholder={"异步\n注释\n剪贴板"}
-              onChange={(event) => setDraft({ vocabularyText: event.target.value })}
-            />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              适合项目术语、人名；提交时会自动去重。
-            </p>
-            <FieldError message={fieldErrors.vocabulary} />
-          </div>
-
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-primary"
-              checked={draft.keepDialect}
-              onChange={(event) => setDraft({ keepDialect: event.target.checked })}
-            />
-            保留方言表达（默认转成普通话）
-          </label>
-        </div>
-      </details>
-
-      {testResult && (
-        <p
-          role="status"
-          className={`text-xs ${testResult.ok ? "text-success" : "text-destructive"}`}
-        >
-          {testResult.ok
-            ? `连接成功 · ${testResult.latencyMs ?? "?"}ms${testResult.model ? ` · ${testResult.model}` : ""}`
-            : (testResult.message ?? "连接失败，请检查地址、Key 与网络。")}
-        </p>
-      )}
-
-      {savedNotice && (
-        <p role="status" className="text-xs text-success">
-          {savedNotice}
-        </p>
-      )}
-
-      {error && (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
-        >
-          {error}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => void runTest()}
-        >
-          {testing ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <TestTube2 className="size-3.5" />
-          )}
-          测试连接
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={busy || !draft.consent}
-          onClick={() => void save()}
-        >
-          {saving && <Loader2 className="size-3.5 animate-spin" />}
-          保存
-        </Button>
-        {!draft.consent && (
-          <span className="text-[11px] text-muted-foreground">先勾选上方同意才能保存。</span>
+        {savedNotice && (
+          <p role="status" className="text-[13px] leading-[1.45] text-signal">
+            {savedNotice}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-[13px] leading-[1.45] text-destructive">
+            {error}
+          </p>
         )}
       </div>
     </div>

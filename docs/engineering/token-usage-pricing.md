@@ -48,8 +48,8 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 | `app/src/protocol/messages.ts` | `UsageRange` / `TokenUsageStats` / `UsageMessage` / `isUsageMessage` / `parseUsageMessage` |
 | `app/src/shared/lib/usage.ts` | 区间标签与格式化（紧凑 Token、¥ 微元、百分比、更新时间、成本来源文案） |
 | `app/src/shared/lib/tauri.ts` | `getTokenUsageStats` / `sendUsageRequest` / 4 个 pricing 命令绑定 |
-| `app/src/desktop/features/usage/` | 桌面用量页 store 与「模型价格」Sheet（420px）；价格表入口在模型分组卡脚，不在导航 |
-| `app/src/desktop/pages/usage-page.tsx` | 桌面用量页（第 6 项导航「用量」，⌘4） |
+| `app/src/desktop/features/usage/` | 桌面用量页 store 与「模型价格」Sheet（460px）；价格表入口在分组列表卡尾，不在导航 |
+| `app/src/desktop/pages/usage-page.tsx` | 桌面用量页（一级「用量」；D85 后 4 项导航里是 ⌘3） |
 | `app/src/mobile/features/usage/` | 手机只读页与快照缓存（进入/切区间/回前台请求） |
 
 ## 3. 数据源与容错
@@ -136,13 +136,13 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 | 其它/缺失 | 7 | 服务端归一为 `7d`；手机命令直接拒绝非法值 |
 
 - `days[]`：账本中最近的、最多 180 个**真实存在**的日期（按日升序），不补零、不按区间裁剪；前端按所选区间过滤展示。
-- `previous`：与所选区间等长、紧邻的上一个区间的汇总（本周之前 7 天 / 30 天 / 180 天），用于环比；无数据时字段为全 0 汇总。
+- `previous`：与所选区间等长、紧邻的上一个区间的汇总（本周之前 7 天 / 30 天 / 180 天）；V1 收口后两端都不渲染环比，字段保留。无数据时字段为全 0 汇总。
 - `coverageDays`：所选区间内有账本日期的天数（含金额缺价但 Token 存在的天）。
 - `summary.sessions` / `clients[].sessions`：区间内**唯一会话 id 数**（同一会话跨天只算一次）；分组 `sessions` 行本身也按 id 跨天合并。
 
 ### 4.3 分组
 
-- `clients`：P0 只有一行 `{key:"dsh", label:"DeepSeek Harness", sub:"本机 cost-meter · 已接入", sharePct:100}`；其它客户端由前端固定渲染「未接入」占位，不进入协议。
+- `clients`：P0 只有一行 `{key:"dsh", label:"DeepSeek Harness", sub:"本机 cost-meter · 已接入", sharePct:100}`；其它客户端不进入协议，前端也不渲染「未接入」占位行。
 - `sessions`：按 `id` 跨天合并；`label` = 标题或「会话 + 8 位短 id」；`sub` = 「最近 MM-DD HH:mm · N 次调用」；`calls` 为区间内调用数。
 - `models`：按 `provider:model` 合并；`label` = model，`provider` = 中文接入方（opencode-go→OpenCode Go；deepseek-account→DeepSeek 账号；deepseek-official→DeepSeek 官方；空→未知接入方）；`sub` = 接入方 + 缓存命中；`price` 为当前报价（CNY/1M）与来源。
 - Top 8 + 其他：超过 8 行截断，追加 `key:"other"`、`label:"其他 N 个会话/模型"`、`tag:"other"`；Token/金额/调用数为被截断行之和，会话组 `sessions` 为剩余数。

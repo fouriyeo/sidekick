@@ -43,6 +43,8 @@
   --border: #2b5560;
   --input: #578893;
   --ring: #6ef0c8;
+  --tertiary: #7ea7a4;
+  --sidebar: #0b242c;
 
   --success: #64d9a4;
   --warning: #eab173;
@@ -103,6 +105,8 @@
   --border: #a4beb9;
   --input: #6f8f89;
   --ring: #0a7764;
+  --tertiary: #6f8f89;
+  --sidebar: #f5faf8;
 
   --success: #186b49;
   --warning: #8a5410;
@@ -196,6 +200,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-tertiary: var(--tertiary);
+  --color-sidebar: var(--sidebar);
   --color-success: var(--success);
   --color-warning: var(--warning);
 

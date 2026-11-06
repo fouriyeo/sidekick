@@ -16,6 +16,7 @@ export function ThemeOptions({ className }: { className?: string }) {
 
   return (
     <fieldset
+      data-slot="segmented"
       className={cn(
         "m-0 grid min-w-0 grid-cols-3 gap-1 rounded-xl border border-border bg-muted p-1",
         className,

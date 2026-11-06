@@ -1,13 +1,32 @@
-import { Clipboard, Info, Keyboard, SunMoon } from "lucide-react";
+import {
+  Clipboard,
+  Info,
+  Keyboard,
+  MessageCircle,
+  Mic,
+  Palette,
+  Plug,
+  Smartphone,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import { ChatSection } from "@/desktop/features/chat/components/chat-section";
 import { useClipboardStore } from "@/desktop/features/clipboard/clipboard-store";
+import { ConnectionSection } from "@/desktop/features/connect/components/connection-section";
+import { HookSection } from "@/desktop/features/hook/components/hook-section";
+import { describeHookStatus, useHookStore } from "@/desktop/features/hook/hook-store";
+import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
+import { ModelsSection } from "@/desktop/features/models/models-section";
 import { AccessibilityCard } from "@/desktop/features/settings/components/accessibility-card";
-import { DESKTOP_NAV } from "@/desktop/lib/desktop-nav";
-import { Card, CardHint, MetaRow } from "@/desktop/shell/card";
-import { PageChip, StateTag } from "@/desktop/shell/page-chips";
+import {
+  DESKTOP_NAV,
+  type DesktopNav,
+  SETTINGS_SECTION_TITLE,
+  type SettingsSection,
+} from "@/desktop/lib/desktop-nav";
+import { ListActionRow, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
-import { PageBody, PageFooter, PageShell } from "@/desktop/shell/page-shell";
-import { useTheme } from "@/shared/lib/theme";
+import { PageBody, PageShell } from "@/desktop/shell/page-shell";
+import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -17,28 +36,196 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
+import { Switch } from "@/shared/ui/switch";
 import { ThemeOptions } from "@/shared/ui/theme-options";
 
-const THEME_LABEL = {
-  system: "外观跟随系统",
-  light: "外观浅色",
-  dark: "外观深色",
-} as const;
-
-const SHORTCUTS = DESKTOP_NAV.map((item) => ({ key: item.shortcut, label: item.label }));
+type SettingsPageProps = {
+  connection: DesktopConnection;
+  section: SettingsSection;
+  onSectionChange: (section: SettingsSection) => void;
+  nav: DesktopNav;
+};
 
 /**
- * 设置：外观 / 自动输入权限 / 剪贴板 / 关于与隐私 / 快捷键。
- * 只影响这台电脑，不改变手机设置；不做桌面 AI 音效试听（音效在手机端）。
+ * 设置：一张 iOS 分组列表，点进二级页再返回。
+ *
+ * 首页只放「会改的东西」：外观、自动输入、手机连接、语音输入、AI 联动、剪贴板、关于；
+ * 每一项右侧只有一个短值，不放解释性长句。二级页共用同一个返回壳。
  */
-export function SettingsPage() {
-  const { preference } = useTheme();
+export function SettingsPage({ connection, section, onSectionChange, nav }: SettingsPageProps) {
+  if (section === "root") {
+    return <SettingsRoot connection={connection} onSectionChange={onSectionChange} />;
+  }
+
+  const title = SETTINGS_SECTION_TITLE[section];
+  return (
+    <PageShell transition="push">
+      <PageHeader title={title} backLabel="设置" onBack={() => onSectionChange("root")} />
+      <PageBody>
+        <div key={section} className="flex flex-col gap-6">
+          {section === "connection" && <ConnectionSettings connection={connection} />}
+          {section === "voice" && <ModelsSection />}
+          {section === "hook" && <HookSection />}
+          {section === "clipboard" && <ClipboardSettings />}
+          {section === "accessibility" && <AccessibilityCard showHeading={false} />}
+          {section === "about" && <AboutSettings />}
+          {section === "messages" && (
+            <ChatSection
+              onSend={connection.sendText}
+              info={connection.info}
+              status={connection.status}
+              onOpenOverview={() => nav.go("overview")}
+              onOpenConnection={() => onSectionChange("connection")}
+            />
+          )}
+        </div>
+      </PageBody>
+    </PageShell>
+  );
+}
+
+function SettingsRoot({
+  connection,
+  onSectionChange,
+}: {
+  connection: DesktopConnection;
+  onSectionChange: (section: SettingsSection) => void;
+}) {
+  const snapshot = useClipboardStore((state) => state.snapshot);
+  const refreshClipboard = useClipboardStore((state) => state.refresh);
+  const cloudStatus = useCloudAsrStore((state) => state.status);
+  const loadCloud = useCloudAsrStore((state) => state.load);
+  const hookStatus = useHookStore((state) => state.status);
+
+  useEffect(() => {
+    void refreshClipboard();
+    void loadCloud();
+  }, [refreshClipboard, loadCloud]);
+
+  const connected = connection.status === "connected";
+  const address = connection.info ? `${connection.info.ip}:${connection.info.port}` : null;
+  const enabled = snapshot?.enabled ?? true;
+  const count = snapshot?.items.length ?? 0;
+  const configured = cloudStatus?.configured ?? false;
+  const hookLabel = describeHookStatus(hookStatus).label;
+
+  return (
+    <PageShell>
+      <PageHeader title="设置" />
+      <PageBody>
+        <ListGroup>
+          <ListRow
+            icon={<Palette aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="purple"
+            title="外观"
+            control={<ThemeOptions className="w-[188px]" />}
+          />
+          <ListRow
+            icon={<Keyboard aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="blue"
+            title="自动输入"
+            meta="辅助功能"
+            chevron
+            onClick={() => onSectionChange("accessibility")}
+          />
+        </ListGroup>
+
+        <ListGroup title="功能">
+          <ListRow
+            icon={<Smartphone aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="green"
+            title="手机连接"
+            meta={connected ? (address ?? "已连接") : "未启动"}
+            mono={connected}
+            chevron
+            onClick={() => onSectionChange("connection")}
+          />
+          <ListRow
+            icon={<Mic aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="orange"
+            title="语音输入"
+            meta={configured ? "百炼" : "未配置"}
+            chevron
+            onClick={() => onSectionChange("voice")}
+          />
+          <ListRow
+            icon={<Plug aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="teal"
+            title="AI 联动"
+            meta={hookLabel}
+            chevron
+            onClick={() => onSectionChange("hook")}
+          />
+          <ListRow
+            icon={<Clipboard aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="blue"
+            title="剪贴板"
+            meta={enabled ? `记录中 · ${count} 条` : "已暂停"}
+            chevron
+            onClick={() => onSectionChange("clipboard")}
+          />
+        </ListGroup>
+
+        <ListGroup title="关于">
+          <ListRow
+            icon={<Info aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="gray"
+            title="关于本机"
+            meta="v0.1.0"
+            chevron
+            onClick={() => onSectionChange("about")}
+          />
+          <ListRow
+            icon={<MessageCircle aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+            iconTone="gray"
+            title="消息通道"
+            meta="调试"
+            chevron
+            onClick={() => onSectionChange("messages")}
+          />
+        </ListGroup>
+      </PageBody>
+    </PageShell>
+  );
+}
+
+function ConnectionSettings({ connection }: { connection: DesktopConnection }) {
+  const [qrOpen, setQrOpen] = useState(true);
+
+  return (
+    <div className="flex min-h-0 flex-col">
+      <div className="dsl-action-group mb-4 flex items-center justify-end self-end">
+        <Button type="button" variant="outline" size="sm" onClick={connection.retry}>
+          重新搜索
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={qrOpen}
+          onClick={() => setQrOpen((open) => !open)}
+        >
+          {qrOpen ? "收起二维码" : "二维码"}
+        </Button>
+      </div>
+      <ConnectionSection
+        info={connection.info}
+        status={connection.status}
+        error={connection.error}
+        onRetry={connection.retry}
+        qrOpen={qrOpen}
+        onToggleQr={() => setQrOpen((open) => !open)}
+      />
+    </div>
+  );
+}
+
+function ClipboardSettings() {
   const snapshot = useClipboardStore((state) => state.snapshot);
   const refresh = useClipboardStore((state) => state.refresh);
   const setEnabled = useClipboardStore((state) => state.setEnabled);
   const clear = useClipboardStore((state) => state.clear);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   useEffect(() => {
     void refresh();
@@ -49,158 +236,33 @@ export function SettingsPage() {
   const maxItems = snapshot?.maxItems ?? 100;
 
   return (
-    <PageShell>
-      <PageHeader
-        title="设置"
-        description="外观、自动输入权限、剪贴板与隐私；这些设置只影响这台电脑，不改变手机设置。"
-        chips={<PageChip label={THEME_LABEL[preference]} tone="signal" />}
-        actions={
-          <Button type="button" variant="outline" size="sm" onClick={() => setPrivacyOpen(true)}>
-            隐私说明
-          </Button>
-        }
-      />
+    <>
+      <ListGroup>
+        <ListRow
+          title="记录剪贴板"
+          control={
+            <Switch
+              aria-label="记录剪贴板"
+              checked={enabled}
+              onCheckedChange={(value) => void setEnabled(value)}
+            />
+          }
+        />
+        <ListRow title="已保存" meta={`${count} / ${maxItems} 条`} mono />
+        <ListRow title="密码框与隐藏内容" meta="不记录" />
+      </ListGroup>
 
-      <PageBody className="overflow-y-auto pr-0.5">
-        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="flex min-w-0 flex-col gap-3">
-            <Card
-              title={
-                <>
-                  <SunMoon aria-hidden="true" />
-                  外观
-                </>
-              }
-              subtitle="APPEARANCE · 双主题"
-              pill={<StateTag label={THEME_LABEL[preference]} tone="signal" />}
-            >
-              <ThemeOptions />
-              <CardHint>
-                默认跟随系统（D76）；界面与手机宠物舞台一起跟随，切浅色后海玻璃舞台会变亮。
-              </CardHint>
-            </Card>
-
-            <Card title="自动输入权限" subtitle="ACCESSIBILITY · MACOS" className="min-h-0">
-              <AccessibilityCard showHeading={false} />
-            </Card>
-          </div>
-
-          <div className="flex min-w-0 flex-col gap-3">
-            <Card
-              title={
-                <>
-                  <Clipboard aria-hidden="true" />
-                  剪贴板历史
-                </>
-              }
-              subtitle="CLIPBOARD · 只存本机"
-              pill={
-                <StateTag
-                  label={enabled ? "正在记录" : "已暂停"}
-                  tone={enabled ? "signal" : "muted"}
-                />
-              }
-              footer={
-                <>
-                  <CardHint>点条目复制、置顶与全文都在「内容」页。</CardHint>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void setEnabled(!enabled)}
-                    >
-                      {enabled ? "暂停" : "继续"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={count === 0}
-                      onClick={() => setConfirmOpen(true)}
-                    >
-                      清空
-                    </Button>
-                  </div>
-                </>
-              }
-            >
-              <MetaRow label="状态" value={enabled ? "正在记录" : "记录已暂停"} />
-              <MetaRow label="当前 / 上限" value={`${count} / ${maxItems} 条`} mono />
-              <MetaRow label="隐私过滤" value="密码框 / 隐藏类型不记录" />
-            </Card>
-
-            <Card
-              title={
-                <>
-                  <Info aria-hidden="true" />
-                  关于与隐私
-                </>
-              }
-              subtitle="ABOUT · LOCAL ONLY"
-              footer={
-                <>
-                  <CardHint>没有账号体系，也没有云同步。</CardHint>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => setPrivacyOpen(true)}
-                  >
-                    完整隐私说明
-                  </Button>
-                </>
-              }
-            >
-              <MetaRow label="版本" value="v0.1.0 · 深海声呐" mono />
-              <MetaRow label="平台" value="macOS · 局域网直连" />
-              <MetaRow label="数据目录" value="~/.sidekick/（0600）" mono />
-              <MetaRow label="隐私" value="数据只在本机；识别音频发往百炼" />
-            </Card>
-
-            <Card
-              title={
-                <>
-                  <Keyboard aria-hidden="true" />
-                  快捷键
-                </>
-              }
-              subtitle="KEYBOARD · 一级导航"
-            >
-              <ul className="flex list-none flex-col gap-1 p-0">
-                {SHORTCUTS.map((item) => (
-                  <li
-                    key={item.key}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-popover px-2.5 py-1.5"
-                  >
-                    <span className="text-[11.5px] text-muted-foreground">{item.label}</span>
-                    <kbd className="rounded-[5px] border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-                      {item.key}
-                    </kbd>
-                  </li>
-                ))}
-              </ul>
-              <CardHint>在任意页面按 ⌘1–⌘6 切换一级页；输入框里不会触发。</CardHint>
-            </Card>
-          </div>
-        </div>
-      </PageBody>
-
-      <PageFooter>
-        <span>小跟班 Sidekick</span>
-        <span>v0.1 · 深海声呐</span>
-        <span className="ml-auto">局域网直连 · 数据只在本机</span>
-      </PageFooter>
+      <ListGroup>
+        <ListActionRow tone="danger" disabled={count === 0} onClick={() => setConfirmOpen(true)}>
+          清空历史
+        </ListActionRow>
+      </ListGroup>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
-          <p className="font-mono text-[9px] tracking-[0.16em] text-destructive uppercase">
-            确认 · 破坏性操作
-          </p>
           <DialogHeader>
             <DialogTitle>清空剪贴板历史？</DialogTitle>
-            <DialogDescription>所有记录都会被删除，且不能恢复。</DialogDescription>
+            <DialogDescription>所有记录都会删除，不能恢复。</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
@@ -218,10 +280,37 @@ export function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function AboutSettings() {
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+
+  return (
+    <>
+      <ListGroup>
+        <ListRow title="版本" meta="0.1.0 · 简约 iOS" />
+        <ListRow title="平台" meta="macOS · 局域网直连" />
+        <ListRow title="数据目录" meta="~/.sidekick" mono />
+      </ListGroup>
+
+      <ListGroup title="隐私">
+        <ListActionRow onClick={() => setPrivacyOpen(true)}>隐私说明</ListActionRow>
+      </ListGroup>
+
+      <ListGroup title="快捷键">
+        {DESKTOP_NAV.map((item) => (
+          <ListRow key={item.id} title={item.label} meta={item.shortcut} mono />
+        ))}
+      </ListGroup>
+
+      <p className="px-1 text-[12px] leading-[1.45] text-muted-foreground">
+        数据只在本机；语音识别时音频实时发送到百炼。
+      </p>
 
       <Dialog open={privacyOpen} onOpenChange={setPrivacyOpen}>
         <DialogContent>
-          <p className="font-mono text-[9px] tracking-[0.16em] text-signal uppercase">隐私说明</p>
           <DialogHeader>
             <DialogTitle>数据只在本机</DialogTitle>
             <DialogDescription className="leading-relaxed">
@@ -237,6 +326,6 @@ export function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageShell>
+    </>
   );
 }

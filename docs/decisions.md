@@ -724,3 +724,55 @@
 - 放弃：抓取 OpenAI 官方页面（P1，当前无 OpenAI 账本）；把 tokei 的整个 pricing.json 直接当运行时文件（seed 需可更新且带来源元数据）；历史事件重算（DSH 已记账，收益低）；调用第三方付费价格 API。
 - 代价：包体增加 seed（约 80KB）与 reqwest 编译/体积；价格目录可能滞后或与账单有汇率差，UI 必须标「以账单为准」；多一套缓存/覆盖文件需要维护。
 - 规范：`app/src-tauri/src/token_pricing.rs`、`app/src-tauri/src/pricing_seed.json`、`app/src-tauri/src/tls.rs`、`app/src-tauri/Cargo.toml`、`scripts/update-pricing.mjs`、`app/src/desktop/features/usage/pricing-sheet.tsx`、`docs/engineering/token-usage-pricing.md`、`docs/dependency-policy.md`。
+
+## D85 · 电脑端「简约 iOS」重做：4 个一级入口 + 216 侧栏 + iOS 分组列表（2026-11-06，取代 D79 的桌面 6 视图/D82 的桌面导航顺序；D82 手机用量页保留）
+
+- 背景：D79「指挥舱 A」在桌面留下 48 全局状态条 + 72 图标导航 + 6 个一级视图 + 系统页 4 段 + 56 页头，壳本身的框比内容还多；状态分散在状态条、会话页、系统段三处，会话列表页又与总览重复。用户要求按 iOS 的「干净、一眼」重做电脑端（与 D80 手机端同一方向），只重排承载与入口、不改功能行为，手机端 D80/D81 规则不动。
+- 决策：
+  - **一级导航只剩 4 个**：概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 设置 ⌘4；默认首页仍是概览。侧栏固定 216：顶部 38 留给 mac 交通灯，下面 logo + 小跟班，再下面 3 个一级入口；设置固定在底部，最下面三行状态摘要（服务 / 手机 / AI）。
+  - **删除**：48 全局状态条、72 图标导航、系统页 4 段、会话列表页。AI 在做什么只在「概览 › 当前会话」一行（标题 + 状态/动作 + 相对时间 + 卡尾「在 DSH 打开」）；手机连接、语音输入、AI 联动、自动输入、剪贴板、关于本机、消息通道全部收进「设置」。
+  - **状态摘要替代状态条**：侧栏三行短值——服务（真实端口 / 未启动）、手机（N 台 / 未连接）、AI（空闲 / 工作中 / 等你决定 / 完成 / 未联动）；服务与手机行点按进「设置 › 手机连接」，AI 行点按进「设置 › AI 联动」。概览顶部另有一张同内容的三行列表（带 chevron），点击落点相同。
+  - **设置是 iOS 式 push**：首页一张分组列表（外观 + 自动输入 / 功能：手机连接、语音输入、AI 联动、剪贴板 / 关于：关于本机、消息通道），每行右侧只有一个短值；点进去是二级页，标题上方一行「‹ 设置」返回，二级页没有第二个动作；不写 URL、不引路由。
+  - **页面骨架 iOS 化**：大标题 30/700（`tracking -0.022em`，右侧最多两个动作）→ 分组列表（组标题 13/400 次级灰，白卡 12 圆角，行 44、hairline 分隔）；内容区顶部 24 拖动条、左右 32 边距、最大宽 720 居中、页内滚动；按钮 13/500 三档（实心薄荷 / 浅灰 / 薄荷文字）、开关 40×24、输入框 34 高浅灰无边框；一页最多一个实心按钮。
+  - **窗口与拖动**：macOS `titleBarStyle: Overlay` + `hiddenTitle`，交通灯浮在侧栏顶部 38 区域内；侧栏顶部、内容区顶部 24、二级页返回行都是拖动区（`data-tauri-drag-region`），交互元素不放进拖动区作为唯一目标。
+  - **视觉令牌收进桌面作用域**：新增 `app/src/desktop/styles/ios.css`，只挂在 `.desktop-ios`。浅色：页 `#F2F2F7` / 卡 `#FFFFFF` / 主文 `#1C1C1E` / 次级 `#8A8A8E` / hairline `#E3E3E8` / 薄荷 `#0A7764`；深色：页 `#000000` / 卡 `#1C1C1E` / 主文 `#F2F2F7` / 次级 `#98989D` / hairline `#38383A` / 薄荷 `#3FC4A0`。组件只用 `bg-background` / `bg-card` / `text-muted-foreground` / `border-border` / `bg-signal` 这类语义类，桌面不写死颜色、不新增颜色变量；手机 `.mobile-clean` 不受影响，桌面字体用 `-apple-system`、不随包字体。
+  - **文案红线**：不写页面说明句、不复述标题含义、不放 mono 大写装饰、不写「暂无数据 / 这里可以看到…」；只有不可逆/危险操作、安全与隐私承诺、必须的输入提示（Key、地址格式）可以留一句解释；版本行写「0.1.0 · 简约 iOS」。
+  - **取代关系**：D79 的桌面 6 视图、48 状态条、72 图标导航、系统页 4 段、桌面会话页与 56 页头规则由本条取代；D82 的桌面导航顺序与 ⌘ 编号被本条取代（用量 ⌘4→⌘3，新增设置 ⌘4；用量页与价格表本身保留）；**D82 的手机「设置 › 用量」保留不变**。D80/D81 的手机两页壳与 MiSans 规则完全不变；D78 的会话工具动作文案继续用于概览「当前会话」detail 与手机会话卡；D69/D77 宠物规则不变。
+- 原因：iOS 分组列表是用户最熟的「设置 / 系统」心智——一行一个值，能点整行；壳越少，状态与入口越不容易分散。状态压成三行短值 + 概览一行当前会话后，「服务在不在 / 手机连没连 / AI 在干什么」仍然在同一位置回答，但不再需要一条跨页状态条和一个独立会话页。一级从 6 降到 4，把配置类入口全部收进设置，主任务（看状态 / 剪贴板 / 用量）保持在一级。大标题 + 720 单列让 1180 窗口不再出现空荡的两栏。
+- 放弃：保留状态条与图标 rail 只换皮肤（框仍然多）；保留会话列表页（与概览当前会话重复，完整信息在 DSH）；设置继续做一级整页而非 push（iOS 的页面心智就是列表 → 二级页）；改 `tokens.css` 全局换肤（会污染手机，改为桌面作用域）；给桌面随包字体（`-apple-system` 已足够且不增包体）。
+- 代价：一级入口 6→4，⌘ 编号变化（用量 ⌘3、设置 ⌘4），旧习惯要重新适应；桌面不再有完整会话列表，只能看概览里最高优先级的一条当前会话；连接、语音、联动多一次点击（概览 / 侧栏状态行 → 设置二级页）；用量页已随后续收口改为同一套 ListGroup / ListRow（2×2 汇总 + 分组列表 + 趋势 + 构成），不再有状态胶囊、页脚与 mono 大写装饰；辅助功能未授权提示从内容区顶部 40px 条改为内容区左下角浮出小卡片（不占布局、不抢焦点）。
+- 规范：实现契约 `docs/engineering/desktop-ios-ui.md`；产品规则 `docs/prd/shell/{INDEX,PRD,SPEC,ACCEPTANCE}.md`；前端结构 `docs/frontend-architecture.md`；实现落点 `app/src/desktop/styles/ios.css`、`app/src/desktop/{app.tsx,shell/{sidebar,list,page-header,page-shell}.tsx,lib/desktop-nav.ts,pages/*}`、`app/src-tauri/tauri.conf.json`；手机端 `.mobile-clean` 不变。
+- 验证：结构与视觉契约已落地（2026-11-06，代码完成）；桌面新壳的验收用例见 `docs/prd/shell/ACCEPTANCE.md`，待真机/交互回归。
+
+## D86 · 电脑端第二次视觉升级：Liquid Glass · iOS 26 质感层（2026-11-06，取代 D85 的视觉/材质与布局数值；D85 的信息架构继续有效）
+
+- 背景：D85 的「简约 iOS」把结构收干净了（4 入口、分组列表、设置 push），但用户实际使用后反馈「普普通通、没有 iOS 的灵动精致」——白卡 + 灰底 + 静态列表只是「像 iOS 的设置页」，缺少 iOS 26 的层级、材质与触感。查了 Apple HIG › Materials 与 Liquid Glass 的公开描述（hierarchy / harmony / consistency；玻璃只用于导航与控件层、内容层保持不透明、同心圆角、specular 高光、弹簧动效），决定在**不改信息架构与功能行为**的前提下，做一层「Liquid Glass」质感升级。
+- 决策：
+  - **三层结构**：内容层（画布 + 不透明白卡 / 行 / 图表）/ 玻璃控件层（侧栏、sticky 工具栏、动作组、分段轨道、次级按钮、辅助功能提示）/ 弹层（34% 黑 + blur 遮罩、20 圆角容器）。**内容卡永远不透明**；玻璃只出现在内容「之上」或「旁边」，不叠在白卡内。
+  - **侧栏 216→224 玻璃导航层**：`blur(30px) saturate(180%)` + 顶部受光渐变；导航项 34 高、圆角 9、14/500；选中项白色滑块用 spring 在入口之间 morph（stiffness 520 / damping 40 / mass 0.8）；底部设置 + 三行状态摘要不变。
+  - **sticky 玻璃工具栏**：页头拆成「工具栏 + 大标题」。未滚动时工具栏透明、只显示右侧动作组；滚动 > 6px 变玻璃胶囊（高 48 / 圆角 18），左侧淡入 **17/600** 紧凑标题，**34/600** 大标题随后滚走；二级页返回在工具栏左侧并 push 进入。
+  - **列表升级**：白卡 16 圆角 + 双层阴影 + 顶部 0.5px 高光；行 52–54、行标题 15/400、说明 13/400、行值 15（mono 13、tabular）；分隔线 0.5px、左缩进 16（带图标块 60）。图标从薄荷线性升级成 iOS 设置同款 **30×30 / 圆角 10 彩色图标块**（7 个 iOS system color：服务绿 / 手机蓝 / AI teal / 外观紫 / 语音橙 / 剪贴板蓝 / 关于灰；不给 tone 时退化薄荷线性图标）。
+  - **控件胶囊化**：按钮全部胶囊（36 / 30 / 26 三档、13–14/500），工具栏相邻动作并进一个玻璃动作组；输入 38/11、搜索胶囊 40、checkbox 18、select 34、分段控件 = 胶囊玻璃轨道 + 白色滑块 spring（stiffness 520 / damping 38 / mass 0.7）。
+  - **质感细节**：同心圆角 18（工具栏）→ 16（卡）→ 10（图标块）/ 9（导航项）→ 胶囊；玻璃 / 卡 / 按钮 / 图标块顶部 0.5–1px specular 高光；固定一层 2.6% soft-light grain（`::after`，`pointer-events: none`）；画布加两层极淡 radial 环境光（薄荷 / 鲸蓝），让玻璃有可读色差。
+  - **动效**：一级页 fade 320ms、设置二级页 push 340ms、侧栏滑块 / 分段滑块 spring、行 0.996 / 按钮 0.97 / checkbox 0.94 按压缩放、弹层 300ms + 遮罩 220ms blur 入场、用量数字 400ms 补间、柱阵 420ms / 20ms 错峰；只动 `transform` / `opacity` / 颜色，不做循环装饰。
+  - **兜底**：`prefers-reduced-motion` 关入场 / 过渡 / 缩放（滑块 spring 退化为 `duration: 0`）；`prefers-reduced-transparency` 玻璃去掉 `backdrop-filter`、背景退回 `--card` 实底；弹层 portal 靠 `app.tsx` 把 `.desktop-ios` 同时挂到 `<html>` 才吃得到桌面令牌。
+  - **作用域不变**：全部在 `app/src/desktop/styles/ios.css` 的 `.desktop-ios`；手机 `.mobile-clean` 完全不动。
+  - **取代关系**：D85 的**视觉 / 材质 / 布局数值**（216 侧栏、30/700 大标题、720 内容宽、12 圆角卡、44 行、8 圆角按钮、扁平页头）由本条取代；D85 的**信息架构**（4 入口、设置 push、删会话页 / 状态条 / 图标 rail）、文案红线与作用域隔离继续有效。手机 D80/D81 规则不变。
+- 原因：用户要的不是「能用的设置页」而是「iOS 的精致感」；iOS 26 的观感来自层级（内容从玻璃下滚过）、材质（半透明 + 模糊 + 饱和度 + 高光）与动效（弹簧、按压、连续性），不是把所有东西都加圆角。把玻璃限定在控制层，既保留层次感，又不牺牲长文本列表的可读性与 WebKit 渲染预算。
+- 放弃：把玻璃铺到内容卡 / 整页（可读性与性能双输，且违反 HIG「glass 是导航与控件层」）；真实窗口 vibrancy / 透明窗口（Tauri 窗口材质与对比度风险大，收益只是透出桌面）；纯装饰动效（循环粒子 / 扫描线——用户要「灵动」不是「花哨」）；手机端也用玻璃（D80/D81 已定，且真机 WebView 103 的 blur 成本不可控）；给图标块扩一整套新色（只用 7 个 iOS system color，按语义分配，避免颜色值膨胀）。
+- 代价：`backdrop-filter` 在 WebKit 上有合成成本，玻璃层数要克制（侧栏 + 工具栏 + 弹层），不要在滚动内容里叠 blur；玻璃对比度依赖画布环境光，未来改背景色要重新验收；必须长期维护 reduce-motion / reduced-transparency 两套兜底；动效只能靠截图 / 目检验终态，CI 不测中间帧；间距 / 圆角等数值可能继续微调，文档以「结构 + 规则 + 关键数值」为准。
+- 规范：`app/src/desktop/styles/ios.css`、`app/src/desktop/app.tsx`（`:root.desktop-ios` + `<html>` 挂类）、`app/src/desktop/shell/{page-header,page-shell,sidebar,list,segmented-control}.tsx`、`app/src/desktop/pages/{overview,content,usage,settings}-page.tsx`、`app/src/desktop/features/settings/components/accessibility-hint.tsx`、`app/src/desktop/features/clipboard/components/clipboard-section.tsx`、`app/src/desktop/features/usage/animated-number.tsx`、`docs/engineering/desktop-ios-ui.md`、`docs/prd/shell/SPEC.md`、`docs/standards/{visual,ux}.md`、`docs/frontend-architecture.md`、`scripts/qa-desktop-ios.mjs`。
+- 验证：代码完成（2026-11-06）；浏览器 QA `scripts/qa-desktop-ios.mjs` 输出 36 张截图（浅 / 深 × 1180 / 960 × 4 个一级页 + 设置二级页 + 弹层）并检查横向溢出 / console error；真机窗口（交通灯位置、拖动区、玻璃观感）与 reduce-motion / reduced-transparency 目检待补。
+
+## D87 · 电脑端窗口级材质：macOS 透明窗口 + NSVisualEffectView（2026-11-06，补充 D86）
+
+- 背景：D86 的玻璃是 CSS 自绘（blur 自己的环境光），没有「桌面/窗口后面的东西透进来」的真实材质，观感仍差 macOS 一档。用户看完 D86 后要求继续往「灵动精致」走，于是补一层系统材质。
+- 决策：
+  - 新增**平台专属** `app/src-tauri/tauri.macos.conf.json`：`app.macOSPrivateApi: true` + window `transparent: true` + `windowEffects: { effects: ["underWindowBackground"], state: "followsWindowActiveState" }`；**基础 `tauri.conf.json` 不动**，Android 不会跟着变透明。
+  - 前端检测：`app/index.html` 的内联脚本在「真实 Tauri（`__TAURI_INTERNALS__.metadata` 存在）+ macOS UA + localStorage 未设 `sidekick:vibrancy=off`」时给 `<html>` 加 `.dsl-vibrancy`。浏览器 dev mock 没有 `metadata`，不触发，仍是 D86 的自绘玻璃。
+  - CSS 分层：`.dsl-vibrancy` 下 `html`/`body`/根 div 透明；内容区 `.dsl-main` 自己铺不透明底色 + 环境光（保证文字对比度）；侧栏只留轻薄白色 tint（浅 0.3→0.07、深 0.1→0.02），去掉 `backdrop-filter`（原生材质已经在模糊）；`prefers-reduced-transparency: reduce` 时侧栏退回 `--sidebar` 实色。
+  - 回退链：非 macOS / 浏览器 / 检测失败 / 手动关闭 → 无 `.dsl-vibrancy` → D86 自绘玻璃；窗口失焦时系统材质自动变浅（`followsWindowActiveState`）。
+- 原因：要让侧栏「真的是玻璃」，材质层必须在 WebView 之后、窗口最底层；只有透明窗口 + NSVisualEffectView 能做到。只让侧栏透明、内容区不透明，能同时保住可读性和材质感。
+- 放弃：整窗全透明（内容可读性崩、文字飘在桌面上）；用 CSS 模拟「桌面模糊」（没有真实桌面内容可模糊）；把透明配置写进基础 `tauri.conf.json`（Android 也会透明）；自绘一套假颗粒纹理冒充材质（D86 的 grain 只是点缀）。
+- 代价：用了 macOS Private API（`macOSPrivateApi`），正式分发/签名前要回归；窗口合成成本略升；**无头环境验证不了真实材质**，必须人工 `pnpm tauri dev` 目检（透明侧栏、失焦变暗、深浅主题、缩放、拖动）。
+- 规范：`app/src-tauri/tauri.macos.conf.json`、`app/index.html`、`app/src/desktop/app.tsx`（`.dsl-main`）、`app/src/desktop/styles/ios.css`（`.dsl-vibrancy` 段）、`scripts/qa-desktop-ios.mjs`（检测表达式 + CSS 契约校验）、`docs/engineering/desktop-ios-ui.md`。

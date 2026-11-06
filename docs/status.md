@@ -85,6 +85,9 @@
 - **触感/时长可配已通过质量门（2026-11-02）**：`haptic` / `disable_webview_haptics`（`app/src-tauri/src/haptics.rs`，decorView `performHapticFeedback` + WebView `setHapticFeedbackEnabled(false)`）通过 `cargo check --target aarch64-linux-android`；前端 `haptics.ts` 收敛为唯一入口、麦克风按下中震、宠物页禁用长按选中；`dimMinutes`（默认 5）与 `keepAwakeHours`（默认 2，0 = 不限）落地并含旧存档迁移；`useKeepAwake(active, maxDurationMs)` 到点释放。`pnpm typecheck / lint / test（174 tests / 28 files）` 全绿；真机触感/变暗/常亮到点待验收。
 - **语音入库 + 100 条上限已验证（2026-11-01）**：Rust `record_item` 单测覆盖 voice kind、同文本去重保置顶、100 条裁剪保置顶；剪贴板 UI 显示 `N / 100 条` 并给语音条目加 Mic 图标与「语音」标签；`cargo test --lib` 24 passed，`pnpm typecheck / lint / test（164 tests / 27 files）/ build` 全绿。`write_text_and_record` 的「暂停记录仍写系统剪贴板、不入历史」由代码路径与单测语义保证。
 - **手机干净版两页壳 + MiSans 质量门（2026-11-05，D80/D81）**：全仓 72 files / 591 tests 全绿；`tsc` / lint / `build` 干净；浏览器 390×844、320×640、浅/深主题截图通过；真机 Realme RMX3370（1080×2400）安装启动，宠物页顶栏 / 会话卡折叠展开 / 鲸鱼无气泡 / 圆形麦克风 / 设置页 / Android 返回键 / MiSans 字体均正常，无 console error。未验证：录音禁切页、结果卡清空二次确认、深色真机、320 宽真机、TalkBack。
+- **电脑端「简约 iOS」重做质量门（2026-11-06，D85）**：电脑端只留 4 个一级页（概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 设置 ⌘4）+ 216 侧栏（三行状态摘要）+ 大标题 + iOS 分组列表；删除会话列表页、系统页 4 段、48 状态条、72 图标导航、页脚与解释性文案；设置改为 iOS push 二级页（手机连接 / 语音输入 / AI 联动 / 自动输入 / 剪贴板 / 关于本机 / 消息通道）。新增 `app/src/desktop/styles/ios.css`（`.desktop-ios` 双主题）、`desktop/shell/{sidebar,list,segmented-control}.tsx`、`desktop/lib/desktop-nav.ts`（4 视图 + 8 个设置段）；窗口改 `titleBarStyle: Overlay`。`pnpm typecheck / lint / test（71 files / 588 tests）/ build`、`check-docs`、`check-boundaries` 全绿；`node scripts/qa-desktop-ios.mjs` 36 张截图（浅/深 × 1180/960 × 4 页 + 二级页 + 三个弹层）无横向溢出、无 console error，弹层背景 token 实测为 `#FFF`（浅）/`#2C2C2E`（深）。**未验证**：真实 Tauri 窗口的交通灯位置/拖动区/960 宽手感（本机屏幕不可截图，需人工 `pnpm tauri dev` 目检）。
+- **电脑端第二轮「Liquid Glass · iOS 26」质感情景（2026-11-06，D86）**：在 D85 的 4 入口 / 设置 push 结构上重做质感层——224 玻璃侧栏（spring 滑块、彩色图标块）、sticky 玻璃工具栏（滚动 >6px 变玻璃胶囊 + 17/600 紧凑标题 + scroll-edge 模糊渐隐）、34/600 大标题、730 单列 / 16 圆角白卡 / 行 54 / 15 号标题、胶囊按钮 36/30/26 与分段控件（spring 滑块）、内容页胶囊搜索与复制 spring、消息通道全宽聊天区 + 薄荷实心气泡 + 浮玻璃输入栏、用量页 30/600 数字补间 + 柱阵 stagger、设置二级页 push 入场 + 展开收起过渡；specular 高光 / 2.6% grain / 极淡环境光；玻璃只做控件层，`prefers-reduced-motion` 与 `prefers-reduced-transparency` 双退化。**验证**：`pnpm typecheck / lint / test（72 files / 592 tests）/ build`、`check-docs`、`check-boundaries` 全绿；`node scripts/qa-desktop-ios.mjs` 44 张截图（浅/深 × 1180/960 × 4 页 + 7 个设置二级页 + 3 弹层 + 滚动态）无横向溢出 / console error；CDP 实测：切换区间数字补间、reduced-motion 下直接跳变、hover 动作显隐、按压缩放、弹层 token 正确。**未验证**：真实 Tauri 窗口的交通灯/拖动/滚动玻璃过渡手感（本机屏幕不可截图，需人工 `pnpm tauri dev` 目检）。
+- **电脑端窗口级材质（2026-11-06，D87，补 D86）**：新增 `app/src-tauri/tauri.macos.conf.json`（`macOSPrivateApi` + `transparent` + `windowEffects: underWindowBackground` / `followsWindowActiveState`），`index.html` 内联脚本只在「真实 Tauri（有 `__TAURI_INTERNALS__.metadata`）+ macOS + 未关开关」时给 `<html>` 加 `.dsl-vibrancy`；该模式下 html/body/根透明、`.dsl-main` 不透明 + 环境光、侧栏只留 tint 且关掉 backdrop-filter，`prefers-reduced-transparency` 退实色；浏览器 dev mock 不触发，保留 D86 自绘玻璃。**验证**：`pnpm tauri dev` 编译并启动成功（配置被接受，`[server]`/`[discovery]`/`[ws] client connected` 正常）；`qa-desktop-ios.mjs` 新增 vibrancy 段：浏览器 mock 检测为 false、模拟真实 Tauri 为 true，`.dsl-vibrancy` 下 html/body/侧栏透明、内容区 `#000`/`#F2F2F7` 不透明（46 张截图无溢出/console error）。**未验证**：真实窗口的材质观感（透明侧栏、失焦变浅、深浅主题、缩放/拖动）——无头环境截不到窗口，需人工 `pnpm tauri dev` 目检。
 - **AI 联动代码质量门（2026-11-02）**：`pnpm typecheck / lint / test（291 tests / 36 files）/ build` 全绿；`cargo test --lib` 71 passed（新增 dsh_hook 23 + install 24）；脚本 `node --check` + `vitest run src/dsh-hook` 32 passed；`node scripts/check-docs.mjs` 0 warning、`check-boundaries` 通过。浏览器 mock DOM 核对四态 `data-ai-state`、文案、asking 6s 降速、completed 3s 回 idle、桌面 AI 联动页首次/已连接态。**未做真实 DSH 插件加载/重启**，也未写真实 `~/.dsh`；需要在用户方便时重启 DSH 验收。
 - **未验证**：macOS 辅助功能勾选后的实际 Cmd+V 粘贴、密码框/窗口切换完整矩阵、真机 60 秒与断连、真机语音转写进入剪贴板历史的端到端（本机 mock/单测已覆盖）、dialog/sheet/tooltip 在 WebView 103 的居中表现（仍用 translate 类）、竖屏 16:9/20:9 安全区、3 分钟 60fps、TalkBack、扩展状态行、AI 联动真实 DSH 重启/插件加载与 Realme 四态 60fps/音效/真机 3 米识别、会话列表/清除/focus 真机、百炼真实账号、本地 Key 迁移、真机流式/60s、用量区间切换/跨天/金额对账、指挥舱 A 桌面真机回归（5 视图 / 状态条 / ⌘ 快捷键 / 「在 DSH 打开」focus 链路）、手机 D80 真机补测（录音禁切页 / 结果卡清空二次确认 / 深色 / 320 宽）。
 
@@ -144,11 +147,12 @@
 - [x] **断连自动重连**：退避重试 + 静默重新发现 + 前后台暂停/恢复；聊天页常显重连状态与手动入口（2026-11-01）。
 - [ ] **麦克风收尾**：勾选 macOS 辅助功能后验证自动粘贴；真机 60 秒/断连/密码框矩阵；模型准确率测试集；结果卡片回车/清空真机验收（2026-11-04 代码完成）。
 - [ ] **麦克风中断真机验收**：快速连点/连按、启动中松手、电脑浮层「取消录音」、看门狗超时（2026-11-04 代码完成，见 MIC-AC-40..44）。
-- [ ] **AI 联动（DSH hook）**：桌面「系统 › 联动」+ 本地脚本注入 + 手机四态/三音效 + 宠物页会话卡（折叠 1 行 / 展开最多 5 行）/清除/反问唤起；代码完成，待真机/隐私验收（2026-11-03）。
+- [ ] **AI 联动（DSH hook）**：桌面「设置 › AI 联动」+ 本地脚本注入 + 手机四态/三音效 + 宠物页会话卡（折叠 1 行 / 展开最多 5 行）/清除/反问唤起；代码完成，待真机/隐私验收（2026-11-03）。
 - [ ] **会话列表真机回归**：宠物页会话卡折叠 1 行 / 展开 5 行、asking 直接 focus、清除二次确认与重现、断连快照、旧插件兼容（2026-11-03；2026-11-05 按 D80 改版，基础折叠/展开/返回已验证）。
 - [ ] **会话行工具动作验收**：工作行 spinner + 「正在…」、无工具/未知工具/旧插件回退、抓包确认无工具名原文/参数/路径/模型名（2026-11-04 代码完成，D78）。
 - [ ] **手机 D80 真机回归**：宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆麦克风；设置页返回；录音中禁切页；结果卡三段 + 清空二次确认；深色与 320 宽（2026-11-05 代码完成，基础页已真机验证）。
-- [ ] **Token 用量看板验收**：真实 ledger 对账、空/损坏账本、价格联网/断网/覆盖文件、桌面 6 导航与 960 宽、手机 320 宽与模型开关、隐私抓包（2026-11-06 代码完成，待真机/对账）。
+- [ ] **Token 用量看板验收**：真实 ledger 对账、空/损坏账本、价格联网/断网/覆盖文件、桌面「用量 ⌘3」与 960 宽、手机 320 宽与模型开关、隐私抓包（2026-11-06 代码完成，待真机/对账）。
+- [ ] **电脑端 D85/D86/D87 真机目检**：窗口级材质（侧栏透出桌面、失焦变浅、reduce-transparency 退实色、`sidekick:vibrancy=off` 回退）、`pnpm tauri dev` 看交通灯位置、拖动区（侧栏 38 / sticky 工具栏）、滚动时玻璃工具栏与紧凑标题过渡、scroll-edge 渐隐、深浅主题、1180 与 960 两档、设置二级页 push/返回、概览二维码弹层、reduce-motion 下降级。
 - [ ] **AI 联动后续**：手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入（接入后用量页客户端分组从「未接入」变为真实数据）。
 - [x] **Release 打包**：`release/` 固定文件名 dmg（3.8MB）+ 签名 APK（7MB）+ 三个打包脚本（2026-11-03，D63）；待正式签名/公证。
 - [ ] **蓝牙通道**：Tauri 移动端 BLE 插件（Kotlin）或 Python sidecar，见 `ble-notes.md`。
@@ -175,9 +179,9 @@
 - [ ] 麦克风：权限拒绝/辅助功能未开/窗口切换/密码框/上滑取消的降级路径
 - [ ] AI 联动：桌面安装/重启/连接；四态动作远看可区分；三音效默认关/录音静音；杀 DSH 15s 内静态；隐私审计通过
 - [ ] 会话卡：折叠 1 行 / 展开 5 行、working wash、× 二次确认；点 asking 唤起 DSH；清除后新事件重现；断连保留最后快照
-- [ ] 桌面壳：默认总览、状态条三段可点、⌘1–⌘6、辅助功能提示条外壳级、麦克风浮层全局、960×640 不溢出
+- [ ] 桌面壳（D85+D86）：默认概览、224 玻璃侧栏 4 入口 + 三行状态摘要、⌘1–⌘4、概览当前会话与「在 DSH 打开」、设置列表 → 二级页 push「‹ 设置」返回、辅助功能提示只在概览顶部出现且授权后消失、麦克风浮层全局、浅/深主题弹层令牌、`node scripts/qa-desktop-ios.mjs` 无溢出、960×640 不裁切；滚动 >6px 出现玻璃工具栏与紧凑标题、内容从玻璃下经过不露边、reduce-motion 无位移动画、reduced-transparency 玻璃变实底
 - [ ] 用量：真实账本对账、价格刷新/断网/覆盖、空态、手机模型开关、抓包无提示词/路径/cwd
 - [ ] 手机壳：默认宠物、顶栏 gear/连接/chat 可点、无底部 tab、结果卡三段、二级页返回层级、录音中禁切页、首用清单在设置 banner
 - [ ] 状态语言：连接 7 / AI 4 / 麦克风 9 两端同词；琥珀只给等你决定；工作行 spinner +「正在<动作>」/「正在思考」
 - [ ] 用量：桌面/手机区间切换与三维分组；数字与账本直算一致；空/损坏账本不造假；价格联网/断网/覆盖文件；手机模型开关；抓包无提示词/路径/cwd
-- [ ] 用量壳：桌面第 6 导航 ⌘4、系统 ⌘5、设置 ⌘6；手机设置 › 用量 → 返回设置；录音中禁切页；价格 Sheet 刷新与 stale
+- [ ] 用量壳：桌面「用量 ⌘3」（分组列表 + 2×2 汇总 30/600 + 数字补间 + 柱阵入场 + 价格表卡尾）；手机设置 › 用量 → 返回设置；录音中禁切页；价格 Sheet 刷新与 stale

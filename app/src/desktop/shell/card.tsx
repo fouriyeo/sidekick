@@ -1,66 +1,39 @@
 import { cn } from "cn";
 import type { ReactNode } from "react";
-
-type CardProps = {
-  /** 卡头标题；可带一个 lucide 图标（`[&_svg]` 统一尺寸与弱化颜色）。 */
-  title?: ReactNode;
-  /** 卡头下的等宽小字副标，如 `VOICE · 最近一次`。 */
-  subtitle?: string;
-  /** 卡头右侧的状态标签 / 计数。 */
-  pill?: ReactNode;
-  children: ReactNode;
-  /** 卡脚：低频动作与说明；有值时自动加顶部分隔线。 */
-  footer?: ReactNode;
-  className?: string;
-  bodyClassName?: string;
-};
+import { ListGroup } from "@/desktop/shell/list";
 
 /**
- * 指挥舱卡片：`--card` 底 + 1px 边框 + 14 圆角，卡头 = 标题 + mono 副标，
- * 卡脚只放低频动作。所有页面共用同一套间距，位置不漂移。
+ * 兼容层：旧 Card / MetaRow / CardHint 语义保留，外观换成 iOS 分组卡。
+ * 新界面优先用 `ListGroup` / `ListRow`；这三个只给还没重写的 Section 用。
  */
 export function Card({
   title,
-  subtitle,
   pill,
   children,
   footer,
   className,
   bodyClassName,
-}: CardProps) {
+}: {
+  title?: ReactNode;
+  /** @deprecated 新设计不显示 mono 副标，传了也不会渲染。 */
+  subtitle?: string;
+  pill?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
   return (
-    <section
-      className={cn(
-        "flex min-h-0 min-w-0 flex-col gap-2 rounded-[14px] border border-border bg-card p-3.5",
-        className,
-      )}
-    >
-      {(title || pill) && (
-        <header className="flex shrink-0 items-start justify-between gap-2.5">
-          <div className="min-w-0">
-            <h2 className="flex items-center gap-1.5 text-[13px] leading-tight font-semibold [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground">
-              {title}
-            </h2>
-            {subtitle && (
-              <p className="mt-0.5 truncate font-mono text-[9px] tracking-[0.13em] text-muted-foreground uppercase">
-                {subtitle}
-              </p>
-            )}
-          </div>
-          {pill && <div className="shrink-0">{pill}</div>}
-        </header>
-      )}
-      <div className={cn("flex min-h-0 flex-col gap-2", bodyClassName)}>{children}</div>
+    <ListGroup title={title} action={pill} className={className}>
+      <div className={cn("px-4 py-4", bodyClassName)}>{children}</div>
       {footer && (
-        <footer className="mt-auto flex shrink-0 items-center justify-between gap-2 border-t border-border pt-2">
-          {footer}
-        </footer>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">{footer}</div>
       )}
-    </section>
+    </ListGroup>
   );
 }
 
-/** 卡片里的键值行：左侧弱化标签、右侧值（可 mono）。 */
+/** 卡内键值行：左侧弱化标签、右侧值（可 mono）。 */
 export function MetaRow({
   label,
   value,
@@ -73,12 +46,17 @@ export function MetaRow({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-h-6 items-center justify-between gap-3 text-[11px]", className)}>
+    <div
+      className={cn(
+        "flex min-h-11 items-center justify-between gap-3 border-b border-[var(--separator)] py-2 text-[15px] last:border-b-0",
+        className,
+      )}
+    >
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "min-w-0 truncate text-right text-foreground",
-          mono && "font-mono text-[10px]",
+          "min-w-0 truncate text-right text-foreground tabular-nums",
+          mono && "font-mono text-[13px]",
         )}
       >
         {value}
@@ -87,11 +65,9 @@ export function MetaRow({
   );
 }
 
-/** 卡片里的一句弱化提示。 */
+/** 卡内一句弱化说明；新设计里只在确实需要时才用。 */
 export function CardHint({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <p className={cn("text-[10.5px] leading-relaxed text-muted-foreground", className)}>
-      {children}
-    </p>
+    <p className={cn("text-[13px] leading-[1.45] text-muted-foreground", className)}>{children}</p>
   );
 }

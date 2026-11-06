@@ -25,6 +25,21 @@
         } catch (error) {
           /* localStorage 被禁用时保持默认深色 */
         }
+
+        // 窗口级材质（D86）：真实 Tauri + macOS 才给 <html> 加 .dsl-vibrancy，
+        // 让侧栏透出系统 NSVisualEffectView（tauri.macos.conf.json 的 windowEffects）。
+        // 浏览器 dev mock 没有 __TAURI_INTERNALS__.metadata，不会触发；localStorage 可一键关闭。
+        try {
+          var internals = window.__TAURI_INTERNALS__;
+          var isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
+          var realTauri = !!internals && "metadata" in internals;
+          var disabled = window.localStorage.getItem("sidekick:vibrancy") === "off";
+          if (isMac && realTauri && !disabled) {
+            document.documentElement.classList.add("dsl-vibrancy");
+          }
+        } catch (error) {
+          /* 检测失败按无材质处理（实色回退） */
+        }
       })();
     </script>
   </head>

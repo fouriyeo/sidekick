@@ -18,7 +18,10 @@ const TEXT_CLASS: Record<PageTone, string> = {
   danger: "text-destructive",
 };
 
-/** 页头状态胶囊：小圆点 + 文字；文字永远在，颜色只是第二线索。 */
+/**
+ * 页头状态胶囊：小圆点 + 文字。
+ * 新设计里页头优先用「服务 / 手机 / AI」这类简短值放在列表行里，胶囊只作补充。
+ */
 export function PageChip({
   label,
   tone = "muted",
@@ -33,7 +36,7 @@ export function PageChip({
   return (
     <span
       className={cn(
-        "inline-flex h-6 max-w-full shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2 text-[11px]",
+        "inline-flex h-5 max-w-full shrink-0 items-center gap-1.5 rounded-full bg-card px-2 text-[11.5px] shadow-[var(--card-shadow)]",
         className,
       )}
       title={title}
@@ -44,7 +47,15 @@ export function PageChip({
   );
 }
 
-/** 行内状态标签（会话行、列表行用）：更小、方角，和页头胶囊区分。 */
+const TAG_CLASS: Record<PageTone, string> = {
+  muted: "bg-muted text-muted-foreground",
+  signal: "bg-wash text-signal",
+  decide: "bg-muted text-decide",
+  success: "bg-muted text-success",
+  danger: "bg-muted text-destructive",
+};
+
+/** 行内状态标签：小圆角、无边框，颜色只是第二线索。 */
 export function StateTag({
   label,
   tone = "muted",
@@ -57,8 +68,8 @@ export function StateTag({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-[5px] border border-border bg-popover px-1.5 py-0.5 text-[10px] leading-none font-medium",
-        TEXT_CLASS[tone],
+        "inline-flex shrink-0 items-center rounded-[6px] px-1.5 py-0.5 text-[11px] leading-none font-medium",
+        TAG_CLASS[tone],
         className,
       )}
     >

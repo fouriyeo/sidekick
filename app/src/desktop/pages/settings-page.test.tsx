@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClipboardSnapshot } from "@/shared/lib/tauri";
 
@@ -14,6 +14,11 @@ const api = vi.hoisted(() => ({
   requestAccessibility: vi.fn(),
   openAccessibilitySettings: vi.fn(),
   revealAccessibilityApp: vi.fn(),
+  getCloudAsrStatus: vi.fn(),
+  saveCloudAsr: vi.fn(),
+  testCloudAsr: vi.fn(),
+  getAsrUsageStats: vi.fn(),
+  clearAsrUsage: vi.fn(),
   normalizeError: (error: unknown): string =>
     error instanceof Error ? error.message : String(error),
 }));
@@ -21,6 +26,9 @@ const api = vi.hoisted(() => ({
 vi.mock("@/shared/lib/tauri", () => api);
 
 import { useClipboardStore } from "@/desktop/features/clipboard/clipboard-store";
+import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
+import type { DesktopNav } from "@/desktop/lib/desktop-nav";
+import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { SettingsPage } from "./settings-page";
 
 const snapshot: ClipboardSnapshot = {
@@ -39,78 +47,117 @@ const snapshot: ClipboardSnapshot = {
   ],
 };
 
+function makeConnection(): DesktopConnection {
+  return {
+    status: "connected",
+    info: {
+      ip: "192.168.1.23",
+      port: 47810,
+      url: "http://192.168.1.23:47810",
+      discoveryPort: 47820,
+    },
+    error: null,
+    sendText: vi.fn(),
+    cancelMic: vi.fn(),
+    requestStatus: vi.fn(),
+    requestFocus: vi.fn(),
+    retry: vi.fn(),
+  };
+}
+
+function makeNav(): DesktopNav {
+  return { go: vi.fn(), goSettings: vi.fn() };
+}
+
 beforeEach(() => {
   useClipboardStore.setState({ snapshot: null, loading: false, error: null });
+  useCloudAsrStore.setState({ status: null });
   vi.clearAllMocks();
   api.listClipboard.mockResolvedValue(snapshot);
   api.setClipboardEnabled.mockResolvedValue({ ...snapshot, enabled: false });
   api.clearClipboard.mockResolvedValue({ ...snapshot, items: [] });
-  api.getAccessibilityInfo.mockResolvedValue({
-    trusted: false,
-    appName: "Sidekick",
-    executablePath: "/Applications/Sidekick.app",
-    isDev: true,
-  });
-  api.requestAccessibility.mockResolvedValue({
-    trusted: true,
-    appName: "Sidekick",
-    executablePath: "/Applications/Sidekick.app",
-    isDev: true,
-  });
-  api.openAccessibilitySettings.mockResolvedValue(undefined);
-  api.revealAccessibilityApp.mockResolvedValue(undefined);
+  api.getCloudAsrStatus.mockResolvedValue({ configured: false });
 });
 
 afterEach(cleanup);
 
-describe("SettingsPage", () => {
-  it("五组设置齐全，外观三选一，且不做桌面音效试听", async () => {
-    render(<SettingsPage />);
+describe("SettingsPage 设置", () => {
+  it("设置首页只有一张列表，每项一个短值", async () => {
+    render(
+      <SettingsPage
+        connection={makeConnection()}
+        section="root"
+        onSectionChange={vi.fn()}
+        nav={makeNav()}
+      />,
+    );
 
     expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "外观" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "自动输入权限" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "剪贴板历史" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "关于与隐私" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "快捷键" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("记录中 · 1 条")).toBeInTheDocument());
 
-    for (const label of ["跟随系统", "浅色", "深色"]) {
-      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    for (const label of [
+      "外观",
+      "自动输入",
+      "手机连接",
+      "语音输入",
+      "AI 联动",
+      "剪贴板",
+      "关于本机",
+      "消息通道",
+    ]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    expect(screen.queryByText(/音效/)).toBeNull();
-
-    // 自动输入权限状态来自 AccessibilityCard（未授权 → 只会复制）。
-    expect(await screen.findByText("未授权，只会复制")).toBeInTheDocument();
+    expect(screen.getByText("192.168.1.23:47810")).toBeInTheDocument();
   });
 
-  it("剪贴板可暂停与清空（清空需二次确认）", async () => {
-    render(<SettingsPage />);
-    await waitFor(() => expect(api.listClipboard).toHaveBeenCalled());
+  it("点「手机连接」进二级页，返回回到设置", () => {
+    const onSectionChange = vi.fn();
+    render(
+      <SettingsPage
+        connection={makeConnection()}
+        section="root"
+        onSectionChange={onSectionChange}
+        nav={makeNav()}
+      />,
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "暂停" }));
-    await waitFor(() => expect(api.setClipboardEnabled).toHaveBeenCalledWith(false));
+    fireEvent.click(screen.getByRole("button", { name: /手机连接/ }));
+    expect(onSectionChange).toHaveBeenCalledWith("connection");
+  });
 
+  it("二级页有大标题和返回", () => {
+    const onSectionChange = vi.fn();
+    render(
+      <SettingsPage
+        connection={makeConnection()}
+        section="about"
+        onSectionChange={onSectionChange}
+        nav={makeNav()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "关于本机" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /设置/ }));
+    expect(onSectionChange).toHaveBeenCalledWith("root");
+  });
+
+  it("剪贴板二级页可以暂停记录与清空", async () => {
+    render(
+      <SettingsPage
+        connection={makeConnection()}
+        section="clipboard"
+        onSectionChange={vi.fn()}
+        nav={makeNav()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText("1 / 100 条")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("switch", { name: /记录剪贴板/ }));
+    expect(api.setClipboardEnabled).toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "清空历史" }));
     fireEvent.click(screen.getByRole("button", { name: "清空" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "清空" }));
-
-    await waitFor(() => expect(api.clearClipboard).toHaveBeenCalledTimes(1));
-  });
-
-  it("隐私说明是弹层，不占页面主区", async () => {
-    render(<SettingsPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: "隐私说明" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("数据只在本机")).toBeInTheDocument();
-    expect(within(dialog).getByText(/阿里云百炼/)).toBeInTheDocument();
-  });
-
-  it("快捷键列出一级导航的 ⌘1–⌘5", () => {
-    render(<SettingsPage />);
-
-    for (const key of ["⌘1", "⌘2", "⌘3", "⌘4", "⌘5"]) {
-      expect(screen.getByText(key)).toBeInTheDocument();
-    }
+    expect(api.clearClipboard).toHaveBeenCalled();
   });
 });

@@ -4,20 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/desktop/pages/overview-page", () => ({
   OverviewPage: () => <div>overview-page</div>,
 }));
-vi.mock("@/desktop/pages/sessions-page", () => ({
-  SessionsPage: () => <div>sessions-page</div>,
-}));
 vi.mock("@/desktop/pages/content-page", () => ({
   ContentPage: () => <div>content-page</div>,
 }));
 vi.mock("@/desktop/pages/usage-page", () => ({
   UsagePage: () => <div>usage-page</div>,
 }));
-vi.mock("@/desktop/pages/system-page", () => ({
-  SystemPage: ({ section }: { section: string }) => <div>system-page:{section}</div>,
-}));
 vi.mock("@/desktop/pages/settings-page", () => ({
-  SettingsPage: () => <div>settings-page</div>,
+  SettingsPage: ({ section }: { section: string }) => <div>settings-page:{section}</div>,
 }));
 vi.mock("@/desktop/features/settings/components/accessibility-hint", () => ({
   AccessibilityHint: () => null,
@@ -34,7 +28,12 @@ vi.mock("@/desktop/features/hook/hook-store", () => ({
 vi.mock("./use-desktop-connection", () => ({
   useDesktopConnection: () => ({
     status: "connected",
-    info: null,
+    info: {
+      ip: "192.168.1.23",
+      port: 47810,
+      url: "http://192.168.1.23:47810",
+      discoveryPort: 47820,
+    },
     error: null,
     sendText: vi.fn(),
     cancelMic: vi.fn(),
@@ -44,10 +43,14 @@ vi.mock("./use-desktop-connection", () => ({
   }),
 }));
 
+import { useDesktopClientsStore } from "@/desktop/lib/desktop-clients-store";
+import { useDesktopStatusStore } from "@/desktop/lib/desktop-status-store";
 import { DesktopApp } from "./app";
 
 beforeEach(() => {
   window.history.pushState({}, "", "/");
+  useDesktopClientsStore.getState().reset();
+  useDesktopStatusStore.getState().reset();
 });
 
 afterEach(() => {
@@ -59,59 +62,55 @@ function pressShortcut(key: string) {
   fireEvent.keyDown(window, { key, metaKey: true });
 }
 
-describe("DesktopApp 指挥舱外壳", () => {
-  it("默认总览，一级导航 6 项", () => {
+describe("DesktopApp 简约 iOS 外壳", () => {
+  it("默认概览，侧栏 4 个入口 + 三行状态摘要", () => {
+    useDesktopClientsStore.setState({ clients: 2 });
+
     render(<DesktopApp />);
 
     expect(screen.getByText("overview-page")).toBeInTheDocument();
-    for (const label of ["总览", "会话", "内容", "用量", "系统", "设置"]) {
-      expect(screen.getByRole("button", { name: new RegExp(`^${label}（`) })).toBeInTheDocument();
+    for (const label of ["概览", "内容", "用量", "设置"]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
-    expect(screen.queryByText("sessions-page")).toBeNull();
-    expect(screen.queryByText("content-page")).toBeNull();
+    expect(screen.getByText("服务")).toBeInTheDocument();
+    expect(screen.getByText("手机")).toBeInTheDocument();
+    expect(screen.getByText("AI")).toBeInTheDocument();
+    expect(screen.getByText("1 台")).toBeInTheDocument();
   });
 
-  it("点击导航切换总览 / 会话 / 内容 / 用量 / 系统 / 设置", () => {
+  it("点击侧栏切换 4 个一级页", () => {
     render(<DesktopApp />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^会话（/ }));
-    expect(screen.getByText("sessions-page")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /^内容（/ }));
+    fireEvent.click(screen.getByRole("button", { name: "内容" }));
     expect(screen.getByText("content-page")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^用量（/ }));
+    fireEvent.click(screen.getByRole("button", { name: "用量" }));
     expect(screen.getByText("usage-page")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^系统（/ }));
-    expect(screen.getByText("system-page:connection")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+    expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^设置（/ }));
-    expect(screen.getByText("settings-page")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /^总览（/ }));
+    fireEvent.click(screen.getByRole("button", { name: "概览" }));
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
-  it("⌘1–⌘6 切换一级页", () => {
+  it("⌘1–⌘4 切换一级页", () => {
     render(<DesktopApp />);
 
     pressShortcut("2");
-    expect(screen.getByText("sessions-page")).toBeInTheDocument();
-
-    pressShortcut("3");
     expect(screen.getByText("content-page")).toBeInTheDocument();
 
-    pressShortcut("4");
+    pressShortcut("3");
     expect(screen.getByText("usage-page")).toBeInTheDocument();
 
-    pressShortcut("5");
-    expect(screen.getByText("system-page:connection")).toBeInTheDocument();
-
-    pressShortcut("6");
-    expect(screen.getByText("settings-page")).toBeInTheDocument();
+    pressShortcut("4");
+    expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
     pressShortcut("1");
+    expect(screen.getByText("overview-page")).toBeInTheDocument();
+
+    // ⌘5 已经没有对应视图，不改变当前页。
+    pressShortcut("5");
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
@@ -126,22 +125,19 @@ describe("DesktopApp 指挥舱外壳", () => {
     input.remove();
   });
 
-  it("状态条三段可点：服务/手机 → 系统 › 连接，AI → 会话", () => {
+  it("侧栏状态行进入设置的对应二级页", () => {
     render(<DesktopApp />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^服务状态/ }));
-    expect(screen.getByText("system-page:connection")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^服务/ }));
+    expect(screen.getByText("settings-page:connection")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^AI 状态/ }));
-    expect(screen.getByText("sessions-page")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /^手机连接/ }));
-    expect(screen.getByText("system-page:connection")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^AI/ }));
+    expect(screen.getByText("settings-page:hook")).toBeInTheDocument();
   });
 
-  it("开发环境 ?view=models 映射到「系统 › 语音」", () => {
+  it("开发环境 ?view=models 映射到「设置 › 语音输入」", () => {
     window.history.pushState({}, "", "/?view=models");
     render(<DesktopApp />);
-    expect(screen.getByText("system-page:voice")).toBeInTheDocument();
+    expect(screen.getByText("settings-page:voice")).toBeInTheDocument();
   });
 });

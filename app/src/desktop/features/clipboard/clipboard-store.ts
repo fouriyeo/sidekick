@@ -33,24 +33,17 @@ export function filterClipboardItems(items: ClipboardItem[], query: string): Cli
 /** 与 Rust 侧 MAX_ITEMS 对齐；snapshot 还没加载时用于展示上限。 */
 export const DEFAULT_CLIPBOARD_MAX_ITEMS = 100;
 
+/** 页头计数：只留「已用 / 上限 条」，不再跟在后面的隐私后缀。 */
 export function formatClipboardCount(count: number, maxItems?: number): string {
   const limit = maxItems && maxItems > 0 ? maxItems : DEFAULT_CLIPBOARD_MAX_ITEMS;
-  return `${count} / ${limit} 条 · 仅保存在这台电脑`;
+  return `${count} / ${limit} 条`;
 }
 
-/** 详情弹层里给来源类型一个可读名字。 */
+/** 行内第二行的来源名。 */
 export function formatClipboardKind(kind: ClipboardItem["kind"]): string {
   if (kind === "voice") return "语音转写";
   if (kind === "url") return "链接";
   return "文本";
-}
-
-/** 列表只显示两行，详情里补全「多少字 / 多少行」，让人知道到底有多少内容。 */
-export function formatClipboardCharCount(text: string): string {
-  // 换行不算「字」，否则多行文本的字数会虚高。
-  const chars = Array.from(text).filter((char) => char !== "\n" && char !== "\r").length;
-  const lines = text.split("\n").length;
-  return lines > 1 ? `共 ${chars} 字 · ${lines} 行` : `共 ${chars} 字`;
 }
 
 export const useClipboardStore = create<ClipboardState>((set) => ({

@@ -1,61 +1,44 @@
 import { cn } from "cn";
-import { Activity, Database, Filter, Layers, RefreshCw, Zap } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect } from "react";
-import { EmptyState } from "@/desktop/components/empty-state";
+import { AnimatedNumber } from "@/desktop/features/usage/animated-number";
 import { PricingSheet } from "@/desktop/features/usage/pricing-sheet";
 import { type UsageGroupMode, useUsageStore } from "@/desktop/features/usage/usage-store";
-import { Card, CardHint } from "@/desktop/shell/card";
-import { PageChip } from "@/desktop/shell/page-chips";
+import { ListActionRow, ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
-import { PageBody, PageFooter, PageShell } from "@/desktop/shell/page-shell";
+import { PageBody, PageShell } from "@/desktop/shell/page-shell";
+import { SegmentedControl } from "@/desktop/shell/segmented-control";
 import type { TokenUsageStats, UsageRow } from "@/protocol/messages";
 import {
-  costSourceLabel,
   formatCny,
   formatCount,
   formatPct,
   formatTokenCompact,
-  formatUpdatedAt,
   formatUsageCost,
-  isEstimated,
-  RANGE_LABEL,
-  TOKEN_PART_COLORS,
   USAGE_RANGES,
 } from "@/shared/lib/usage";
 import { Button } from "@/shared/ui/button";
 
-const GROUP_TABS: ReadonlyArray<{ value: UsageGroupMode; label: string }> = [
+const GROUP_OPTIONS: ReadonlyArray<{ value: UsageGroupMode; label: string }> = [
   { value: "client", label: "客户端" },
   { value: "session", label: "会话" },
   { value: "model", label: "模型" },
 ];
 
-const PLANNED_CLIENTS = [
-  { key: "claude-code", label: "Claude Code", sub: "P1 · 解析器未接入", tokens: null },
-  { key: "codex", label: "Codex", sub: "P1 · 解析器未接入", tokens: null },
-];
-
-const LEDGER_REASON: Record<string, { title: string; description: string }> = {
-  ledger_missing: {
-    title: "还没找到 DSH 账本",
-    description:
-      "先把 DSH 打开一次，或在「系统 › 联动」确认联动已安装。账本只在本机读取，不会上传。",
-  },
-  ledger_invalid: {
-    title: "账本格式暂时认不出来",
-    description: "DSH 正在写入时可能短暂读不到；稍后点重试。不会显示猜测数字。",
-  },
-  ledger_too_large: {
-    title: "账本文件异常偏大",
-    description: "已超过 64MB 保护上限，看板停止读取。请检查 DSH cost-meter 账本。",
-  },
+/** 只留一句结论；账本缺失/损坏/超限的排查说明不再进界面。 */
+const LEDGER_TITLE: Record<string, string> = {
+  ledger_missing: "还没找到 DSH 账本",
+  ledger_invalid: "账本格式暂时认不出来",
+  ledger_too_large: "账本文件异常偏大",
 };
 
 /**
- * 用量（第 6 个桌面一级页）：只读 DSH cost-meter 账本。
+ * 用量（一级页）：只读 DSH cost-meter 账本。
  *
- * 首屏回答「用了多少 / 花了多少 / 缓存有多省」；分组卡可切
- * 客户端 / 会话 / 模型；价格表从模型行脚进入，只用于对照与缺价估算。
+ * 首屏是 2×2 汇总，随后是「客户端 / 会话 / 模型」分组列表与价格表入口；
+ * 趋势与 Token 构成放在分组之后做补充。不再有页面说明句、状态胶囊、页脚，
+ * 也没有 Claude Code / Codex「P1 未接入」占位。
  */
 export function UsagePage() {
   const range = useUsageStore((state) => state.range);
@@ -78,116 +61,56 @@ export function UsagePage() {
     void load();
   }, [load]);
 
-  const summary = stats?.summary;
   const ledgerUnavailable = stats != null && !stats.ledger.available;
-  const reason = LEDGER_REASON[stats?.ledger.reason ?? ""] ?? LEDGER_REASON.ledger_missing;
+  const ledgerTitle = LEDGER_TITLE[stats?.ledger.reason ?? ""] ?? LEDGER_TITLE.ledger_missing;
 
   return (
     <PageShell>
       <PageHeader
         title="用量"
-        description="DSH 本机账本；按客户端、会话、模型看 Token 与花费，价格表只做对照。"
-        chips={
-          <>
-            <PageChip label="DSH 记账" tone="signal" />
-            <PageChip label="本机 · 不上传" tone="muted" />
-          </>
-        }
         actions={
           <>
-            <fieldset
-              className="m-0 flex h-8 items-center rounded-lg border border-border bg-card p-0.5"
-              aria-label="统计区间"
-            >
-              {USAGE_RANGES.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  className={cn(
-                    "h-7 rounded-md px-2.5 text-[11px] transition-colors",
-                    range === item.value
-                      ? "bg-wash text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                  aria-pressed={range === item.value}
-                  onClick={() => setRange(item.value)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </fieldset>
+            <SegmentedControl
+              label="统计区间"
+              className="w-[232px]"
+              value={range}
+              options={USAGE_RANGES}
+              onChange={setRange}
+            />
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
+              aria-label="刷新"
+              aria-busy={loading}
               disabled={loading}
               onClick={() => void load()}
             >
-              <RefreshCw className={loading ? "animate-spin" : undefined} aria-hidden="true" />
-              刷新
+              <RefreshCw
+                aria-hidden="true"
+                className={loading ? "size-3.5 animate-spin" : "size-3.5"}
+              />
             </Button>
           </>
         }
       />
 
-      <PageBody className="overflow-y-auto pr-0.5">
+      <PageBody>
         {error && !stats ? (
-          <div className="py-12">
-            <EmptyState
-              icon={<Database className="size-4" />}
-              title="读取用量失败"
-              description={error}
-              action={
-                <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
-                  重试
-                </Button>
-              }
-            />
-          </div>
+          <StateGroup label="读取用量失败" onRetry={() => void load()} />
         ) : ledgerUnavailable ? (
-          <div className="py-12">
-            <EmptyState
-              icon={<Database className="size-4" />}
-              title={reason.title}
-              description={reason.description}
-              action={
-                <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
-                  重试
-                </Button>
-              }
-            />
-          </div>
-        ) : !stats || !summary ? (
-          <div className="flex flex-1 items-center justify-center py-16 text-[12px] text-muted-foreground">
-            正在读取本机账本…
-          </div>
+          <StateGroup label={ledgerTitle} onRetry={() => void load()} />
+        ) : !stats ? (
+          <StateGroup label="正在读取本机账本…" />
         ) : (
-          <>
-            <StatsRow stats={stats} />
-            <div className="grid min-h-0 shrink-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]">
-              <TrendCard stats={stats} />
-              <CacheCard stats={stats} />
-            </div>
-            <div className="grid min-h-0 shrink-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)]">
-              <CompositionCard stats={stats} />
-              <GroupCard
-                stats={stats}
-                group={group}
-                onGroupChange={setGroup}
-                onOpenPricing={() => setSheetOpen(true)}
-              />
-            </div>
-          </>
+          <UsageContent
+            stats={stats}
+            group={group}
+            onGroupChange={setGroup}
+            onOpenPricing={() => setSheetOpen(true)}
+          />
         )}
       </PageBody>
-
-      <PageFooter>
-        <span>DSH COST-METER · {RANGE_LABEL[range]}</span>
-        <span className="normal-case">
-          实际记账来自 DSH；缺价才按价格表估算（标 ≈）；百炼语音费用不并入
-        </span>
-        {stats?.pricing.stale && <span className="text-decide">价格表待更新</span>}
-      </PageFooter>
 
       {stats && (
         <PricingSheet
@@ -205,301 +128,17 @@ export function UsagePage() {
   );
 }
 
-function StatsRow({ stats }: { stats: TokenUsageStats }) {
-  const { summary, previous } = stats;
-  const cacheRead = summary.cacheRead;
+/** 空态 / 错误态：一行结论 + 一个动作，不画插画、不写长说明。 */
+function StateGroup({ label, onRetry }: { label: string; onRetry?: () => void }) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Stat
-        label="总 TOKEN"
-        value={formatTokenCompact(summary.tokens)}
-        unit="tokens"
-        hint="五桶合计"
-        delta={deltaText(summary.tokens, previous.tokens, true)}
-      />
-      <Stat
-        label={summary.costSource === "estimated" ? "估算花费" : "DSH 花费"}
-        value={formatUsageCost(summary.costSource, summary.costCnyMicros)}
-        hint={
-          summary.costSource === "unknown"
-            ? "缺价 · 不估算"
-            : isEstimated(summary.costSource)
-              ? "含估算 · 以账单为准"
-              : "账本 costCny"
-        }
-        delta={deltaText(summary.costCnyMicros, previous.costCnyMicros)}
-      />
-      <Stat
-        label="缓存命中率"
-        value={formatPct(summary.cacheHitPct)}
-        hint={`${formatTokenCompact(cacheRead)} 缓存读`}
-        delta={`${formatTokenCompact(cacheRead)} 来自缓存`}
-      />
-      <Stat
-        label="调用 / 会话"
-        value={formatCount(summary.calls)}
-        unit="次"
-        hint="DSH 账本累计"
-        delta={`${summary.sessions} 个会话`}
-      />
-    </div>
+    <ListGroup>
+      <ListEmpty>{label}</ListEmpty>
+      {onRetry && <ListActionRow onClick={onRetry}>重试</ListActionRow>}
+    </ListGroup>
   );
 }
 
-function Stat({
-  label,
-  value,
-  unit,
-  hint,
-  delta,
-}: {
-  label: string;
-  value: string;
-  unit?: string;
-  hint?: string;
-  delta?: string;
-}) {
-  return (
-    <div className="rounded-[14px] border border-border bg-card px-3.5 py-3">
-      <p className="font-mono text-[9px] tracking-[0.13em] text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p className="mt-1.5 flex items-baseline gap-1 text-[24px] leading-none font-semibold tabular-nums">
-        {value}
-        {unit && <span className="text-[10px] font-normal text-muted-foreground">{unit}</span>}
-      </p>
-      <p className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
-        <span className="truncate">{delta}</span>
-        {hint && <span className="truncate text-muted-foreground/70">· {hint}</span>}
-      </p>
-    </div>
-  );
-}
-
-function deltaText(current: number, previous: number, neutral = false): string {
-  if (previous <= 0) return neutral ? "上一周期无数据" : "上一周期无数据";
-  const pct = ((current - previous) / previous) * 100;
-  if (Math.abs(pct) < 0.05) return "与上一周期持平";
-  const arrow = pct > 0 ? "↑" : "↓";
-  return `${arrow} ${Math.abs(pct).toFixed(1)}% 对比上一周期`;
-}
-
-function TrendCard({ stats }: { stats: TokenUsageStats }) {
-  const days = stats.days.slice(-30);
-  const max = Math.max(...days.map((day) => day.costCnyMicros), 1);
-  const total = days.reduce((sum, day) => sum + day.costCnyMicros, 0);
-  const average = days.length > 0 ? total / days.length : 0;
-  const peak = Math.max(...days.map((day) => day.costCnyMicros), 0);
-  return (
-    <Card
-      title={
-        <>
-          <Activity aria-hidden="true" />
-          花费趋势
-        </>
-      }
-      subtitle="COST · 近 30 天 · CNY"
-      pill={<span className="text-[10px] text-muted-foreground">峰值 {formatCny(peak)}</span>}
-      footer={
-        <>
-          <CardHint>末根高亮为今天；柱高按当天花费。</CardHint>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
-            日均 {formatCny(average)} · 合计 {formatCny(total)}
-          </span>
-        </>
-      }
-    >
-      <div className="flex h-[132px] items-end gap-[3px] px-0.5">
-        {days.map((day) => {
-          const height = day.costCnyMicros > 0 ? (day.costCnyMicros / max) * 100 : 2;
-          const isLast = day.date === days[days.length - 1]?.date;
-          return (
-            <div
-              key={day.date}
-              className="group flex h-full min-w-0 flex-1 flex-col items-stretch justify-end gap-1"
-              title={`${day.date} · ${formatCny(day.costCnyMicros)} · ${formatTokenCompact(day.tokens)} tokens`}
-            >
-              <div
-                className={cn(
-                  "w-full rounded-[2px] transition-colors",
-                  isLast ? "bg-signal" : "bg-signal/45 group-hover:bg-signal/70",
-                )}
-                style={{ height: `${Math.max(2, height)}%` }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between pt-1 text-[9px] text-muted-foreground">
-        <span>{days[0]?.date.slice(5)}</span>
-        <span>{days[days.length - 1]?.date.slice(5)}</span>
-      </div>
-    </Card>
-  );
-}
-
-function CacheCard({ stats }: { stats: TokenUsageStats }) {
-  const { summary } = stats;
-  const hit = Math.max(0, Math.min(100, summary.cacheHitPct ?? 0));
-  return (
-    <Card
-      title={
-        <>
-          <Zap aria-hidden="true" />
-          缓存效率
-        </>
-      }
-      subtitle={`CACHE · ${RANGE_LABEL[stats.range]}`}
-      footer={<CardHint>命中率 = 缓存读 ÷（输入 + 缓存读 + 缓存写）</CardHint>}
-    >
-      <div className="flex items-center gap-4">
-        <div
-          className="relative grid size-[104px] shrink-0 place-items-center rounded-full"
-          style={{
-            background: `conic-gradient(var(--signal) ${hit}%, var(--border) ${hit}% 100%)`,
-          }}
-          role="img"
-          aria-label={`缓存命中率 ${formatPct(summary.cacheHitPct)}`}
-        >
-          <div className="grid size-[86px] place-items-center rounded-full bg-card text-center">
-            <div>
-              <p className="text-[22px] leading-none font-semibold tabular-nums">
-                {Math.round(hit)}%
-              </p>
-              <p className="mt-1 text-[9px] text-muted-foreground">命中率</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <LegendRow
-            label="缓存读"
-            value={summary.cacheRead}
-            total={summary.tokens}
-            color="var(--chart-2)"
-          />
-          <LegendRow
-            label="输入"
-            value={summary.input}
-            total={summary.tokens}
-            color="var(--chart-1)"
-          />
-          <LegendRow
-            label="输出"
-            value={summary.output}
-            total={summary.tokens}
-            color="var(--chart-3)"
-          />
-          {summary.reasoning > 0 && (
-            <LegendRow
-              label="推理"
-              value={summary.reasoning}
-              total={summary.tokens}
-              color="var(--chart-5)"
-            />
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function LegendRow({
-  label,
-  value,
-  total,
-  color,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  color: string;
-}) {
-  const pct = total > 0 ? (value / total) * 100 : 0;
-  return (
-    <div className="flex items-center gap-1.5 text-[10px]">
-      <i className="size-1.5 shrink-0 rounded-full" style={{ background: color }} />
-      <span className="w-[3em] shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-right font-mono tabular-nums">
-        {formatTokenCompact(value)}
-      </span>
-      <span className="w-[3.4em] shrink-0 text-right text-muted-foreground tabular-nums">
-        {pct.toFixed(1)}%
-      </span>
-    </div>
-  );
-}
-
-function CompositionCard({ stats }: { stats: TokenUsageStats }) {
-  const { summary } = stats;
-  const parts = [
-    {
-      key: "cacheRead",
-      label: "缓存读",
-      value: summary.cacheRead,
-      color: TOKEN_PART_COLORS.cacheRead,
-    },
-    { key: "input", label: "输入", value: summary.input, color: TOKEN_PART_COLORS.input },
-    { key: "output", label: "输出", value: summary.output, color: TOKEN_PART_COLORS.output },
-    {
-      key: "cacheWrite",
-      label: "缓存写",
-      value: summary.cacheWrite,
-      color: TOKEN_PART_COLORS.cacheWrite,
-    },
-    {
-      key: "reasoning",
-      label: "推理",
-      value: summary.reasoning,
-      color: TOKEN_PART_COLORS.reasoning,
-    },
-  ].filter((part) => part.value > 0);
-  const total = summary.tokens || 1;
-  return (
-    <Card
-      title={
-        <>
-          <Layers aria-hidden="true" />
-          Token 构成
-        </>
-      }
-      subtitle={`BUCKETS · ${RANGE_LABEL[stats.range]}`}
-      footer={<CardHint>5 个桶来自 DSH 账本；为 0 时自动省略。</CardHint>}
-    >
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-        {parts.map((part) => (
-          <i
-            key={part.key}
-            title={`${part.label} ${formatTokenCompact(part.value)}`}
-            style={{ width: `${(part.value / total) * 100}%`, background: part.color }}
-          />
-        ))}
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {parts.map((part) => (
-          <div key={part.key} className="flex items-center gap-2 text-[10.5px]">
-            <i className="size-1.5 shrink-0 rounded-full" style={{ background: part.color }} />
-            <span className="w-[3em] shrink-0 text-muted-foreground">{part.label}</span>
-            <span className="min-w-0 flex-1 text-right font-mono tabular-nums">
-              {formatTokenCompact(part.value)}
-            </span>
-            <span className="w-[3.4em] shrink-0 text-right text-muted-foreground tabular-nums">
-              {((part.value / total) * 100).toFixed(1)}%
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-1 flex items-center justify-between border-t border-border pt-2 text-[10.5px]">
-        <span className="text-muted-foreground">每次调用平均</span>
-        <span className="font-mono tabular-nums">
-          {formatTokenCompact(summary.calls > 0 ? summary.tokens / summary.calls : 0)} tokens ·{" "}
-          {formatCny(summary.calls > 0 ? summary.costCnyMicros / summary.calls : 0, 4)}
-        </span>
-      </div>
-    </Card>
-  );
-}
-
-function GroupCard({
+function UsageContent({
   stats,
   group,
   onGroupChange,
@@ -516,142 +155,216 @@ function GroupCard({
       : group === "session"
         ? stats.groups.sessions
         : stats.groups.models;
-  const priced = stats.groups.models.filter((row) => row.price).length;
+  const modelsHidden = group === "model" && (stats.groups.modelsHidden ?? false);
+
   return (
-    <Card
-      title={
-        <>
-          <Filter aria-hidden="true" />
-          分组明细
-        </>
-      }
-      subtitle="GROUP · 客户端 / 会话 / 模型"
-      pill={
-        <div
-          className="flex items-center rounded-lg border border-border bg-card p-0.5"
-          role="tablist"
-          aria-label="分组维度"
-        >
-          {GROUP_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              role="tab"
-              className={cn(
-                "h-6 rounded-md px-2 text-[10.5px] transition-colors",
-                group === tab.value
-                  ? "bg-wash text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              aria-selected={group === tab.value}
-              onClick={() => onGroupChange(tab.value)}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <>
+      <SummaryCard stats={stats} />
+
+      <section className="flex flex-col gap-2">
+        <div className="px-1">
+          <SegmentedControl
+            label="分组维度"
+            className="w-full"
+            value={group}
+            options={GROUP_OPTIONS}
+            onChange={onGroupChange}
+          />
         </div>
-      }
-      footer={
-        <>
-          <button
-            type="button"
-            className="flex min-w-0 items-center gap-1 text-left text-[10px] text-muted-foreground hover:text-foreground"
-            onClick={onOpenPricing}
-          >
-            <span className="truncate">
-              价格表 · {priced} 个模型有价 · {formatUpdatedAt(stats.pricing.updatedAt)}
-              {stats.pricing.stale ? " · 已过期" : ""}
-            </span>
-            <span aria-hidden="true">→</span>
-          </button>
-          <CardHint>
-            {stats.ledger.reason ? "展示上次成功读取的缓存" : `${stats.coverageDays} 天有数据`}
-          </CardHint>
-        </>
-      }
-    >
-      <div className="flex flex-col">
-        {rows.length === 0 ? (
-          <p className="py-6 text-center text-[11px] text-muted-foreground">
-            这个区间没有可展示的分组。
-          </p>
-        ) : (
-          rows.map((row) => <GroupRow key={row.key} row={row} />)
-        )}
-        {group === "client" &&
-          PLANNED_CLIENTS.map((client) => (
-            <div
-              key={client.key}
-              className="flex items-center gap-2 border-t border-border/60 py-2"
-            >
-              <i className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
-              <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
-                {client.label}
-              </span>
-              <span className="shrink-0 text-[9px] text-muted-foreground">{client.sub}</span>
-              <span className="w-9 shrink-0 text-right text-[10px] text-muted-foreground">—</span>
-            </div>
-          ))}
-      </div>
-      {group === "client" && (
-        <p className="text-[10px] leading-relaxed text-muted-foreground">
-          客户端 = AI 工具。当前只有 DSH 接入账本；Claude Code / Codex 在 P1 解析器接入后出现。
-        </p>
-      )}
-    </Card>
+        <ListGroup>
+          {modelsHidden ? (
+            <ListEmpty>模型分组已在电脑端关闭</ListEmpty>
+          ) : rows.length === 0 ? (
+            <ListEmpty>这个区间没有数据</ListEmpty>
+          ) : (
+            rows.map((row) => (
+              <GroupListRow key={row.key} row={row} showDetail={group !== "client"} />
+            ))
+          )}
+          <ListActionRow onClick={onOpenPricing}>
+            {stats.pricing.stale ? "价格表 · 待更新" : "价格表"}
+          </ListActionRow>
+        </ListGroup>
+      </section>
+
+      <TrendGroup stats={stats} />
+      <CompositionGroup stats={stats} />
+    </>
   );
 }
 
-function GroupRow({ row }: { row: UsageRow }) {
-  const estimated = isEstimated(row.costSource);
+/** 汇总：花费 / Token / 会话 / 缓存命中，2×2 网格；数字换区间时补间到新值。 */
+function SummaryCard({ stats }: { stats: TokenUsageStats }) {
+  const summary = stats.summary;
+  const items: ReadonlyArray<{
+    label: string;
+    value: number | null;
+    format: (value: number) => string;
+  }> = [
+    {
+      label: "花费",
+      value: summary.costSource === "unknown" ? null : summary.costCnyMicros,
+      format: (value) => formatUsageCost(summary.costSource, value),
+    },
+    { label: "Token", value: summary.tokens, format: formatTokenCompact },
+    { label: "会话", value: summary.sessions, format: formatCount },
+    { label: "缓存命中", value: summary.cacheHitPct, format: (value) => formatPct(value) },
+  ];
+
   return (
-    <div className="group flex items-center gap-2 border-t border-border/60 py-2 first:border-t-0">
-      <i
-        className={cn(
-          "size-1.5 shrink-0 rounded-full",
-          row.tag === "other" ? "bg-muted-foreground/40" : "bg-signal",
-        )}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 truncate text-[11.5px] font-medium" title={row.label}>
-            {row.label}
-          </span>
-          {row.tag && row.tag !== "other" && (
-            <span className="shrink-0 rounded border border-border px-1 py-px text-[8.5px] text-muted-foreground">
-              {row.tag}
-            </span>
+    <div className="dsl-card grid grid-cols-2">
+      {items.map((item, index) => (
+        <div
+          key={item.label}
+          className={cn(
+            "px-5 py-4",
+            index % 2 === 1 && "border-l border-border",
+            index < 2 && "border-b border-border",
           )}
-          {estimated && (
-            <span
-              className="shrink-0 text-[9px] text-decide"
-              title={costSourceLabel(row.costSource)}
-            >
-              ≈
-            </span>
-          )}
+        >
+          <p className="text-[12px] leading-none text-muted-foreground">{item.label}</p>
+          <p className="mt-2.5 text-[30px] leading-none font-semibold tracking-[-0.022em] tabular-nums">
+            <AnimatedNumber value={item.value} format={item.format} />
+          </p>
         </div>
-        <div className="mt-1 flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-[9.5px] text-muted-foreground">
-            {row.sub ?? ""}
-          </span>
-          <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
-            <i
-              className="block h-full rounded-full bg-signal/60"
-              style={{ width: `${Math.min(100, row.sharePct)}%` }}
-            />
-          </span>
-          <span className="w-9 shrink-0 text-right text-[9px] text-muted-foreground tabular-nums">
-            {row.sharePct.toFixed(1)}%
-          </span>
-        </div>
-      </div>
-      <div className="flex w-[104px] shrink-0 flex-col items-end">
-        <span className="text-[11px] tabular-nums">{formatTokenCompact(row.tokens)}</span>
-        <span className="text-[9.5px] text-muted-foreground tabular-nums">
-          {formatUsageCost(row.costSource, row.costCnyMicros)}
-        </span>
-      </div>
+      ))}
+      {stats.ledger.reason && (
+        <p className="col-span-2 border-t border-border px-5 py-2 text-[12px] leading-[1.45] text-muted-foreground">
+          展示上次成功读取的缓存
+        </p>
+      )}
     </div>
+  );
+}
+
+function GroupListRow({ row, showDetail }: { row: UsageRow; showDetail: boolean }) {
+  const detail = showDetail && row.sub ? row.sub : undefined;
+  return (
+    <ListRow
+      title={row.label}
+      detail={detail}
+      meta={`${formatTokenCompact(row.tokens)} · ${formatUsageCost(row.costSource, row.costCnyMicros)}`}
+      titleAttr={row.label}
+      tone={row.tag === "other" ? "muted" : "default"}
+    />
+  );
+}
+
+/** 花费柱入场：从底部按 20ms 错峰拉高，落定柔和收尾。 */
+const BAR_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+const BAR_GROW_DURATION = 0.42;
+const BAR_STAGGER = 0.02;
+/** 背景网格：3 条内部分隔线 + 一条基线，只用来读高度，不抢柱子。 */
+const GRID_RATIOS = [0.25, 0.5, 0.75] as const;
+
+/** 区间内最近 30 天花费柱阵：柱子按 20ms 错峰生长，网格线用 hairline 令牌。 */
+function TrendGroup({ stats }: { stats: TokenUsageStats }) {
+  const reduced = useReducedMotion();
+  const days = stats.days.slice(-30);
+  if (days.length === 0) return null;
+
+  const peak = Math.max(...days.map((day) => day.costCnyMicros), 1);
+  // 留 6% 顶空：最高的柱子不贴住卡片上沿，网格线也读得出来。
+  const scale = peak * 1.06;
+  const total = days.reduce((sum, day) => sum + day.costCnyMicros, 0);
+  const average = total / days.length;
+  // 只有日期窗口变了才重挂重播入场；同区间刷新账本不重播，避免闪一下。
+  const windowKey = `${stats.range}-${days[0]?.date ?? ""}-${days[days.length - 1]?.date ?? ""}`;
+
+  return (
+    <ListGroup
+      title="花费趋势"
+      action={
+        <span className="text-[12px] tabular-nums text-muted-foreground">
+          合计 {formatCny(total)}
+        </span>
+      }
+    >
+      <div
+        role="img"
+        aria-label={`近 ${days.length} 天花费合计 ${formatCny(total)}，日均 ${formatCny(average)}`}
+        className="px-4 pt-3 pb-2.5"
+      >
+        <div className="relative h-[96px]">
+          <div key={windowKey} className="relative flex h-full items-end gap-[2px]">
+            {days.map((day, index) => {
+              const height = day.costCnyMicros > 0 ? (day.costCnyMicros / scale) * 100 : 1.5;
+              const isToday = index === days.length - 1;
+              return (
+                <div
+                  key={day.date}
+                  title={`${day.date} · ${formatCny(day.costCnyMicros)} · ${formatTokenCompact(day.tokens)} tokens`}
+                  className="flex h-full min-w-0 flex-1 flex-col justify-end"
+                >
+                  <motion.div
+                    initial={reduced ? false : { scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={
+                      reduced
+                        ? { duration: 0 }
+                        : {
+                            duration: BAR_GROW_DURATION,
+                            ease: BAR_EASE,
+                            delay: index * BAR_STAGGER,
+                          }
+                    }
+                    className={cn(
+                      "w-full rounded-[2px]",
+                      day.costCnyMicros <= 0
+                        ? "bg-[var(--separator)]"
+                        : isToday
+                          ? "bg-[var(--ios-blue)]"
+                          : "bg-signal",
+                    )}
+                    style={{ height: `${Math.max(1.5, height)}%`, transformOrigin: "bottom" }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {/* 网格压在柱阵上面才看得见：柱子常常贴顶，画在背后等于没画。 */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            {GRID_RATIOS.map((ratio) => (
+              <span
+                key={ratio}
+                className="absolute inset-x-0 h-[0.5px] bg-[var(--separator)]"
+                style={{ top: `${ratio * 100}%` }}
+              />
+            ))}
+            <span className="absolute inset-x-0 bottom-0 h-[0.5px] bg-[var(--separator)]" />
+          </div>
+        </div>
+        <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+          <span>{days[0]?.date.slice(5)}</span>
+          <span>{days[days.length - 1]?.date.slice(5)}</span>
+        </div>
+      </div>
+    </ListGroup>
+  );
+}
+
+/** Token 五桶：一行一个桶（名称 + 数量 · 占比），不画堆叠条和图例。 */
+function CompositionGroup({ stats }: { stats: TokenUsageStats }) {
+  const summary = stats.summary;
+  const parts = [
+    { key: "cacheRead", label: "缓存读", value: summary.cacheRead },
+    { key: "input", label: "输入", value: summary.input },
+    { key: "output", label: "输出", value: summary.output },
+    { key: "cacheWrite", label: "缓存写", value: summary.cacheWrite },
+    { key: "reasoning", label: "推理", value: summary.reasoning },
+  ].filter((part) => part.value > 0);
+  if (parts.length === 0) return null;
+
+  const total = summary.tokens || 1;
+  return (
+    <ListGroup title="Token 构成">
+      {parts.map((part) => (
+        <ListRow
+          key={part.key}
+          title={part.label}
+          meta={`${formatTokenCompact(part.value)} · ${formatPct((part.value / total) * 100)}`}
+        />
+      ))}
+    </ListGroup>
   );
 }

@@ -1,6 +1,6 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-05 桌面按 D79 完成「指挥舱 A」5 视图壳，2026-11-06 按 D82 增第 6 视图「用量」；手机按 D80 完成干净版两页壳（宠物 + 设置，591 tests 全绿，真机已验证基础页，主题运行时见 §6）。
+> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-06 桌面按 D85 重做为「简约 iOS」4 入口壳（224 侧栏 + iOS 分组列表 + 设置二级页，取代 D79 的 6 视图壳），同日 D86 升级为 Liquid Glass · iOS 26 质感层（玻璃只给控件层 + 弹簧动效），用量页按 D82 保留；手机按 D80 完成干净版两页壳（宠物 + 设置）；测试以 `pnpm test` 当前输出为准（2026-11-06 基线 588+），真机已验证基础页，主题运行时见 §6。
 > 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)；壳与导航规则见 [prd/shell/](./prd/shell/INDEX.md)。
 > 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
 > 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
@@ -9,7 +9,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-05 起桌面按 D79 采用「指挥舱 A」壳（5 视图，D82 增「用量」为第 6 视图），手机按 D80 改为两页壳（宠物 / 设置；无底栏），聊天降级为「系统 › 消息」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
+- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-06 起桌面按 D85 采用「简约 iOS」壳（4 个一级入口：概览 / 内容 / 用量 / 设置；224 侧栏 + iOS 分组列表 + 设置二级页），同日 D86 升级为 Liquid Glass · iOS 26 质感层，手机按 D80 改为两页壳（宠物 / 设置；无底栏），聊天降级为「设置 › 消息通道」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -41,15 +41,15 @@ app/
 ├─ src/
 │  ├─ main.tsx                # app_role → 动态 import 对应 entry
 │  ├─ entries/
-│  │  ├─ desktop.tsx          # 挂载桌面指挥舱壳（`desktop/app.tsx`）
+│  │  ├─ desktop.tsx          # 挂载桌面「Liquid Glass」壳（`desktop/app.tsx`；`.desktop-ios` 同时挂根 div 与 <html>）
 │  │  └─ mobile.tsx           # 挂载手机两页壳（`mobile/app.tsx` + `.mobile-clean`）
-│  ├─ desktop/                # 桌面专属（指挥舱壳，固定窗口布局）
-│  │  ├─ app.tsx              # 桌面根：外壳 + 视图切换 + 全局层（辅助功能条/麦克风浮层）
-│  │  ├─ shell/               # icon-rail / global-status-bar / page-header / page-shell / page-chips / card / system-segments
-│  │  ├─ pages/               # overview / sessions / content / system / settings 五个一级页
-│  │  ├─ features/            # 各页 Section（不自带页头）：connection / chat / clipboard / hook / models / settings / mic-receiver
-│  │  ├─ lib/                 # desktop-nav、status/clients/activity/voice store、activity-events、ws-client
-│  │  └─ components/          # 跨页小组件（EmptyState 等）
+│  ├─ desktop/                # 桌面专属（Liquid Glass 壳，固定窗口布局）
+│  │  ├─ app.tsx              # 桌面根：224 玻璃侧栏 + 视图切换 + sticky 页头 + 全局层（麦克风浮层 / toast）；给 <html> 补 .desktop-ios 供弹层 portal
+│  │  ├─ shell/               # sidebar / list / page-header / page-shell / segmented-control（card / page-chips 已退出、待删）
+│  │  ├─ pages/               # overview / content / usage / settings 四个一级页
+│  │  ├─ features/            # 各页 Section（不自带页头）：connection / chat / clipboard / hook / models / settings / mic-receiver / usage
+│  │  ├─ lib/                 # desktop-nav、status/clients/voice store、ws-client
+│  │  └─ styles/              # ios.css：Liquid Glass 令牌 + 材质类（.dsl-glass / .dsl-card / .dsl-topbar / .dsl-tile）+ 动效（dsl-page-in / dsl-page-push）
 │  ├─ mobile/                 # 手机专属（只做竖屏）
 │  │  ├─ app.tsx              # 手机根：宠物 + 设置/二级页 + 返回栈
 │  │  ├─ shell/               # page / page-header / pet-top-bar
@@ -61,9 +61,10 @@ app/
 │  │  │  ├─ mic/              # 按住说话、圆钮/胶囊、权限、结果卡
 │  │  │  ├─ connect/          # 连接页、扫码、重连（connection-view）
 │  │  │  ├─ chat/             # 消息页（通道调试）
+│  │  │  ├─ usage/            # 设置 › 用量（只读看板）
 │  │  │  └─ settings/         # 更多：设置整页（页面化）
 │  │  ├─ ui-store.ts          # MobileView 枚举 + scanOpen + offlineReturnView
-│  │  └─ styles/
+│  │  └─ styles/              # clean.css：手机「干净版」令牌，只挂 `.mobile-clean`
 │  ├─ shared/
 │  │  ├─ ui/                  # shadcn 复制组件 + signal-bars / status-chip / theme-options
 │  │  ├─ lib/
@@ -169,7 +170,7 @@ UI 事件
 - 连接状态收敛为一个状态机：`disconnected → connecting → connected → error`；所有界面读同一个 store，不各自维护 `online` 布尔值。
 - 事件订阅在 entry 挂载时注册一次，卸载时取消；不要在每次渲染里 `listen`。
 - 协议增量（D79）：`system` 消息增加可选 `clients`（当前在线客户端数，含桌面本机窗口与网页预览），桌面 `desktop-clients-store` 展示 `max(0, clients - 1)` 台设备；旧服务端不发送、旧客户端忽略。`status.sessionList` 的 `tool` 仍按 D78 双端白名单，展示文案集中在 `shared/lib/sessions.ts`。
-- 桌面本地动作：会话页 / 总览的「在 DSH 打开」走本地 WS 发 `focus.request` 并读 `focus.result`，不新增协议、不接受手机传来的应用路径。
+- 桌面本地动作：概览「当前会话」卡尾的「在 DSH 打开」走本地 WS 发 `focus.request` 并读 `focus.result`，不新增协议、不接受手机传来的应用路径。
 - 数据 store 只存协议真实字段：AI 状态 / 会话列表 / 在线数 / 最近发生都来自事件；「最近发生」仅内存（cap 20），重启清空，不落盘。
 - **浏览器 dev mock 没有本地 WS**：`?role=desktop` 下「在 DSH 打开」（本地 WS 发 `focus.request`）不会生效，必须在 `pnpm tauri dev` / 真机验证；dev mock 已补 `__TAURI_EVENT_PLUGIN_INTERNALS__` 供新增订阅使用。
 
@@ -182,7 +183,8 @@ UI 事件
 - `shadcn/tailwind.css` 只提供 variants/utilities；颜色值在 `tokens.css` 定义。
 - 视觉系统是「深海声呐」双主题（2026-11-04，D71）：`tokens.css` 的 `:root` 放深色（无 JS/回退兜底），`:root[data-theme="light"]` 放浅色；**颜色不再由 `.dark` 块承载**。`.dark` 只服务 Tailwind 的 `dark:` 变体，必须与 `data-theme` 同步。
 - 令牌全部 hex（真机 WebView 103 不支持 `oklch`/`color-mix`），`--radius: 12px`；语义色板与用法见 [standards/visual.md](./standards/visual.md)。
-- 字体用系统栈：`-apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif`；数据/地址/用量用 `ui-monospace`；`body` 开启 `tabular-nums`；不打包完整中文字体。
+- **平台作用域令牌与材质**：`tokens.css` 是两端基线，桌面另有 `desktop/styles/ios.css`（只挂 `.desktop-ios`；D85 定「简约 iOS」结构，D86 升级 Liquid Glass：玻璃 `--glass-bg` / `--glass-highlight` / `--glass-shadow`、卡片双层阴影 + 顶部高光、画布环境光、2.6% grain，浅色 `#F2F2F7` 页 / `#FFF` 卡 / `#0A7764` 薄荷，深色 `#000` 页 / `#1C1C1E` 卡 / `#3FC4A0` 薄荷），手机另有 `mobile/styles/clean.css`（只挂 `.mobile-clean`，D80/D81）。两个作用域互不影响：改桌面不要动手机，反之亦然；组件只用语义类（`bg-card` / `text-muted-foreground` / `border-border` / `bg-signal`），桌面不写死颜色、不新增颜色变量。**玻璃只给控件层**（侧栏 / 工具栏 / 动作组 / 分段轨道 / 弹层遮罩），内容卡与列表保持不透明。
+- 字体：桌面用系统栈 `-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", …`，不随包字体；手机用随包 MiSans Normal 400（D81，`.mobile-clean` 首选，系统字体做缺字回退）。数据/地址/用量用 `ui-monospace`；`body` 开启 `tabular-nums`。
 - 图标统一用 lucide-react；不引 iconfont、不内联一大段 SVG path。
 
 **主题运行时**
@@ -266,7 +268,7 @@ UI 事件
 }
 ```
 
-完整令牌集（含 `--pet-*`、`--chart-*`、`--shadow-*`）见 `app/src/shared/styles/tokens.css`；语义解释见 [standards/visual.md](./standards/visual.md) §3。`--pet-*` 也随 `data-theme` 切换（深色深海自发光 / 浅色海玻璃舞台，D76）；始终深色的表面用 `.deep-sea-scope` 重新钉住深色 pet 令牌与浮层用到的壳层信号色（如桌面麦克风浮层）。
+完整令牌集（含 `--pet-*`、`--chart-*`、`--shadow-*`）见 `app/src/shared/styles/tokens.css`；桌面「Liquid Glass」覆盖见 `app/src/desktop/styles/ios.css`（`.desktop-ios`），手机「干净版」覆盖见 `app/src/mobile/styles/clean.css`（`.mobile-clean`）；语义解释见 [standards/visual.md](./standards/visual.md) §3。`--pet-*` 也随 `data-theme` 切换（深色深海自发光 / 浅色海玻璃舞台，D76）；始终深色的表面用 `.deep-sea-scope` 重新钉住深色 pet 令牌与浮层用到的壳层信号色（如桌面麦克风浮层）。
 
 **类名与组件**
 
@@ -274,7 +276,7 @@ UI 事件
 - 多变体组件用 CVA（shadcn 默认方案）；不要为每个变体写一套 CSS。
 - 类名顺序：布局 → 盒模型 → 排版 → 视觉 → 状态；启用 Biome 的 `useSortedClasses` 时自动排序。
 - 不给 `<body>` 或全局元素写“状态类”做布局切换；用组件边界和 `data-*` 属性。主题切换统一走 `data-theme` + `.dark`，不要手改 `<html>` 的 class。
-- 颜色令牌已随 `data-theme` 变化，组件优先用语义类（`bg-card`、`text-muted-foreground`）；只有需要针对主题换结构/图片时才用 `dark:`。
+- 颜色令牌已随 `data-theme` 变化，组件优先用语义类（`bg-card`、`text-muted-foreground`）；只有需要针对主题换结构/图片时才用 `dark:`。桌面新组件按 D85 只消费语义类与 iOS 令牌，不写死颜色、不新增颜色变量。
 - 动态值（进度、位移）用 CSS 变量传，不在 JSX 里拼复杂字符串。
 
 **移动端**
@@ -284,7 +286,7 @@ UI 事件
 - 键盘弹出时用 `visualViewport` 调整底部输入区，避免输入框被遮挡。
 - 点击目标 ≥ 44×44 px；图标按钮要有 `aria-label`。
 - 安卓上避免大面积 `backdrop-filter`、`filter: blur()`、阴影动画；优先 `transform`/`opacity`。
-- 桌面窗口可缩放：用 `min-w`/`max-w` 与 grid/flex，不写死像素宽度；设计基准 1180×760（最小 960×640），手机 entry 不假设桌面尺寸。
+- 桌面窗口可缩放：用 `min-w`/`max-w` 与 flex，不写死整页宽度；设计基准 1180×760（最小 960×640），内容区最大宽 730 居中；手机 entry 不假设桌面尺寸。
 
 ## 7. 组件规范（shadcn/ui + Base UI）
 
@@ -341,11 +343,11 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - 本地持久化：服务器地址用 localStorage；宠物存档用 plugin-store（adapter 隔离）；聊天记录暂不落盘。
 - 不引全局事件总线；Tauri 事件在 `shared/lib/tauri.ts` 里转成 store action。
 - 组件局部 UI 状态（展开/收起、输入草稿）留在组件内，不进全局 store。
-**壳与视图（D79）**
+**壳与视图（D85 桌面 / D80 手机）**
 
-- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | sessions | content | usage | system | settings`、`SystemSection = connection | voice | hook | chat`、导航项与 ⌘1–⌘6；壳只维护「当前视图 + 系统分段」，不进 URL、不引路由。
+- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | content | usage | settings`、`SettingsSection = root | connection | voice | hook | clipboard | accessibility | about | messages`、导航项与 ⌘1–⌘4；壳只维护「当前一级视图 + 设置二级页」，不进 URL、不引路由。侧栏 `shell/sidebar.tsx`（224 玻璃层）的三行状态摘要分别跳「设置 › 手机连接 / AI 联动」；页面骨架统一走 `shell/page-shell.tsx`（内容列 730 / 左右 28 / 滚动容器 + 状态交给页头）、`shell/page-header.tsx`（sticky 玻璃工具栏 + 34/600 大标题 + 滚动后 17/600 紧凑标题 + 二级页「‹ 设置」返回）、`shell/list.tsx`（ListGroup / ListRow / ListActionRow / ListEmpty，行 52–54、彩色图标块 30）与 `shell/segmented-control.tsx`（胶囊玻璃轨道 + spring 滑块）。动效 class 在 `ios.css`：`dsl-page-in`（一级页 fade）、`dsl-page-push`（设置二级页 push）、`dsl-glass` / `dsl-card` / `dsl-topbar` / `dsl-tile`。`shell/card.tsx` 与 `shell/page-chips.tsx` 已无页面使用（仅保留导出、待删）。`app.tsx` 把 `.desktop-ios` 同时挂到 `<html>`，Dialog / Sheet 的 portal 才吃得到桌面令牌。
 - 手机：`mobile/ui-store.ts` 的 `MobileView = pet | settings | chat | asking | offline` + `scanOpen`；根页面按 view 渲染宠物/设置/二级页，无底部 tab；返回栈在 `mobile/system-back.ts`。
-- 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopActivityStore`（最近事件）、`useDesktopVoiceStore`（最近一次语音）、`desktop-activity-events.ts`（事件→最近发生）；手机 `session-store`（会话卡 + 清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）；`activity-store` 暂留但不再渲染。
+- 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopVoiceStore`（最近一次语音）、`useHookStore`（联动状态与设置）；`useDesktopActivityStore` / `desktop-activity-events.ts` 仍保留但不再有 UI 渲染（D80 后无活动流）。手机 `session-store`（会话卡 + 清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）。
 - `status` 解析集中在数据 store；D78 的工具动作文案由 `shared/lib/sessions.ts` 统一派生，桌面与手机共用，不各写一套映射。
 - Android 返回键统一从 `shared/lib/tauri.ts` 的 `subscribeBackButton` 进入（App 启动注册一次）；「更多」页往 `mobile/system-back.ts` 的返回栈压处理函数，其它二级页由 `MobileApp` 按视图层级处理，根页面兜底「再按一次退出」（2 秒窗口，之后调 `exitApp`）。规则见 [standards/ux.md](./standards/ux.md) §4.1。
 
@@ -356,6 +358,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - Vitest + Testing Library：协议解析、状态机映射、纯函数、关键组件。
 - Tauri API 在测试里 mock；不依赖真实 Rust 进程。
 - 端到端继续用现有 CDP + `adb` 脚本；Tauri WebView 暂不接 Playwright。
+- 电脑端改界面前后跑 `scripts/qa-desktop-ios.mjs`：浅/深 × 1180/960 × 4 个一级页 + 设置二级页 + 弹层共 36 张截图到 `artifacts/desktop-ios-qa/`，并检查横向溢出与 console error。
 - 每次提交前：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`。
 - 新增脚本建议：`typecheck`、`lint`、`format`、`test`、`test:watch`。
 
@@ -404,7 +407,7 @@ adb shell dumpsys package com.android.webview | grep versionName
 
 ## 13. 迁移计划
 
-当前进度（2026-11-05）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动已落地。桌面按 D79 完成 5 视图壳、D82 增用量页；手机按 D80 完成两页壳（宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆形麦克风 / 结果卡弹窗；设置二级页 / 首用 banner / 返回层级），删除 `stream`、`tab-bar`、`now-row` 与动态页；`.mobile-clean` 令牌只作用于手机；全仓 591 tests / tsc / lint / build 全绿，真机 Realme 已验证宠物页/会话展开/设置/返回键，待补录音禁切页、结果卡清空、深色/320 真机。
+当前进度（2026-11-06）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动、Token 用量看板已落地。桌面按 D85 重做为「简约 iOS」4 入口壳：224 侧栏 + 大标题页头 + iOS 分组列表 + 设置二级页，删除 48 状态条、72 图标 rail、桌面会话页与系统页 4 段；同日 D86 升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏、30×30 彩色图标块、胶囊控件、spring 动效、grain），`.desktop-ios` 令牌只作用于桌面；用量页按 D82 保留为一级「用量」。手机按 D80 完成两页壳（宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆形麦克风 / 结果卡弹窗；设置二级页 / 首用 banner / 返回层级），删除 `stream`、`tab-bar`、`now-row` 与动态页，`.mobile-clean` 令牌只作用于手机。全仓 tsc / lint / build 全绿，测试以 `pnpm test` 当前输出为准（2026-11-06 基线 588+）；真机 Realme 已验证宠物页/会话展开/设置/返回键，待补录音禁切页、结果卡清空、深色/320 真机；桌面新壳待交互回归。
 
 | 阶段 | 内容 | 退出标准 |
 | --- | --- | --- |
@@ -426,7 +429,8 @@ adb shell dumpsys package com.android.webview | grep versionName
 - [ ] 桌面 `pnpm tauri dev` 正常启动，`[server] listening` 出现
 - [ ] 安卓 `scripts/build-android.sh && scripts/install-android.sh` 成功
 - [ ] 手机打开 App 自动发现并连接电脑，状态为「已连接」；无发现时可手动输入地址兜底
-- [ ] 桌面指挥舱壳：默认总览、状态条三段可点、⌘1–⌘6、辅助功能提示条外壳级、麦克风浮层全局
+- [ ] 桌面 Liquid Glass 壳：默认概览、224 玻璃侧栏 + 三行状态摘要可点、⌘1–⌘4、滚动后 sticky 玻璃工具栏 + 紧凑标题、设置二级页 push/返回、概览顶部自动输入提示、麦克风浮层全局；无状态条 / 图标 rail / 会话页 / 系统 4 段
+- [ ] 内容层不透明（白卡 / 行 / 图表无 backdrop-filter）；`prefers-reduced-motion` 无入场/缩放、`prefers-reduced-transparency` 玻璃退为实底卡
 - [ ] 手机两页壳：默认宠物、顶栏 gear/连接/chat 可点、无底部 tab、会话卡折叠展开、二级页返回层级正确、录音中禁切页、结果卡三段
 - [ ] 状态语言两端同词（连接 7 / AI 4 / 麦克风 9），琥珀只给「等你决定」，会话工作行显示 D78 工具动作
 - [ ] 双向聊天与现状一致，气泡方向正确

@@ -120,6 +120,7 @@ describe("ModelsSection 百炼配置", () => {
     expect(key).toHaveAttribute("placeholder", expect.stringContaining("sk-"));
     expect(key).toHaveAttribute("type", "password");
     expect(screen.getByLabelText("模型")).toHaveValue("qwen-audio-3.1-asr-flash-streaming");
+    expect(screen.getByText("已配置")).toBeInTheDocument();
     expect(screen.getAllByText("¥0.12").length).toBeGreaterThan(0);
   });
 
@@ -194,7 +195,7 @@ describe("ModelsSection 百炼配置", () => {
 
     const save = screen.getByRole("button", { name: "保存" });
     expect(save).toBeDisabled();
-    expect(screen.getByText("先勾选上方同意才能保存。")).toBeInTheDocument();
+    expect(screen.getByText("先同意才能保存")).toBeInTheDocument();
     fireEvent.click(save);
     expect(tauri.saveCloudAsr).not.toHaveBeenCalled();
   });
@@ -227,21 +228,22 @@ describe("ModelsSection 百炼配置", () => {
 });
 
 describe("ModelsSection 用量统计", () => {
-  it("切换区间：今天只看汇总，近 7 天/近 1 个月显示按天明细，近 1 年按月汇总", async () => {
+  it("切换区间：今天只汇总，7 天/30 天按天明细，1 年按月汇总", async () => {
     await renderPanel();
 
-    expect(screen.getByRole("tab", { name: "今天" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "今天" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("11-14")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "明细" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "近 7 天" }));
+    fireEvent.click(screen.getByRole("button", { name: "7 天" }));
     expect(screen.getByText("11-14")).toBeInTheDocument();
     expect(screen.getByText("11-08")).toBeInTheDocument();
     expect(screen.queryByText("11-07")).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "近 1 个月" }));
+    fireEvent.click(screen.getByRole("button", { name: "30 天" }));
     expect(screen.getByText("10-16")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "近 1 年" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 年" }));
     expect(screen.getByText("2026-11")).toBeInTheDocument();
     expect(screen.getByText("2025-11")).toBeInTheDocument();
 

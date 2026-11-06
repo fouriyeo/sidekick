@@ -1,17 +1,18 @@
+import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { type AccessibilityInfo, getAccessibilityInfo } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 
 type AccessibilityHintProps = {
-  /** 「去开启」跳到设置页的「自动输入权限」卡；系统授权只能由用户在那里完成。 */
+  /** 「去开启」跳到设置页的「自动输入」；系统授权只能由用户在那里完成。 */
   onOpenSettings: () => void;
 };
 
 /**
- * 自动输入（macOS 辅助功能）未授权时的外壳级提示条（40，所有桌面页都出现）。
+ * 自动输入（macOS 辅助功能）未授权时，在「概览」顶部出现的一行提示。
  *
- * 辅助功能属于 TCC 保护，只能由用户在系统设置里手动开启——没有任何 API 能代授。
- * 这里只做两件事：持续提醒 + 一键到设置页；授权后回到窗口自动消失，也可「知道了」收起。
+ * 只有未授权时占位：一行说清「没开 / 只会复制」+ 一个「去开启」+ 关闭；
+ * 授权后（或非 macOS）自动消失，从系统设置切回来时重新判定。
  */
 export function AccessibilityHint({ onOpenSettings }: AccessibilityHintProps) {
   const [info, setInfo] = useState<AccessibilityInfo | null>(null);
@@ -39,34 +40,27 @@ export function AccessibilityHint({ onOpenSettings }: AccessibilityHintProps) {
   return (
     <div
       role="status"
-      className="flex h-10 shrink-0 items-center gap-2.5 overflow-hidden border-b border-border bg-wash px-3.5 text-[11.5px]"
+      className="dsl-glass flex min-h-[56px] items-center gap-3 rounded-[16px] px-4 py-2.5"
     >
-      <p className="min-w-0 flex-1 truncate">
-        <strong className="font-semibold text-foreground">自动输入还没开启</strong>
-        <span className="text-muted-foreground">
-          {" "}
-          · 语音结果只能复制到剪贴板；开启后才会自动粘贴，并出现「回车 / 清空」。
+      <span aria-hidden="true" className="size-[7px] shrink-0 rounded-full bg-decide" />
+      <p className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate text-[15px] leading-tight">
+        <span className="shrink-0 font-medium text-foreground">自动输入未开启</span>
+        <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+          ·
         </span>
+        <span className="truncate text-[13px] text-muted-foreground">语音结果只会复制到剪贴板</span>
       </p>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          className="h-6 rounded-[7px] px-2.5 text-[11px]"
-          onClick={onOpenSettings}
-        >
-          去开启
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 rounded-[7px] px-2.5 text-[11px] text-muted-foreground"
-          onClick={() => setDismissed(true)}
-        >
-          知道了
-        </Button>
-      </div>
+      <Button type="button" variant="ghost" size="sm" onClick={onOpenSettings}>
+        去开启
+      </Button>
+      <button
+        type="button"
+        aria-label="关闭提示"
+        onClick={() => setDismissed(true)}
+        className="-mr-1.5 grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground"
+      >
+        <X aria-hidden="true" className="size-3.5" />
+      </button>
     </div>
   );
 }

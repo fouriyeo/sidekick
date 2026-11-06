@@ -4,6 +4,10 @@ import type { ClipboardSnapshot } from "@/shared/lib/tauri";
 import { useClipboardStore } from "../clipboard-store";
 import { ClipboardSection } from "./clipboard-section";
 
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+
+vi.mock("sonner", () => ({ toast }));
+
 const api = vi.hoisted(() => ({
   listClipboard: vi.fn(),
   copyClipboardItem: vi.fn(),
@@ -50,6 +54,8 @@ const snapshot: ClipboardSnapshot = {
 
 beforeEach(() => {
   useClipboardStore.setState({ snapshot: null, loading: false, error: null });
+  toast.success.mockClear();
+  toast.error.mockClear();
   api.listClipboard.mockResolvedValue(snapshot);
   api.copyClipboardItem.mockResolvedValue(snapshot);
   api.toggleClipboardPin.mockResolvedValue(snapshot);
@@ -66,41 +72,95 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("ClipboardSection 查看详情", () => {
-  it("列表行单行截断，但每条都有查看详情按钮", async () => {
+describe("ClipboardSection 列表", () => {
+  it("页头显示计数，行只留摘要与来源 · 时间", async () => {
     render(<ClipboardSection />);
 
     const preview = await screen.findByText(/第一行：把这段代码改成异步/);
     expect(preview.className).toContain("truncate");
-    expect(screen.getAllByRole("button", { name: "查看详情" })).toHaveLength(2);
+    // 计数与「清空」并进同一个玻璃动作组（iOS 工具栏胶囊）。
+    const count = screen.getByText("2 / 100 条");
+    expect(count.closest(".dsl-action-group")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "清空" }).closest(".dsl-action-group"),
+    ).not.toBeNull();
+    expect(screen.getByText("文本 · 刚刚")).toBeInTheDocument();
+    expect(screen.getByText("链接 · 刚刚")).toBeInTheDocument();
   });
 
-  it("弹层展示完整文本、字数和行数", async () => {
+  it("点击整行复制，并 toast 反馈", async () => {
     render(<ClipboardSection />);
 
-    fireEvent.click((await screen.findAllByRole("button", { name: "查看详情" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: /第一行：把这段代码改成异步/ }));
 
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/最后补上测试和验收/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/共 \d+ 字 · 3 行/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/文本/)).toBeInTheDocument();
-  });
-
-  it("在详情里可复制、置顶和删除", async () => {
-    render(<ClipboardSection />);
-
-    fireEvent.click((await screen.findAllByRole("button", { name: "查看详情" }))[0]);
-    const dialog = await screen.findByRole("dialog");
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "复制" }));
     await waitFor(() => expect(api.copyClipboardItem).toHaveBeenCalledWith("1"));
-    expect(await within(dialog).findByRole("button", { name: "已复制" })).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith("已复制到剪贴板");
+    expect(await screen.findByText("已复制")).toBeInTheDocument();
+    // 行尾的 ✓ 是 Motion 的 spring 元素，出现在被复制的这一行。
+    expect(document.querySelector('[data-copied="true"]')).not.toBeNull();
+  });
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "置顶" }));
+  it("置顶与删除都是带名字的可聚焦按钮", async () => {
+    render(<ClipboardSection />);
+
+    // 第二条已置顶：常显标记 + 「取消置顶」按钮。
+    await screen.findByText("https://tauri.app/start/");
+    expect(screen.getByText("已置顶")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "置顶" })[0]);
     await waitFor(() => expect(api.toggleClipboardPin).toHaveBeenCalledWith("1"));
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "删除" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "删除这条" })[0]);
+    await waitFor(() => expect(api.deleteClipboardItem).toHaveBeenCalledWith("1"));
+  });
+});
+
+describe("ClipboardSection 搜索与空态", () => {
+  it("搜索是胶囊输入，按文本过滤，无匹配时只留一行结论", async () => {
+    render(<ClipboardSection />);
+    await screen.findByText(/第一行：把这段代码改成异步/);
+
+    const input = screen.getByLabelText("搜索剪贴板");
+    expect(input).toHaveAttribute("placeholder", "搜索");
+    expect(input.closest(".dsl-search")).not.toBeNull();
+    fireEvent.change(input, { target: { value: "tauri" } });
+
+    expect(screen.queryByText(/第一行：把这段代码改成异步/)).toBeNull();
+    expect(screen.getByText("https://tauri.app/start/")).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "不存在的内容" } });
+    expect(screen.getByText("没有匹配的内容")).toBeInTheDocument();
+  });
+
+  it("没有记录时显示一行空态", async () => {
+    api.listClipboard.mockResolvedValue({ ...snapshot, items: [] });
+    render(<ClipboardSection />);
+
+    expect(await screen.findByText("还没有记录")).toBeInTheDocument();
+  });
+});
+
+describe("ClipboardSection 开关与清空", () => {
+  it("暂停记录走同一个开关", async () => {
+    render(<ClipboardSection />);
+
+    fireEvent.click(screen.getByLabelText("记录剪贴板"));
+
+    await waitFor(() => expect(api.setClipboardEnabled).toHaveBeenCalledWith(false));
+  });
+
+  it("清空需要二次确认", async () => {
+    api.clearClipboard.mockResolvedValue({ ...snapshot, items: [] });
+    render(<ClipboardSection />);
+    await screen.findByText(/第一行：把这段代码改成异步/);
+
+    fireEvent.click(screen.getByRole("button", { name: "清空" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("清空剪贴板历史？")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "清空" }));
+
+    await waitFor(() => expect(api.clearClipboard).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(api.deleteClipboardItem).toHaveBeenCalledWith("1");
   });
 });

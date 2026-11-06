@@ -159,13 +159,19 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("UsagePage 用量页", () => {
-  it("渲染 KPI、分组与价格入口", async () => {
+  it("渲染 2×2 汇总、分组列表与价格表入口", async () => {
     render(<UsagePage />);
     await waitFor(() => expect(screen.getByText("4.82 亿")).toBeInTheDocument());
     expect(screen.getByText("¥29.84")).toBeInTheDocument();
     expect(screen.getByText("98.2%")).toBeInTheDocument();
     expect(screen.getByText("修复登录")).toBeInTheDocument();
-    expect(screen.getByText(/价格表 · 1 个模型有价/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "价格表" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /近 7 天花费合计/ })).toBeInTheDocument();
+    // PLANNED_CLIENTS 区块与页面说明句 / 状态胶囊都已删除。
+    expect(screen.queryByText("Claude Code")).toBeNull();
+    expect(screen.queryByText("Codex")).toBeNull();
+    expect(screen.queryByText("本机 · 不上传")).toBeNull();
+    expect(screen.queryByText("P1 · 解析器未接入")).toBeNull();
   });
 
   it("切区间会重新拉取，切分组不重新拉取", async () => {
@@ -175,16 +181,46 @@ describe("UsagePage 用量页", () => {
     fireEvent.click(screen.getByRole("button", { name: "30 天" }));
     await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledWith("30d"));
 
-    fireEvent.click(screen.getByRole("tab", { name: "模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "模型" }));
     expect(screen.getByText("deepseek-v4.1-flash")).toBeInTheDocument();
     expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(2);
   });
 
-  it("模型价格 Sheet 展示单价并支持刷新", async () => {
+  it("页头刷新按钮重新拉取账本", async () => {
+    render(<UsagePage />);
+    await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+    await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(2));
+  });
+
+  it("切换区间后汇总数字补间到新区间值", async () => {
+    render(<UsagePage />);
+    await waitFor(() => expect(screen.getByText("4.82 亿")).toBeInTheDocument());
+
+    tauri.getTokenUsageStats.mockResolvedValue(
+      stats({
+        range: "30d",
+        summary: { ...stats().summary, tokens: 1_000_000_000, costCnyMicros: 50_000_000 },
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "30 天" }));
+
+    // 动画中间值不可断言，只等最终值落定（Motion 补间 400ms）。
+    await waitFor(
+      () => {
+        expect(screen.getByText("10 亿")).toBeInTheDocument();
+        expect(screen.getByText("¥50.00")).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("价格表 Sheet 展示单价并支持刷新", async () => {
     render(<UsagePage />);
     await waitFor(() => expect(screen.getByText("修复登录")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: /价格表 · 1 个模型有价/ }));
+    fireEvent.click(screen.getByRole("button", { name: "价格表" }));
     expect(await screen.findByText("模型价格")).toBeInTheDocument();
     expect(screen.getByText("¥0.288")).toBeInTheDocument();
 
@@ -192,12 +228,25 @@ describe("UsagePage 用量页", () => {
     await waitFor(() => expect(tauri.refreshTokenPricing).toHaveBeenCalledWith(true));
   });
 
-  it("账本缺失显示空态而不是假数字", async () => {
+  it("账本缺失只显示一行结论 + 重试动作", async () => {
     tauri.getTokenUsageStats.mockResolvedValue(
       stats({ ledger: { available: false, reason: "ledger_missing" }, coverageDays: 0 }),
     );
     render(<UsagePage />);
     expect(await screen.findByText("还没找到 DSH 账本")).toBeInTheDocument();
     expect(screen.queryByText("4.82 亿")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(2));
+  });
+
+  it("模型分组在电脑端关闭时给出结论", async () => {
+    useUsageStore.setState({ group: "model" });
+    tauri.getTokenUsageStats.mockResolvedValue(
+      stats({ groups: { clients: [], sessions: [], models: [], modelsHidden: true } }),
+    );
+    render(<UsagePage />);
+    expect(await screen.findByText("模型分组已在电脑端关闭")).toBeInTheDocument();
+    expect(screen.queryByText("这个区间没有数据")).toBeNull();
   });
 });
