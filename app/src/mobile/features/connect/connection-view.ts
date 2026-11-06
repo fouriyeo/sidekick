@@ -11,6 +11,11 @@ import { useConnectionStore } from "./connection-store";
 export type ConnectionView = {
   label: string;
   detail?: string;
+  /**
+   * 顶部条用的短标签：连上时为 null（只留信号塔图标，状态不是主要信息）；
+   * 没连上时才给最短状态词，完整文案仍在 `label`/`detail` 与 aria-label 里。
+   */
+  shortLabel: string | null;
   level: SignalLevel;
   tone: SignalTone;
 };
@@ -44,7 +49,7 @@ export function connectionViewOf(
   retrySeconds: number | null = null,
 ): ConnectionView {
   if (state.status === "connected") {
-    return { label: "已连接", detail: "局域网", level: 3, tone: "signal" };
+    return { label: "已连接", detail: "局域网", shortLabel: null, level: 3, tone: "signal" };
   }
 
   if (state.status === "connecting") {
@@ -52,6 +57,7 @@ export function connectionViewOf(
     return {
       label: "连接中…",
       ...(addr ? { detail: addr } : {}),
+      shortLabel: "连接中",
       level: 2,
       tone: "muted",
     };
@@ -61,6 +67,7 @@ export function connectionViewOf(
     return {
       label: "正在重连",
       detail: state.retryAttempt > 0 ? `第 ${state.retryAttempt} 次` : undefined,
+      shortLabel: "重连中",
       level: 2,
       tone: "muted",
     };
@@ -70,12 +77,13 @@ export function connectionViewOf(
     return {
       label: "还没连上电脑",
       detail: `${retrySeconds} 秒后重连`,
+      shortLabel: `重连 ${retrySeconds}s`,
       level: 1,
       tone: "muted",
     };
   }
 
-  return { label: "还没连上电脑", level: 1, tone: "muted" };
+  return { label: "还没连上电脑", shortLabel: "未连接", level: 1, tone: "muted" };
 }
 
 /** 组件里直接取连接状态展示口径；连接相关页面/顶部条不要各写一套文案。 */

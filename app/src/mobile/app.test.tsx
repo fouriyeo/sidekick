@@ -28,6 +28,7 @@ const tauri = vi.hoisted(() => ({
   sendMicStart: vi.fn(),
   sendMicStop: vi.fn(),
   sendStatusRequest: vi.fn(),
+  sendUsageRequest: vi.fn(),
   setKeepScreenOn: vi.fn(),
   subscribeBackButton: vi.fn(),
   subscribeChat: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("@/shared/lib/tauri", () => ({
   sendMicStart: tauri.sendMicStart,
   sendMicStop: tauri.sendMicStop,
   sendStatusRequest: tauri.sendStatusRequest,
+  sendUsageRequest: tauri.sendUsageRequest,
   setKeepScreenOn: tauri.setKeepScreenOn,
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
   subscribeBackButton: (handler: () => void) => {
@@ -185,6 +187,7 @@ beforeEach(() => {
     tauri.sendMicStop,
     tauri.sendMicFrame,
     tauri.sendKeyRequest,
+    tauri.sendUsageRequest,
   ]) {
     fn.mockReset();
   }
@@ -197,6 +200,7 @@ beforeEach(() => {
   tauri.sendStatusRequest.mockResolvedValue(undefined);
   tauri.sendFocusRequest.mockResolvedValue(undefined);
   tauri.sendChat.mockResolvedValue(undefined);
+  tauri.sendUsageRequest.mockResolvedValue(undefined);
   clearBackHandlers();
 });
 
@@ -288,6 +292,15 @@ describe("MobileApp 返回层级", () => {
     }));
     await renderApp();
     act(() => useUiStore.setState({ view: "asking" }));
+
+    pressBack();
+
+    expect(useUiStore.getState().view).toBe("pet");
+  });
+
+  it("usage → pet（用量从宠物页顶栏进入）", async () => {
+    await renderApp();
+    act(() => useUiStore.setState({ view: "usage" }));
 
     pressBack();
 

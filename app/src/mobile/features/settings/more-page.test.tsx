@@ -69,7 +69,7 @@ describe("MorePage 二级页结构", () => {
     expect(sub.className).not.toContain("uppercase");
   });
 
-  it("分组卡顺序：连接/外观/反馈/显示/用量/数据与关于/消息通道", () => {
+  it("分组卡顺序：连接/外观/反馈/显示/数据与关于/消息通道（用量不在这里）", () => {
     const { container } = render(<MorePage />);
 
     expect(groupLabels(container)).toEqual([
@@ -77,7 +77,6 @@ describe("MorePage 二级页结构", () => {
       "外观",
       "反馈",
       "显示",
-      "用量",
       "数据与关于",
       "消息通道",
     ]);
@@ -98,11 +97,12 @@ describe("MorePage 二级页结构", () => {
     expect(useUiStore.getState().view).toBe("pet");
   });
 
-  it("「用量」入口进入 usage 二级页", () => {
-    render(<MorePage />);
+  it("不再有「用量」入口：v17 起在宠物页顶栏的今日数字里", () => {
+    const { container } = render(<MorePage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /用量/ }));
-    expect(useUiStore.getState().view).toBe("usage");
+    expect(container.querySelector("section[aria-label='用量']")).toBeNull();
+    expect(screen.queryByRole("button", { name: /用量/ })).toBeNull();
+    expect(useUiStore.getState().view).toBe("settings");
   });
 });
 

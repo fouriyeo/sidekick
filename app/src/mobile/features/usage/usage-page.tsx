@@ -32,7 +32,7 @@ const GROUP_TABS: ReadonlyArray<{ value: GroupMode; label: string }> = [
 ];
 
 /**
- * 手机「设置 › 用量」：只读桌面广播的聚合快照，不直接读文件。
+ * 手机「用量」：从宠物页顶栏的今日数字进入（v17），只读桌面广播的聚合快照，不直接读文件。
  *
  * 数据只在用量页请求；断连时保留最后快照并说明「等待电脑」，不显示假数字。
  * 模型分组受 D83 开关控制；录音中由 ui-store 拦截所有换页入口。
@@ -46,6 +46,7 @@ export function UsagePage() {
   const setRange = useMobileUsageStore((state) => state.setRange);
   const connected = useConnectionStore((state) => state.status === "connected");
   const setView = useUiStore((state) => state.setView);
+  const openOffline = useUiStore((state) => state.openOffline);
   const [group, setGroup] = useState<GroupMode>("session");
 
   const current = data?.range === range ? data : null;
@@ -66,8 +67,8 @@ export function UsagePage() {
       <PageHeader
         title="用量"
         sub="DSH 本机账本 · 不上传"
-        onBack={() => setView("settings")}
-        backLabel="返回设置"
+        onBack={() => setView("pet")}
+        backLabel="返回宠物"
       />
 
       <PageScroll className="px-0 pt-0 pb-[calc(env(safe-area-inset-bottom)+24px)]">
@@ -102,7 +103,7 @@ export function UsagePage() {
             title={connected ? "电脑还没回应" : "还没连上电脑"}
             description={
               connected
-                ? "可以稍后再试；也可以先回设置检查连接。"
+                ? "可以稍后再试；也可以点「去连接」检查。"
                 : "用量来自电脑上的 DSH 账本，连上后再看。"
             }
             action={
@@ -112,7 +113,7 @@ export function UsagePage() {
                 size="sm"
                 onClick={() => {
                   if (error) request();
-                  else setView("settings");
+                  else openOffline();
                 }}
               >
                 {error ? "重试" : "去连接"}

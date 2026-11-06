@@ -146,6 +146,7 @@ beforeEach(() => {
   useMobileUsageStore.setState({
     range: "7d",
     data: stats(),
+    today: null,
     loading: false,
     error: null,
   });
@@ -163,10 +164,10 @@ describe("手机 UsagePage", () => {
     expect(screen.getByText(/个模型有价/)).toBeInTheDocument();
   });
 
-  it("返回设置；切区间请求新快照", () => {
+  it("返回宠物；切区间请求新快照", () => {
     const { unmount } = render(<UsagePage />);
-    fireEvent.click(screen.getByRole("button", { name: "返回设置" }));
-    expect(useUiStore.getState().view).toBe("settings");
+    fireEvent.click(screen.getByRole("button", { name: "返回宠物" }));
+    expect(useUiStore.getState().view).toBe("pet");
     unmount();
 
     render(<UsagePage />);

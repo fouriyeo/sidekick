@@ -6,7 +6,7 @@ import { micBusyNow } from "@/mobile/features/mic/mic-store";
  *
  * - 只有 `pet` 是根页面；没有底部三档；
  * - `settings` 从左上 gear 进入，`chat` 从右上 chat 进入，都是二级全屏页；
- * - `usage` 从设置页「用量」进入，返回回设置（D82）；
+ * - `usage` 从宠物页顶栏的今日数字进入（v17，D92），返回回宠物；
  * - `asking` / `offline` 也是二级页，返回时按层级回 pet / 上一页；
  * - `offline` 记录打开它的视图，返回时回到原页面（「连接」是多入口的排障页）。
  */

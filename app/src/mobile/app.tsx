@@ -104,7 +104,7 @@ export function MobileApp() {
   }, []);
 
   // App 启动时注册唯一的返回键监听；页面内弹层/确认态先由返回栈消费。
-  // 返回层级：scan → 上一页；settings/chat/usage/asking → pet 或设置；offline → 上一页；
+  // 返回层级：scan → 上一页；settings/chat/usage/asking → pet；offline → 上一页；
   // 根页面 pet 走「再按一次退出」。
   const onSystemBack = useCallback(() => {
     if (micBusyNow()) return;
@@ -126,10 +126,8 @@ export function MobileApp() {
         case "settings":
         case "chat":
         case "asking":
-          ui.setView("pet");
-          break;
         case "usage":
-          ui.setView("settings");
+          ui.setView("pet");
           break;
         case "offline":
           ui.closeOffline();
@@ -199,6 +197,10 @@ export function MobileApp() {
       connection.resumeRetry();
       // 回前台补一次状态快照；过期的 completed 会被 ai-status 的时钟检查忽略。
       requestStatusIfConnected();
+      // 顶栏的「今天」数字也补一次：熄屏期间账本可能已经变了。
+      if (useConnectionStore.getState().status === "connected") {
+        useMobileUsageStore.getState().requestToday();
+      }
       if (useUiStore.getState().view === "usage") {
         useMobileUsageStore.getState().request();
       }
@@ -264,6 +266,8 @@ export function MobileApp() {
       setOnline(event.online);
       if (event.online) {
         requestStatusIfConnected();
+        // 顶栏「今天」数字：连上后静默拉一次，断连期间不请求。
+        useMobileUsageStore.getState().requestToday();
         // 用量页打开时补拉一次；其它页面不主动请求，避免无谓广播。
         if (useUiStore.getState().view === "usage") {
           useMobileUsageStore.getState().request();
