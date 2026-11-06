@@ -31,7 +31,7 @@ function clearTimer() {
 }
 
 export const useMobileUsageStore = create<MobileUsageState>((set, get) => ({
-  range: "7d",
+  range: "today",
   data: null,
   today: null,
   loading: false,

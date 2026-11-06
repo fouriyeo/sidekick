@@ -583,7 +583,12 @@ impl TokenUsageStore {
             .iter()
             .map(|session| row_from_session(session, total))
             .collect();
-        session_rows.sort_by(|a, b| b.tokens.cmp(&a.tokens));
+        // D102：分组排行按金额降序（Token 仅作同额兜底），Top 8 也按金额选。
+        session_rows.sort_by(|a, b| {
+            b.cost_cny_micros
+                .cmp(&a.cost_cny_micros)
+                .then_with(|| b.tokens.cmp(&a.tokens))
+        });
 
         let mut model_rows: Vec<UsageRow> = models
             .iter()
@@ -592,7 +597,11 @@ impl TokenUsageStore {
                 row_from_model(model, total, quote)
             })
             .collect();
-        model_rows.sort_by(|a, b| b.tokens.cmp(&a.tokens));
+        model_rows.sort_by(|a, b| {
+            b.cost_cny_micros
+                .cmp(&a.cost_cny_micros)
+                .then_with(|| b.tokens.cmp(&a.tokens))
+        });
 
         truncate_with_other(&mut session_rows, "会话", total);
         truncate_with_other(&mut model_rows, "模型", total);
@@ -601,7 +610,11 @@ impl TokenUsageStore {
             .iter()
             .map(|client| row_from_client(client, &summary))
             .collect();
-        client_rows.sort_by(|a, b| b.tokens.cmp(&a.tokens));
+        client_rows.sort_by(|a, b| {
+            b.cost_cny_micros
+                .cmp(&a.cost_cny_micros)
+                .then_with(|| b.tokens.cmp(&a.tokens))
+        });
         if client_rows.is_empty() && summary.tokens > 0 {
             client_rows.push(UsageRow {
                 key: "dsh".into(),
@@ -923,14 +936,26 @@ fn aggregate_groups(
 
     let unique_sessions = sessions.len() as u64;
     let mut sessions = sessions.into_values().collect::<Vec<_>>();
-    sessions.sort_by(|a, b| b.buckets.tokens().cmp(&a.buckets.tokens()));
+    sessions.sort_by(|a, b| {
+        b.cost_micros
+            .cmp(&a.cost_micros)
+            .then_with(|| b.buckets.tokens().cmp(&a.buckets.tokens()))
+    });
     let mut models = models.into_values().collect::<Vec<_>>();
-    models.sort_by(|a, b| b.buckets.tokens().cmp(&a.buckets.tokens()));
+    models.sort_by(|a, b| {
+        b.cost_micros
+            .cmp(&a.cost_micros)
+            .then_with(|| b.buckets.tokens().cmp(&a.buckets.tokens()))
+    });
     for client in clients.values_mut() {
         client.sessions = unique_sessions;
     }
     let mut clients = clients.into_values().collect::<Vec<_>>();
-    clients.sort_by(|a, b| b.buckets.tokens().cmp(&a.buckets.tokens()));
+    clients.sort_by(|a, b| {
+        b.cost_micros
+            .cmp(&a.cost_micros)
+            .then_with(|| b.buckets.tokens().cmp(&a.buckets.tokens()))
+    });
 
     let total_buckets = Buckets {
         input: total.input,
@@ -1214,6 +1239,47 @@ mod tests {
         assert_eq!(week.summary.tokens, 33_300_000);
         assert_eq!(week.summary.cost_cny_micros, 6_000_000);
         assert_eq!(week.previous.tokens, 0);
+    }
+
+    const RANKING_LEDGER: &str = r#"{
+      "days": {
+        "2026-11-05": {
+          "input": 9001000, "output": 0, "cacheRead": 0,
+          "cacheWrite": 0, "reasoning": 0, "calls": 2,
+          "costCny": 9.0,
+          "byProviderModel": {
+            "p:big-cheap": {
+              "input": 9000000, "output": 0, "cacheRead": 0,
+              "cacheWrite": 0, "reasoning": 0, "calls": 1, "costCny": 1.0
+            },
+            "p:costly-small": {
+              "input": 1000, "output": 0, "cacheRead": 0,
+              "cacheWrite": 0, "reasoning": 0, "calls": 1, "costCny": 8.0
+            }
+          },
+          "sessions": [
+            { "id": "s-big", "title": "大 Token 便宜",
+              "input": 9000000, "output": 0, "cacheRead": 0,
+              "cacheWrite": 0, "reasoning": 0, "calls": 1, "costCny": 1.0 },
+            { "id": "s-costly", "title": "小 Token 贵",
+              "input": 1000, "output": 0, "cacheRead": 0,
+              "cacheWrite": 0, "reasoning": 0, "calls": 1, "costCny": 8.0 }
+          ]
+        }
+      }
+    }"#;
+
+    #[test]
+    fn groups_rank_by_cost_not_tokens() {
+        let pricing: Arc<dyn PriceLookup> = Arc::new(FakePricing { quote: None });
+        let store = store_with(RANKING_LEDGER, pricing);
+        let stats = store.stats_at("today", today());
+        assert_eq!(stats.groups.sessions.len(), 2);
+        assert_eq!(stats.groups.sessions[0].label, "小 Token 贵");
+        assert_eq!(stats.groups.sessions[1].label, "大 Token 便宜");
+        assert_eq!(stats.groups.models.len(), 2);
+        assert_eq!(stats.groups.models[0].label, "costly-small");
+        assert_eq!(stats.groups.models[1].label, "big-cheap");
     }
 
     #[test]

@@ -73,8 +73,8 @@ export const useUsageStore = create<UsageState>((set, get) => {
   }
 
   return {
-    range: "7d",
-    group: "session",
+    range: "today",
+    group: "model",
     stats: null,
     loading: false,
     error: null,

@@ -298,24 +298,29 @@ describe("手机 UsagePage（D98）", () => {
     expect(document.querySelector(".mu-tip")).toBeNull();
   });
 
-  it("分组默认会话、可切模型；副行只用后端 sub", () => {
+  it("分组默认模型、可切会话；副行只用后端 sub", () => {
     render(<UsagePage />);
     const groups = screen.getByRole("region", { name: "分组" });
+    expect(within(groups).getByRole("button", { name: "模型" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(groups).getByText("deepseek-v4.1-flash")).toBeInTheDocument();
+    expect(within(groups).getByText("OpenCode Go · 缓存命中 97.9%")).toBeInTheDocument();
+    expect(within(groups).getByText("¥29.80")).toBeInTheDocument();
+
+    fireEvent.click(within(groups).getByRole("button", { name: "会话" }));
     expect(within(groups).getByText("修复登录")).toBeInTheDocument();
     expect(within(groups).getByText("最近 11-05 22:00 · 300 次调用")).toBeInTheDocument();
     // 旧版副行里的占比/金额拼接不再出现。
     expect(within(groups).queryByText(/41\.5%/)).toBeNull();
     expect(within(groups).queryByText(/· ¥/)).toBeNull();
-
-    fireEvent.click(within(groups).getByRole("button", { name: "模型" }));
-    expect(within(groups).getByText("deepseek-v4.1-flash")).toBeInTheDocument();
-    expect(within(groups).getByText("OpenCode Go · 缓存命中 97.9%")).toBeInTheDocument();
-    expect(within(groups).getByText("¥29.80")).toBeInTheDocument();
   });
 
   it("「其他」行垫底且压暗", () => {
     render(<UsagePage />);
     const groups = screen.getByRole("region", { name: "分组" });
+    fireEvent.click(within(groups).getByRole("button", { name: "会话" }));
     const rows = groups.querySelectorAll(".mu-row");
     expect(rows).toHaveLength(2);
     expect(rows[rows.length - 1].textContent).toContain("其他会话");

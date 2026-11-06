@@ -204,6 +204,12 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("UsagePage 用量页", () => {
+  it("默认区间今天、默认分组模型", () => {
+    const initial = useUsageStore.getInitialState();
+    expect(initial.range).toBe("today");
+    expect(initial.group).toBe("model");
+  });
+
   it("渲染花费 hero、读数、剖面、构成、账本与价格表入口", async () => {
     render(<UsagePage />);
     await waitFor(() => expect(screen.getByText("修复登录")).toBeInTheDocument());

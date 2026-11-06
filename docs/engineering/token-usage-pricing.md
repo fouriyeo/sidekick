@@ -145,7 +145,7 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 - `clients`：P0 只有一行 `{key:"dsh", label:"DeepSeek Harness", sub:"本机 cost-meter · 已接入", sharePct:100}`；其它客户端不进入协议，前端也不渲染「未接入」占位行。
 - `sessions`：按 `id` 跨天合并；`label` = 标题或「会话 + 8 位短 id」；`sub` = 「最近 MM-DD HH:mm · N 次调用」；`calls` 为区间内调用数。
 - `models`：按 `provider:model` 合并；`label` = model，`provider` = 中文接入方（opencode-go→OpenCode Go；deepseek-account→DeepSeek 账号；deepseek-official→DeepSeek 官方；空→未知接入方）；`sub` = 接入方 + 缓存命中；`price` 为当前报价（CNY/1M）与来源。
-- Top 8 + 其他：超过 8 行截断，追加 `key:"other"`、`label:"其他 N 个会话/模型"`、`tag:"other"`；Token/金额/调用数为被截断行之和，会话组 `sessions` 为剩余数。
+- Top 8 + 其他：按**金额降序**（同额再按 Token，D102）排序后超过 8 行截断，追加 `key:"other"`、`label:"其他 N 个会话/模型"`、`tag:"other"`；Token/金额/调用数为被截断行之和，会话组 `sessions` 为剩余数。
 
 ## 5. 价格体系
 

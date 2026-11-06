@@ -59,7 +59,7 @@ export function UsagePage() {
   const connected = useConnectionStore((state) => state.status === "connected");
   const setView = useUiStore((state) => state.setView);
   const openOffline = useUiStore((state) => state.openOffline);
-  const [group, setGroup] = useState<GroupMode>("session");
+  const [group, setGroup] = useState<GroupMode>("model");
 
   const current = data?.range === range ? data : null;
   const modelsHidden = current?.groups.modelsHidden === true;

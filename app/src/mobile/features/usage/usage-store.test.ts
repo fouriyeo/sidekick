@@ -74,6 +74,10 @@ beforeEach(() => {
 });
 
 describe("useMobileUsageStore 今日快照", () => {
+  it("默认区间是今天", () => {
+    expect(useMobileUsageStore.getInitialState().range).toBe("today");
+  });
+
   it("apply(today) 只写顶栏 today，不动用量页 data / range", () => {
     useMobileUsageStore.getState().apply(stats("today", 100));
 
