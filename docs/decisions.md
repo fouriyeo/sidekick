@@ -966,3 +966,15 @@
 - 代价：⌘2–⌘4 第二次迁移（D94 刚把 内容 / 用量 前移过一轮），需一次性刷新测试、QA 脚本与文档；设置首页多一行，960×640 下开始出现滚动（设置页本就是列表，可接受）；语音页要滚动才能看全三段（配置 / 关键词 / 用量），不再有「根页摘要」；`?pane=` 调试参数失效。
 - 编号说明：同日手机「语音录音 / 结果 UI 重做」已先占用 D100，本条按时间顺序记为 D101；`desktop-nav.ts` / `app.tsx` 注释里的 D100 均指本条。
 - 规范：`app/src/desktop/{lib/desktop-nav.ts,app.tsx,shell/sidebar.tsx,pages/settings-page.tsx}`、`app/src/desktop/features/models/{voice-settings.tsx,keywords-panel.tsx,cloud-asr-form.tsx,usage-stats.tsx}`、`app/src/desktop/pages/{voice-page.tsx,voice-page.test.tsx}`（删除）、`app/src/desktop/{app.test.tsx,pages/settings-page.test.tsx,features/models/voice-settings.test.tsx}`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/*`、`docs/prd/mic/*`、`docs/prd/usage/*`、`docs/standards/ux.md`、`docs/engineering/{desktop-ios-ui,asr-model,asr-cloud-bailian,audio-pipeline,protocol-audio,quality}.md`、`docs/{INDEX,status,frontend-architecture,setup}.md`、`AGENTS.md`。
+
+## D102 · 用量页默认「今天 / 模型」、分组排行改按金额、桌面账本字号下调一档（2026-11-07，取代 D97/D98 的默认 7 天/会话与「后端按 Token 选 Top 8」）
+
+- 背景：用户明确要求两端默认「今天」、三个分组 tab 默认「模型」、排行按金额从大到小；电脑端表格文字太挤，要求文字小一号并注意行高。
+- 决策：
+  - 桌面 `usage-store` 默认 `range="today"`、`group="model"`；手机 `usage-store` 默认 `range="today"`，页面分组默认 `model`（`modelsHidden` 时自动回落会话）。
+  - 后端 `build_groups` / `aggregate_groups` 的会话、模型、客户端排序从 Token 改为**金额降序**，同额再按 Token；Top 8 与「其他」因此按金额选取。前端仍按金额排序兜底（防止旧桌面/异常数据）。
+  - 桌面账本字号整体下调一档：行标题 13.5→12.5（行高 16）、副行 11→10.5（行高 13）、Token/金额 11.5→10.5、表头 10.5→10、「按花费」11→10.5；行高 34→35，`min-height` 272→280，补偿缩字后的呼吸感。
+  - 同步测试：桌面/手机 store 默认值断言、手机分组默认模型断言、Rust `groups_rank_by_cost_not_tokens`（高金额低 Token 的行必须排在前面）。
+- 原因：默认「今天」回答「现在花了多少」，默认「模型」回答「钱花在哪个模型」；按金额排行与用户看花费的视角一致；缩字 + 行高补偿让账本从「挤」变成可扫读。
+- 代价：凌晨的「今天」可能只有很少金额（单日柱已做刻度/昨日文字化处理，不再压扁）；「其他」的语义从 Token 尾部变为金额尾部；桌面账本 8 行高度 +8px，1180 首屏仍完整（QA 复核）。
+- 规范：`app/src/desktop/features/usage/usage-store.ts`、`app/src/desktop/styles/usage.css`、`app/src/mobile/features/usage/{usage-store.ts,usage-page.tsx}`、`app/src-tauri/src/token_usage.rs`、`app/src/desktop/pages/usage-page.test.tsx`、`app/src/mobile/features/usage/{usage-page.test.tsx,usage-store.test.ts}`、`docs/prd/usage/{PRD,SPEC,ACCEPTANCE}.md`、`docs/engineering/token-usage-pricing.md`、`docs/design/usage-dashboard-v2/README.md`、`AGENTS.md`。
