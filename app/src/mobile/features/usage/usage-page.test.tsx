@@ -37,7 +37,8 @@ function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
   }));
   return {
     range: "7d",
-    generatedAt: Date.now(),
+    // 固定快照时间，避免区间过滤依赖跑测试当天的日期（跨午夜会少一天）。
+    generatedAt: new Date(2026, 10, 6, 12, 0, 0).getTime(),
     summary: {
       tokens: 481_854_387,
       input: 3_017_736,

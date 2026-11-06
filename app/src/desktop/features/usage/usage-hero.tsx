@@ -1,4 +1,4 @@
-import type { TokenUsageStats } from "@/protocol/messages";
+import type { TokenUsageDay, TokenUsageStats } from "@/protocol/messages";
 import { formatCount, formatPct, formatTokenCompact, isEstimated } from "@/shared/lib/usage";
 import { periodLabel, rangeSpendLabel, spendDelta } from "@/shared/lib/usage-chart";
 import { AnimatedNumber } from "./animated-number";
@@ -9,12 +9,18 @@ import { AnimatedNumber } from "./animated-number";
  * 缺价（costSource=unknown）时不伪装成 ¥0：大数显示「—」，环比隐藏；
  * 估算/混合沿用现有口径加 `≈`。首帧直接显示终值，切区间才补间。
  */
-export function UsageHero({ stats }: { stats: TokenUsageStats }) {
+export function UsageHero({
+  stats,
+  days,
+}: {
+  stats: TokenUsageStats;
+  /** 已按当前区间过滤的日期（快照 days 是最近 180 天）。 */
+  days: TokenUsageDay[];
+}) {
   const { summary, previous } = stats;
   const costKnown = summary.costSource !== "unknown";
   const estimated = isEstimated(summary.costSource);
   const delta = costKnown ? spendDelta(summary.costCnyMicros, previous.costCnyMicros) : null;
-  const days = stats.days;
 
   return (
     <section aria-label="花费总览" className="dsl-usage-hero">

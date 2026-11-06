@@ -56,15 +56,17 @@ export function SpendProfile({
     const total = costs.reduce((sum, value) => sum + value, 0);
     const single = n === 1;
     const lastIsToday = n > 0 && isToday(days[n - 1].date);
-    const domainMax = Math.max(...costs, single ? previousCostCnyMicros : 0, 0.01);
-    const yMax = niceAxisMax(domainMax * 1.07);
+    // 单日：刻度只看今天本身；昨天只作为基准线（超出刻度时退成文字标注），
+    // 避免「今天 ¥0.3、昨天 ¥54」把今天的柱子压成一条线。
+    const domainMax = single ? Math.max(costs[0] * 1.35, 0.01) : Math.max(...costs, 0.01);
+    const yMax = niceAxisMax(single ? domainMax : domainMax * 1.07);
     const yAt = (value: number) => BOTTOM - (value / yMax) * (BOTTOM - TOP);
     const xAt = (index: number) =>
       single ? (LEFT + RIGHT) / 2 : LEFT + (index / (n - 1)) * (RIGHT - LEFT);
     const points = days.map((day, index) => ({ x: xAt(index), y: yAt(day.costCnyMicros) }));
     const average = n > 0 ? total / n : 0;
     return { n, costs, total, single, lastIsToday, yMax, yAt, points, average };
-  }, [days, previousCostCnyMicros]);
+  }, [days]);
 
   const { n, costs, total, single, lastIsToday, yMax, yAt, points, average } = model;
 
@@ -80,6 +82,7 @@ export function SpendProfile({
   }
 
   const last = points[n - 1];
+  const previousOnScale = previousCostCnyMicros > 0 && previousCostCnyMicros <= yMax * 0.98;
   const donePoints = lastIsToday ? points.slice(0, -1) : points;
   const donePath = smoothLinePath(donePoints, { minY: TOP - 2, maxY: BOTTOM });
   const area = areaPath(points, BOTTOM);
@@ -195,7 +198,7 @@ export function SpendProfile({
               >
                 {formatCny(costs[0])}
               </text>
-              {previousCostCnyMicros > 0 && (
+              {previousCostCnyMicros > 0 && previousOnScale && (
                 <>
                   <line
                     className="dsl-usage-ref-line"
@@ -213,6 +216,11 @@ export function SpendProfile({
                     昨天 {formatCny(previousCostCnyMicros)}
                   </text>
                 </>
+              )}
+              {previousCostCnyMicros > 0 && !previousOnScale && (
+                <text className="dsl-usage-ref-label" x={RIGHT} y={TOP + 8} textAnchor="end">
+                  昨天 {formatCny(previousCostCnyMicros)}
+                </text>
               )}
               <text className="dsl-usage-x-label now" x={last.x} y={H - 4} textAnchor="middle">
                 今天

@@ -58,9 +58,11 @@ function buildGeometry(
 ): ChartGeometry {
   const count = days.length;
   const maxCost = Math.max(...days.map((day) => day.costCnyMicros), 0);
-  const yMax = niceAxisMax(
-    Math.max(maxCost, count === 1 ? Math.max(0, previousCostMicros) : 0, 1) * 1.12,
-  );
+  // 单日：刻度只看今天本身；昨天超出刻度时退成文字标注，不把柱子压成一条线。
+  const yMax =
+    count === 1
+      ? niceAxisMax(Math.max(maxCost * 1.35, 1))
+      : niceAxisMax(Math.max(maxCost, 1) * 1.12);
   const yAt = (value: number): number =>
     BASELINE_Y - (Math.max(0, value) / yMax) * (BASELINE_Y - PAD_TOP);
   const usable = Math.max(1, width - PAD_X * 2);
@@ -89,7 +91,10 @@ function buildGeometry(
         height: barHeight,
       },
       barLabel: { x: point.x, y: Math.max(PAD_TOP + 10, point.y - 9) },
-      previousY: previousCostMicros > 0 ? yAt(previousCostMicros) : null,
+      previousY:
+        previousCostMicros > 0 && previousCostMicros <= yMax * 0.98
+          ? yAt(previousCostMicros)
+          : null,
       averageY: null,
       todayPoint: null,
       nodePoints: [],
@@ -436,6 +441,17 @@ export function SpendProfile({ days, previousCostMicros, costSource }: SpendProf
               textAnchor="middle"
             >
               {formatUsageCost(costSource, days[0]?.costCnyMicros ?? 0)}
+            </text>
+          )}
+
+          {geometry.previousY === null && geometry.count === 1 && previousCostMicros > 0 && (
+            <text
+              className="mu-ref-label"
+              x={geometry.width - PAD_X}
+              y={PAD_TOP + 8}
+              textAnchor="end"
+            >
+              昨天 {formatUsageCost(costSource, previousCostMicros)}
             </text>
           )}
 

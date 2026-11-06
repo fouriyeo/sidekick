@@ -6,7 +6,7 @@ import { useMobileUsageStore } from "@/mobile/features/usage/usage-store";
 import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
 import { useUiStore } from "@/mobile/ui-store";
-import type { TokenUsageStats, UsageRow } from "@/protocol/messages";
+import type { TokenUsageDay, TokenUsageStats, UsageRow } from "@/protocol/messages";
 import {
   formatCount,
   formatPct,
@@ -18,6 +18,7 @@ import {
 import type { CostBucketKey, SpendDelta } from "@/shared/lib/usage-chart";
 import {
   costBuckets,
+  daysForRange,
   periodLabel,
   rangeSpendLabel,
   rowCostShare,
@@ -185,6 +186,8 @@ function UsageDashboard({
 }) {
   const hasActivity =
     stats.summary.tokens > 0 || stats.summary.costCnyMicros > 0 || stats.summary.calls > 0;
+  // 快照 days 是最近 180 个真实日期，剖面/区间日期按当前区间过滤。
+  const days = daysForRange(stats.days, stats.range, stats.generatedAt);
 
   return (
     <>
@@ -198,8 +201,8 @@ function UsageDashboard({
       )}
       {!connected && <p className="mu-note">电脑未连接，显示最后一次快照。</p>}
 
-      <Hero stats={stats} />
-      <ProfileSection stats={stats} />
+      <Hero stats={stats} days={days} />
+      <ProfileSection stats={stats} days={days} />
       {hasActivity && <CompositionSection stats={stats} />}
       <GroupsSection
         stats={stats}
@@ -213,8 +216,8 @@ function UsageDashboard({
   );
 }
 
-function Hero({ stats }: { stats: TokenUsageStats }) {
-  const { summary, previous, days, range } = stats;
+function Hero({ stats, days }: { stats: TokenUsageStats; days: TokenUsageDay[] }) {
+  const { summary, previous, range } = stats;
   // 缺价时不编造金额，也不显示没有基数的环比。
   const delta =
     summary.costSource === "unknown"
@@ -264,8 +267,8 @@ function Readout({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProfileSection({ stats }: { stats: TokenUsageStats }) {
-  const { days, summary, previous } = stats;
+function ProfileSection({ stats, days }: { stats: TokenUsageStats; days: TokenUsageDay[] }) {
+  const { summary, previous } = stats;
   const hasCost = days.some((day) => day.costCnyMicros > 0);
   const total = days.reduce((sum, day) => sum + day.costCnyMicros, 0);
   const singleDay = days.length === 1;

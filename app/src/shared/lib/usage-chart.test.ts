@@ -4,6 +4,7 @@ import {
   areaPath,
   axisLabel,
   costBuckets,
+  daysForRange,
   isToday,
   localDayKey,
   niceAxisMax,
@@ -97,6 +98,37 @@ describe("usage-chart", () => {
       20,
     );
     expect(path.endsWith("L10.00 20.00 L0.00 20.00 Z")).toBe(true);
+  });
+
+  it("按区间过滤 days：今天只留 1 天，7/30 天按日历窗口", () => {
+    const dates = [
+      "2026-09-30",
+      "2026-10-01",
+      "2026-10-30",
+      "2026-10-31",
+      "2026-11-01",
+      "2026-11-05",
+      "2026-11-06",
+    ].map((date) => ({ date }));
+    const generatedAt = new Date(2026, 10, 6, 12, 0, 0).getTime();
+    expect(daysForRange(dates, "today", generatedAt).map((day) => day.date)).toEqual([
+      "2026-11-06",
+    ]);
+    expect(daysForRange(dates, "7d", generatedAt).map((day) => day.date)).toEqual([
+      "2026-10-31",
+      "2026-11-01",
+      "2026-11-05",
+      "2026-11-06",
+    ]);
+    expect(daysForRange(dates, "30d", generatedAt).map((day) => day.date)).toEqual([
+      "2026-10-30",
+      "2026-10-31",
+      "2026-11-01",
+      "2026-11-05",
+      "2026-11-06",
+    ]);
+    expect(daysForRange(dates, "180d", generatedAt)).toHaveLength(dates.length);
+    expect(daysForRange([], "7d", generatedAt)).toEqual([]);
   });
 
   it("日期：本地日、今天判定、区间文案", () => {

@@ -11,6 +11,7 @@ import { PageHeader } from "@/desktop/shell/page-header";
 import { PageShell } from "@/desktop/shell/page-shell";
 import type { TokenUsageStats } from "@/protocol/messages";
 import { USAGE_RANGES } from "@/shared/lib/usage";
+import { daysForRange } from "@/shared/lib/usage-chart";
 import { Button } from "@/shared/ui/button";
 
 /** 只留一句结论；账本缺失/损坏/超限的排查说明不再进界面。 */
@@ -142,14 +143,16 @@ function UsageContent({
   onOpenPricing: () => void;
 }) {
   const costAvailable = stats.summary.costSource !== "unknown" && stats.summary.costCnyMicros > 0;
+  // 账本快照的 days 是最近 180 个真实日期，图表按当前区间过滤（与手机同一规则）。
+  const days = daysForRange(stats.days, stats.range, stats.generatedAt);
 
   return (
     <>
-      <UsageHero stats={stats} />
+      <UsageHero stats={stats} days={days} />
       <div className="dsl-usage-rule" />
       <SpendProfile
         range={stats.range}
-        days={stats.days}
+        days={days}
         previousCostCnyMicros={stats.previous.costCnyMicros}
         costAvailable={costAvailable}
       />

@@ -25,6 +25,13 @@ const COST_BUCKETS: ReadonlyArray<{ key: CostBucketKey; label: string }> = [
   { key: "reasoning", label: "推理" },
 ];
 
+const RANGE_DAYS: Record<UsageRange, number> = {
+  today: 1,
+  "7d": 7,
+  "30d": 30,
+  "180d": 180,
+};
+
 const RANGE_SPEND_LABEL: Record<UsageRange, string> = {
   today: "今天花费",
   "7d": "近 7 天花费",
@@ -45,6 +52,29 @@ export function localDayKey(date: Date = new Date()): string {
 
 export function isToday(dateStr: string, now: Date = new Date()): boolean {
   return dateStr === localDayKey(now);
+}
+
+export function rangeDayCount(range: UsageRange): number {
+  return RANGE_DAYS[range] ?? 7;
+}
+
+/**
+ * 账本快照的 `days` 是「最近最多 180 个真实日期」，协议约定**不按区间裁剪**；
+ * 页面要按当前区间过滤后再画图/取区间日期。以快照 `generatedAt` 的本地日
+ * 作为区间终点（服务器与手机同一时区；跨时区午夜边界只影响一天）。
+ */
+export function daysForRange<T extends { date: string }>(
+  days: ReadonlyArray<T>,
+  range: UsageRange,
+  generatedAt: number,
+): T[] {
+  const count = rangeDayCount(range);
+  const base = Number.isFinite(generatedAt) && generatedAt > 0 ? new Date(generatedAt) : new Date();
+  const end = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - (count - 1));
+  const startKey = localDayKey(start);
+  const endKey = localDayKey(end);
+  return days.filter((day) => day.date >= startKey && day.date <= endKey);
 }
 
 /** 「MM-DD」，账本日期字符串直接截取，不经过 Date 避免时区偏移。 */

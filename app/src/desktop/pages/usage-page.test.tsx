@@ -31,6 +31,17 @@ function pricing(overrides: Partial<PricingStatus> = {}): PricingStatus {
   };
 }
 
+const FIXED_NOW = new Date(2026, 10, 6, 12, 0, 0).getTime();
+const DAY_DATES = [
+  "2026-10-31",
+  "2026-11-01",
+  "2026-11-02",
+  "2026-11-03",
+  "2026-11-04",
+  "2026-11-05",
+  "2026-11-06",
+];
+
 function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
   const summary = {
     tokens: 475_554_339,
@@ -48,11 +59,11 @@ function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
   };
   return {
     range: "7d",
-    generatedAt: Date.now(),
+    generatedAt: FIXED_NOW,
     summary,
     previous: { ...summary, tokens: 400_000_000, costCnyMicros: 25_000_000 },
-    days: Array.from({ length: 7 }, (_, index) => ({
-      date: `2026-11-0${index + 1}`,
+    days: DAY_DATES.map((date) => ({
+      date,
       tokens: 67_936_334,
       input: 431_105,
       output: 178_271,
@@ -205,7 +216,7 @@ describe("UsagePage 用量页", () => {
     expect(within(hero).getByText("较上期").closest(".dsl-usage-delta")?.textContent).toContain(
       "19.4%",
     );
-    expect(within(hero).getByText("11-01 – 11-07")).toBeInTheDocument();
+    expect(within(hero).getByText("10-31 – 11-06")).toBeInTheDocument();
 
     expect(screen.getByRole("img", { name: /近 7 天每日花费/ })).toBeInTheDocument();
     expect(screen.getByText("缓存读")).toBeInTheDocument();
