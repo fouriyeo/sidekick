@@ -152,7 +152,7 @@ beforeEach(() => {
   // 测试里默认暂停自动重连，避免真实定时器干扰。
   useConnectionStore.getState().pauseRetry();
   useUiStore.setState({ view: "pet", scanOpen: false, offlineReturnView: "pet" });
-  useFirstUseStore.setState({ micReady: false, dismissed: false, hydrated: false });
+  useFirstUseStore.setState({ micReady: false, dismissed: false, hydrated: false, desktop: null });
   useSessionStore.getState().clearAll();
   usePetStore.setState({
     pet: defaultPetState(Date.now()),
@@ -465,6 +465,38 @@ describe("MobileApp 协议消息", () => {
 
     expect(useFirstUseStore.getState().micReady).toBe(true);
     expect(localStorage.getItem("sidekick:first-use")).toContain('"micReady":true');
+  });
+
+  it("desktop.status 更新首用清单的电脑侧状态，且不进聊天记录", async () => {
+    await renderApp();
+
+    act(() => {
+      tauri.chatHandler?.(
+        '{"type":"desktop.status","v":1,"asrConfigured":true,"asrHasKey":true,"accessibilityTrusted":false,"ts":1730000000000}',
+      );
+    });
+
+    expect(useFirstUseStore.getState().desktop).toEqual({
+      asrConfigured: true,
+      asrHasKey: true,
+      accessibilityTrusted: false,
+      at: 1730000000000,
+    });
+    // 只更新首用清单，不写本地存档、不进聊天记录。
+    expect(localStorage.getItem("sidekick:first-use")).toBeNull();
+    expect(useChatStore.getState().messages).toHaveLength(0);
+  });
+
+  it("旧桌面不发 desktop.status：电脑侧状态保持未上报", async () => {
+    await renderApp();
+
+    act(() => {
+      tauri.chatHandler?.(
+        '{"type":"status","v":1,"source":"dsh","state":"idle","sessions":0,"ts":1730000000000}',
+      );
+    });
+
+    expect(useFirstUseStore.getState().desktop).toBeNull();
   });
 
   it("录音中不触发 AI 触感", async () => {

@@ -28,7 +28,12 @@ beforeEach(() => {
     saveStatus: "idle",
     bubble: null,
   });
-  useFirstUseStore.setState({ hydrated: false, micReady: false, dismissed: false });
+  useFirstUseStore.setState({
+    hydrated: false,
+    micReady: false,
+    dismissed: false,
+    desktop: null,
+  });
   document.documentElement.dataset.theme = "dark";
 });
 
@@ -138,9 +143,79 @@ describe("MorePage 首用清单 banner", () => {
     first.unmount();
 
     localStorage.setItem(FIRST_USE_KEY, JSON.stringify({ micReady: true, dismissed: true }));
-    useFirstUseStore.setState({ hydrated: false, micReady: false, dismissed: false });
+    useFirstUseStore.setState({
+      hydrated: false,
+      micReady: false,
+      dismissed: false,
+      desktop: null,
+    });
     render(<MorePage />);
     expect(screen.queryByText(/首用清单/)).toBeNull();
+  });
+
+  it("desktop 未知（旧桌面）：保持 2 个「在电脑上完成」", () => {
+    useFirstUseStore.setState({ hydrated: true, micReady: true, desktop: null });
+    render(<MorePage />);
+
+    expect(screen.getByText(/还差 2 步/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /首用清单，已完成 2\/4/ }));
+    expect(screen.getAllByText("在电脑上完成")).toHaveLength(2);
+  });
+
+  it("电脑侧全部真实完成：banner「已完成」，四步都是「已完成」", () => {
+    useFirstUseStore.setState({
+      hydrated: true,
+      micReady: true,
+      desktop: { asrConfigured: true, asrHasKey: true, accessibilityTrusted: true, at: 1 },
+    });
+    render(<MorePage />);
+
+    expect(screen.queryByText(/还差/)).toBeNull();
+    // banner 文案是「首用清单」+「 · 已完成」两段文本，按按钮整体文本断言。
+    const banner = screen.getByRole("button", { name: /首用清单，已完成 4\/4/ });
+    expect(banner.textContent).toContain("首用清单 · 已完成");
+
+    fireEvent.click(banner);
+    expect(screen.getAllByText("已完成")).toHaveLength(4);
+    expect(screen.queryByText("在电脑上完成")).toBeNull();
+    expect(
+      screen.getByText("电脑已保存百炼 Key，并已通过配置检查；录音只发往电脑配置的百炼。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("电脑已授权；转写完会自动输入，结果卡有「回车 / 清空」。"),
+    ).toBeInTheDocument();
+  });
+
+  it("百炼已配置但辅助功能未授权：已完成 3/4、还差 1 步、只剩 1 个「在电脑上完成」", () => {
+    useFirstUseStore.setState({
+      hydrated: true,
+      micReady: true,
+      desktop: { asrConfigured: true, asrHasKey: true, accessibilityTrusted: false, at: 2 },
+    });
+    render(<MorePage />);
+
+    expect(screen.getByText(/还差 1 步/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /首用清单，已完成 3\/4/ }));
+    expect(screen.getAllByText("已完成")).toHaveLength(3);
+    expect(screen.getAllByText("在电脑上完成")).toHaveLength(1);
+    expect(
+      screen.getByText("还没授权；不开只会复制到剪贴板，没有「回车 / 清空」，也不会自动输入。"),
+    ).toBeInTheDocument();
+  });
+
+  it("电脑已保存 Key 但配置不完整：仍算未完成并提示缺什么", () => {
+    useFirstUseStore.setState({
+      hydrated: true,
+      desktop: { asrConfigured: false, asrHasKey: true, accessibilityTrusted: false, at: 3 },
+    });
+    render(<MorePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /首用清单，已完成 1\/4/ }));
+    expect(
+      screen.getByText("电脑已保存 Key，但配置还不完整（同意上传 / 地址或模型）。"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("在电脑上完成")).toHaveLength(2);
   });
 });
 

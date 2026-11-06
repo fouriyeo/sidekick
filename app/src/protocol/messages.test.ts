@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   isConnEvent,
+  isDesktopStatusMessage,
   isFocusResultMessage,
   isKeyResultMessage,
   isStatusMessage,
   isUsageRange,
   normalizeSessionList,
   normalizeSessionTitle,
+  parseDesktopStatus,
   parseFocusResult,
   parseKeyResult,
   parseMessage,
@@ -424,5 +426,46 @@ describe("usage message", () => {
     expect(isUsageRange("30d")).toBe(true);
     expect(isUsageRange("180d")).toBe(true);
     expect(isUsageRange("365d")).toBe(false);
+  });
+});
+
+describe("desktop status", () => {
+  const message = {
+    type: "desktop.status",
+    v: 1,
+    asrConfigured: true,
+    asrHasKey: true,
+    accessibilityTrusted: false,
+    ts: 1730000000000,
+  };
+
+  it("parses the three flags and the desktop timestamp", () => {
+    expect(parseDesktopStatus(JSON.stringify(message))).toEqual(message);
+    expect(isDesktopStatusMessage(message)).toBe(true);
+    expect(isDesktopStatusMessage({ ...message, accessibilityTrusted: true })).toBe(true);
+  });
+
+  it("returns null when fields are missing, the version is wrong or types are wrong", () => {
+    const { asrConfigured: _configured, ...withoutConfigured } = message;
+    const { asrHasKey: _hasKey, ...withoutHasKey } = message;
+    const { accessibilityTrusted: _trusted, ...withoutTrusted } = message;
+    const { ts: _ts, ...withoutTs } = message;
+
+    expect(parseDesktopStatus(JSON.stringify(withoutConfigured))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify(withoutHasKey))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify(withoutTrusted))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify(withoutTs))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify({ ...message, v: 2 }))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify({ ...message, type: "status" }))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify({ ...message, asrConfigured: "yes" }))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify({ ...message, asrHasKey: 1 }))).toBeNull();
+    expect(
+      parseDesktopStatus(JSON.stringify({ ...message, accessibilityTrusted: null })),
+    ).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify({ ...message, ts: "now" }))).toBeNull();
+    expect(parseDesktopStatus(JSON.stringify({ ...message, ts: Number.NaN }))).toBeNull();
+    expect(parseDesktopStatus("not-json")).toBeNull();
+    expect(isDesktopStatusMessage(null)).toBe(false);
+    expect(isDesktopStatusMessage({ ...message, accessibilityTrusted: undefined })).toBe(false);
   });
 });

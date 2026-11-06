@@ -2,7 +2,7 @@
 
 当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
 
-服务端把 `chat` / `system` / `status` / `usage` / `mic.*` / `key.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照；`focus.request` 由桌面处理并回 `focus.result`；`key.request` 由桌面校验后合成按键并回 `key.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
+服务端把 `chat` / `system` / `status` / `desktop.status` / `usage` / `mic.*` / `key.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照（`status` + `desktop.status`）；`focus.request` 由桌面处理并回 `focus.result`；`key.request` 由桌面校验后合成按键并回 `key.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
 ## 连接
 
@@ -95,6 +95,29 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 ```json
 { "type": "status.request" }
 ```
+
+### desktop.status
+
+电脑侧就绪状态（桌面 → 手机），给手机首用清单的 ③ 百炼 Key / ④ 辅助功能提供真实完成态。只含布尔与时间戳，**不含 Key、掩码、路径或任何内容**。
+
+```json
+{
+  "type": "desktop.status",
+  "v": 1,
+  "asrConfigured": true,
+  "asrHasKey": true,
+  "accessibilityTrusted": true,
+  "ts": 1730000000000
+}
+```
+
+- `asrConfigured`：百炼已配置完整——已同意音频上传 + 已保存 Key + 地址/模型校验通过（对应桌面 `asr_cloud_status().configured`）
+- `asrHasKey`：百炼 Key 已保存（允许「已保存但配置不完整」的中间态）
+- `accessibilityTrusted`：macOS 已授权辅助功能（对应 `accessibility_trusted()`；非 macOS 恒为 false）
+- `ts`：桌面时钟毫秒时间戳
+- 发送时机：新客户端连接时直发一条；手机发 `status.request` 时随 `status` 快照一起广播
+- 旧桌面不发送：旧手机忽略未知类型；旧桌面 / 未收到时手机 ③④ 显示「在电脑上完成」，**不伪造完成态**
+- 隐私：只有两个配置就绪布尔 + 一个系统权限布尔，不读取/外发 Key 本身、掩码、提示词、文件路径
 
 ### usage.request / usage
 
@@ -270,6 +293,7 @@ SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`（DSH 本地脚本）、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
 - AI 会话列表：`app/src/mobile/features/sessions/`（列表/清除标记）；focus 唤起：`app/src-tauri/src/app_focus.rs`、`desktop_server.rs`、`mobile_client.rs`
+- 首用清单电脑侧状态：`desktop_server.rs`（`desktop_status_message` / 新连接直发 / `status.request` 广播）、`app/src/protocol/messages.ts`（解析）、`app/src/mobile/features/first-use/store.ts` 与 `settings/more-page.tsx`（③④ 完成态）
 - 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）
 
 ## 规划中的事件（AI 接入阶段）

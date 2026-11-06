@@ -291,6 +291,21 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     {
         println!("[ws] 发送 AI 状态快照失败，连接即将关闭");
     }
+    // 首用清单 ③④：手机拿不到电脑端真实状态，只能固定显示「在电脑上完成」。
+    // 这里在 hook 快照之后直发一条 desktop.status（只含布尔与时间戳，不含 Key/掩码/路径）。
+    let asr_status = state.asr_cloud.status();
+    let desktop_status = desktop_status_message(
+        asr_status.configured,
+        asr_status.has_key,
+        desktop_mic::accessibility_trusted(),
+    );
+    if sender
+        .send(Message::Text(desktop_status.into()))
+        .await
+        .is_err()
+    {
+        println!("[ws] 发送桌面状态快照失败，连接即将关闭");
+    }
     let _ = state.tx.send(system_message_with_clients(
         format!("客户端已连接，当前 {count} 个"),
         count,
@@ -337,6 +352,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         if kind == "status.request" {
                             // 手机要一次当前 AI 状态快照；广播给所有客户端即可。
                             let _ = recv_state.tx.send(recv_state.hook.snapshot_json());
+                            // 同时补一条电脑端真实状态（首用清单 ③④），只含布尔与时间戳。
+                            let asr = recv_state.asr_cloud.status();
+                            let _ = recv_state.tx.send(desktop_status_message(
+                                asr.configured,
+                                asr.has_key,
+                                desktop_mic::accessibility_trusted(),
+                            ));
                             continue;
                         }
                         if kind == "usage.request" {
@@ -1064,6 +1086,26 @@ fn system_message_with_clients(text: String, clients: usize) -> String {
     serde_json::json!({ "type": "system", "text": text, "clients": clients }).to_string()
 }
 
+/// 桌面 → 手机：首用清单 ③（百炼 Key）与 ④（辅助功能）的真实状态。
+///
+/// 只下发布尔值与时间戳，**绝不包含 API Key、掩码、文件路径、提示词**；
+/// 字段名按协议固定为 camelCase 字面量，便于单测与旧客户端忽略未知消息。
+fn desktop_status_message(
+    asr_configured: bool,
+    asr_has_key: bool,
+    accessibility_trusted: bool,
+) -> String {
+    serde_json::json!({
+        "type": "desktop.status",
+        "v": 1,
+        "asrConfigured": asr_configured,
+        "asrHasKey": asr_has_key,
+        "accessibilityTrusted": accessibility_trusted,
+        "ts": now_ms(),
+    })
+    .to_string()
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1515,5 +1557,65 @@ mod clients_message_tests {
         assert_eq!(value["type"], "system");
         assert_eq!(value["text"], "客户端已连接，当前 2 个");
         assert_eq!(value["clients"], 2);
+    }
+
+    #[test]
+    fn desktop_status_message_has_expected_shape() {
+        let raw = desktop_status_message(true, true, false);
+        let value: Value = serde_json::from_str(&raw).expect("应是合法 JSON");
+        assert_eq!(value["type"], "desktop.status");
+        assert_eq!(value["v"], 1);
+        assert_eq!(value["asrConfigured"], true);
+        assert_eq!(value["asrHasKey"], true);
+        assert_eq!(value["accessibilityTrusted"], false);
+        assert!(value["ts"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn desktop_status_message_reflects_false_state() {
+        let raw = desktop_status_message(false, false, false);
+        let value: Value = serde_json::from_str(&raw).expect("应是合法 JSON");
+        assert_eq!(value["asrConfigured"], false);
+        assert_eq!(value["asrHasKey"], false);
+        assert_eq!(value["accessibilityTrusted"], false);
+    }
+
+    #[test]
+    fn desktop_status_message_has_no_secret_material() {
+        let raw = desktop_status_message(true, true, true);
+        let value: Value = serde_json::from_str(&raw).expect("应是合法 JSON");
+        let object = value.as_object().expect("应是 JSON 对象");
+        let mut keys: Vec<&str> = object.keys().map(|key| key.as_str()).collect();
+        keys.sort_unstable();
+        // 字段集合精确匹配：只有 type/v/asrConfigured/asrHasKey/accessibilityTrusted/ts。
+        assert_eq!(
+            keys,
+            [
+                "accessibilityTrusted",
+                "asrConfigured",
+                "asrHasKey",
+                "ts",
+                "type",
+                "v",
+            ]
+        );
+        for forbidden in [
+            "apiKey",
+            "api_key",
+            "keyMasked",
+            "keyHint",
+            "path",
+            "endpoint",
+            "model",
+            "prompt",
+        ] {
+            assert!(
+                !object.contains_key(forbidden),
+                "desktop.status 不应包含字段 {forbidden}"
+            );
+        }
+        assert!(!raw.contains("apiKey"));
+        assert!(!raw.contains("keyMasked"));
+        assert!(!raw.contains("keyHint"));
     }
 }

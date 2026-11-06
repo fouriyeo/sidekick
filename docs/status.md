@@ -54,6 +54,8 @@
 
 43. 手机设置页排版收敛 + 鸿蒙字体（2026-11-06，D90/D91）：行标题 16/20→15/21、说明 13/17→13/19、单行/双行卡片行高 48/52→56/60、卡片间距 14→20、左右内边距 14→16、分段控件 44→36 且段间隙 2→4、标签与控件 10→16；字体由 MiSans 换成随包 **HarmonyOS Sans SC Regular**（8.1MB 原始 TTF，许可禁止转 WOFF2/subset），删除 MiSans WOFF2（−3.9MB），APK 净增约 4MB。真机 BKQ-AN10（Android 17 / WebView 156）用 CDP `CSS.getPlatformFontsForNode` 确认实际渲染 `HarmonyOS Sans SC`；冷启动字体加载约 430ms（`font-display: swap`）。
 
+
+44. 首用清单 ③④ 跨端真实状态（2026-11-06，D92）：修复用户反馈「电脑已配置百炼 API Key、手机语音也能识别，但手机首用清单仍显示 ③ 未完成、还差 2 步」。新增桌面 → 手机 `desktop.status` 消息（`asrConfigured` / `asrHasKey` / `accessibilityTrusted` / `ts`，只含布尔与时间戳，不含 Key/掩码/路径）：桌面在新客户端连接与手机 `status.request` 时下发；手机在连接成功、回前台、打开设置页时刷新。清单 done 累计 ① ② 本地状态 + ③ ④ 桌面真实上报，③④ 为 true 才显示「已完成」，全部完成时 banner 显示「首用清单 · 已完成」；旧桌面/未收到时仍显示「在电脑上完成」，不伪造完成态。
 ## 已验证（有实际证据）
 
 - 手机浏览器扫码可打开电脑 `http://<电脑IP>:<端口>/`（局域网 HTTP 通；当时固定 8848，现已改为 `47810` 起候选回退）；
@@ -124,7 +126,7 @@
 | AI 联动自由文本提问 | 只认显式提问/审批（ask_user_question/exit_plan_mode/approval/blocked）；模型在回复末尾问一句不算 |
 | 指挥舱 A 待真机验收 | 代码完成（2026-11-05，D79）：浏览器 QA 15 屏无 console error / 无横向溢出，960 单列与 1180 两列已验证；待真机回归「在 DSH 打开」的 focus 链路（浏览器 mock 无本地 WS）、Android 返回键层级、录音中禁切页、双主题、首用清单与状态词 |
 | 手机台数为近似 | 桌面「已连接 · N 台设备」来自 `system.clients - 1`（含桌面本机窗口与网页预览），不显示设备名；精确台数需 P1 角色握手 |
-| 首用清单后两步不可验证 | 手机只记录连接 + 麦克风（`micReady` 存本机）；百炼 Key / macOS 辅助功能只能在电脑完成，手机显示「在电脑上完成」，不伪造完成态 |
+| 首用清单 ③④ 依赖电脑上报 | ③ 百炼 Key / ④ 辅助功能由桌面 `desktop.status` 上报真实布尔；手机连接、回前台、打开设置页时刷新，显示真实完成态；旧桌面或未收到时显示「在电脑上完成」，不伪造。TCC 授权变化后要等下一次快照才更新（不实时） |
 | 动态「最近发生」不落盘 | 只存内存（cap 20），重启清空；由 `conn` / `status` / `mic.result` / `focus.result` 派生（活动流持久化为 P1） |
 | 宠物图集只有四态 | 已接 OpenPets schema 2（D57）；睡眠等状态行待美术；done 已改 loop（D77） |
 | 触感依赖系统设置 | App 主动触感走 `performHapticFeedback`，系统「触摸振动」关闭时不震（尊重用户设置，非 bug）；`navigator.vibrate` 因 APK 未声明 `VIBRATE` 被 WebView 忽略，只作浏览器兜底；iOS 暂无触感 |

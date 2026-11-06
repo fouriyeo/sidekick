@@ -221,7 +221,31 @@ export type UsageRequestMessage = {
   ts?: number;
 };
 
-export type IncomingMessage = ChatMessage | SystemMessage | StatusMessage | UsageMessage;
+/**
+ * 桌面 → 手机：电脑侧真实配置状态（首用清单 ③④ 的完成依据）。
+ *
+ * 只含布尔与时间戳，不含 Key/掩码/路径；旧桌面不发送，手机收到前保持「在电脑上完成」。
+ * 手机在连接成功、回前台、打开设置页时发 status.request，桌面据此重发本消息。
+ */
+export type DesktopStatusMessage = {
+  type: "desktop.status";
+  v: 1;
+  /** 已保存 Key、已同意上传且地址/模型校验通过。 */
+  asrConfigured: boolean;
+  /** 已保存百炼 Key（不一定通过配置检查）。 */
+  asrHasKey: boolean;
+  /** 电脑已授权 macOS 辅助功能。 */
+  accessibilityTrusted: boolean;
+  /** 桌面毫秒时间戳。 */
+  ts: number;
+};
+
+export type IncomingMessage =
+  | ChatMessage
+  | SystemMessage
+  | StatusMessage
+  | UsageMessage
+  | DesktopStatusMessage;
 
 export type ServerInfo = {
   ip: string;
@@ -558,6 +582,31 @@ export function parseStatusMessage(raw: string): StatusMessage | null {
   }
   if (!isStatusMessage(value)) return null;
   return { ...value, sessionList: normalizeSessionList(value.sessionList) };
+}
+
+/** 严格解析电脑侧状态：缺字段/错版本/错类型一律不认（旧桌面不发 → 保持现状）。 */
+export function isDesktopStatusMessage(value: unknown): value is DesktopStatusMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const message = value as Record<string, unknown>;
+  return (
+    message.type === "desktop.status" &&
+    message.v === 1 &&
+    typeof message.asrConfigured === "boolean" &&
+    typeof message.asrHasKey === "boolean" &&
+    typeof message.accessibilityTrusted === "boolean" &&
+    typeof message.ts === "number" &&
+    Number.isFinite(message.ts)
+  );
+}
+
+export function parseDesktopStatus(raw: string): DesktopStatusMessage | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return isDesktopStatusMessage(value) ? value : null;
 }
 
 export function isFocusResultMessage(value: unknown): value is FocusResultMessage {

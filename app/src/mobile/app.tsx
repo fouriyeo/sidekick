@@ -17,6 +17,7 @@ import { useMobileUsageStore } from "@/mobile/features/usage/usage-store";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import {
+  parseDesktopStatus,
   parseFocusResult,
   parseKeyResult,
   parseMessage,
@@ -212,6 +213,13 @@ export function MobileApp() {
 
   useEffect(() => {
     const unsubscribeChat = subscribeChat((raw) => {
+      // 电脑侧真实配置状态：只驱动首用清单 ③④，不进入聊天记录。
+      const desktopStatus = parseDesktopStatus(raw);
+      if (desktopStatus) {
+        useFirstUseStore.getState().applyDesktopStatus(desktopStatus);
+        return;
+      }
+
       const focusResult = parseFocusResult(raw);
       if (focusResult) {
         useSessionStore.getState().handleFocusResult(focusResult);

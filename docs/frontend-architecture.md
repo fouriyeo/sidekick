@@ -56,7 +56,7 @@ app/
 │  │  ├─ features/
 │  │  │  ├─ pet/              # 首屏：舞台、鲸鱼、会话卡容器
 │  │  │  ├─ asking/           # 等你决定页
-│  │  │  ├─ first-use/        # 首用清单（4 步；本地只验前两步；设置页 banner 复用）
+│  │  │  ├─ first-use/        # 首用清单（4 步；①② 本地、③④ 吃 desktop.status；设置页 banner 复用）
 │  │  │  ├─ sessions/         # 会话卡 / 会话行 / 清除标记 / D78 工具动作
 │  │  │  ├─ mic/              # 按住说话、圆钮/胶囊、权限、结果卡
 │  │  │  ├─ connect/          # 连接页、扫码、重连（connection-view）

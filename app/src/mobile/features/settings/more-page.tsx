@@ -11,6 +11,7 @@ import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
 import { pushBackHandler } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
+import { sendStatusRequest } from "@/shared/lib/tauri";
 import { setThemePreference, type ThemePreference, useTheme } from "@/shared/lib/theme";
 import { Label } from "@/shared/ui/label";
 import { Toggle } from "./toggle";
@@ -134,6 +135,7 @@ function FirstUseBanner({
   const hydrated = useFirstUseStore((state) => state.hydrated);
   const micReady = useFirstUseStore((state) => state.micReady);
   const dismissed = useFirstUseStore((state) => state.dismissed);
+  const desktop = useFirstUseStore((state) => state.desktop);
   const hydrate = useFirstUseStore((state) => state.hydrate);
   const connected = useConnectionStore((state) => state.status === "connected");
   const openOffline = useUiStore((state) => state.openOffline);
@@ -142,13 +144,27 @@ function FirstUseBanner({
     hydrate();
   }, [hydrate]);
 
+  // 打开设置页（以及连接状态变化）时向电脑要一次桌面状态快照；
+  // 旧桌面不回应，首用清单保持「在电脑上完成」；请求失败静默（不影响页面）。
+  useEffect(() => {
+    if (!connected) return;
+    void sendStatusRequest().catch(() => undefined);
+  }, [connected]);
+
   if (!hydrated || dismissed) return null;
 
-  const done = (connected ? 1 : 0) + (micReady ? 1 : 0);
+  const asrConfigured = desktop?.asrConfigured === true;
+  const asrHasKey = desktop?.asrHasKey === true;
+  const accessibilityTrusted = desktop?.accessibilityTrusted === true;
+  const done =
+    (connected ? 1 : 0) +
+    (micReady ? 1 : 0) +
+    (asrConfigured ? 1 : 0) +
+    (accessibilityTrusted ? 1 : 0);
   const remaining = FIRST_USE_TOTAL - done;
 
   // 内容即原 FirstUseCard 的四步（D79 / v16：从宠物首屏移到设置页 banner）；
-  // 手机只本地验证「连接 + 麦克风」，后两步明确写「在电脑上完成」，不伪造完成态。
+  // 前两步由手机本地验证，后两步只听电脑 desktop.status，不伪造完成态。
   const steps = [
     {
       key: "connect",
@@ -173,18 +189,26 @@ function FirstUseBanner({
     {
       key: "bailian",
       title: "在电脑上配置百炼语音",
-      done: false,
+      done: asrConfigured,
       current: false,
       desktop: true,
-      description: "不配置时录音能开始，但一定转写失败；音频只发往电脑配置的百炼。",
+      description: asrConfigured
+        ? "电脑已保存百炼 Key，并已通过配置检查；录音只发往电脑配置的百炼。"
+        : desktop !== null && asrHasKey
+          ? "电脑已保存 Key，但配置还不完整（同意上传 / 地址或模型）。"
+          : "不配置时录音能开始，但一定转写失败；音频只发往电脑配置的百炼。",
     },
     {
       key: "accessibility",
       title: "在电脑上开启辅助功能",
-      done: false,
+      done: accessibilityTrusted,
       current: false,
       desktop: true,
-      description: "不开只会复制到剪贴板，没有「回车 / 清空」，也不会自动输入。",
+      description: accessibilityTrusted
+        ? "电脑已授权；转写完会自动输入，结果卡有「回车 / 清空」。"
+        : desktop?.accessibilityTrusted === false
+          ? "还没授权；不开只会复制到剪贴板，没有「回车 / 清空」，也不会自动输入。"
+          : "不开只会复制到剪贴板，没有「回车 / 清空」，也不会自动输入。",
     },
   ] as const;
 
@@ -198,7 +222,8 @@ function FirstUseBanner({
         onClick={() => onExpandedChange(!expanded)}
       >
         <span className="min-w-0 truncate text-[13px] leading-[19px] text-muted-foreground">
-          <span className="text-foreground">首用清单</span> · 还差 {remaining} 步
+          <span className="text-foreground">首用清单</span>
+          {remaining > 0 ? ` · 还差 ${remaining} 步` : " · 已完成"}
         </span>
         {expanded ? (
           <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
@@ -230,7 +255,7 @@ function FirstUseBanner({
                     <span className="text-[14px] leading-5 text-foreground">{step.title}</span>
                     {step.done && <span className="text-[12px] text-success">已完成</span>}
                     {step.current && <span className="text-[12px] text-decide">当前步骤</span>}
-                    {step.desktop && (
+                    {!step.done && step.desktop && (
                       <span className="text-[12px] text-muted-foreground">在电脑上完成</span>
                     )}
                   </div>

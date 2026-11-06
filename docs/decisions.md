@@ -823,3 +823,16 @@
 - 原因：用户偏好；鸿蒙字体的字形更几何、字面比 MiSans 略窄，15/400 下「老年机」感更弱。
 - 代价：字体 3.9 MB → 8.1 MB；冷启动首次字体加载约 430 ms（`font-display: swap`，先系统字体后替换），TTF 解析峰值内存略升。
 - 规范：`app/src/mobile/assets/fonts/HarmonyOS_SansSC_Regular.ttf`、`app/src/mobile/assets/fonts/README.md`、`app/src/mobile/styles/clean.css`、`app/src/mobile/features/settings/more-page.tsx`（关于行）、`docs/prd/shell/SPEC.md`；真机 BKQ-AN10 用 CDP `CSS.getPlatformFontsForNode` 确认实际渲染为 `HarmonyOS Sans SC`。
+
+## D92 · 首用清单 ③④ 改为桌面真实状态上报（2026-11-06，取代 D79/D80 的「手机不显示 ③④ 完成态」）
+
+- 背景：用户反馈「电脑上明明配置了百炼 AK（API Key）、手机语音也能正常识别，但手机设置页的首用清单仍显示 ③ 百炼未完成、还差 2 步」。排查确认是产品规则而非识别故障：手机只能本地判断 ① 连接 / ② 麦克风（`micReady`），③ 百炼 Key / ④ 辅助功能固定写死 `done: false` +「在电脑上完成」，banner 永远「还差 2 步」；只要电脑配置过，显示就与事实矛盾。
+- 决策：
+  - 新增桌面 → 手机消息 `desktop.status`（v1）：`{ asrConfigured, asrHasKey, accessibilityTrusted, ts }`，**只有布尔 + 时间戳**，不含 Key、掩码、路径、提示词。`asrConfigured` = 已同意上传 + 已保存 Key + 地址/模型校验通过；`accessibilityTrusted` = macOS 辅助功能已授权（非 macOS 恒 false）。
+  - 发送时机：新客户端连接时直发；手机发 `status.request` 时随 `status` 快照一起广播。手机在连接成功、回前台、打开设置页时各拉一次，所以电脑改配置后无需重装 App。
+  - 手机首用清单 done 改为 `① + ② + ③ + ④` 的真实值：③④ 只在桌面明确上报 `true` 时显示「已完成」；false / 未知（旧桌面不发）仍显示「在电脑上完成」；全部完成时 banner 从「还差 N 步」变为「首用清单 · 已完成」。
+  - ③ 的完成条件从「已保存 Key 且测试通过」改为「`asrConfigured = true`」：测试结果不落盘、无法跨重启复现，配置校验（同意 + Key + 地址/模型）才是可长期上报的真实状态。
+- 原因：用户要的是「手机显示与电脑事实一致」。用真实状态上报既满足诉求，也保留原红线「不伪造完成态」——手机只渲染桌面明确上报的值，未知一律降级为「在电脑上完成」。
+- 放弃：只改文案/不把 ③④ 计入步数（手机仍无法回答「到底配了没有」）；靠手机端「录音成功过一次」反推 ③（要等用户先录一次，且无法覆盖 ④；只作为旧桌面兜底也不如直接上报准确）；把整个 `asr.json` 配置或 Key 掩码发上手机（隐私红线，且手机不需要）。
+- 代价：协议多一种消息（旧手机忽略、旧桌面不发，双向兼容）；辅助功能在 TCC 里变化后要等下一次快照才更新（不实时，接受）。
+- 规范：`protocol/README.md`（desktop.status）、`app/src-tauri/src/desktop_server.rs`、`app/src/protocol/messages.ts`、`app/src/mobile/features/first-use/store.ts`、`app/src/mobile/app.tsx`、`app/src/mobile/features/settings/more-page.tsx`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`。
