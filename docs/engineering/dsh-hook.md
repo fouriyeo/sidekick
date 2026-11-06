@@ -194,7 +194,7 @@ DSH session/event
   - completed：`remainingMs ?? 3000`；到点回 `resume ?? idle`；新状态取消旧定时器；超过 `remainingMs` 的旧 completed 忽略。
   - asking 持久；working 覆盖 sleep；away 优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
 - `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
-- `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音。
+- `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音；总音量 `MASTER_GAIN = 3.9`（在 3 倍基础上再 +30%，约 +2.3 dB；单音峰值最高 0.702，不削波）。
 - `pet-stage.tsx` / `sprite-pet.tsx`：`data-ai-state`；帧动画图集按状态候选链播放；只 transform/opacity。
 - `pet-page.tsx`：宠物页组装（顶部条 → 会话卡 → 鲸鱼 → 麦克风）。
 - `app.tsx`：上线/回前台 `sendStatusRequest()`；状态不追加到聊天。

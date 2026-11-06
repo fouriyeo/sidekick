@@ -75,10 +75,12 @@ const PATTERNS: Record<PetSoundKind, Tone[]> = {
 export const ASK_REPEAT_MS = 12_000;
 
 /**
- * 总音量倍数：1 = 原始设计音量，2 = 放大一倍，3 = 在放大一倍的基础上再 +50%。
- * 单音峰值最高 0.18 × 3 = 0.54；开工音 E5+B5 有 0.04s 重叠，峰值和 0.78 < 1，不削波。
+ * 总音量倍数：1 = 原始设计音量，2 = 放大一倍，3 = 在放大一倍的基础上再 +50%，
+ * 3.9 = 在当前基础上再 +30%（约 +2.3 dB）。
+ * 单音峰值最高 0.18 × 3.9 = 0.702（< 1）；开工音 E5+B5 起音重叠 0.04s，但第一音此时
+ * 已指数衰减，重叠区包络和约 0.13 × 3.9 ≈ 0.50，不会叠出更高峰，不削波。
  */
-const MASTER_GAIN = 3;
+const MASTER_GAIN = 3.9;
 
 function defaultContextFactory(): AudioContext | null {
   if (typeof AudioContext === "undefined") return null;

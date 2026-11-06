@@ -165,7 +165,7 @@ describe("createPetSounds 门禁", () => {
     ).toEqual([523.25, 659.25, 783.99]);
   });
 
-  it("播放音量是设计值的三倍（MASTER_GAIN = 3）", () => {
+  it("播放音量是设计值的 3.9 倍（MASTER_GAIN = 3.9，+30%）", () => {
     const { sounds } = createSounds();
     sounds.unlock();
 
@@ -176,7 +176,7 @@ describe("createPetSounds 门禁", () => {
           ((gain.linearRampToValueAtTime.mock.calls[0]?.[0] as number | undefined) ?? 0).toFixed(6),
         ),
       ),
-    ).toEqual([0.39, 0.42, 0.45]);
+    ).toEqual([0.507, 0.546, 0.585]);
   });
 });
 
