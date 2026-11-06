@@ -43,7 +43,7 @@ const CARD_CLASS = "overflow-hidden rounded-2xl border-[0.5px] border-border bg-
 
 /** 卡片内分隔线：0.5 hairline，左侧留 14 与文字对齐。 */
 function Hairline() {
-  return <div aria-hidden="true" className="ml-3.5 h-[0.5px] bg-border" />;
+  return <div aria-hidden="true" className="ml-4 h-[0.5px] bg-border" />;
 }
 
 type Option<T extends string | number> = { value: T; label: string };
@@ -55,18 +55,22 @@ function Segmented<T extends string | number>({
   options,
   onChange,
   className,
+  fit = false,
 }: {
   label: string;
   value: T;
   options: ReadonlyArray<Option<T>>;
   onChange: (value: T) => void;
+  /** true 时按内容宽度自适应（行内跟标签同排）；false 时铺满并三等分（区块内）。 */
+  fit?: boolean;
   className?: string;
 }) {
   return (
     <fieldset
       aria-label={label}
       className={cn(
-        "m-0 grid shrink-0 grid-cols-3 gap-0.5 rounded-[10px] bg-muted p-0.5",
+        "m-0 grid shrink-0 gap-1 rounded-[11px] bg-muted p-[3px]",
+        fit ? "w-fit grid-flow-col auto-cols-max" : "grid-cols-3",
         className,
       )}
     >
@@ -79,7 +83,7 @@ function Segmented<T extends string | number>({
             type="button"
             aria-pressed={active}
             className={cn(
-              "flex min-h-11 min-w-0 items-center justify-center rounded-[8px] px-0 text-[13px] leading-[15px] font-normal whitespace-nowrap transition-colors",
+              "flex min-h-9 min-w-0 items-center justify-center rounded-[9px] px-2.5 text-[13px] leading-[18px] font-normal whitespace-nowrap transition-colors",
               active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
             )}
             onClick={() => onChange(option.value)}
@@ -107,12 +111,12 @@ function ChoiceBlock<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="px-3.5 py-2.5">
-      <p className="m-0 text-base leading-5 text-foreground">{title}</p>
+    <div className="px-4 pt-4 pb-4">
+      <p className="m-0 text-[15px] leading-[21px] text-foreground">{title}</p>
       {description && (
-        <p className="mt-0.5 text-[13px] leading-[17px] text-muted-foreground">{description}</p>
+        <p className="mt-1 text-[13px] leading-[19px] text-muted-foreground">{description}</p>
       )}
-      <div className="mt-2">
+      <div className="mt-3">
         <Segmented label={title} value={value} options={options} onChange={onChange} />
       </div>
     </div>
@@ -185,7 +189,7 @@ function FirstUseBanner({
   ] as const;
 
   return (
-    <section aria-label="首用清单" className="mx-4 mt-3">
+    <section aria-label="首用清单" className="mx-4 mt-4">
       <button
         type="button"
         aria-expanded={expanded}
@@ -193,7 +197,7 @@ function FirstUseBanner({
         className="flex min-h-11 w-full items-center justify-between gap-2 text-left"
         onClick={() => onExpandedChange(!expanded)}
       >
-        <span className="min-w-0 truncate text-[13px] leading-[18px] text-muted-foreground">
+        <span className="min-w-0 truncate text-[13px] leading-[19px] text-muted-foreground">
           <span className="text-foreground">首用清单</span> · 还差 {remaining} 步
         </span>
         {expanded ? (
@@ -204,12 +208,12 @@ function FirstUseBanner({
       </button>
 
       {expanded && (
-        <div className="mt-2 rounded-2xl border-[0.5px] border-border bg-card p-3.5">
+        <div className="mt-2 rounded-2xl border-[0.5px] border-border bg-card p-4">
           <ul className="m-0 list-none p-0">
             {steps.map((step, index) => (
               <li
                 key={step.key}
-                className="flex gap-2.5 border-t-[0.5px] border-border py-2.5 first:border-t-0 first:pt-0"
+                className="flex gap-3 border-t-[0.5px] border-border py-3 first:border-t-0 first:pt-0"
               >
                 <span
                   aria-hidden="true"
@@ -223,20 +227,20 @@ function FirstUseBanner({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[15px] leading-5 text-foreground">{step.title}</span>
+                    <span className="text-[14px] leading-5 text-foreground">{step.title}</span>
                     {step.done && <span className="text-[12px] text-success">已完成</span>}
                     {step.current && <span className="text-[12px] text-decide">当前步骤</span>}
                     {step.desktop && (
                       <span className="text-[12px] text-muted-foreground">在电脑上完成</span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[13px] leading-[18px] text-muted-foreground">
+                  <p className="mt-1 text-[13px] leading-[19px] text-muted-foreground">
                     {step.description}
                   </p>
                   {step.key === "connect" && !connected && (
                     <button
                       type="button"
-                      className="mt-1 flex min-h-11 items-center text-[15px] text-primary"
+                      className="mt-2 flex min-h-11 items-center text-[14px] text-primary"
                       onClick={openOffline}
                     >
                       去连接
@@ -264,32 +268,32 @@ function AboutCard({
 }) {
   return (
     <section aria-label="数据与关于" className={CARD_CLASS}>
-      <p className="px-3.5 pt-3 text-[13px] leading-[18px] text-muted-foreground">
+      <p className="px-4 pt-4 text-[13px] leading-[20px] text-muted-foreground">
         宠物数据只存在本机，无账号、无云同步，卸载会丢失。
       </p>
-      <p className="px-3.5 pt-1 pb-3 text-[13px] leading-[18px] text-muted-foreground">
+      <p className="px-4 pt-2 pb-4 text-[13px] leading-[20px] text-muted-foreground">
         版本 · Sidekick 0.1.0 · Android
         <br />
-        字体 · MiSans（小米，免费商用）
+        字体 · HarmonyOS Sans（华为，免费商用）
       </p>
       <Hairline />
       {resetConfirm ? (
-        <div className="px-3.5 py-2.5">
-          <p className="m-0 text-base leading-5 text-foreground">要重置宠物吗？</p>
-          <p className="mt-1 text-[13px] leading-[18px] text-muted-foreground">
+        <div className="px-4 py-4">
+          <p className="m-0 text-[15px] leading-[21px] text-foreground">要重置宠物吗？</p>
+          <p className="mt-1.5 text-[13px] leading-[19px] text-muted-foreground">
             外观、反馈与显示设置都会恢复默认；本机存档会被清空，且不能恢复。连接与语音配置不受影响。
           </p>
-          <div className="mt-1 flex justify-end">
+          <div className="mt-2 flex justify-end">
             <button
               type="button"
-              className="flex min-h-11 items-center px-2 text-[15px] leading-5 text-muted-foreground"
+              className="flex min-h-11 items-center px-2 text-[14px] leading-5 text-muted-foreground"
               onClick={() => onResetConfirmChange(false)}
             >
               取消
             </button>
             <button
               type="button"
-              className="flex min-h-11 items-center px-2 text-[15px] leading-5 text-destructive"
+              className="flex min-h-11 items-center px-2 text-[14px] leading-5 text-destructive"
               onClick={() => void onReset()}
             >
               重置
@@ -299,7 +303,7 @@ function AboutCard({
       ) : (
         <button
           type="button"
-          className="flex min-h-12 w-full items-center px-3.5 text-left text-base leading-5 text-destructive"
+          className="flex min-h-[56px] w-full items-center px-4 text-left text-[15px] leading-[21px] text-destructive"
           onClick={() => onResetConfirmChange(true)}
         >
           重置宠物
@@ -375,7 +379,7 @@ export function MorePage() {
         {settingsError && (
           <p
             role="alert"
-            className="mx-4 mt-3 rounded-2xl border-[0.5px] border-destructive bg-card px-3.5 py-2.5 text-[13px] leading-[18px] text-destructive"
+            className="mx-4 mt-3 rounded-2xl border-[0.5px] border-destructive bg-card px-4 py-3.5 text-[13px] leading-[19px] text-destructive"
           >
             {settingsError}
           </p>
@@ -383,20 +387,20 @@ export function MorePage() {
 
         <FirstUseBanner expanded={firstUseOpen} onExpandedChange={setFirstUseOpen} />
 
-        <div className="mx-4 mt-3.5 flex flex-col gap-3.5">
+        <div className="mx-4 mt-5 flex flex-col gap-5">
           <section aria-label="连接" className={CARD_CLASS}>
             <button
               type="button"
               aria-label={`连接状态：${connection.label}，点按查看连接`}
-              className="flex min-h-[52px] w-full items-center gap-2.5 px-3.5 text-left"
+              className="flex min-h-[60px] w-full items-center gap-4 px-4 text-left"
               onClick={openOffline}
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-base leading-5 text-foreground">
+                <span className="block truncate text-[15px] leading-[21px] text-foreground">
                   {connection.label}
                   {connection.detail ? ` · ${connection.detail}` : ""}
                 </span>
-                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                <span className="mt-1 block truncate text-[13px] leading-[19px] text-muted-foreground">
                   局域网直连 · 断线自动重连
                 </span>
               </span>
@@ -405,8 +409,8 @@ export function MorePage() {
           </section>
 
           <section aria-label="外观" className={CARD_CLASS}>
-            <div className="flex min-h-[52px] items-center gap-2.5 px-3.5">
-              <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+            <div className="flex min-h-[60px] items-center gap-4 px-4">
+              <span className="min-w-0 flex-1 truncate text-[15px] leading-[21px] text-foreground">
                 外观
               </span>
               <Segmented
@@ -414,16 +418,16 @@ export function MorePage() {
                 value={preference}
                 options={THEME_OPTIONS}
                 onChange={setThemePreference}
-                className="w-[180px]"
+                fit
               />
             </div>
           </section>
 
           <section aria-label="反馈" className={CARD_CLASS}>
-            <div className="flex min-h-12 items-center gap-2.5 px-3.5">
+            <div className="flex min-h-[56px] items-center gap-4 px-4">
               <Label
                 htmlFor="pet-haptics"
-                className="min-w-0 flex-1 text-base leading-5 font-normal text-foreground"
+                className="min-w-0 flex-1 text-[15px] leading-[21px] font-normal text-foreground"
               >
                 震动
               </Label>
@@ -435,10 +439,10 @@ export function MorePage() {
               />
             </div>
             <Hairline />
-            <div className="flex min-h-12 items-center gap-2.5 px-3.5">
+            <div className="flex min-h-[56px] items-center gap-4 px-4">
               <Label
                 htmlFor="pet-sound"
-                className="min-w-0 flex-1 text-base leading-5 font-normal text-foreground"
+                className="min-w-0 flex-1 text-[15px] leading-[21px] font-normal text-foreground"
               >
                 AI 音效
               </Label>
@@ -450,8 +454,8 @@ export function MorePage() {
               />
             </div>
             <Hairline />
-            <div className="flex min-h-12 items-center gap-2.5 px-3.5">
-              <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+            <div className="flex min-h-[56px] items-center gap-4 px-4">
+              <span className="min-w-0 flex-1 truncate text-[15px] leading-[21px] text-foreground">
                 试听
               </span>
               <span className="flex shrink-0 items-center gap-1">
@@ -467,7 +471,7 @@ export function MorePage() {
                     )}
                     <button
                       type="button"
-                      className="flex min-h-11 items-center px-0.5 text-[15px] leading-5 text-primary"
+                      className="flex min-h-11 items-center px-0.5 text-[14px] leading-5 text-primary"
                       onClick={() => previewPetSound(kind)}
                     >
                       {PET_SOUND_LABEL[kind]}
@@ -477,8 +481,8 @@ export function MorePage() {
               </span>
             </div>
             <Hairline />
-            <div className="flex min-h-[52px] items-center gap-2.5 px-3.5">
-              <span className="min-w-0 flex-1 truncate text-base leading-5 text-foreground">
+            <div className="flex min-h-[60px] items-center gap-4 px-4">
+              <span className="min-w-0 flex-1 truncate text-[15px] leading-[21px] text-foreground">
                 减少动效
               </span>
               <Segmented
@@ -486,25 +490,25 @@ export function MorePage() {
                 value={pet.settings.reduceMotion}
                 options={REDUCE_OPTIONS}
                 onChange={(value) => void update({ reduceMotion: value })}
-                className="w-[180px]"
+                fit
               />
             </div>
           </section>
 
-          <p className="mx-4 text-[13px] leading-[18px] text-muted-foreground">
+          <p className="mx-4 text-[13px] leading-[20px] text-muted-foreground">
             录音时不响 · 系统静音或勿扰下可能无法完全遵守。
           </p>
 
           <section aria-label="显示" className={CARD_CLASS}>
-            <div className="flex min-h-[52px] items-center gap-2.5 px-3.5">
+            <div className="flex min-h-[60px] items-center gap-4 px-4">
               <span className="min-w-0 flex-1">
                 <Label
                   htmlFor="pet-keep-awake"
-                  className="block text-base leading-5 font-normal text-foreground"
+                  className="block text-[15px] leading-[21px] font-normal text-foreground"
                 >
                   屏幕常亮
                 </Label>
-                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                <span className="mt-1 block truncate text-[13px] leading-[19px] text-muted-foreground">
                   放在桌边时不自动熄屏，会更耗电
                 </span>
               </span>
@@ -546,15 +550,17 @@ export function MorePage() {
           <section aria-label="用量" className={CARD_CLASS}>
             <button
               type="button"
-              className="flex min-h-[52px] w-full items-center gap-2.5 px-3.5 text-left"
+              className="flex min-h-[60px] w-full items-center gap-4 px-4 text-left"
               onClick={() => setView("usage")}
             >
               <span className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-wash text-signal">
                 <Gauge className="size-4" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-base leading-5 text-foreground">用量</span>
-                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                <span className="block truncate text-[15px] leading-[21px] text-foreground">
+                  用量
+                </span>
+                <span className="mt-1 block truncate text-[13px] leading-[19px] text-muted-foreground">
                   本机 DSH 账本 · Token 与花费
                 </span>
               </span>
@@ -571,12 +577,14 @@ export function MorePage() {
           <section aria-label="消息通道" className={CARD_CLASS}>
             <button
               type="button"
-              className="flex min-h-[52px] w-full items-center gap-2.5 px-3.5 text-left"
+              className="flex min-h-[60px] w-full items-center gap-4 px-4 text-left"
               onClick={() => setView("chat")}
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-base leading-5 text-foreground">消息通道</span>
-                <span className="mt-px block truncate text-[13px] leading-[17px] text-muted-foreground">
+                <span className="block truncate text-[15px] leading-[21px] text-foreground">
+                  消息通道
+                </span>
+                <span className="mt-1 block truncate text-[13px] leading-[19px] text-muted-foreground">
                   和电脑互发的调试通道
                 </span>
               </span>
@@ -585,7 +593,7 @@ export function MorePage() {
           </section>
         </div>
 
-        <p className="mx-4 mt-4 text-[13px] leading-[18px] text-muted-foreground">
+        <p className="mx-4 mt-4 text-[13px] leading-[20px] text-muted-foreground">
           录音只在按住时采集，音频不保存；没有账号，也不上传其他数据。
         </p>
       </PageScroll>

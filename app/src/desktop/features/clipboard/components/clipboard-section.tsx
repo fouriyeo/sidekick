@@ -3,6 +3,7 @@ import { Check, Pin, Search, Trash2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SPRING_POP, SPRING_SLIDE } from "@/desktop/lib/motion";
 import { ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
 import { PageBody, PageShell } from "@/desktop/shell/page-shell";
@@ -24,11 +25,6 @@ import {
   formatClipboardKind,
   useClipboardStore,
 } from "../clipboard-store";
-
-/** 行按下：很短的回弹，只做「按到了」的确认，不制造列表抖动。 */
-const PRESS_SPRING = { type: "spring", stiffness: 640, damping: 42, mass: 0.6 } as const;
-/** 复制成功的 ✓：稍微过冲一点再落定，iOS 的轻快感。 */
-const COPY_SPRING = { type: "spring", stiffness: 520, damping: 26, mass: 0.6 } as const;
 
 /**
  * 内容页（剪贴板唯一归属）：页头一行计数 + 清空，正文是搜索、暂停开关与记录列表。
@@ -203,8 +199,8 @@ function ClipboardRow({
     <motion.div
       className="dsl-row group gap-2.5 hover:bg-accent"
       style={{ transitionProperty: "background-color" }}
-      whileTap={reduced ? undefined : { scale: 0.997 }}
-      transition={reduced ? { duration: 0 } : PRESS_SPRING}
+      whileTap={reduced ? undefined : { scale: 0.985 }}
+      transition={reduced ? { duration: 0 } : SPRING_SLIDE}
     >
       <button
         type="button"
@@ -226,7 +222,7 @@ function ClipboardRow({
           className="flex shrink-0 items-center text-signal"
           initial={reduced ? false : { opacity: 0, scale: 0.55 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={reduced ? { duration: 0 } : COPY_SPRING}
+          transition={reduced ? { duration: 0 } : SPRING_POP}
         >
           <Check aria-hidden="true" className="size-4" />
           <span className="sr-only">已复制</span>

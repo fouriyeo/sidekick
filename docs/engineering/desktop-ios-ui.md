@@ -138,13 +138,14 @@ related:
 | --- | --- | --- |
 | 一级页切换 | `dsl-page-in` 320ms | 淡入 + 轻微上浮/缩放；换页自然重播 |
 | 设置二级页 push | `dsl-page-push` 340ms | 从右侧 26px 推入 + 淡入；返回不反向播 |
-| 侧栏选中滑块 | Motion `layoutId` + spring | stiffness 520 / damping 40 / mass 0.8 |
-| 分段滑块 | Motion `layoutId` + spring | stiffness 520 / damping 38 / mass 0.7 |
-| 按压缩放 | CSS / Motion | 行 0.996、按钮 0.97、checkbox 0.94；只做「按到了」的确认 |
-| 弹层入场 | `dsl-dialog-in` 300ms / 遮罩 220ms | 遮罩 blur 从 0→10；容器从 0.94 + 8px 下方弹起 |
+| 侧栏选中滑块 | Motion `layoutId` + spring | `SPRING_SLIDE`：stiffness 520 / damping 24 / mass 0.8（ζ≈0.59，过冲 10%） |
+| 分段滑块 | Motion `layoutId` + spring | 同一令牌 `SPRING_SLIDE`：滑块跨选项 morph 时越位再落定 |
+| 按压缩放 | CSS / Motion | 行 0.985 / 按钮 0.94 / checkbox 0.9 / 导航项 0.965；按下 90ms 快进、松手 320ms 回弹，只弹一次 |
+| 弹层入场 | `dsl-dialog-in` 320ms / 遮罩 220ms | 遮罩 blur 从 0→10；容器从 0.94 + 8px 下方弹起，back-out 过冲到约 1.03 |
 | 数值变化 | Motion 补间 400ms | 只给用量 2×2 数字；首帧直接显示最终值，不数数 |
 | 柱阵入场 | Motion `scaleY` 420ms、20ms 错峰 | 只在日期窗口变化时重播，同区间刷新不重播 |
 
+- **Q 弹（D89）**：弹簧只服务控件层——滑块、按压、弹层；页面 fade / push 不加过冲（730 内容列整体回弹会晕）。手机端在 `clean.css` 用同一根 back-out 曲线（`--spring-back`）：结果卡 300ms pop-in、会话行 260ms + 24ms 错峰、麦克风圆钮按下 0.92、开关滑块 transform 320ms；WebView 103 只认 `transform`，不写 CSS `translate` / `scale` 属性。
 - **reduce-motion**（`prefers-reduced-motion: reduce`）：关掉页面 / 弹层入场、行与按钮过渡、按压缩放；滑块 spring 退化为 `duration: 0`；保留状态切换的即时反馈。
 - **reduced-transparency**（`prefers-reduced-transparency: reduce`）：玻璃层去掉 `backdrop-filter`，背景退回 `--card` 实底；不允许在此时仍依赖模糊可读性。
 - 动画只动 `transform` / `opacity` / 颜色；不做无限循环装饰；后台 / 失焦由 `useMotionPause` 暂停。

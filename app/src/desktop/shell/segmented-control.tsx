@@ -1,10 +1,9 @@
 import { cn } from "cn";
 import { motion, useReducedMotion } from "motion/react";
 import { useId } from "react";
+import { SPRING_SLIDE } from "@/desktop/lib/motion";
 
 type SegmentedOption<T extends string> = { value: T; label: string };
-
-const SPRING = { type: "spring", stiffness: 520, damping: 38, mass: 0.7 } as const;
 
 /**
  * iOS 26 分段控件：胶囊玻璃轨道 + 白色滑块，滑块在选项之间 spring morph。
@@ -47,7 +46,7 @@ export function SegmentedControl<T extends string>({
               <motion.span
                 layoutId={thumbId}
                 className="dsl-seg-thumb"
-                transition={reduced ? { duration: 0 } : SPRING}
+                transition={reduced ? { duration: 0 } : SPRING_SLIDE}
               />
             )}
             <span className="relative z-10">{option.label}</span>

@@ -791,3 +791,35 @@
 - 放弃：保留 Dock + 只加托盘（用户明确不要 Dock）；菜单栏显示状态文字（占空间、v1 只放图标）；关窗时弹「仍在后台运行」提示（多余）；用彩色 logo 当托盘图标（模板图下变纯色块）；用 `LSUIElement` 写 Info.plist（Tauri 侧 `set_activation_policy` 即可，打包配置不用改）。
 - 代价：没有 ⌘Q / Cmd+Tab / App 菜单，退出只能右键菜单；隐藏窗口的 WebView 仍占内存（约 100–200MB）；**无头环境截不到菜单栏与模板图反色，必须人工 `pnpm tauri dev` 目检**。
 - 规范：`docs/engineering/desktop-tray.md`、`app/src-tauri/src/tray.rs`、`app/src-tauri/src/lib.rs`、`app/src-tauri/Cargo.toml`、`scripts/gen-tray-icon.py`、`AGENTS.md`（关窗行为与已知坑）。
+
+## D89 · Q 弹动效：弹簧降到 ζ≈0.59（过冲 10%）+ 手机端补回弹（2026-11-06，调整 D86 的弹簧参数与 D80 的手机壳动效）
+
+- 背景：用户提出「想要那种 Q 弹的动画」，并先问了现有动画到底有没有在用。实测现状：桌面 8 处 Motion 全在跑，但 damping 40/38 使 ζ≈0.98–1.0（几乎不回弹）；页面/弹层是单段缓出；按压只有单向缩放。手机端一处 Motion 都没有，结果卡硬切出现，麦克风钮的 `active:scale-*` 在 WebView 103 上根本不生效（Tailwind v4 编译成 `scale` 属性）。
+- 决策（用户选择：两端都做、过冲 10%）：
+  - 桌面只做**控件层**：新增 `desktop/lib/motion.ts` 的 `SPRING_SLIDE`（520 / 24 / 0.8，ζ≈0.59、过冲 10%）与 `SPRING_POP`（520 / 20 / 0.6，过冲 12%），侧栏滑块、分段滑块、剪贴板复制勾共用；按压改成「按下 90ms 快进 `--press-in`、松手 320ms back-out 回弹」，行 0.985 / 按钮 0.94 / checkbox 0.9 / 导航项 0.965；弹层 320ms 同曲线（过冲到约 1.03）。
+  - 页面 fade / push **不加过冲**：730 宽内容列整体回弹会晕，转场只负责层级。
+  - 手机不引 Motion（全量 72KB gzip，且 WebView 103 的 rAF 驱动有掉帧风险），在 `clean.css` 用 CSS back-out `cubic-bezier(0.34, 1.56, 0.64, 1)`：结果卡 300ms pop-in、会话行 260ms + 24ms 错峰、麦克风圆钮按下 0.92（写 `transform`，绕开不支持的 `scale` 属性）、开关滑块改 `transform` 320ms（原来用 `left`，硬切）。
+  - 宠物本体不动：图集不重绘、不加 filter 是红线，Q 弹只做控件与容器层。
+- 原因：Q 弹的物理量是阻尼比而不是时长——ζ 0.55–0.7 才有 8%–13% 的一次过冲；原参数 ζ≈1 是「稳」，只改时长只能变快慢、变不出回弹。
+- 放弃：全站统一弹簧（页面转场也弹，晕）；手机引入 Motion（包体 + 兼容风险）；CSS `linear()` 造弹簧（WebView 113+ 才有，103 不支持）；给鲸鱼加 scale/squash（红线，且与帧动画叠加会显廉价）。
+- 代价：回弹更抢注意力，频繁操作时可能觉得「多动」；桌面 `--spring-back` 是 CSS 曲线、Motion 是物理弹簧，两边只能对齐过冲量，手感不能完全一致。真机 / 真窗口手感必须人工目检，无头环境验证不了。
+- 规范：`app/src/desktop/lib/motion.ts`（+ `motion.test.ts` 用 ζ/过冲公式守住区间）、`app/src/desktop/styles/ios.css`（`--spring-back` / `--press-in` / 按压 / 弹层 / reduce-motion）、`app/src/mobile/styles/clean.css`、`mic-button.tsx`、`session-row.tsx`、`toggle.tsx`、`docs/engineering/desktop-ios-ui.md` §6、`docs/prd/shell/{PRD,SPEC}.md`。
+
+## D90 · 手机设置页字号/间距收敛：回到 15 号 + 加大留白（2026-11-06，调整 D80/D81 的实现值）
+
+- 背景：用户在真机上看设置页，反馈「文字太大、跟老年机一样；文字之间留白不够；按钮/切换 tab 距离太近；整体没有留白美学」。
+- 实测：代码里行标题是 `text-base`（16px）、行高 20（1.25），说明 13/17 且与标题只隔 1px、分段控件高 44 且段间隙 2px、卡片间距 14——远离 D80 写的 15 号，且密度偏大。
+- 决策：行标题 16/20 → **15/21**；说明 13/17 → **13/19**，与标题间距 1 → **4**；段落说明 13/18 → **13/20**；单行卡片行高 48 → **56**、双行 52 → **60**；左右内边距 14 → **16**；卡片间距 14 → **20**；分段控件高 44 → **36**、段间隙 2 → **4**、轨道内边距 2 → **3**；行内分段不再固定 180px，改为按内容自适应展开（`fit`：跟随系统 72px / 浅色·深色 46px，选项内边距 10px，杜绝「跟随系统」贴边）；块内分段仍三等分铺满；标签与控件间距 10 → **16**；首用清单展开卡内边距/步骤间距同步放大。
+- 原因：16px（1.25 行高）+ 1px 标题说明间距 + 44 高分段的组合是「老年机」感的主要来源；字号回到 15 并拉开留白后，同屏信息量不变、呼吸感明显。
+- 放弃：全局缩字号（宠物页/结果卡不跟随）、用 500/600 字重做层级（仍是 400）。
+- 代价：设置页整体高度约 +8%，一屏能看到的组数略少。
+- 规范：`app/src/mobile/features/settings/more-page.tsx`（真机实测 15/21、gap 20、段高 36/gap 4）。
+
+## D91 · 手机字体改用 HarmonyOS Sans SC（2026-11-06，取代 D81 的 MiSans 部分；D81 的字号/行高规则继续有效）
+
+- 背景：D81 曾在 MiSans 与 HarmonyOS Sans 之间选了 MiSans；用户看过真机设置页后明确表示「我喜欢鸿蒙字体」。
+- 决策：手机端随包 **HarmonyOS Sans SC Regular（400）原始 TTF，8.1 MB，未做任何改动**（不转 WOFF2、不 subset），`clean.css` `@font-face` + `.mobile-clean` 首选，系统字体做缺字回退；桌面不加载。删除 `MiSans-Normal.woff2`（−3.9 MB），APK 净增约 4 MB。
+- 许可：《HarmonyOS Sans 字体许可协议》允许免费商用/嵌入/随软件分发，但要求注明使用、不得修改字体、不得单独再分发或销售——所以**不能像 MiSans 那样把 TTF 转成 WOFF2**；软件内注明在「设置 › 数据与关于」，来源与协议记在 `app/src/mobile/assets/fonts/README.md`。
+- 原因：用户偏好；鸿蒙字体的字形更几何、字面比 MiSans 略窄，15/400 下「老年机」感更弱。
+- 代价：字体 3.9 MB → 8.1 MB；冷启动首次字体加载约 430 ms（`font-display: swap`，先系统字体后替换），TTF 解析峰值内存略升。
+- 规范：`app/src/mobile/assets/fonts/HarmonyOS_SansSC_Regular.ttf`、`app/src/mobile/assets/fonts/README.md`、`app/src/mobile/styles/clean.css`、`app/src/mobile/features/settings/more-page.tsx`（关于行）、`docs/prd/shell/SPEC.md`；真机 BKQ-AN10 用 CDP `CSS.getPlatformFontsForNode` 确认实际渲染为 `HarmonyOS Sans SC`。

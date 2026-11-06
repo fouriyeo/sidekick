@@ -50,7 +50,7 @@ related:
 | 麦克风 | 56 薄荷圆钮居中、距底 24；录音 / 处理时展开为 `min(90vw,420px)` 胶囊；覆盖层在按钮上方，不推动按钮 |
 | 内容 | 左右 16；卡片圆角 16、间距 10–12；列表行 52；超长文本单行省略 |
 | 结果卡 | 弹窗三段：grabber 36×4 + header 40（20 check + 16/400 标题 + 12 时间 / 复制 icon）+ content 34（13/400 单行）+ footer 40（15/400 清空 / ↵ 回车，44 热区）；总高约 125 |
-| 字号 / 字重 | 字体 MiSans Normal（随包 WOFF2，D81）；inline 17 / 会话标题 15 / 正文 13 / caption 12；只 400；不用 mono 大写装饰；设置说明行高 1.45 |
+| 字号 / 字重 | 字体 HarmonyOS Sans SC Regular（随包原始 TTF，D91）；inline 17 / 会话标题 15 / 正文 13 / caption 12；只 400；不用 mono 大写装饰；设置说明行高 19（13/19） |
 | 触控 | 所有可点目标 ≥44×44；主操作 48–56 |
 
 ## 2. 桌面壳骨架
@@ -273,7 +273,7 @@ related:
 - **WebView 103**：颜色用 hex；高度用 `100vh` / `100%`；不用 CSS `translate` 属性做居中；dialog / sheet / tooltip 中的 `translate` 类是已知待修项，新壳不再新增。
 - **双主题**：深色 / 浅色都要成立；桌面令牌与玻璃材质在 `.desktop-ios`（`ios.css`），手机在 `.mobile-clean`（`clean.css`），互不影响；宠物舞台随主题（D76）；桌面麦克风浮层用 `.deep-sea-scope` 恒定深海；手机扫码取景同样恒深海。
 - **玻璃层级**：玻璃只给控件层（侧栏 / 工具栏 / 动作组 / 分段轨道 / 辅助功能提示 / 弹层遮罩），内容白卡与行保持不透明；玻璃层数要克制，不在滚动内容里叠 `backdrop-filter`；弹层走 portal，需 `.desktop-ios` 同时挂在 `<html>` 上才吃得到桌面令牌。
-- **动效**：只动 `transform` / `opacity` / 颜色；页面 fade 320ms / 二级页 push 340ms、滑块 spring、按压缩放、弹层 300ms、用量数字 400ms、柱阵 420ms/20ms 错峰；`prefers-reduced-motion` 关页面与弹层入场、按压与滑块动效，`prefers-reduced-transparency` 玻璃退为 `--card` 实底；不做循环装饰；后台 / 失焦暂停。
+- **动效**：只动 `transform` / `opacity` / 颜色；页面 fade 320ms / 二级页 push 340ms（**不加过冲**）、滑块 `SPRING_SLIDE` spring（ζ≈0.59、过冲 10%）、按压缩放（按下 90ms、松手 320ms 回弹）、弹层 320ms、用量数字 400ms、柱阵 420ms/20ms 错峰；手机端 `clean.css` 用同一根 `--spring-back` 曲线做结果卡 / 会话行 / 麦克风钮 / 开关（WebView 103 只认 `transform`）；`prefers-reduced-motion` 关页面与弹层入场、按压与滑块动效，`prefers-reduced-transparency` 玻璃退为 `--card` 实底；不做循环装饰；后台 / 失焦暂停。
 - **无障碍**：侧栏状态摘要行是按钮并带 `aria-label`（如「连接状态，点按查看」）；色点 `aria-hidden`、文字始终在场；页头标题是页面 h1；当前导航项 `aria-current="page"`；辅助功能提示是 `role="status"`、不抢焦点；键盘焦点顺序按视觉顺序。
 - **拖动区**：侧栏顶部 38 与 sticky 工具栏（含二级页返回行）是拖动区；拖动区内若放按钮，必须另有可用入口，不能把拖动区当唯一可点目标。
 

@@ -91,7 +91,7 @@ export function SessionRow({
     <li
       data-session-tool={row.tool ?? "none"}
       className={cn(
-        "relative flex h-[52px] items-center gap-2.5 px-3.5",
+        "ms-row relative flex h-[52px] items-center gap-2.5 px-3.5",
         row.display === "working" && "bg-[var(--wash)]",
         className,
       )}

@@ -184,7 +184,7 @@ UI 事件
 - 视觉系统是「深海声呐」双主题（2026-11-04，D71）：`tokens.css` 的 `:root` 放深色（无 JS/回退兜底），`:root[data-theme="light"]` 放浅色；**颜色不再由 `.dark` 块承载**。`.dark` 只服务 Tailwind 的 `dark:` 变体，必须与 `data-theme` 同步。
 - 令牌全部 hex（真机 WebView 103 不支持 `oklch`/`color-mix`），`--radius: 12px`；语义色板与用法见 [standards/visual.md](./standards/visual.md)。
 - **平台作用域令牌与材质**：`tokens.css` 是两端基线，桌面另有 `desktop/styles/ios.css`（只挂 `.desktop-ios`；D85 定「简约 iOS」结构，D86 升级 Liquid Glass：玻璃 `--glass-bg` / `--glass-highlight` / `--glass-shadow`、卡片双层阴影 + 顶部高光、画布环境光、2.6% grain，浅色 `#F2F2F7` 页 / `#FFF` 卡 / `#0A7764` 薄荷，深色 `#000` 页 / `#1C1C1E` 卡 / `#3FC4A0` 薄荷），手机另有 `mobile/styles/clean.css`（只挂 `.mobile-clean`，D80/D81）。两个作用域互不影响：改桌面不要动手机，反之亦然；组件只用语义类（`bg-card` / `text-muted-foreground` / `border-border` / `bg-signal`），桌面不写死颜色、不新增颜色变量。**玻璃只给控件层**（侧栏 / 工具栏 / 动作组 / 分段轨道 / 弹层遮罩），内容卡与列表保持不透明。
-- 字体：桌面用系统栈 `-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", …`，不随包字体；手机用随包 MiSans Normal 400（D81，`.mobile-clean` 首选，系统字体做缺字回退）。数据/地址/用量用 `ui-monospace`；`body` 开启 `tabular-nums`。
+- 字体：桌面用系统栈 `-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", …`，不随包字体；手机用随包 HarmonyOS Sans SC Regular 400（D91，`.mobile-clean` 首选，系统字体做缺字回退；原始 TTF 不可转格式/subset）。数据/地址/用量用 `ui-monospace`；`body` 开启 `tabular-nums`。
 - 图标统一用 lucide-react；不引 iconfont、不内联一大段 SVG path。
 
 **主题运行时**

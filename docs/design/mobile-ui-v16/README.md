@@ -23,7 +23,7 @@ related:
 - 宠物页：会话卡置顶（折叠 1 行 / 展开 5 行、working wash、× 二次确认）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 24）。
 - 结果卡：弹窗三段 grabber + header 16「已输入」+ content 13 单行 + footer 15「清空 / ↵ 回车」；总高约 125；清空二次确认。
 - 令牌：`app/src/mobile/styles/clean.css`（`.mobile-clean`，浅/深两套，只作用手机）。
-- 字体：MiSans Normal 400（随包 WOFF2，D81）；会话标题 15；设置说明行高 1.45；正文 13。
+- 字体：HarmonyOS Sans SC Regular 400（随包原始 TTF，D91；D81 时期为 MiSans）；会话标题 15；设置说明行高 19；正文 13。
 - 角色：鲸鱼不重绘、不染色、不加 filter；桌面端不受影响。
 
 ## 实现与决策

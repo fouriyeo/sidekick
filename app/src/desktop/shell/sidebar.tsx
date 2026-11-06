@@ -7,6 +7,7 @@ import {
 } from "@/desktop/lib/desktop-clients-store";
 import { DESKTOP_NAV, type DesktopView, type SettingsSection } from "@/desktop/lib/desktop-nav";
 import { useDesktopStatusStore } from "@/desktop/lib/desktop-status-store";
+import { SPRING_SLIDE } from "@/desktop/lib/motion";
 import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { AI_STATE_LABEL } from "@/shared/lib/status";
 import { SignalDot, type SignalStatus } from "@/shared/ui/signal-dot";
@@ -97,8 +98,6 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
   );
 }
 
-const SPRING = { type: "spring", stiffness: 520, damping: 40, mass: 0.8 } as const;
-
 function NavItem({
   label,
   shortcut,
@@ -127,7 +126,7 @@ function NavItem({
         <motion.span
           layoutId="dsl-nav-active"
           className="dsl-nav-thumb"
-          transition={reduced ? { duration: 0 } : SPRING}
+          transition={reduced ? { duration: 0 } : SPRING_SLIDE}
         />
       )}
       <span className={cn("relative z-10 shrink-0", active ? "text-signal" : "opacity-90")}>

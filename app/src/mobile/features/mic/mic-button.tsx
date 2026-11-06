@@ -715,7 +715,7 @@ export function MicButton({
           {showResult && (
             <div
               data-testid="mic-result-card"
-              className="pointer-events-auto w-full overflow-hidden rounded-[20px] border-[0.5px] border-border bg-card text-left shadow-[0_12px_32px_-12px_rgba(20,30,35,0.18)]"
+              className="mic-result-card pointer-events-auto w-full overflow-hidden rounded-[20px] border-[0.5px] border-border bg-card text-left shadow-[0_12px_32px_-12px_rgba(20,30,35,0.18)]"
             >
               <div
                 aria-hidden="true"
@@ -851,7 +851,7 @@ export function MicButton({
           aria-label={listening ? "松开结束录音" : "按住说话，麦克风"}
           aria-pressed={listening}
           className={cn(
-            "pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border text-sm font-medium transition-transform active:scale-[0.98]",
+            "press-spring pointer-events-auto flex h-14 touch-none select-none items-center justify-center gap-2.5 rounded-full border text-sm font-medium",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pet-signal focus-visible:ring-offset-2 focus-visible:ring-offset-pet-bg",
             recording
               ? "w-[min(90vw,420px)] px-5"

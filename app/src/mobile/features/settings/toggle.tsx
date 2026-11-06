@@ -11,7 +11,7 @@ type ToggleProps = {
  * 手机设置页开关（v16）：轨道 51×31、滑块 27、44dp 触控热区。
  *
  * 不用 shadcn Switch：它用 Tailwind 的 `translate-x-*`（编译成 CSS `translate` 属性），
- * 安卓 WebView 103 不支持，真机上滑块不会动。这里用 `left` 定位。
+ * 安卓 WebView 103 不支持，真机上滑块不会动。这里用 `left` 起点 + `transform` 位移。
  */
 export function Toggle({ id, label, checked, onCheckedChange }: ToggleProps) {
   return (
@@ -32,10 +32,9 @@ export function Toggle({ id, label, checked, onCheckedChange }: ToggleProps) {
         )}
       >
         <span
-          className={cn(
-            "absolute top-[2px] size-[27px] rounded-full bg-white transition-colors",
-            checked ? "left-[22px]" : "left-[2px]",
-          )}
+          aria-hidden="true"
+          className="toggle-knob absolute top-[2px] left-[2px] size-[27px] rounded-full bg-white"
+          style={{ transform: checked ? "translateX(20px)" : "translateX(0)" }}
         />
       </span>
     </button>
