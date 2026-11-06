@@ -12,11 +12,20 @@ export function PageShell({
   children,
   className,
   transition = "fade",
+  size = "regular",
+  tone = "default",
+  bottomGap = "regular",
 }: {
   children: ReactNode;
   className?: string;
   /** fade = 一级页切换；push = 设置二级页从右侧推入（iOS push 动效）。 */
   transition?: "fade" | "push";
+  /** regular = 730 单列；wide = 956（用量等宽幅数据页，D97）。 */
+  size?: "regular" | "wide";
+  /** usage = 用量页的深海/海玻璃画布底色（页面级例外）。 */
+  tone?: "default" | "usage";
+  /** compact = 底部 24，宽幅数据页首屏尽量不出现滚动。 */
+  bottomGap?: "regular" | "compact";
 }) {
   const [scrolled, setScrolled] = useState(false);
 
@@ -25,7 +34,10 @@ export function PageShell({
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           data-page-scroll
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+            tone === "usage" && "dsl-usage-canvas",
+          )}
           onScroll={(event) => {
             const next = event.currentTarget.scrollTop > 6;
             setScrolled((current) => (current === next ? current : next));
@@ -33,7 +45,9 @@ export function PageShell({
         >
           <div
             className={cn(
-              "mx-auto flex w-full max-w-[730px] flex-col px-7 pb-16",
+              "mx-auto flex w-full flex-col px-7",
+              size === "wide" ? "max-w-[956px]" : "max-w-[730px]",
+              bottomGap === "compact" ? "pb-6" : "pb-16",
               transition === "push" ? "dsl-page-push" : "dsl-page-in",
               className,
             )}

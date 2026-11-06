@@ -1,0 +1,733 @@
+/* ============================================================================
+   手机「用量」页（D98）
+   ----------------------------------------------------------------------------
+   只作用在 `.mobile-usage` 作用域，不影响宠物页/设置页；桌面端不加载本文件。
+   视觉：无卡片、hairline 分区；花费当主角，区间驱动剖面 + Token 光谱 + 账本。
+   兼容：WebView 103 不用 `:has`、CSS `translate`/`scale` 属性、`oklch`、
+   `color-mix`、`dvh`；只写 hex/rgba 与 transform；手机只竖屏。
+   ========================================================================== */
+
+.mobile-usage {
+  /* 浅色：薄荷/蓝/琥珀/紫/灰绿；涨用珊瑚。 */
+  --mu-c1: #0a7764;
+  --mu-c2: #3f74d9;
+  --mu-c3: #a97624;
+  --mu-c4: #6b5fd0;
+  --mu-c5: #5f7975;
+  --mu-up: #c0522f;
+  --mu-grid: rgba(10, 26, 23, 0.1);
+  --mu-rule-strong: rgba(10, 26, 23, 0.26);
+  --mu-tip-bg: #ffffff;
+  --mu-tip-border: rgba(10, 26, 23, 0.12);
+  --mu-tip-shadow: 0 12px 28px rgba(15, 45, 38, 0.16);
+}
+
+.dark .mobile-usage,
+html[data-theme="dark"] .mobile-usage {
+  --mu-c1: #3fc4a0;
+  --mu-c2: #7ea8ff;
+  --mu-c3: #e8b46e;
+  --mu-c4: #9a8df3;
+  --mu-c5: #6f8b87;
+  --mu-up: #ff8f6d;
+  --mu-grid: rgba(255, 255, 255, 0.1);
+  --mu-rule-strong: rgba(255, 255, 255, 0.26);
+  --mu-tip-bg: #1c1c1e;
+  --mu-tip-border: rgba(255, 255, 255, 0.14);
+  --mu-tip-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------------------------------------------------------------------------
+   区间：4 项下划线 tab（整行 44，选中薄荷 2px）
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-range {
+  display: flex;
+  align-items: stretch;
+  height: 44px;
+  min-width: 0;
+  margin: 2px 16px 0;
+  padding: 0;
+  border: 0;
+}
+
+.mobile-usage .mu-underline-tab {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-usage .mu-underline-tab::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  left: calc(50% - 12px);
+  width: 24px;
+  height: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
+
+.mobile-usage .mu-underline-tab[aria-pressed="true"] {
+  color: var(--foreground);
+}
+
+.mobile-usage .mu-underline-tab[aria-pressed="true"]::after {
+  background: var(--primary);
+}
+
+.mobile-usage .mu-underline-tab:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Hero：花费当主角
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-hero {
+  padding: 14px 16px 0;
+}
+
+.mobile-usage .mu-hero-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-usage .mu-hero-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-hero-period {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-hero-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  min-width: 0;
+  margin-top: 7px;
+}
+
+.mobile-usage .mu-amount {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-delta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: none;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-delta-up {
+  color: var(--mu-up);
+}
+
+.mobile-usage .mu-delta-down {
+  color: var(--mu-c1);
+}
+
+.mobile-usage .mu-delta-flat {
+  color: var(--muted-foreground);
+}
+
+.mobile-usage .mu-delta-label {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.mobile-usage .mu-readouts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mobile-usage .mu-readout {
+  min-width: 0;
+}
+
+.mobile-usage .mu-readout-label {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.mobile-usage .mu-readout-value {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   分区：hairline 分隔、无卡片
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-section {
+  margin: 14px 16px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.mobile-usage .mu-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 18px;
+}
+
+.mobile-usage .mu-section-title {
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mobile-usage .mu-section-meta {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-conclusion {
+  margin: 10px 0 2px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ---------------------------------------------------------------------------
+   花费剖面
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-chart-wrap {
+  margin-top: 6px;
+}
+
+.mobile-usage .mu-chart {
+  position: relative;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mobile-usage .mu-chart-svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+  overflow: visible;
+}
+
+.mobile-usage .mu-base {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.mobile-usage .mu-avg {
+  stroke: var(--mu-rule-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+.mobile-usage .mu-area {
+  opacity: 0.9;
+}
+
+.mobile-usage .mu-trace {
+  fill: none;
+  stroke: var(--mu-c1);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mobile-usage .mu-trace-thin {
+  stroke-width: 1.15;
+}
+
+.mobile-usage .mu-trace-cut {
+  fill: none;
+  stroke: var(--mu-c1);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 3 4;
+  opacity: 0.6;
+}
+
+.mobile-usage .mu-node {
+  fill: var(--background);
+  stroke: var(--mu-c1);
+  stroke-width: 1.2;
+}
+
+.mobile-usage .mu-halo {
+  fill: var(--mu-c1);
+  opacity: 0.18;
+}
+
+.mobile-usage .mu-dot {
+  fill: var(--mu-c1);
+}
+
+.mobile-usage .mu-bar {
+  opacity: 0.95;
+}
+
+.mobile-usage .mu-ref-line {
+  stroke: var(--mu-rule-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.8;
+}
+
+.mobile-usage .mu-ref-label {
+  fill: var(--muted-foreground);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-usage .mu-bar-value {
+  fill: var(--foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-usage .mu-x-label {
+  fill: var(--muted-foreground);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-usage .mu-x-label-now {
+  fill: var(--mu-c1);
+}
+
+/* 入场描线：只做线/面积，不做循环动画；reduced-motion 由 data-motion 关掉。 */
+.mobile-usage .mu-chart[data-motion="on"] .mu-trace {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mu-draw 900ms cubic-bezier(0.22, 0.75, 0.2, 1) 80ms forwards;
+}
+
+.mobile-usage .mu-chart[data-motion="on"] .mu-area {
+  opacity: 0;
+  animation: mu-area-in 620ms ease-out 240ms forwards;
+}
+
+@keyframes mu-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mu-area-in {
+  to {
+    opacity: 0.9;
+  }
+}
+
+/* 气泡：HTML，白底/深灰底，靠边收拢。 */
+.mobile-usage .mu-tip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--mu-tip-border);
+  border-radius: 9px;
+  background: var(--mu-tip-bg);
+  box-shadow: var(--mu-tip-shadow);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-tip-below {
+  transform: translate(-50%, 10px);
+}
+
+.mobile-usage .mu-tip-date {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-usage .mu-tip-value {
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-usage .mu-tip-tokens {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   Token 构成：8px 光谱 + 五行图例
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-spectrum {
+  display: flex;
+  height: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--border);
+}
+
+.mobile-usage .mu-spectrum i {
+  display: block;
+  flex: 0 0 auto;
+  height: 100%;
+}
+
+.mobile-usage .mu-legend {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-usage .mu-legend-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto 48px;
+  gap: 8px;
+  align-items: center;
+  min-height: 26px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mobile-usage .mu-legend-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.mobile-usage .mu-legend-label {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-legend-value {
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-legend-pct {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   分组账本
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.mobile-usage .mu-group-tabs {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mobile-usage .mu-group-tabs .mu-underline-tab {
+  flex: 0 0 auto;
+  /* 视觉 36 高；伪元素上下各扩 4px，命中区仍是 44。 */
+  height: 36px;
+  padding: 0 10px;
+}
+
+.mobile-usage .mu-group-tabs .mu-underline-tab::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: 0;
+  bottom: -4px;
+  left: 0;
+}
+
+.mobile-usage .mu-group-tabs .mu-underline-tab:first-child {
+  padding-left: 0;
+}
+
+.mobile-usage .mu-group-tabs .mu-underline-tab::after {
+  bottom: 0;
+}
+
+.mobile-usage .mu-sort {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-rows {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-usage .mu-row {
+  padding: 9px 0 8px;
+  border-top: 1px solid var(--border);
+}
+
+.mobile-usage .mu-row-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mobile-usage .mu-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-usage .mu-row-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-row-sub {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-row-nums {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.mobile-usage .mu-row-tokens {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-row-cost {
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-row-bar {
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.mobile-usage .mu-row-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--mu-c1);
+  opacity: 0.72;
+}
+
+.mobile-usage .mu-row-other .mu-row-title,
+.mobile-usage .mu-row-other .mu-row-cost {
+  color: var(--muted-foreground);
+}
+
+.mobile-usage .mu-row-other .mu-row-bar i {
+  background: var(--muted-foreground);
+  opacity: 0.35;
+}
+
+/* ---------------------------------------------------------------------------
+   价格行（只读）+ 底部隐私
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-usage .mu-price-label {
+  flex: none;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mobile-usage .mu-price-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  text-align: right;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-usage .mu-privacy {
+  margin: 12px 16px 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* ---------------------------------------------------------------------------
+   状态：无卡片，一行结论 + 文字动作
+   ------------------------------------------------------------------------- */
+.mobile-usage .mu-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 16px 0;
+}
+
+.mobile-usage .mu-state-text {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.mobile-usage .mu-action {
+  flex: none;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-usage .mu-action:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.mobile-usage .mu-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 16px 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.mobile-usage .mu-note-warn {
+  color: var(--destructive);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-usage .mu-chart[data-motion="on"] .mu-trace,
+  .mobile-usage .mu-chart[data-motion="on"] .mu-area {
+    animation: none;
+  }
+
+  .mobile-usage .mu-chart[data-motion="on"] .mu-trace {
+    stroke-dashoffset: 0;
+  }
+
+  .mobile-usage .mu-chart[data-motion="on"] .mu-area {
+    opacity: 0.9;
+  }
+}

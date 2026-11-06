@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import type { Root } from "react-dom/client";
 import { MobileApp } from "@/mobile/app";
 import "@/mobile/styles/clean.css";
+import "@/mobile/styles/usage.css";
 
 export function mountMobile(root: Root): void {
   root.render(

@@ -1,0 +1,506 @@
+/* ============================================================================
+   用量页（D97）—— 深潜仪表 / 花费剖面
+   ----------------------------------------------------------------------------
+   只服务桌面「用量」：宽幅数据页（900 内容宽）、无卡片、等宽数字、剖面图。
+   颜色/字体全部走这里的 --usage-* 令牌，浅/深两套；不写死在组件里。
+   桌面其它页仍是 ios.css 的分组列表；本文件在 app.tsx 里排在 ios.css 之后。
+   ========================================================================== */
+
+.dsl-usage {
+  /* 浅色：海玻璃纸面 */
+  --usage-c1: #0a7764; /* 缓存读 / 主信号 */
+  --usage-c2: #3f74d9; /* 输入 */
+  --usage-c3: #a97624; /* 输出 */
+  --usage-c4: #6b5fd0; /* 缓存写 */
+  --usage-c5: #5f7975; /* 推理 */
+  --usage-up: #c0522f;
+  --usage-grid: rgba(10, 26, 23, 0.09);
+  --usage-grid-strong: rgba(10, 26, 23, 0.16);
+  --usage-axis: var(--muted-foreground);
+  --usage-tip-bg: var(--popover);
+  --usage-tip-shadow: 0 16px 36px rgba(15, 45, 38, 0.16);
+  --usage-glow: none;
+  --usage-area-top: 0.13;
+  --usage-mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, "Roboto Mono", monospace;
+}
+
+html[data-theme="dark"] .dsl-usage,
+html.dark .dsl-usage {
+  /* 深色：深海仪表 */
+  --usage-c1: #46d6b0;
+  --usage-c2: #7ea8ff;
+  --usage-c3: #e8b46e;
+  --usage-c4: #9a8df3;
+  --usage-c5: #6f8b87;
+  --usage-up: #ff8f6d;
+  --usage-grid: rgba(233, 243, 240, 0.075);
+  --usage-grid-strong: rgba(233, 243, 240, 0.16);
+  --usage-axis: #6f8580;
+  --usage-tip-bg: var(--popover);
+  --usage-tip-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  --usage-glow: drop-shadow(0 0 9px rgba(70, 214, 176, 0.34));
+  --usage-area-top: 0.26;
+}
+
+html[data-theme="dark"] .desktop-ios .dsl-usage-canvas,
+html.dark .desktop-ios .dsl-usage-canvas {
+  background:
+    radial-gradient(760px 360px at 86% -10%, rgba(70, 214, 176, 0.055), transparent 62%),
+    radial-gradient(620px 320px at -4% 108%, rgba(91, 91, 214, 0.045), transparent 60%),
+    linear-gradient(180deg, #08151a 0%, #061013 40%, #040b0d 100%);
+}
+
+html[data-theme="light"] .desktop-ios .dsl-usage-canvas {
+  background: linear-gradient(180deg, #f5f8f7 0%, #eef2f1 46%, #e9efee 100%);
+}
+
+html.dsl-vibrancy .desktop-ios .dsl-usage-canvas {
+  background: transparent;
+}
+
+.dsl-usage .dsl-num {
+  font-family: var(--usage-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------- hero ---------------- */
+.dsl-usage-hero { padding-top: 16px; }
+.dsl-usage-hero-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.dsl-usage-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.01em;
+}
+.dsl-usage-period {
+  font-family: var(--usage-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.dsl-usage-hero-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
+}
+.dsl-usage-amount-line { display: flex; align-items: baseline; min-width: 0; }
+.dsl-usage-cur {
+  font-family: var(--usage-mono);
+  font-size: 22px;
+  color: var(--muted-foreground);
+  margin-right: 5px;
+  letter-spacing: 0;
+}
+.dsl-usage-amount {
+  font-family: var(--usage-mono);
+  font-size: 58px;
+  line-height: 0.92;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.dsl-usage-delta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-left: 18px;
+  font-family: var(--usage-mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+  transform: translateY(-4px);
+}
+.dsl-usage-delta[data-direction="up"] { color: var(--usage-up); }
+.dsl-usage-delta[data-direction="down"] { color: var(--usage-c1); }
+.dsl-usage-delta[data-direction="flat"] { color: var(--muted-foreground); }
+.dsl-usage-delta .label {
+  margin-left: 6px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-readouts { display: flex; align-items: flex-end; flex: none; padding-bottom: 1px; }
+.dsl-usage-readout {
+  padding-left: 22px;
+  margin-left: 22px;
+  border-left: 1px solid var(--border);
+}
+.dsl-usage-readout:first-child { padding-left: 0; margin-left: 0; border-left: 0; }
+.dsl-usage-readout .ro-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-readout .ro-value {
+  font-family: var(--usage-mono);
+  font-size: 23px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.dsl-usage-rule { height: 1px; background: var(--border); margin-top: 15px; }
+.dsl-usage-cache-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+/* ---------------- tabs ---------------- */
+.dsl-usage-tabs { display: flex; align-items: center; height: 30px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.dsl-usage-tab {
+  position: relative;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+.dsl-usage-tab:hover { color: var(--foreground); }
+.dsl-usage-tab[aria-pressed="true"] { color: var(--foreground); }
+.dsl-usage-tab-ind {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--signal);
+}
+
+/* ---------------- 花费剖面 ---------------- */
+.dsl-usage-chart-block { padding-top: 12px; }
+.dsl-usage-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 18px;
+  margin-bottom: 2px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-avg {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--usage-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-avg i {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin-right: 7px;
+  border-top: 1px dashed var(--usage-grid-strong);
+}
+.dsl-usage-avg b { margin-left: 5px; font-weight: 400; color: var(--foreground); }
+.dsl-usage-chart { position: relative; }
+.dsl-usage-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.dsl-usage-grid-line { stroke: var(--usage-grid); stroke-width: 1; }
+.dsl-usage-base-line { stroke: var(--usage-grid-strong); stroke-width: 1; }
+.dsl-usage-avg-line { stroke: var(--usage-grid-strong); stroke-width: 1; stroke-dasharray: 3 5; }
+.dsl-usage-area { pointer-events: none; }
+.dsl-usage-trace {
+  fill: none;
+  stroke: var(--usage-c1);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: var(--usage-glow);
+}
+.dsl-usage-trace-cut {
+  fill: none;
+  stroke: var(--usage-c1);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 3 5;
+  opacity: 0.55;
+}
+.dsl-usage-axis-label {
+  fill: var(--usage-axis);
+  font-family: var(--usage-mono);
+  font-size: 9.5px;
+  opacity: 0.85;
+}
+.dsl-usage-x-label { fill: var(--muted-foreground); font-family: var(--usage-mono); font-size: 10.5px; }
+.dsl-usage-x-label.now { fill: var(--usage-c1); }
+.dsl-usage-peak-dot { fill: var(--usage-c1); opacity: 0.55; }
+.dsl-usage-peak-label { fill: var(--muted-foreground); font-family: var(--usage-mono); font-size: 10.5px; }
+.dsl-usage-anno { opacity: 0; animation: dsl-usage-fade 0.5s ease 0.7s forwards; }
+.dsl-usage-today-line { stroke: var(--usage-c1); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.3; }
+.dsl-usage-today-dot { fill: var(--usage-c1); }
+.dsl-usage-today-halo {
+  fill: var(--usage-c1);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dsl-usage-halo 3.2s ease-out 1.2s infinite;
+}
+.dsl-usage-hover-line { stroke: var(--usage-grid-strong); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; }
+.dsl-usage-hover-dot { fill: var(--background); stroke: var(--usage-c1); stroke-width: 1.5; opacity: 0; }
+.dsl-usage-chart.is-hover .dsl-usage-hover-line,
+.dsl-usage-chart.is-hover .dsl-usage-hover-dot { opacity: 1; }
+.dsl-usage-chart.is-hover .dsl-usage-anno { opacity: 0; transition: opacity 0.15s; }
+.dsl-usage-tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, calc(-100% - 12px));
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--usage-tip-bg);
+  box-shadow: var(--usage-tip-shadow);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.dsl-usage-tip[data-placement="below"] { transform: translate(-50%, 12px); }
+.dsl-usage-tip .tip-date {
+  font-family: var(--usage-mono);
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-tip .tip-value { font-family: var(--usage-mono); font-size: 14px; color: var(--foreground); }
+.dsl-usage-tip .tip-tokens {
+  font-family: var(--usage-mono);
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  margin-top: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-bar-value { fill: var(--foreground); font-family: var(--usage-mono); font-size: 11.5px; }
+.dsl-usage-ref-line { stroke: var(--usage-grid-strong); stroke-width: 1; stroke-dasharray: 3 5; }
+.dsl-usage-ref-label { fill: var(--muted-foreground); font-family: var(--usage-mono); font-size: 10px; }
+.dsl-usage-stop-top { stop-color: var(--usage-c1); stop-opacity: var(--usage-area-top); }
+.dsl-usage-stop-bottom { stop-color: var(--usage-c1); stop-opacity: 0; }
+.dsl-usage-bar-top { stop-color: var(--usage-c1); stop-opacity: 0.85; }
+.dsl-usage-bar-bottom { stop-color: var(--usage-c1); stop-opacity: 0.16; }
+
+@keyframes dsl-usage-halo {
+  0% { transform: scale(1); opacity: 0.35; }
+  70%, 100% { transform: scale(3.4); opacity: 0; }
+}
+@keyframes dsl-usage-fade { to { opacity: 1; } }
+
+/* ---------------- 下半区 ---------------- */
+.dsl-usage-lower {
+  display: grid;
+  grid-template-columns: 296px minmax(0, 1fr);
+  column-gap: 48px;
+  padding-top: 20px;
+}
+.dsl-usage-comp { display: flex; flex-direction: column; }
+.dsl-usage-comp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-comp-total { font-family: var(--usage-mono); font-size: 11px; color: var(--muted-foreground); }
+.dsl-usage-stack {
+  display: flex;
+  gap: 1px;
+  height: 10px;
+  margin-top: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--border);
+}
+.dsl-usage-stack i { display: block; height: 100%; min-width: 2px; flex: 0 0 auto; }
+.dsl-usage-legend { margin-top: 11px; display: flex; flex-direction: column; }
+.dsl-usage-legend-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto 48px;
+  align-items: center;
+  gap: 10px;
+  height: 25px;
+  font-size: 12.5px;
+}
+.dsl-usage-dot { width: 7px; height: 7px; border-radius: 2px; }
+.dsl-usage-legend-label { color: var(--muted-foreground); }
+.dsl-usage-legend-value { font-family: var(--usage-mono); font-size: 11.5px; color: var(--muted-foreground); }
+.dsl-usage-legend-pct {
+  font-family: var(--usage-mono);
+  font-size: 11.5px;
+  color: var(--foreground);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dsl-usage-price {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dsl-usage-price-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+.dsl-usage-price-link:hover { background: var(--accent); }
+.dsl-usage-price-meta {
+  font-family: var(--usage-mono);
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+.dsl-usage-groups-head { display: flex; align-items: center; justify-content: space-between; height: 28px; }
+.dsl-usage-sort { font-size: 11px; color: var(--muted-foreground); }
+.dsl-usage-thead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 82px 88px;
+  gap: 14px;
+  padding: 2px 0 4px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-thead span:nth-child(3),
+.dsl-usage-thead span:nth-child(4) { text-align: right; }
+.dsl-usage-rows { display: flex; flex-direction: column; min-height: 272px; }
+.dsl-usage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 82px 88px;
+  gap: 14px;
+  align-items: center;
+  height: 34px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+.dsl-usage-row:last-child { border-bottom: 1px solid var(--border); }
+.dsl-usage-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dsl-usage-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  line-height: 15px;
+  color: var(--foreground);
+}
+.dsl-usage-row[data-other="true"] .dsl-usage-row-title { color: var(--muted-foreground); }
+.dsl-usage-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 13px;
+  color: var(--muted-foreground);
+}
+.dsl-usage-row-bar { height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.dsl-usage-row-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--signal);
+  opacity: 0.72;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dsl-usage-row[data-other="true"] .dsl-usage-row-bar i { background: var(--muted-foreground); opacity: 0.45; }
+.dsl-usage-row-tokens,
+.dsl-usage-row-cost {
+  font-family: var(--usage-mono);
+  font-size: 11.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dsl-usage-row-tokens { color: var(--muted-foreground); }
+.dsl-usage-row-cost { color: var(--foreground); }
+.dsl-usage-empty {
+  padding: 22px 0;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+/* 构成色：五桶同名类，桌面/手机各自令牌 */
+.dsl-usage-c1 { background: var(--usage-c1); }
+.dsl-usage-c2 { background: var(--usage-c2); }
+.dsl-usage-c3 { background: var(--usage-c3); }
+.dsl-usage-c4 { background: var(--usage-c4); }
+.dsl-usage-c5 { background: var(--usage-c5); }
+.dsl-usage-dot.dsl-usage-c1 { background: var(--usage-c1); }
+.dsl-usage-dot.dsl-usage-c2 { background: var(--usage-c2); }
+.dsl-usage-dot.dsl-usage-c3 { background: var(--usage-c3); }
+.dsl-usage-dot.dsl-usage-c4 { background: var(--usage-c4); }
+.dsl-usage-dot.dsl-usage-c5 { background: var(--usage-c5); }
+
+/* ---------------- 状态 ---------------- */
+.dsl-usage-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 48px 0;
+}
+.dsl-usage-state-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.dsl-usage-state-title { font-size: 15px; color: var(--foreground); }
+.dsl-usage-state-action {
+  font-size: 12.5px;
+  color: var(--signal);
+  padding: 4px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.dsl-usage-state-action:hover { background: var(--accent); }
+
+/* ---------------- 窄窗口：960 最小窗口 ---------------- */
+@media (max-width: 1079px) {
+  .dsl-usage-hero-row { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .dsl-usage-readouts { align-self: stretch; }
+  .dsl-usage-amount { font-size: 52px; }
+  .dsl-usage-lower { grid-template-columns: minmax(0, 1fr); row-gap: 28px; }
+  .dsl-usage-groups { order: 1; }
+  .dsl-usage-comp { order: 2; }
+  .dsl-usage-price { margin-top: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsl-usage-today-halo { display: none; }
+  .dsl-usage-area { transition: none; }
+  .dsl-usage-anno { animation: none; opacity: 1; }
+  .dsl-usage-row-bar i { transition: none; }
+}

@@ -890,3 +890,35 @@
 - 放弃：写清除标记（TTL/落盘副作用、还要处理自动清除提示）；桌面桥过滤（会影响桌面概览）；为每个会话排精确 `setTimeout`（后台节流、快照更新时重排，复杂度不值）；做成设置项（用户明确要固定 2 小时，先固定）。
 - 代价：最多 60 秒延迟；只隐藏手机列表，电脑端仍保留该会话；后台定时器被节流时靠回前台刷新兜底。
 - 规范：`app/src/shared/lib/sessions.ts`、`app/src/mobile/features/sessions/{session-store.ts,use-session-clock.ts}`、`app/src/mobile/features/pet/pet-page.tsx`、`app/src/shared/lib/sessions.test.ts`、`app/src/mobile/features/pet/pet-page.test.tsx`、`docs/prd/hook/{PRD,SPEC,ACCEPTANCE}.md`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`AGENTS.md`。
+
+## D97 · 电脑端「用量」页重做：深潜仪表 / 花费剖面（2026-11-06，取代 D82/D85 的 2×2 卡片与 730 单列用量页）
+
+- 背景：用户明确说电脑端用量页「太丑」，希望 Token 消耗这一块有视觉设计；先出 HTML 视觉稿确认「深潜仪表」方向（宽幅、花费当主角、花费剖面曲线、Token 光谱、带占比条的账本），确认后落地。用量页是 D85 之后第一个从 iOS 分组列表里独立出来的**宽幅数据页**。
+- 决策：
+  - 页面骨架：`PageShell` 新增 `size="wide"`（`max-w-[956px]`，1180 窗内左右 28 后约 900 内容）与 `tone="usage"`（滚动容器铺深海/海玻璃画布，`html.dsl-vibrancy` 下退透明）；`PageHeader` 新增 `compact`（不渲染 34/600 大标题，工具栏 17/600 标题常显，保留 `sr-only h1`）。
+  - 内容：花费 hero（58px 等宽数字 + `≈` + 环比 + 区间日期）→ 花费剖面（当前区间 `days`、y 轴取整刻度、日均虚线、峰值标注、今天呼吸点/末段虚线、单日柱 + 昨日基准、悬停气泡、sr-only 每日表）→ Token 光谱（五桶、最大余数百分比、缓存读薄荷 c1）+ 分组账本（行内按金额降序、占比小柱、价格行贴底）→ 价格表 Sheet（行为不变）。
+  - 去掉：2×2 汇总卡、胶囊分段、固定近 30 天柱阵、五行 Token 构成列表、页脚/说明句；区间与分组改成下划线 tab（`aria-pressed`）。
+  - 令牌/样式：新增 `app/src/desktop/styles/usage.css`（`.dsl-usage` 作用域，浅/深 `--usage-*`、`.dsl-num` 等宽数字、画布、图表/账本/状态；宽 1080 断点下 hero 换行、下半区单列）；`app.tsx` 在 `ios.css` 之后引入；**不改 `tokens.css`，不把用量页颜色塞回 ios.css**。
+  - 共享纯函数：`app/src/shared/lib/usage-chart.ts`（刻度/路径/日期/环比/构成百分比/占比/排序），桌面与手机共用；`TOKEN_PART_COLORS` 不再用于新页面（缓存读固定 c1）。
+  - Dev mock 改成按区间生成连续日 + 自洽 `previous` + 五桶，浏览器验收与截图才有可信曲线。
+  - 明确不做：视觉稿里的主题切换按钮（正式主题仍走设置/系统）、视觉稿的 4 项导航（现为 D94 的 5 项）、图表库、协议/Rust/后端改动。
+- 原因：花费是用户看用量时的第一问题，2×2 卡片把花费、Token、会话、命中率平权，反而没有主角；线性剖面 + 取整刻度 + 今日/单日处理能把「这个月/这周的形状」讲清楚；无卡片和等宽数字让数据页和 iOS 设置页拉开层次，同时保留壳层玻璃与侧栏，不破坏 D85/D86。
+- 放弃：保留 730 单列只换卡片样式（数据密度不够，视觉稿的核心是宽幅剖面）；用 ECharts/Recharts（新依赖 + 体积/主题适配成本，且只需要一条线）；继续 div 柱阵（30/180 天的柱宽与今日点表达不了形状）；保留胶囊分段（与“仪表”气质不符，且同页两组 tab 需要统一）；把 delta/坐标轴/占比条继续列为禁止（用户已确认视觉稿）。
+- 代价：用量页是 730 单列的**明确例外**，与契约 v3 记录；后端 Top 8 仍按 Token 选取，前端只在返回行内按金额排序并标「按花费」（后续要改后端另立决策，会影响手机）；等宽数字依赖系统 SF Mono/Menlo 回退；SVG 图表需要自管 a11y、reduced-motion 与 jsdom 不可断言的几何。
+- 规范：`app/src/desktop/{styles/usage.css,pages/usage-page.tsx,shell/page-shell.tsx,shell/page-header.tsx,app.tsx}`、`app/src/desktop/features/usage/{usage-tabs,usage-hero,spend-profile,token-composition,group-ledger}.tsx`、`app/src/shared/lib/usage-chart.ts`、`app/src/dev/tauri-mock.ts`、`app/src/desktop/pages/usage-page.test.tsx`、`app/src/shared/lib/usage-chart.test.ts`、`scripts/qa-desktop-ios.mjs`、`docs/prd/usage/{SPEC,ACCEPTANCE,PRD}.md`、`docs/engineering/desktop-ios-ui.md`、`docs/design/usage-dashboard-v2/`、`AGENTS.md`。
+
+## D98 · 手机端「用量」页重做：紧凑仪表 / 可拖动花费剖面（2026-11-06，取代 D80 用量页的卡片堆叠与固定 14 天柱阵）
+
+- 背景：桌面用量页重做后，用户问「手机端是不是也要重新设计一下」。结论是**要，但只重做「用量」页**：手机壳（宠物页/设置/顶栏）刚经 D80/D91/D93/D95/D96 打磨并在真机验证，重做整机是 churn；真正对不上的是用量页——Token 当主角、固定 14 天柱、缓存读蓝色、卡片堆叠，与桌面的数据语言分裂。
+- 决策：
+  - 页面骨架：页头沿用 `PageHeader`（返回宠物 + 「用量」+ 副行），正文**无白卡**、hairline 分区；区间与分组改成下划线 tab（区间 44 高、分组 36 视觉 / 44 命中）；320–430 宽、竖屏单布局。
+  - 内容：花费 hero（40–42 等宽 + 环比 + Token/会话/缓存三读数）→ 当前区间花费剖面（150 高、无 y 轴、峰标 ≤31 点、今天点/末段虚线、单日柱 + 昨日基准、触摸拖动气泡）→ 8px Token 光谱 + 5 行（缓存读薄荷 `--mu-c1`）→ 按花费排序的账本（行底 3px 占比条）→ 只读价格行 → 隐私一行。
+  - 交互：`touch-action: pan-y`；水平位移 >8px 才捕获指针；原地轻点也出气泡；松手 1.2s 收起；不 preventDefault 纵向滚动；拖动后吞掉一次 click。
+  - 样式：新增 `app/src/mobile/styles/usage.css`（`.mobile-usage` 作用域，浅/深 `--mu-*` 令牌），`entries/mobile.tsx` 在 `clean.css` 后引入；**不改 `clean.css`**（当时有未提交的麦克风改动，避免混写）。
+  - 共享：图表坐标/路径/日期/环比/百分比/排序复用 `app/src/shared/lib/usage-chart.ts`；手机不引 Motion（WebView 103 与体积考虑），描线用 CSS `pathLength` + `useReducedMotion` 退化。
+  - Dev mock：`send_usage_request` 也认 `?usage=empty`，手机账本缺失态可在浏览器截图；不再只有单测覆盖。
+  - 明确不做：重做宠物页/设置/顶栏；手机价格面板与刷新；把手机强行套成桌面 900 宽布局；循环呼吸动画（OLED，D58/D89）。
+- 原因：用量是用户打开手机看数据的核心场景，花费应该当主角；当前区间剖面比固定 14 天更能回答「这周/这个月怎么样」；无卡片 + 等宽数字 + 薄荷光谱与桌面同源，但保留手机的 44dp、触摸、纵向滚动与 WebView 103 约束。
+- 放弃：整机重做（风险/收益倒挂）；保留卡片 + 只换配色（数据密度不够）；保留 Token hero（与桌面相反）；加 y 轴（390 宽太挤，峰标 + 日均 + 气泡已够）；真呼吸循环（手机红线不做循环动画，改静态柔光 halo）；引 Motion（D89 已定手机不引）；改 `clean.css`（在途改动冲突）。
+- 代价：手机用量页是「无卡片」的页面级例外，与其它页的卡片语言不同；无 y 轴导致绝对值只能靠读数/气泡；后端 Top 8 仍按 Token 选取；真机（Realme WebView 103 / Honor）尚未走查，需补；切区间沿用 store 语义会短暂出现「正在读账本…」。
+- 规范：`app/src/mobile/features/usage/{usage-page.tsx,spend-profile.tsx,usage-page.test.tsx}`、`app/src/mobile/styles/usage.css`、`app/src/entries/mobile.tsx`、`app/src/dev/tauri-mock.ts`、`docs/prd/usage/{SPEC,ACCEPTANCE,PRD}.md`、`docs/design/usage-dashboard-v2/`、`AGENTS.md`。

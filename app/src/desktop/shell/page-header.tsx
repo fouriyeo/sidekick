@@ -22,6 +22,8 @@ type PageHeaderProps = {
   /** 二级页（设置里点进去的页）的返回回调；有值时工具栏左侧出现「‹ 返回」。 */
   onBack?: () => void;
   backLabel?: string;
+  /** 宽幅数据页：不显示 34/600 大标题，工具栏标题常显（用量页，D97）。 */
+  compact?: boolean;
   className?: string;
 };
 
@@ -39,6 +41,7 @@ export function PageHeader({
   actions,
   onBack,
   backLabel = "返回",
+  compact = false,
   className,
 }: PageHeaderProps) {
   const scrolled = usePageScrolled();
@@ -69,7 +72,7 @@ export function PageHeader({
               aria-hidden="true"
               className={cn(
                 "truncate text-[17px] font-semibold tracking-[-0.015em] transition-all duration-300",
-                scrolled ? "opacity-100" : "translate-y-1 opacity-0",
+                compact || scrolled ? "opacity-100" : "translate-y-1 opacity-0",
               )}
             >
               {title}
@@ -79,16 +82,22 @@ export function PageHeader({
         </header>
       </div>
 
-      <div className="flex items-end justify-between gap-3 pt-1 pb-1">
-        <h1 className="truncate text-[34px] leading-none font-semibold tracking-[-0.022em]">
-          {title}
-        </h1>
-        {chips && <div className="flex shrink-0 items-center gap-1.5 pb-1">{chips}</div>}
-      </div>
-      {description && (
-        <p className="max-w-[62ch] truncate text-[14px] leading-[1.45] text-muted-foreground">
-          {description}
-        </p>
+      {compact ? (
+        <h1 className="sr-only">{title}</h1>
+      ) : (
+        <>
+          <div className="flex items-end justify-between gap-3 pt-1 pb-1">
+            <h1 className="truncate text-[34px] leading-none font-semibold tracking-[-0.022em]">
+              {title}
+            </h1>
+            {chips && <div className="flex shrink-0 items-center gap-1.5 pb-1">{chips}</div>}
+          </div>
+          {description && (
+            <p className="max-w-[62ch] truncate text-[14px] leading-[1.45] text-muted-foreground">
+              {description}
+            </p>
+          )}
+        </>
       )}
     </>
   );

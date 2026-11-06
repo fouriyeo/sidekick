@@ -1,6 +1,6 @@
 ---
 doc: engineering/desktop-ios-ui
-title: 电脑端「Liquid Glass · iOS 26」界面契约 v2（2026-11-06）
+title: 电脑端「Liquid Glass · iOS 26」界面契约 v3（2026-11-06）
 status: active
 updated: 2026-11-06
 load: on-demand
@@ -13,8 +13,9 @@ related:
   - ../../app/src/desktop/styles/ios.css
 ---
 
-# 电脑端「Liquid Glass · iOS 26」界面契约 v2
+# 电脑端「Liquid Glass · iOS 26」界面契约 v3
 
+> **v3（2026-11-06，D97）**：新增第一个**宽幅数据页**——用量页（900 内容、compact 页头、SVG 花费剖面、Token 光谱、带占比条的账本）；它是 §4「730 单列」的明确例外，见 §9。其余页面/壳层规则不变。
 > **v2（2026-11-06 第二次视觉升级，D86）**：信息架构与 v1/D85 完全一致（4 入口、216→224 侧栏、分组列表、设置 push），只把「像 iOS」升级成「Liquid Glass · iOS 26」质感层——玻璃只给控件层、内容层不透明、弹簧动效、彩色图标块、specular 高光与极轻 grain。
 > **v1（D85，同日）** 的结构决策（4 个一级入口、设置 push、删会话页 / 状态条 / 图标 rail、文案红线）继续有效，**D94 把语音提升为第 2 个一级页后变为 5 个入口**；本文件只描述 v2 的材质、布局常量、组件行为与动效。
 > 本文件是**实现契约**：改电脑端界面时按这里写；产品规则收进 `docs/prd/shell/`，视觉语义见 `docs/standards/visual.md`，交互规则见 `docs/standards/ux.md`。
@@ -99,7 +100,7 @@ related:
 | 侧栏 | 宽 **224**；顶部 38 交通灯区；logo 22 + 「小跟班」15/600；导航项高 34、圆角 9、14/500、图标 17（stroke 2.1）；选中项白色滑块（深色 `#3A3A3E`）用 spring 在入口之间 morph；「设置」固定底部；分隔线 + 三行状态摘要（行高 26、12 号、色点 7px） |
 | sticky 工具栏 | 高 **48**、圆角 **18**、`sticky top-0 z-30`；未滚动时透明、只显示右侧动作组（二级页另有左侧「‹ 设置」返回），滚动 > 6px 后变玻璃并在左侧淡入 **17/600** 紧凑标题；拖动区 |
 | 大标题 | **34/600**、`tracking -0.022em`，在工具栏下方；右侧可选状态胶囊；不写副题 / 说明句 |
-| 内容列 | 最大宽 **730** 居中、左右 **28**、底部 64；页内滚动、`overscroll-contain`；组间距 **24** |
+| 内容列 | 最大宽 **730** 居中、左右 **28**、底部 64；页内滚动、`overscroll-contain`；组间距 **24**。**用量页例外（D97）**：`size="wide"` → 最大宽 **956**（1180 窗内约 900 内容）、`bottomGap="compact"` → 底部 24，见 §9。 |
 | 白卡 / 列表行 | 卡 16 圆角；行最小高 **54**（`px-16 / py-10`）、行标题 **15/400**、说明 **13/400**、右侧值 **15**（mono 13、tabular）；分隔线 0.5px、左缩进 **16**（带图标块 **60**）；按下缩到 0.996 |
 | 图标块 | **30×30 / 圆角 10**、白字、顶部 0.5px 高光；七个 tone：blue / green / orange / purple / pink / teal / gray；不给 tone 时退化为 22 盒薄荷线性图标 |
 | 按钮 | **胶囊 999**；高 36（sm 30 / xs 26）、13–14/500；实心薄荷 / 玻璃次级 / 薄荷文字 / 危险红字；一页最多一个实心；按下缩到 0.97；工具栏相邻动作并进一个玻璃动作组 |
@@ -107,7 +108,7 @@ related:
 | 开关 / 输入 / 搜索 | 开关 40×24、白滑块 20；输入 38 高 / 圆角 11 / 14 号；搜索是 40 高胶囊（`--muted` 底，聚焦柔光）；checkbox 18 / 圆角 5；select 34 / 圆角 10 |
 | 弹层 | Dialog 20 圆角、标题 18/600、描述 14/1.5；遮罩 34% 黑 + blur 10；Sheet 20 圆角 |
 | 焦点 | 内描边柔光 **3.5px** `--focus-ring`，`outline: none`；不在列表里抖动 |
-| 字体 | `-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", …`；桌面不随包字体；mono 只给地址、版本号、快捷键 |
+| 字体 | `-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", …`；桌面不随包字体；mono 只给地址、版本号、快捷键，以及**用量页的数字/日期**（`.dsl-num`，D97，SF Mono/Menlo 回退） |
 
 ## 5. 组件（唯一来源）
 
@@ -121,9 +122,9 @@ related:
 
 `app/src/desktop/shell/page-shell.tsx` / `page-header.tsx`：
 
-- `PageShell({ transition = "fade" })`：滚动容器 + 内容列（730 / 28 / 底 64）；`fade` = 一级页切换（`dsl-page-in`），`push` = 设置二级页从右侧推入（`dsl-page-push`）；滚动 > 6px 时把「已滚动」状态提供给页头。
+- `PageShell({ transition = "fade", size = "regular", tone = "default", bottomGap = "regular" })`：滚动容器 + 内容列（regular 730 / 28 / 底 64；wide 956 / 28 / 底 24）；`tone="usage"` 给滚动容器加 `dsl-usage-canvas`（用量页画布）；`fade` = 一级页切换（`dsl-page-in`），`push` = 设置二级页从右侧推入（`dsl-page-push`）；滚动 > 6px 时把「已滚动」状态提供给页头。
 - `PageBody`：组间距 24。
-- `PageHeader({ title, actions?, onBack?, backLabel? })`：sticky 玻璃工具栏 + 34/600 大标题；二级页在工具栏左侧显示「‹ 设置」；不写 description（旧参数仅兼容）。
+- `PageHeader({ title, actions?, onBack?, backLabel?, compact? })`：sticky 玻璃工具栏 + 34/600 大标题；二级页在工具栏左侧显示「‹ 设置」；不写 description（旧参数仅兼容）；`compact` 用于宽幅数据页——不渲染大标题、工具栏标题常显、保留 `sr-only h1`。
 - `shell/segmented-control.tsx`：胶囊玻璃轨道 + 白色滑块，spring morph；选中语义用 `aria-pressed`。
 - `shell/sidebar.tsx`：224 玻璃侧栏 + 导航滑块 + 三行状态摘要。
 
@@ -168,6 +169,7 @@ related:
 - **手机端不用玻璃**：`.mobile-clean` 不变，D80/D81 规则照旧。
 - 不改协议、Rust、store 行为；不引入新依赖（图标只用 lucide-react、二维码沿用 `qrcode`）。
 - 不恢复会话列表页、状态条、图标 rail、系统页分段条（D85 已删除）。
+- 数据页例外：用量页允许 SVG 折线/面积、坐标轴、占比条与等宽数字（D97）；其他页面继续不画 SVG 数据图、不做图表库。
 
 ## 7. 窗口级材质（macOS vibrancy，D87）
 
@@ -187,3 +189,15 @@ related:
 - `prefers-reduced-transparency: reduce` 时侧栏退回 `--sidebar` 实色。
 - **不要**把透明窗口配置写进基础 `tauri.conf.json`：Android 窗口会跟着透明。
 - 无头/CI 只能验证「检测表达式 + `.dsl-vibrancy` 下的 CSS 契约」（`qa-desktop-ios.mjs` 的 `vibrancy` 段），真实材质必须人工目检。
+
+## 9. 宽幅数据页（用量，D97）
+
+> 用量页是「730 单列」的明确例外：它是数据页，不是设置列表；其他一级页/二级页仍按 §4。
+
+- **骨架**：`<PageShell size="wide" tone="usage" bottomGap="compact">` + `<PageHeader compact title="用量" actions={区间下划线 tab + 刷新} />`。内容约 900（`max-w-[956px]` − 左右 28）；1180×760 首屏不裁切（底部 24）；`html.dsl-vibrancy` 下 `.dsl-usage-canvas` 透明，不吃掉原生材质。
+- **层级**：花费 hero（58/500 等宽 + `≈` + 环比 + 区间日期）→ 花费剖面 → Token 光谱 + 分组账本（价格行贴底）；无白卡、无组标题；hairline `--border` 分隔，组间距 20–28。
+- **令牌**：`app/src/desktop/styles/usage.css` 的 `.dsl-usage` 作用域——浅/深 `--usage-c1..c5`（缓存读固定 c1 薄荷）、`--usage-up`、`--usage-grid`、`--usage-glow`、`--usage-mono`；数字用 `.dsl-num`（SF Mono → Menlo → 等宽回退 + tabular）。**不要把这些颜色写回 `ios.css` / `tokens.css`**。
+- **图表**：SVG `viewBox 900×196`，左轴 40 / 顶 14 / 底 170；2 条网格 + 基线 + `¥` 轴标；Catmull-Rom 平滑 + 面积渐变；今日竖虚线 + 空心点 + 呼吸环 + 末段虚线（仅最后一天是今天时）；峰值标注（峰值是今天则跳过）；单日柱 + 昨日基准；悬停十字线 + 气泡（高点自动翻到点下方）；`role="img"` + 完整 aria-label + `sr-only` 每日表；Motion `pathLength` 1.05s；`prefers-reduced-motion` 直接定格。
+- **断点**：`max-width: 1079px` 时 hero 读数换行、下半区单列（账本在前、构成 + 价格在后）；960×640 允许页内纵向滚动，不横向溢出。
+- **共享数学**：`app/src/shared/lib/usage-chart.ts`（桌面 + 手机共用），不要复制刻度 / 路径 / 百分比 / 环比逻辑。
+- **明确不做**：图表库、内容层玻璃、把用量页改回 730、让缓存读继续用 `--chart-2` 蓝。

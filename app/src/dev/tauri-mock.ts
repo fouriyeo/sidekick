@@ -383,137 +383,203 @@ export function installTauriMock(): void {
     return dshHookSnapshot();
   }
 
-  type MockUsageDay = {
-    date: string;
-    tokens: number;
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    costCnyMicros: number;
-    calls: number;
-  };
   const mockUsageRanges: Record<string, number> = { today: 1, "7d": 7, "30d": 30, "180d": 180 };
   let mockPricingUpdatedAt = Date.now() - 2 * 60 * 60 * 1000;
   let mockPricingAuto = true;
   let mockMobileModels = true;
 
+  const usageBucketShares = {
+    cacheRead: 0.955,
+    input: 0.017,
+    output: 0.02,
+    cacheWrite: 0.001,
+    reasoning: 0.007,
+  } as const;
+
+  function mockUsageRng(seed: number) {
+    let state = seed;
+    return () => {
+      state |= 0;
+      state = (state + 0x6d2b79f5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
   function mockUsageStats(range: string) {
-    const days = mockUsageRanges[range] ?? 7;
-    const dayCount = Math.min(180, Math.max(1, days));
-    const daily: MockUsageDay[] = [];
-    for (let index = dayCount - 1; index >= 0; index -= 1) {
-      const date = new Date();
-      date.setDate(date.getDate() - index);
+    const dayCount = mockUsageRanges[range] ?? 7;
+    // 连同上一区间一起生成，previous 才有真实可比基数。
+    const windowDays = dayCount * 2;
+    const rnd = mockUsageRng(20_261_106 + dayCount);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const entries = Array.from({ length: windowDays }, (_, index) => {
+      const offset = windowDays - 1 - index;
+      const date = new Date(today.getTime() - offset * 86_400_000);
+      const weekday = date.getDay();
+      const weekend = weekday === 0 || weekday === 6;
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
-      // 7 天约 4.8 亿 tokens / ¥29.84；长区间按同一日均放大。
-      const base = index === 0 ? 74_000_000 : 66_000_000 + ((index * 37) % 5) * 900_000;
-      daily.push({
+      let spend = 4.0 + Math.sin(offset / 9.5) * 0.9 + (weekend ? -1.25 : 0.42) + rnd() * 0.85;
+      const monthDay = `${date.getMonth() + 1}-${date.getDate()}`;
+      if (monthDay === "10-21") spend += 4.2;
+      if (monthDay === "11-02") spend += 2.2;
+      if (monthDay === "10-08") spend += 1.2;
+      if (offset === 0) spend *= 0.55; // 今天还没过完
+      spend = Math.max(0.35, spend);
+      const tokens = Math.round(spend * 16_100_000);
+      const bucket = (share: number) => Math.round(tokens * share);
+      return {
         date: `${date.getFullYear()}-${month}-${day}`,
-        tokens: base,
-        input: Math.round(base * 0.00626),
-        output: Math.round(base * 0.00259),
-        cacheRead: Math.round(base * 0.978),
-        cacheWrite: 0,
-        costCnyMicros: Math.round(base * 0.062),
-        calls: 220 + ((index * 17) % 60),
-      });
-    }
-    const total = (key: "tokens" | "input" | "output" | "cacheRead" | "costCnyMicros" | "calls") =>
-      daily.reduce((sum, day) => sum + day[key], 0);
-    const summary = {
-      tokens: total("tokens"),
-      input: total("input"),
-      output: total("output"),
-      cacheRead: total("cacheRead"),
-      cacheWrite: 0,
-      reasoning: 0,
-      costCnyMicros: total("costCnyMicros"),
-      estimatedCostMicros: 0,
-      costSource: "ledger",
-      calls: total("calls"),
-      sessions: Math.max(5, Math.round((15 * dayCount) / 7)),
-      cacheHitPct: 98.15,
-    };
-    const totalTokens = summary.tokens;
-    const rows = (prefix: string, count: number) =>
-      Array.from({ length: count }, (_, index) => ({
-        key: `${prefix}-${index}`,
-        label:
-          prefix === "s"
-            ? [
-                "修复登录",
-                "生成看板",
-                "重构协议",
-                "跑验收测试",
-                "价格表接入",
-                "桌面导航",
-                "手机页面",
-                "其他会话",
-                "补充会话",
-              ][index % 9]
-            : [
-                `deepseek-v4.1-flash`,
-                `deepseek-flash`,
-                `deepseek-search-api`,
-                `deepseek-fetch-api`,
-              ][index % 4],
-        sub: prefix === "s" ? "最近 11-05 22:39 · 120 次调用" : "OpenCode Go · 缓存命中 97.2%",
-        tokens: Math.round(totalTokens / (index + 1.6)),
-        costCnyMicros: Math.round(summary.costCnyMicros / (index + 1.6)),
+        tokens,
+        input: bucket(usageBucketShares.input),
+        output: bucket(usageBucketShares.output),
+        cacheRead: bucket(usageBucketShares.cacheRead),
+        cacheWrite: bucket(usageBucketShares.cacheWrite),
+        reasoning: bucket(usageBucketShares.reasoning),
+        costCnyMicros: Math.round(spend * 1_000_000),
+        calls: 180 + Math.round(rnd() * 140),
+      };
+    });
+
+    const sessionCount = Math.min(214, Math.max(4, Math.round(dayCount * 2.1)));
+    const summarize = (slice: typeof entries) => {
+      const tokens = slice.reduce((sum, item) => sum + item.tokens, 0);
+      const input = slice.reduce((sum, item) => sum + item.input, 0);
+      const output = slice.reduce((sum, item) => sum + item.output, 0);
+      const cacheRead = slice.reduce((sum, item) => sum + item.cacheRead, 0);
+      const cacheWrite = slice.reduce((sum, item) => sum + item.cacheWrite, 0);
+      const reasoning = slice.reduce((sum, item) => sum + item.reasoning, 0);
+      const cacheBase = input + cacheRead + cacheWrite;
+      return {
+        tokens,
+        input,
+        output,
+        cacheRead,
+        cacheWrite,
+        reasoning,
+        costCnyMicros: slice.reduce((sum, item) => sum + item.costCnyMicros, 0),
         estimatedCostMicros: 0,
-        costSource: "ledger",
-        sharePct: 100 / (index + 1.6),
-        calls: Math.round(summary.calls / (index + 1.6)),
-        sessions: null,
-        cacheHitPct: 98.15 - index * 0.4,
-        modelId: prefix === "m" ? `deepseek-v4.1-flash-${index}` : null,
-        provider: prefix === "m" ? "OpenCode Go" : null,
-        tag: null,
-        price:
-          prefix === "m"
-            ? {
-                inputCnyPerM: 0.288,
-                outputCnyPerM: 0.067,
-                cacheReadCnyPerM: 0.227,
-                cacheWriteCnyPerM: 0,
-                source: "seed",
-              }
-            : null,
-      }));
+        costSource: "ledger" as const,
+        calls: slice.reduce((sum, item) => sum + item.calls, 0),
+        sessions: sessionCount,
+        cacheHitPct: cacheBase > 0 ? (cacheRead / cacheBase) * 100 : null,
+      };
+    };
+
+    const current = entries.slice(-dayCount);
+    const previous = entries.slice(0, dayCount);
+    const summary = summarize(current);
+    const totalTokens = Math.max(1, summary.tokens);
+    const totalCost = Math.max(1, summary.costCnyMicros);
+
+    const buildRows = (
+      prefix: string,
+      labels: string[],
+      weights: number[],
+      sub: (index: number) => string,
+      tagOther: boolean,
+    ) => {
+      let spentCost = 0;
+      let spentTokens = 0;
+      return labels.map((label, index) => {
+        const last = index === labels.length - 1;
+        const weight = weights[index] ?? 0;
+        const cost = last ? totalCost - spentCost : Math.round(totalCost * weight);
+        const tokens = last ? totalTokens - spentTokens : Math.round(totalTokens * weight);
+        spentCost += cost;
+        spentTokens += tokens;
+        return {
+          key: `${prefix}-${index}`,
+          label,
+          sub: sub(index),
+          tokens,
+          costCnyMicros: cost,
+          estimatedCostMicros: 0,
+          costSource: "ledger" as const,
+          sharePct: (tokens / totalTokens) * 100,
+          calls: Math.max(1, Math.round(summary.calls * weight)),
+          sessions: prefix === "s" ? null : Math.max(1, Math.round(sessionCount * weight)),
+          cacheHitPct: 98.15 - index * 0.4,
+          modelId: prefix === "m" ? `${label}-${index}` : null,
+          provider: prefix === "m" ? "DeepSeek 官方" : null,
+          tag: tagOther && last ? "other" : null,
+          price:
+            prefix === "m"
+              ? {
+                  inputCnyPerM: 0.288,
+                  outputCnyPerM: 0.067,
+                  cacheReadCnyPerM: 0.227,
+                  cacheWriteCnyPerM: 0,
+                  source: "seed",
+                }
+              : null,
+        };
+      });
+    };
+
+    const recentDate =
+      (current[current.length - 2] ?? current[current.length - 1])?.date.slice(5) ?? "";
+    const sessions = buildRows(
+      "s",
+      [
+        "修复登录",
+        "生成看板",
+        "重构协议",
+        "跑验收测试",
+        "价格表接入",
+        "桌面导航",
+        "手机页面",
+        "其他会话",
+      ],
+      [0.328, 0.221, 0.154, 0.096, 0.072, 0.051, 0.043, 0.035],
+      (index) =>
+        index === 7
+          ? "未在 Top 8"
+          : `最近 ${recentDate} 22:39 · ${Math.round(summary.calls * [0.328, 0.221, 0.154, 0.096, 0.072, 0.051, 0.043][index])} 次调用`,
+      true,
+    );
+    const clients = buildRows(
+      "c",
+      ["DeepSeek Harness", "手机 App", "网页预览", "其他客户端"],
+      [0.918, 0.049, 0.022, 0.011],
+      (index) =>
+        ["本机 cost-meter · 已接入", "局域网 · 已连接", "浏览器预览", "未在 Top 8"][index] ?? "",
+      true,
+    );
+    const models = buildRows(
+      "m",
+      ["deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v3.2", "其他模型"],
+      [0.678, 0.243, 0.058, 0.021],
+      (index) =>
+        index === 3
+          ? "未在 Top 8"
+          : `DeepSeek 官方 · 缓存命中 ${(98.15 - index * 0.4).toFixed(1)}%`,
+      true,
+    );
+
     return {
       range,
       generatedAt: Date.now(),
       summary,
-      previous: {
-        ...summary,
-        tokens: Math.round(summary.tokens * 0.82),
-        costCnyMicros: Math.round(summary.costCnyMicros * 0.9),
-      },
-      days: daily,
+      previous: summarize(previous),
+      days: current.map(
+        ({ date, tokens, input, output, cacheRead, cacheWrite, costCnyMicros, calls }) => ({
+          date,
+          tokens,
+          input,
+          output,
+          cacheRead,
+          cacheWrite,
+          costCnyMicros,
+          calls,
+        }),
+      ),
       groups: {
-        clients: [
-          {
-            key: "dsh",
-            label: "DeepSeek Harness",
-            sub: "本机 cost-meter · 已接入",
-            tokens: summary.tokens,
-            costCnyMicros: summary.costCnyMicros,
-            estimatedCostMicros: 0,
-            costSource: "ledger",
-            sharePct: 100,
-            calls: summary.calls,
-            sessions: summary.sessions,
-            cacheHitPct: 98.15,
-            modelId: null,
-            provider: null,
-            tag: null,
-            price: null,
-          },
-        ],
-        sessions: rows("s", 8),
-        models: mockMobileModels ? rows("m", 4) : [],
+        clients,
+        sessions,
+        models: mockMobileModels ? models : [],
         modelsHidden: !mockMobileModels,
       },
       pricing: {
@@ -528,9 +594,33 @@ export function installTauriMock(): void {
         fxSource: "ledger",
         mobileModels: mockMobileModels,
       },
-      coverageDays: Math.min(dayCount, 6),
+      coverageDays: dayCount,
       ledger: { available: true, reason: null as string | null },
     };
+  }
+
+  function mockUsageEmpty(range: string) {
+    const empty = mockUsageStats(range);
+    empty.ledger = { available: false, reason: "ledger_missing" };
+    empty.summary = {
+      ...empty.summary,
+      tokens: 0,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      costCnyMicros: 0,
+      estimatedCostMicros: 0,
+      costSource: "unknown",
+      calls: 0,
+      sessions: 0,
+      cacheHitPct: null,
+    } as unknown as typeof empty.summary;
+    empty.days = [];
+    empty.groups = { clients: [], sessions: [], models: [], modelsHidden: !mockMobileModels };
+    empty.coverageDays = 0;
+    return empty;
   }
 
   const internals: MockInternals = {
@@ -590,11 +680,11 @@ export function installTauriMock(): void {
       }
       if (command === "send_usage_request") {
         const range = typeof args?.range === "string" ? args.range : "7d";
+        // 浏览器验收空状态：?usage=empty（手机页也走这条）
+        const data =
+          params.get("usage") === "empty" ? mockUsageEmpty(range) : mockUsageStats(range);
         window.setTimeout(() => {
-          emit(
-            "chat",
-            JSON.stringify({ type: "usage", v: 1, ts: Date.now(), data: mockUsageStats(range) }),
-          );
+          emit("chat", JSON.stringify({ type: "usage", v: 1, ts: Date.now(), data }));
         }, 120);
         return null;
       }
@@ -602,16 +692,7 @@ export function installTauriMock(): void {
         const range = typeof args?.range === "string" ? args.range : "7d";
         // 浏览器验收空状态：?usage=empty
         if (params.get("usage") === "empty") {
-          const empty = mockUsageStats(range);
-          empty.ledger = { available: false, reason: "ledger_missing" };
-          empty.summary.tokens = 0;
-          empty.summary.costCnyMicros = 0;
-          empty.groups.clients = [];
-          empty.groups.sessions = [];
-          empty.groups.models = [];
-          empty.days = [];
-          empty.coverageDays = 0;
-          return empty;
+          return mockUsageEmpty(range);
         }
         return mockUsageStats(range);
       }

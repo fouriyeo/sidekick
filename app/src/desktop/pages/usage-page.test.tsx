@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUsageStore } from "@/desktop/features/usage/usage-store";
 import type { PricingStatus, TokenUsageStats } from "@/protocol/messages";
@@ -33,7 +33,7 @@ function pricing(overrides: Partial<PricingStatus> = {}): PricingStatus {
 
 function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
   const summary = {
-    tokens: 481_854_387,
+    tokens: 475_554_339,
     input: 3_017_736,
     output: 1_247_899,
     cacheRead: 471_288_704,
@@ -44,7 +44,7 @@ function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
     costSource: "ledger" as const,
     calls: 1_939,
     sessions: 15,
-    cacheHitPct: 98.15,
+    cacheHitPct: 99.4,
   };
   return {
     range: "7d",
@@ -53,13 +53,13 @@ function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
     previous: { ...summary, tokens: 400_000_000, costCnyMicros: 25_000_000 },
     days: Array.from({ length: 7 }, (_, index) => ({
       date: `2026-11-0${index + 1}`,
-      tokens: 10_000_000,
-      input: 100_000,
-      output: 40_000,
-      cacheRead: 9_860_000,
+      tokens: 67_936_334,
+      input: 431_105,
+      output: 178_271,
+      cacheRead: 67_326_958,
       cacheWrite: 0,
-      costCnyMicros: 1_200_000,
-      calls: 200,
+      costCnyMicros: 4_263_148,
+      calls: 277,
     })),
     groups: {
       clients: [
@@ -74,7 +74,7 @@ function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
           sharePct: 100,
           calls: summary.calls,
           sessions: summary.sessions,
-          cacheHitPct: 98.15,
+          cacheHitPct: 99.4,
           modelId: null,
           provider: null,
           tag: null,
@@ -97,6 +97,40 @@ function stats(overrides: Partial<TokenUsageStats> = {}): TokenUsageStats {
           modelId: null,
           provider: null,
           tag: null,
+          price: null,
+        },
+        {
+          key: "s-2",
+          label: "生成看板",
+          sub: "最近 11-05 21:00 · 120 次调用",
+          tokens: 100_000_000,
+          costCnyMicros: 6_000_000,
+          estimatedCostMicros: 0,
+          costSource: "ledger",
+          sharePct: 20.8,
+          calls: 120,
+          sessions: null,
+          cacheHitPct: 97.8,
+          modelId: null,
+          provider: null,
+          tag: null,
+          price: null,
+        },
+        {
+          key: "other",
+          label: "其他 6 个会话",
+          sub: "未在 Top 8",
+          tokens: 175_554_339,
+          costCnyMicros: 11_842_039,
+          estimatedCostMicros: 0,
+          costSource: "ledger",
+          sharePct: 36.9,
+          calls: 1_500,
+          sessions: 6,
+          cacheHitPct: null,
+          modelId: null,
+          provider: null,
+          tag: "other",
           price: null,
         },
       ],
@@ -159,19 +193,25 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("UsagePage 用量页", () => {
-  it("渲染 2×2 汇总、分组列表与价格表入口", async () => {
+  it("渲染花费 hero、读数、剖面、构成、账本与价格表入口", async () => {
     render(<UsagePage />);
-    await waitFor(() => expect(screen.getByText("4.82 亿")).toBeInTheDocument());
-    expect(screen.getByText("¥29.84")).toBeInTheDocument();
-    expect(screen.getByText("98.2%")).toBeInTheDocument();
-    expect(screen.getByText("修复登录")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("修复登录")).toBeInTheDocument());
+
+    const hero = screen.getByLabelText("花费总览");
+    expect(within(hero).getByText("29.84")).toBeInTheDocument();
+    expect(within(hero).getByText("4.76 亿")).toBeInTheDocument();
+    expect(within(hero).getByText("15")).toBeInTheDocument();
+    expect(within(hero).getByText("99.4%")).toBeInTheDocument();
+    expect(within(hero).getByText("较上期").closest(".dsl-usage-delta")?.textContent).toContain(
+      "19.4%",
+    );
+    expect(within(hero).getByText("11-01 – 11-07")).toBeInTheDocument();
+
+    expect(screen.getByRole("img", { name: /近 7 天每日花费/ })).toBeInTheDocument();
+    expect(screen.getByText("缓存读")).toBeInTheDocument();
+    expect(screen.getByText("99.1%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "价格表" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /近 7 天花费合计/ })).toBeInTheDocument();
-    // PLANNED_CLIENTS 区块与页面说明句 / 状态胶囊都已删除。
-    expect(screen.queryByText("Claude Code")).toBeNull();
-    expect(screen.queryByText("Codex")).toBeNull();
-    expect(screen.queryByText("本机 · 不上传")).toBeNull();
-    expect(screen.queryByText("P1 · 解析器未接入")).toBeNull();
+    expect(screen.getByText("生成看板")).toBeInTheDocument();
   });
 
   it("切区间会重新拉取，切分组不重新拉取", async () => {
@@ -186,7 +226,7 @@ describe("UsagePage 用量页", () => {
     expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(2);
   });
 
-  it("页头刷新按钮重新拉取账本", async () => {
+  it("刷新按钮重新拉取账本", async () => {
     render(<UsagePage />);
     await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(1));
 
@@ -194,9 +234,9 @@ describe("UsagePage 用量页", () => {
     await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(2));
   });
 
-  it("切换区间后汇总数字补间到新区间值", async () => {
+  it("切区间后花费与 Token 补间到新区间值", async () => {
     render(<UsagePage />);
-    await waitFor(() => expect(screen.getByText("4.82 亿")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("29.84")).toBeInTheDocument());
 
     tauri.getTokenUsageStats.mockResolvedValue(
       stats({
@@ -206,14 +246,70 @@ describe("UsagePage 用量页", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "30 天" }));
 
-    // 动画中间值不可断言，只等最终值落定（Motion 补间 400ms）。
     await waitFor(
       () => {
         expect(screen.getByText("10 亿")).toBeInTheDocument();
-        expect(screen.getByText("¥50.00")).toBeInTheDocument();
+        expect(screen.getByText("50.00")).toBeInTheDocument();
       },
       { timeout: 3000 },
     );
+  });
+
+  it("上期为 0 时不显示环比", async () => {
+    tauri.getTokenUsageStats.mockResolvedValue(
+      stats({ previous: { ...stats().previous, costCnyMicros: 0, costSource: "unknown" } }),
+    );
+    render(<UsagePage />);
+    await waitFor(() => expect(screen.getByText("修复登录")).toBeInTheDocument());
+    expect(screen.queryByText("较上期")).toBeNull();
+  });
+
+  it("缺价时花费显示 —，不画空剖面", async () => {
+    tauri.getTokenUsageStats.mockResolvedValue(
+      stats({ summary: { ...stats().summary, costCnyMicros: 0, costSource: "unknown" } }),
+    );
+    render(<UsagePage />);
+    await waitFor(() => expect(screen.getByText("修复登录")).toBeInTheDocument());
+
+    const hero = screen.getByLabelText("花费总览");
+    expect(within(hero).getByText("—")).toBeInTheDocument();
+    expect(within(hero).queryByText("较上期")).toBeNull();
+    expect(screen.getByText("这个区间还没有记账金额")).toBeInTheDocument();
+  });
+
+  it("缓存命中为 null 时显示 —", async () => {
+    tauri.getTokenUsageStats.mockResolvedValue(
+      stats({ summary: { ...stats().summary, cacheHitPct: null } }),
+    );
+    render(<UsagePage />);
+    await waitFor(() => expect(screen.getByText("修复登录")).toBeInTheDocument());
+    const hero = screen.getByLabelText("花费总览");
+    expect(within(hero).getByText("—")).toBeInTheDocument();
+  });
+
+  it("今天区间只有一天时退化成单日柱 + 昨日基准", async () => {
+    tauri.getTokenUsageStats.mockResolvedValue(
+      stats({
+        range: "today",
+        days: [
+          {
+            date: "2026-11-06",
+            tokens: 74_000_000,
+            input: 1_258_000,
+            output: 191_800,
+            cacheRead: 72_476_000,
+            cacheWrite: 0,
+            costCnyMicros: 2_050_000,
+            calls: 220,
+          },
+        ],
+        previous: { ...stats().previous, costCnyMicros: 4_340_000 },
+      }),
+    );
+    render(<UsagePage />);
+    await waitFor(() => expect(screen.getByRole("img", { name: /今天花费/ })).toBeInTheDocument());
+    expect(screen.getByText("昨天 ¥4.34")).toBeInTheDocument();
+    expect(screen.getAllByText("今天").length).toBeGreaterThanOrEqual(2);
   });
 
   it("价格表 Sheet 展示单价并支持刷新", async () => {
@@ -234,7 +330,7 @@ describe("UsagePage 用量页", () => {
     );
     render(<UsagePage />);
     expect(await screen.findByText("还没找到 DSH 账本")).toBeInTheDocument();
-    expect(screen.queryByText("4.82 亿")).toBeNull();
+    expect(screen.queryByText("29.84")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     await waitFor(() => expect(tauri.getTokenUsageStats).toHaveBeenCalledTimes(2));

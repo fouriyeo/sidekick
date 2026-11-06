@@ -19,6 +19,7 @@ import { Sidebar } from "@/desktop/shell/sidebar";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import { Toaster } from "@/shared/ui/sonner";
 import "@/desktop/styles/ios.css";
+import "@/desktop/styles/usage.css";
 import { useDesktopConnection } from "./use-desktop-connection";
 
 /** 输入框 / 下拉里不劫持 ⌘1–⌘5（浏览器默认的标签切换也不抢）。 */
