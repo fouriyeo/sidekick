@@ -922,3 +922,18 @@
 - 放弃：整机重做（风险/收益倒挂）；保留卡片 + 只换配色（数据密度不够）；保留 Token hero（与桌面相反）；加 y 轴（390 宽太挤，峰标 + 日均 + 气泡已够）；真呼吸循环（手机红线不做循环动画，改静态柔光 halo）；引 Motion（D89 已定手机不引）；改 `clean.css`（在途改动冲突）。
 - 代价：手机用量页是「无卡片」的页面级例外，与其它页的卡片语言不同；无 y 轴导致绝对值只能靠读数/气泡；后端 Top 8 仍按 Token 选取；真机（Realme WebView 103 / Honor）尚未走查，需补；切区间沿用 store 语义会短暂出现「正在读账本…」。
 - 规范：`app/src/mobile/features/usage/{usage-page.tsx,spend-profile.tsx,usage-page.test.tsx}`、`app/src/mobile/styles/usage.css`、`app/src/entries/mobile.tsx`、`app/src/dev/tauri-mock.ts`、`docs/prd/usage/{SPEC,ACCEPTANCE,PRD}.md`、`docs/design/usage-dashboard-v2/`、`AGENTS.md`。
+
+## D99 · App 图标与品牌标记换成「随身卡」（2026-11-06，取代猫头 logo / 爪印方向与 D88 的猫头托盘图）
+
+- 背景：用户要重做 App 图标，先后否掉紫色底、带脸角色 IP、以爪印为起点，并把判据说明白——**图标要让人认得出它管的是什么东西**，光有情绪没有所指不行。随后用户自己给出卡片方向：手机本身像一张卡，这张卡同时有工卡、录音卡、备忘录三重读法，正好对上产品的汇报 / 语音输入 / 剪贴板三件事。过程稿留在 `brand/icon-drafts/card-round/`（定稿批 + `wallpaper-test.py` 真实壁纸评审表 + `build-check.py` 落盘产物核对表，已 gitignore、不入库）；更早的爪印、角色、灰底概念批与徽章批评审完即清理。
+- 决策：
+  - **标记是「一张随身卡」**：贴顶边的穿透挂孔（工卡）+ 左上斜切一角（SIM / 录音卡的机械感）+ 右下**一颗琥珀灯**（REC / 待命 / 为你亮着）；卡身歪 3.5°（正的像证件，歪的像随身物）；底色深青 `#0F3A3E`，灯是画面里唯一的高彩度元素。
+  - **母版双轨**：App 图标母版用位图 `brand/appicon.png`（1024 满幅、无透明通道、不烤圆角，遮罩交给系统）；小尺寸（favicon 16–32、侧栏 22、托盘 36 单色）用矢量几何派生，保持锐利。两份同源，唯一事实源是 `scripts/gen-brand-mark.py`。
+  - **三条图标规则**（本轮踩出来的，后续每个新图标都适用）：差异必须长在**轮廓**上，不能长在内部细节里（内部细节在 40px 第一批死掉）；底色必须和壁纸**抢边界**，选中深值带彩度，禁止中性对比底；**玻璃不能当图标材质**（玻璃靠极小明度差，而 40px 只吃明度差）。
+  - **Android 自适应图标修正**：`pnpm tauri icon` 把 `ic_launcher_background` 默认写成 `#FFFFFF`，而母版是满幅深青底，圆遮罩外圈会露出一圈白。改为背景层 `#0F3A3E` + 前景层只画卡身（挂孔镂空露出背景色、灯实心）并缩到 60% 安全区；由 `scripts/gen-brand-mark.py` 在 `pnpm tauri icon` **之后**重写五档 `ic_launcher_foreground.png`。
+  - **托盘图标**从猫头剪影换成随身卡剪影（卡身实心 + 挂孔与灯镂空），生成入口迁到 `scripts/gen-brand-mark.py`，旧 `scripts/gen-tray-icon.py`（画猫头）已删除。
+  - **暂不动**：`brand/logo-horizontal*.svg` 文字标（内部仍嵌猫头）与 `brand/logo-icon.svg` / `logo-favicon.svg` / `logo-appicon.svg` 旧矢量源，等文字标一起重做时再处理；`brand/icon-drafts/` 是本地过程稿，不作为事实源。
+- 原因：卡片是唯一同时满足「有具体所指（手机就是那张卡）+ 有情绪（一颗为你亮着的灯）+ 轮廓级差异（斜角与挂孔在 40px 仍然成立）」的方向；爪印是痕迹、没有主体，角色头像被否，抽象形状没有所指，都不成立。琥珀灯承担情绪，是因为整张图只有它高彩度，视线第一个落点就是它——像夜里留的灯，而不是未读红点。
+- 放弃：爪印路线（`paw-v2`、`card-round` 之前的六版概念全部无所指，40px 实测只有最普通的那版能认）；带脸角色（用户否）；紫色底（用户否）；玻璃卡（40px 糊）；「两枚爪印/一叠卡」等多主体（40px 混成一团）；把矢量当 App 图标母版（位图才是用户批准的那张图，矢量只服务小尺寸）。
+- 代价：位图母版在 16–32px 会比矢量软（macOS Dock/Finder 小尺寸与 `.ico` 已可辨认，但不是极限锐利）；`gen/android` 不入库，每次 `pnpm tauri android init` + `pnpm tauri icon` 后必须重跑 `python3 scripts/gen-brand-mark.py`，否则自适应图标白边回归；「随身卡」在 iOS 着色模式下会塌成一块剪影，斜角与挂孔能保住识别，但灯的暖色信息会丢；真机主屏与 macOS 菜单栏观感尚未目检。
+- 规范：`brand/appicon.png`、`brand/logo-mark.svg`、`brand/logo-mark-flat.svg`、`scripts/gen-brand-mark.py`、`app/public/{favicon,logo-icon}.svg`、`app/src-tauri/icons/**`、`app/src-tauri/icons/tray.png`、`app/src-tauri/gen/android/app/src/main/res/{values/ic_launcher_background.xml,mipmap-*/ic_launcher_foreground.png}`、`docs/engineering/desktop-tray.md`、`README.md`、`AGENTS.md`、`brand/icon-drafts/`。

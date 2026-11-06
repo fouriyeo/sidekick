@@ -39,8 +39,8 @@ related:
 | `app/src-tauri/src/tray.rs` | 托盘图标/菜单/点击事件；`TRAY_READY` 全局开关；`show_main_window()` |
 | `app/src-tauri/src/lib.rs` | setup 里设 Accessory、建托盘、首次把窗口叫到前台；`on_window_event` 拦 `CloseRequested`；单实例回调复用 `show_main_window` |
 | `app/src-tauri/Cargo.toml` | **桌面目标**才开 `tauri` 的 `tray-icon` + `image-png` feature（Android 不带 tray 依赖） |
-| `app/src-tauri/icons/tray.png` | 36×36 单色模板图（猫头剪影 + 眼睛镂空），18pt @2x |
-| `scripts/gen-tray-icon.py` | 从 `brand/logo-favicon.svg` 的几何重新生成 `tray.png`（只依赖 Pillow） |
+| `app/src-tauri/icons/tray.png` | 36×36 单色模板图（随身卡剪影：卡身实心 + 挂孔与灯镂空），18pt @2x |
+| `scripts/gen-brand-mark.py` | 从「随身卡」几何唯一事实源重新生成 `tray.png`（含 Android 自适应前景层与 favicon，只依赖 Pillow） |
 
 图标必须是**模板图**：`icon_as_template(true)` 后系统只用 alpha 着色，浅色菜单栏画黑、深色画白、
 窗口失焦自动变淡。彩色 logo 直接缩放会变成一块纯色方块；菜单栏高度只有 18pt，细节要能去掉圆角底色单独成立。
@@ -72,7 +72,7 @@ related:
 
 仍必须人工目检（屏幕录制权限拿不到，截图全黑）：
 
-1. `cd app && pnpm tauri dev` → 菜单栏出现猫头剪影（浅色/深色各看一次）。
+1. `cd app && pnpm tauri dev` → 菜单栏出现随身卡剪影（浅色/深色各看一次）。
 2. 点窗口关闭按钮 → 窗口消失、**Dock 里没有 Sidekick**、菜单栏图标还在；`lsof -nP -iTCP:47810` 仍有进程监听。
 3. 手机 App 在关窗后仍显示「已连接」，AI 状态仍随 DSH 活动变化。
 4. 左键点图标 → 窗口回来且可输入；再关窗 → 再左键 → 还能回来。

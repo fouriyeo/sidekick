@@ -1,19 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 44 312 312" width="312" height="312" role="img" aria-labelledby="logo-title logo-desc">
-  <title id="logo-title">小跟班 Sidekick</title>
-  <desc id="logo-desc">Favicon: the Sidekick cat head on a light rounded square.</desc>
-
-  <rect x="100" y="44" width="312" height="312" rx="72" fill="#F1F1FA"/>
-  <rect x="106" y="50" width="300" height="300" rx="66" fill="none" stroke="#E1E1EE" stroke-width="4"/>
-
-  <path d="M 196 166 L 184 92 L 250 132 Z" fill="#5B5BD6" stroke="#5B5BD6" stroke-width="30" stroke-linejoin="round"/>
-  <path d="M 316 166 L 328 92 L 262 132 Z" fill="#5B5BD6" stroke="#5B5BD6" stroke-width="30" stroke-linejoin="round"/>
-  <path d="M 202 152 L 194 107 L 234 131 Z" fill="#34D399" stroke="#34D399" stroke-width="10" stroke-linejoin="round"/>
-  <path d="M 310 152 L 318 107 L 278 131 Z" fill="#34D399" stroke="#34D399" stroke-width="10" stroke-linejoin="round"/>
-  <path d="M 136 222 C 136 164 176 128 256 128 C 336 128 376 164 376 222 C 376 280 330 314 256 314 C 182 314 136 280 136 222 Z" fill="#5B5BD6"/>
-  <circle cx="206" cy="218" r="21" fill="#1E1B4B"/>
-  <circle cx="306" cy="218" r="21" fill="#1E1B4B"/>
-  <circle cx="213" cy="210" r="7" fill="#FFFFFF"/>
-  <circle cx="313" cy="210" r="7" fill="#FFFFFF"/>
-  <path d="M 236 242 C 242 254 250 254 256 244 C 262 254 270 254 276 242" fill="none" stroke="#1E1B4B" stroke-width="8" stroke-linecap="round"/>
-  <path d="M 256 302 C 242 293 234 287 234 277 C 234 269 240 263 248 263 C 252 263 255 265 256 268 C 257 265 260 263 264 263 C 272 263 278 269 278 277 C 278 287 270 293 256 302 Z" fill="#FF7A59"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="t d">
+  <title id="t">小跟班 Sidekick</title>
+  <desc id="d">一张随身卡：贴顶的挂孔、斜切的一角、一颗会亮的灯。</desc>
+  <rect width="1024" height="1024" rx="176" fill="#0F3A3E"/>
+  <path d="M 373.7 152.9 L 373.7 152.9 L 753.0 176.1 L 753.0 176.1 L 765.2 177.5 L 777.2 180.3 L 788.8 184.5 L 799.9 189.9 L 810.3 196.5 L 819.9 204.2 L 828.6 213.0 L 836.3 222.7 L 842.8 233.1 L 848.1 244.3 L 852.1 256.0 L 854.8 268.0 L 856.1 280.3 L 856.0 292.6 L 856.0 292.6 L 826.7 771.7 L 826.7 771.7 L 825.3 783.9 L 822.5 796.0 L 818.4 807.6 L 812.9 818.7 L 806.3 829.1 L 798.6 838.7 L 789.8 847.4 L 780.1 855.0 L 769.7 861.5 L 758.5 866.8 L 746.9 870.8 L 734.8 873.5 L 722.6 874.8 L 710.2 874.8 L 710.2 874.8 L 271.0 847.9 L 271.0 847.9 L 258.8 846.5 L 246.8 843.7 L 235.2 839.5 L 224.1 834.1 L 213.7 827.5 L 204.1 819.8 L 195.4 811.0 L 187.7 801.3 L 181.2 790.9 L 175.9 779.7 L 171.9 768.0 L 169.2 756.0 L 167.9 743.7 L 168.0 731.4 L 168.0 731.4 L 193.6 312.2 Z" fill="#F5EFE3"/>
+  <path d="M 463.2 244.5 L 688.8 258.3 L 688.8 258.3 L 700.3 260.3 L 711.0 264.8 L 720.5 271.6 L 728.2 280.3 L 733.8 290.6 L 737.0 301.8 L 737.5 313.4 L 735.5 324.9 L 731.0 335.6 L 724.2 345.1 L 715.5 352.8 L 705.3 358.4 L 694.1 361.5 L 682.5 362.1 L 682.5 362.1 L 456.9 348.3 L 456.9 348.3 L 445.4 346.3 L 434.7 341.8 L 425.2 335.0 L 417.5 326.3 L 411.9 316.1 L 408.8 304.9 L 408.2 293.3 L 410.2 281.8 L 414.7 271.0 L 421.5 261.6 L 430.2 253.9 L 440.4 248.3 L 451.6 245.1 L 463.2 244.5 Z" fill="#0A2E31"/>
+  <circle cx="700.0" cy="690.0" r="58.0" fill="#F2AA3C"/>
 </svg>

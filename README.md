@@ -33,9 +33,13 @@ scripts/package-release.sh # 打包桌面 dmg + 安卓 release APK 到 release/
 
 ## 品牌资源
 
-- `brand/` — logo 源文件：`logo-icon.svg`、`logo-horizontal.svg`、`logo-horizontal-dark.svg`、`logo-appicon.svg`、`logo-favicon.svg`
-- 修改后重新生成全平台图标：`cd app && pnpm tauri icon ../brand/logo-appicon.svg`
-- Web favicon：`app/public/favicon.svg`（来自 `brand/logo-favicon.svg`）
+- 品牌标记是「随身卡」（决策 D99）：贴顶边的穿透挂孔 + 左上斜切一角 + 右下颗琥珀灯，深青底 `#0F3A3E`
+- `brand/appicon.png` — App 图标母版（1024 满幅、无透明通道、不烤圆角，遮罩交给系统）
+- `brand/logo-mark.svg` / `brand/logo-mark-flat.svg` — 矢量标记（富质感版 / 小尺寸扁平版）
+- `scripts/gen-brand-mark.py` — 几何唯一事实源：派生 favicon、侧栏 22px 标记、托盘 36px 单色模板图、Android 自适应前景层
+- 重生成全平台图标（顺序不能反）：`cd app && pnpm tauri icon ../brand/appicon.png` → `python3 scripts/gen-brand-mark.py`
+- `brand/icon-drafts/` — 图标过程稿与真实壁纸/真实尺寸评审表，**不作为事实源**
+- 旧猫头源仍在：`brand/logo-icon.svg`、`logo-favicon.svg`、`logo-appicon.svg`、`logo-horizontal*.svg`（文字标待与图标一起重做）
 
 ## 文档
 

@@ -5,3 +5,6 @@
 app/src-tauri/gen/
 artifacts
 .pnpm-shim/
+
+# 图标/视觉过程稿与评审截图（约 16MB，本地评审用，不入库；定稿资产是 brand/appicon.png 与 brand/logo-mark*.svg）
+brand/icon-drafts/
