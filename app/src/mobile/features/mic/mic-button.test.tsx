@@ -113,6 +113,16 @@ describe("MicButton 竖屏胶囊", () => {
     expect(mic.textContent).toContain("按住说话");
   });
 
+  it("录音按钮带 mic-gesture：子元素不接收 pointer 事件，避免 recording 切换时 pointercancel", () => {
+    const mic = renderButton();
+
+    // 真机：pointerdown 落在子 svg 上，recording 开始后子元素被卸载，
+    // Chrome 会对进行中的触摸补 pointercancel，手指轻微一动就取消录音。
+    // 让子元素 pointer-events:none、手势永远落在按钮本身。
+    expect(mic.className).toContain("mic-gesture");
+    expect(mic.className).toContain("touch-none");
+  });
+
   it("覆盖层在胶囊上方独立定位，不参与容器宽度", () => {
     const mic = renderButton();
     const overlay = overlayOf(mic);
@@ -121,7 +131,8 @@ describe("MicButton 竖屏胶囊", () => {
     expect(overlay).not.toBe(mic);
     expect(isPositioned(overlay)).toBe(true);
     expect(overlay.className).toContain("absolute");
-    expect(overlay.className).toContain("bottom-[68px]");
+    expect(overlay.className).toContain("mic-card-layer");
+    expect(overlay.className).toContain("bottom-[170px]");
     expect(overlay.className).toContain("inset-x-0");
     expect(overlay.className).toContain("mx-auto");
     expect(overlay.className).toContain("w-[min(86vw,380px)]");
@@ -130,15 +141,6 @@ describe("MicButton 竖屏胶囊", () => {
     // 容器里只有按钮一个流内元素，覆盖层不会撑宽按钮。
     const inFlow = [...container.children].filter((child) => !isPositioned(child));
     expect(inFlow).toEqual([mic]);
-  });
-
-  it("宠物页有最近会话时可把覆盖层再上移，避免盖住该行", () => {
-    setMicIdle();
-    render(<MicButton active overlayBottomClassName="bottom-[124px]" />);
-    const mic = screen.getByRole("button", { name: /按住说话/ });
-    const overlay = overlayOf(mic);
-    expect(overlay.className).toContain("bottom-[124px]");
-    expect(overlay.className).not.toContain("bottom-[68px]");
   });
 
   it("没有任何「取消录音」按钮，取消只靠上滑手势", () => {
@@ -170,7 +172,7 @@ describe("MicButton 竖屏胶囊", () => {
     expect(card.className).toContain("pointer-events-auto");
   });
 
-  it("结果卡是 v16 三段弹窗：grabber / header 16 / content 13 单行 / footer", () => {
+  it("结果卡只留百炼 + 右侧小字状态 + 2 行正文，没有复制/时间/底部动作区", () => {
     useMicStore.setState({
       phase: "delivered",
       result: {
@@ -184,49 +186,33 @@ describe("MicButton 竖屏胶囊", () => {
     });
     renderButton();
 
-    // 卡片：白底、圆角 20、0.5 hairline、浮影；不再套 deep-sea 深色作用域。
     const card = screen.getByTestId("mic-result-card");
-    expect(card.className).toContain("rounded-[20px]");
-    expect(card.className).toContain("border-[0.5px]");
+    expect(card.className).toContain("rounded-[18px]");
+    expect(card.className).toContain("border");
     expect(card.className).toContain("bg-card");
-    expect(card.className).toContain("shadow-[0_12px_32px_-12px_rgba(20,30,35,0.18)]");
-    expect(card.className).not.toMatch(/surface/);
+    expect(screen.queryByTestId("mic-result-grabber")).toBeNull();
 
-    // grabber 36×4，#D1D1D6，居中。
-    const grabber = screen.getByTestId("mic-result-grabber");
-    expect(grabber.className).toContain("w-9");
-    expect(grabber.className).toContain("h-1");
-    expect(grabber.className).toContain("bg-[#d1d1d6]");
-
-    // header：薄荷 check +「已输入」16/400 + 右侧时间 12/400。
+    expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
     const title = screen.getByText("已输入");
-    expect(title.className).toContain("text-base");
-    expect(title.className).toContain("font-normal");
-    const when = screen.getByText("刚刚");
-    expect(when.className).toContain("text-[12px]");
+    expect(title.className).toContain("text-[9px]");
+    expect(screen.queryByText("刚刚")).toBeNull();
+    expect(screen.queryByRole("button", { name: "复制识别文本" })).toBeNull();
 
-    // content：正文 13/400、单行省略。
     const body = screen.getByText("把这段代码改成异步，然后提醒我跑测试");
-    expect(body.className).toContain("text-[13px]");
-    expect(body.className).toContain("truncate");
-    expect(body.className).toContain("whitespace-nowrap");
+    expect(body.className).toContain("text-[11.5px]");
+    expect(body.className).toContain("line-clamp-2");
 
-    // footer：15/400 纯文字动作，无实心底色/描边。
+    // 两个动作圆在卡片外、麦克风左右；只在插入成功时可见。
     const enter = screen.getByRole("button", { name: "在电脑上按回车" });
     const clear = screen.getByRole("button", { name: "清空电脑输入框" });
-    expect(enter.className).toContain("text-[15px]");
-    expect(clear.className).toContain("text-[15px]");
-    expect(enter.className).toContain("text-primary");
-    expect(clear.className).toContain("text-muted-foreground");
-    expect(enter.className).not.toMatch(/\bbg-/);
-    expect(clear.className).not.toMatch(/\bbg-/);
-    expect(enter.className).toContain("min-h-11");
-
-    // 复制按钮仍在（icon-only，44 热区在 header 右侧）。
-    expect(screen.getByRole("button", { name: "复制识别文本" })).toBeInTheDocument();
+    expect(card.contains(enter)).toBe(false);
+    expect(card.contains(clear)).toBe(false);
+    expect(enter.className).toContain("mic-action");
+    expect(enter.className).toContain("size-14");
+    expect(enter.getAttribute("data-visible")).toBe("true");
   });
 
-  it("错误态用 destructive 文案，结构与成功态一致且没有按键动作", () => {
+  it("错误态用珊瑚色小字，仍没有按键动作", () => {
     useMicStore.setState({
       phase: "error",
       session: "session-1",
@@ -235,10 +221,11 @@ describe("MicButton 竖屏胶囊", () => {
     });
     renderButton();
 
-    expect(screen.getByTestId("mic-result-grabber")).toBeInTheDocument();
+    expect(screen.queryByTestId("mic-result-grabber")).toBeNull();
     const title = screen.getByText("没成功");
-    expect(title.className).toContain("text-destructive");
-    expect(screen.getByText("没听清，靠近一点再说一次。").className).toContain("text-destructive");
+    expect(title.className).toContain("text-[9px]");
+    expect(title.className).toContain("text-pet-coral");
+    expect(screen.getByText("没听清，靠近一点再说一次。").className).toContain("text-pet-coral");
     expect(screen.queryByRole("button", { name: "在电脑上按回车" })).toBeNull();
     expect(screen.queryByRole("button", { name: "清空电脑输入框" })).toBeNull();
   });
@@ -260,8 +247,11 @@ describe("MicButton 竖屏胶囊", () => {
     await waitFor(() => expect(useMicStore.getState().phase).toBe("listening"));
 
     fireEvent.pointerMove(mic, { pointerId: 1, clientX: 196, clientY: 760 });
-    expect(mic.textContent).toContain("上滑取消");
-    expect(mic.textContent).not.toContain("松手取消");
+    expect(screen.getByText("上滑取消")).toBeInTheDocument();
+    expect(screen.queryByText("松手取消")).toBeNull();
+    // 录音胶囊是深石墨 + 柔光；取消提示在胶囊上方，不再把胶囊染成珊瑚色。
+    expect(mic.className).toContain("mic-recording");
+    expect(mic.className).not.toContain("bg-pet-coral");
 
     fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 760 });
     await waitFor(() =>
@@ -276,12 +266,14 @@ describe("MicButton 竖屏胶囊", () => {
 
     fireEvent.pointerDown(mic, { pointerId: 1, clientX: 196, clientY: 800 });
     await waitFor(() => expect(useMicStore.getState().phase).toBe("listening"));
-    expect(mic.textContent).toContain("上滑取消");
+    expect(screen.getByText("上滑取消")).toBeInTheDocument();
     expect(mic.className).toContain("w-[min(90vw,420px)]");
+    expect(mic.className).toContain("mic-recording");
 
     fireEvent.pointerMove(mic, { pointerId: 1, clientX: 196, clientY: 700 });
-    await waitFor(() => expect(mic.textContent).toContain("松手取消"));
-    expect(mic.className).toContain("bg-pet-coral");
+    await waitFor(() => expect(screen.getByText("松手取消")).toBeInTheDocument());
+    expect(mic.className).toContain("mic-recording");
+    expect(mic.className).not.toContain("bg-pet-coral");
 
     fireEvent.pointerUp(mic, { pointerId: 1, clientX: 196, clientY: 700 });
     await waitFor(() => expect(useMicStore.getState().phase).toBe("idle"));
@@ -291,7 +283,7 @@ describe("MicButton 竖屏胶囊", () => {
 });
 
 describe("MicButton 流式识别回显", () => {
-  it("录音时在胶囊上方显示实时文本、百炼来源和上传提示", () => {
+  it("录音时在胶囊上方显示白卡：百炼 + 识别中 + 2 行实时文本", () => {
     useMicStore.setState({
       phase: "listening",
       session: "session-1",
@@ -301,10 +293,12 @@ describe("MicButton 流式识别回显", () => {
     renderButton();
 
     expect(screen.getByText("帮我把这段异步的注释")).toBeInTheDocument();
-    expect(screen.getByText(/百炼 · 音频上传中/)).toBeInTheDocument();
+    expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
+    expect(screen.getByText("识别中")).toBeInTheDocument();
+    expect(screen.queryByText(/音频上传中/)).toBeNull();
   });
 
-  it("收尾时圆钮里只转 spinner，不写字、不撑宽（「云端收尾…/百炼」已移除）", () => {
+  it("收尾时圆钮里只显示 spinner，不写「云端收尾…/百炼」", () => {
     useMicStore.setState({
       phase: "processing",
       session: "session-1",
@@ -319,12 +313,10 @@ describe("MicButton 流式识别回显", () => {
     expect(mic.className).toContain("h-14");
     expect(mic.className).toContain("bg-pet-primary");
 
-    // 圆钮里只有一个 spinner，没有任何文字/徽标（文字会撑出 56 圆钮，看起来像圆盘变形）。
-    expect(mic.textContent).toBe("");
-    expect(mic.querySelectorAll("span")).toHaveLength(0);
-    expect(mic.querySelector("svg")?.getAttribute("class")).toContain("animate-spin");
-
-    // 最后一段实时文本仍在按钮上方的独立覆盖层里，来源徽标也留在覆盖层。
+    const spinner = mic.querySelector("svg.animate-spin");
+    expect(spinner).not.toBeNull();
+    expect(spinner?.closest("span")?.className).toContain("opacity-100");
+    expect(screen.queryByText(/云端收尾/)).toBeNull();
     expect(screen.getByText("帮我把这段异步的注释改成中文")).toBeInTheDocument();
     expect(screen.getAllByText("百炼").length).toBeGreaterThan(0);
   });
@@ -367,8 +359,10 @@ describe("MicButton 结果卡片按键", () => {
 
     const enter = screen.getByRole("button", { name: "在电脑上按回车" });
     const clear = screen.getByRole("button", { name: "清空电脑输入框" });
-    expect(enter.className).toContain("h-11");
-    expect(clear.className).toContain("h-11");
+    expect(enter.className).toContain("mic-action");
+    expect(clear.className).toContain("mic-action");
+    expect(enter.className).toContain("size-14");
+    expect(clear.className).toContain("size-14");
     expect(enter.textContent).toContain("回车");
     expect(clear.textContent).toContain("清空");
   });

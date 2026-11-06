@@ -109,7 +109,7 @@ describe("PetPage v16 结构", () => {
     expect(screen.queryByText("小跟班 · Sidekick")).not.toBeInTheDocument();
   });
 
-  it("麦克风是居中圆形（shape=circle），距底 56（原来 24 太贴屏幕下沿）", () => {
+  it("麦克风是居中圆形（shape=circle），距底 56；卡片位置由 MicButton 内部管理", () => {
     render(<PetPage />);
 
     const mic = screen.getByTestId("mic");

@@ -155,20 +155,6 @@ html[data-theme="dark"] .mobile-clean {
   --press-in: cubic-bezier(0.32, 0, 0.67, 0);
 }
 
-@keyframes mobile-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.92);
-  }
-  60% {
-    transform: translateY(0) scale(1.012);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes mobile-row-in {
   from {
     opacity: 0;
@@ -178,12 +164,6 @@ html[data-theme="dark"] .mobile-clean {
     opacity: 1;
     transform: none;
   }
-}
-
-/* 结果卡：说完话从按钮上沿弹出来，不再是白卡硬切 */
-.mobile-clean .mic-result-card {
-  animation: mobile-pop-in 300ms var(--spring-back) both;
-  transform-origin: 50% 100%;
 }
 
 /* 会话卡展开：新出现的行依次落下，整卡不跳变 */
@@ -218,6 +198,69 @@ html[data-theme="dark"] .mobile-clean {
   will-change: transform;
 }
 
+/* 录音按钮的子元素全是装饰：pointerdown 必须落在按钮本身。
+   否则 recording 开始时子元素被卸载，Chrome 会对正在进行的触摸补发 pointercancel，
+   手指轻微一动就被当成取消（真机复现：12px 上移即取消）。 */
+.mobile-clean .mic-gesture > * {
+  pointer-events: none;
+}
+
+/* 录音胶囊 ↔ 圆形主按钮：宽度/底色/阴影平滑过渡，内容分层淡入淡出 */
+.mobile-clean .mic-morph {
+  transition:
+    width 300ms cubic-bezier(0.22, 1.2, 0.36, 1),
+    background-color 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease,
+    transform 320ms var(--spring-back);
+  overflow: hidden;
+}
+
+.mobile-clean .mic-morph:active {
+  transform: scale(0.92);
+  transition-duration: 90ms;
+  transition-timing-function: var(--press-in);
+}
+
+.mobile-clean .mic-recording {
+  border-color: transparent;
+  background: #2c2c2e;
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 -18px 38px rgba(44, 44, 46, 0.18),
+    0 8px 18px -12px rgba(0, 0, 0, 0.42);
+}
+
+/* 实时卡/结果卡共用一个位置，松手后下滑 */
+.mobile-clean .mic-card-layer {
+  transition: bottom 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 左右动作圆：浅灰底、深色图标；淡入时轻微放大 */
+.mobile-clean .mic-action {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+  transition:
+    opacity 200ms ease,
+    transform 240ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+.mobile-clean .mic-action[data-visible="true"] {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-clean .mic-morph,
+  .mobile-clean .mic-card-layer,
+  .mobile-clean .mic-action {
+    transition: none;
+  }
+}
+
 /* 麦克风圆钮：按下快速压扁，松手弹回（原来靠 active:scale-*，WebView 103 上不生效） */
 .mobile-clean .press-spring {
   transition: transform 320ms var(--spring-back);
@@ -235,7 +278,6 @@ html[data-theme="dark"] .mobile-clean {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mobile-clean .mic-result-card,
   .mobile-clean .ms-row,
   .mobile-clean .ms-swipe-content,
   .mobile-clean .press-spring,
@@ -244,7 +286,8 @@ html[data-theme="dark"] .mobile-clean {
     transition: none;
   }
 
-  .mobile-clean .press-spring:active {
+  .mobile-clean .press-spring:active,
+  .mobile-clean .mic-morph:active {
     transform: none;
   }
 }

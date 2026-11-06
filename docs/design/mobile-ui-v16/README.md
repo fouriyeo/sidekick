@@ -21,7 +21,7 @@ related:
 
 - 手机只有两页：宠物（根）/ 设置（二级）。顶栏 gear / 连接状态 / chat；无底部 tab。
 - 宠物页：会话卡置顶（折叠 1 行 / 展开 5 行、working wash、左滑清除、已完成 2h 自动隐藏）→ 无底色鲸鱼（230 / 展开 220）→ 居中 56 薄荷圆麦克风（距底 56）。
-- 结果卡：弹窗三段 grabber + header 16「已输入」+ content 13 单行 + footer 15「清空 / ↵ 回车」；总高约 125；清空二次确认。
+- 结果卡：弹窗三段 grabber + header 16「已输入」+ content 13 单行 + footer 15「清空 / ↵ 回车」；总高约 125；清空二次确认。**D100 起已重做**：共用白卡（百炼 + 右侧 9px 状态 + 2 行正文），动作改为麦克风左右两个圆钮；以 D100 与 mic SPEC 为准。
 - 令牌：`app/src/mobile/styles/clean.css`（`.mobile-clean`，浅/深两套，只作用手机）。
 - 字体：HarmonyOS Sans SC Regular 400（随包原始 TTF，D91；D81 时期为 MiSans）；会话标题 15；设置说明行高 19；正文 13。
 - 角色：鲸鱼不重绘、不染色、不加 filter；桌面端不受影响。
@@ -29,5 +29,5 @@ related:
 ## 实现与决策
 
 - 代码落点：`app/src/mobile/{app.tsx,ui-store.ts,styles/clean.css}`、`app/src/mobile/features/{pet,sessions,settings,mic}/**`、`app/src/mobile/shell/{pet-top-bar,page-header}.tsx`。
-- 决策：D80（两页壳 / 删动态页 / 会话置顶 / 结果卡三段）、D81（MiSans + 字号/行高）。
+- 决策：D80（两页壳 / 删动态页 / 会话置顶 / 结果卡三段）、D81（MiSans + 字号/行高）；结果卡/录音胶囊的后续改动见 D100。
 - 验收：`docs/prd/shell/ACCEPTANCE.md` 的 SHL-AC-26…47、SHL-AC-55…59；真机基础页已验，录音禁切页 / 结果卡清空 / 320 宽待补。

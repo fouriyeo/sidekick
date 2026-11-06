@@ -14,8 +14,7 @@ export const MIC_COPY = {
   idleDisconnected: "先连接电脑",
   arming: "准备中…",
   listening: "正在听",
-  cloudConnecting: "云端连接中…",
-  audioUploading: "音频上传中",
+  recognizing: "识别中",
   engineCloud: "百炼",
   cancelHint: "上滑取消",
   releaseToCancel: "松手取消",
@@ -34,8 +33,6 @@ export const MIC_COPY = {
   permissionGuideSteps: ["打开系统设置", "应用 → Sidekick → 权限", "把「麦克风」设为允许"],
   permissionGuideClose: "知道了",
   retry: "再说一次",
-  copy: "复制",
-  copiedAction: "已复制",
 } as const;
 
 export function micLocalErrorText(error: unknown): string {

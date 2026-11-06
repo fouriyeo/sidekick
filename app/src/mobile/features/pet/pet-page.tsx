@@ -18,6 +18,10 @@ import { usePetStore } from "./pet-store";
 
 /** 56 圆钮居中、距底 56：原 24 贴着手势条/屏幕下沿，按住不舒服。 */
 const MIC_BOTTOM_CLASS = "bottom-[calc(env(safe-area-inset-bottom)+56px)]";
+/**
+ * 语音实时文本 / 结果卡 / 上滑取消提示统一上移到屏幕中段：
+ * 底部太靠下不方便看，挡住宠物可以接受（录音时不看宠物）。
+ */
 /** 底部留给麦克风的空间（56 圆钮 + 56 距底），让鲸鱼在消息卡与麦克风之间居中。 */
 const MIC_SPACER_CLASS = "h-[calc(env(safe-area-inset-bottom)+112px)] flex-none";
 

@@ -937,3 +937,32 @@
 - 放弃：爪印路线（`paw-v2`、`card-round` 之前的六版概念全部无所指，40px 实测只有最普通的那版能认）；带脸角色（用户否）；紫色底（用户否）；玻璃卡（40px 糊）；「两枚爪印/一叠卡」等多主体（40px 混成一团）；把矢量当 App 图标母版（位图才是用户批准的那张图，矢量只服务小尺寸）。
 - 代价：位图母版在 16–32px 会比矢量软（macOS Dock/Finder 小尺寸与 `.ico` 已可辨认，但不是极限锐利）；`gen/android` 不入库，每次 `pnpm tauri android init` + `pnpm tauri icon` 后必须重跑 `python3 scripts/gen-brand-mark.py`，否则自适应图标白边回归；「随身卡」在 iOS 着色模式下会塌成一块剪影，斜角与挂孔能保住识别，但灯的暖色信息会丢；真机主屏与 macOS 菜单栏观感尚未目检。
 - 规范：`brand/appicon.png`、`brand/logo-mark.svg`、`brand/logo-mark-flat.svg`、`scripts/gen-brand-mark.py`、`app/public/{favicon,logo-icon}.svg`、`app/src-tauri/icons/**`、`app/src-tauri/icons/tray.png`、`app/src-tauri/gen/android/app/src/main/res/{values/ic_launcher_background.xml,mipmap-*/ic_launcher_foreground.png}`、`docs/engineering/desktop-tray.md`、`README.md`、`AGENTS.md`、`brand/icon-drafts/`。
+
+## D100 · 语音录音/结果 UI 重做：深石墨胶囊 + 共用白卡 + 卡外动作圆钮（2026-11-06，取代 D80 的珊瑚胶囊/三段结果卡）
+
+- 背景：用户对语音输入的两段体验连续提了三轮意见：① 录音胶囊的珊瑚色 + 红色渐变太重，要求参考微信/QQ/WhatsApp/Telegram；② 渐变与按钮交界有横线、按钮被融掉；③ 结果卡「已输入」字大、底部太高、复制和“刚刚”多余，清空/回车不应塞在卡里。最终确认：录音胶囊用深石墨 + 柔和向上阴影，取消提示放胶囊上方；结果卡只留「百炼 + 右侧小字状态 + 2 行正文」，清空/回车放麦克风左右两个浅灰圆钮；松手时胶囊收缩、卡片下滑、动作圆错峰淡入。
+- 决策：
+  - **录音态**：胶囊 `#2C2C2E` + `inset 0 1px 0 rgba(255,255,255,.06)` + `0 -18px 38px rgba(44,44,46,.18)` + `0 8px 18px -12px rgba(0,0,0,.42)`；内部只留脉冲点/计时/波形；取消提示为胶囊上方 12px 文字（距容器底 100px），进入取消区变珊瑚色；80/32 阈值不变，胶囊不再变色。
+  - **实时卡/结果卡共用白卡**：同一张卡、同一位置（距容器底 170 → 110），卡头左侧「百炼」徽标、右侧 9px 状态（实时「识别中」+ 呼吸点；结果「已输入/已复制/没成功」），正文 11.5px / 最多 2 行；去掉 grabber、复制、时间、卡内底部动作区；卡宽 `min(86vw,380px)`、18 圆角。
+  - **动作圆钮**：插入成功时麦克风左右各一个 56px 浅灰 `#F2F2F7` 圆钮（左清空、右回车，深色图标/文字，回车绿），仅 `inserted` 出现；复制/失败不出现；清空仍两次确认，第二次前变珊瑚色「再点一次」。
+  - **过渡**：胶囊宽度 260→56（约 300ms）、结果卡 170→110（280ms）、动作圆错峰淡入（120/160ms）；用 CSS transition（width/background/bottom/opacity/transform），不引动画库；`prefers-reduced-motion` 直接切结果态。
+  - **测试/文档**：`mic-button.test.tsx` 改为验证白卡结构、2 行正文、无复制/时间/卡内动作、卡外圆钮；`pet-page.test.tsx` 移除 `overlayBottomClassName`；mic/shell PRD/SPEC/AC 同步。
+- 原因：用户明确否掉大红色、横线、融掉按钮、卡内大字号/复制/时间；深石墨 + 柔光与深色动作圆同一材质语言，白卡只承载文字，动作回到拇指可及的底部；三圆一行让“长胶囊收缩成圆”的过渡连续，不会突然换一套控件。
+- 放弃：珊瑚胶囊/红色渐变（用户否，太重）；v5 单层渐变把胶囊融掉（用户否，按钮消失）；把清空/回车放卡内（用户否，抢文字、底部太高）；复制按钮/“刚刚”/grabber（用户否，多余）；动作圆放麦克风正上方（过渡不如三圆一行顺）。
+- 代价：结果卡不再有复制入口（依赖系统长按/剪贴板历史），时间信息移除；卡外圆钮占左右空间，极窄屏（<320）需回归；深色主题下浅灰圆钮比页面亮，视觉重量仍在可接受范围；真机（Realme WebView 103）尚未安装验收。
+- 规范：`app/src/mobile/features/mic/mic-button.tsx`、`mic-copy.ts`、`mic-button.test.tsx`、`app/src/mobile/features/pet/pet-page.tsx`、`pet-page.test.tsx`、`app/src/mobile/styles/clean.css`、`docs/prd/mic/{SPEC,PRD,ACCEPTANCE}.md`、`docs/prd/shell/{SPEC,ACCEPTANCE}.md`、`docs/status.md`、`AGENTS.md`。
+
+## D101 · 语音收回「设置 › 语音输入」单页 + 桌面一级回到 4 个入口（2026-11-06，取代 D94 的导航部分）
+
+- 背景：用户觉得电脑端语音部分没必要单独占一个一级页，也不该再往下设二级页；语音是配置类内容，和概览 / 内容 / 用量这类主任务不是一个层级。D94 把语音提升为一级后，一级入口从 4 个变 5 个、⌘2–⌘5 全部前移，却没有降低任何点击深度（原来「设置 › 语音输入」就已经是 2 次点击，语音根页看配置仍要再 push 一次），只换来更挤的导航和一轮文档 / 测试漂移。
+- 决策：
+  - 桌面一级回到 **4 个：概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 设置 ⌘4**；224 侧栏上半只有概览 / 内容 / 用量 3 项，设置固定在底部；三行状态摘要（服务 / 手机 / AI）不变。
+  - 语音收回 **「设置 › 语音输入」单个 push 二级页**：页内纵向三段 = 百炼配置（原「连接与识别」`CloudAsrForm`）+ 关键词列表（原独立关键词页，改为可嵌入面板 `KeywordsPanel`）+ 语音用量（`UsageStatsPanel`），**页内不再 push**；页头只有「‹ 设置」返回。
+  - 设置首页「功能」组顺序：手机连接 / **语音输入** / AI 联动 / 剪贴板；语音行 meta 已配置显示「已配置」，未配置显示「未配置」+ 一颗琥珀点（未配置信号从侧栏导航项挪到设置行）。
+  - 旧「语音」一级页与「连接与识别 / 关键词 / 语音用量」三个二级页删除；`DesktopView` 去掉 `voice`、`VoicePane` 删除，`SettingsSection` 新增 `voice`；`?view=voice` 与 `?view=models` 作为调试别名都落到「设置 › 语音输入」。
+  - 保留 D94 的能力：关键词仍是单一列表（一行一个词、加号加行、保存、不做分组 / 权重，最多 2000 个、统一权重 4）、`asr_keywords_save` 只写 `bailian.vocabulary`、未配置信号、2 次点击可达（设置 → 语音输入）。
+- 原因：配置类不与主任务平级——壳的目标是「主任务 ≤1 次操作、配置与排障收进设置二级页」，语音属于配置与低频维护；D94 提升一级并没有减少可达次数，反而让 5 个入口挤在 224 侧栏、⌘ 编号二次迁移。收回后设置首页仍 ≤2 次可达，未配置信号仍在设置行可见。
+- 放弃：保留 5 入口但把语音根页平铺（导航仍多一项，根页信息与设置列表重复）；语音留在设置里但仍带 3 个 push 子页（用户明确不要二级页，内部再 push 层次过深）；把关键词并进百炼配置表单（关键词是用户内容，需要独立保存与逐行校验）；删掉语音用量统计（费用仍需可见）。
+- 代价：⌘2–⌘4 第二次迁移（D94 刚把 内容 / 用量 前移过一轮），需一次性刷新测试、QA 脚本与文档；设置首页多一行，960×640 下开始出现滚动（设置页本就是列表，可接受）；语音页要滚动才能看全三段（配置 / 关键词 / 用量），不再有「根页摘要」；`?pane=` 调试参数失效。
+- 编号说明：同日手机「语音录音 / 结果 UI 重做」已先占用 D100，本条按时间顺序记为 D101；`desktop-nav.ts` / `app.tsx` 注释里的 D100 均指本条。
+- 规范：`app/src/desktop/{lib/desktop-nav.ts,app.tsx,shell/sidebar.tsx,pages/settings-page.tsx}`、`app/src/desktop/features/models/{voice-settings.tsx,keywords-panel.tsx,cloud-asr-form.tsx,usage-stats.tsx}`、`app/src/desktop/pages/{voice-page.tsx,voice-page.test.tsx}`（删除）、`app/src/desktop/{app.test.tsx,pages/settings-page.test.tsx,features/models/voice-settings.test.tsx}`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/*`、`docs/prd/mic/*`、`docs/prd/usage/*`、`docs/standards/ux.md`、`docs/engineering/{desktop-ios-ui,asr-model,asr-cloud-bailian,audio-pipeline,protocol-audio,quality}.md`、`docs/{INDEX,status,frontend-architecture,setup}.md`、`AGENTS.md`。
