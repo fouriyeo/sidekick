@@ -266,6 +266,7 @@ load: on-demand
 ## 12. 交接
 
 - 令牌落地：基线 `app/src/shared/styles/tokens.css`，桌面覆盖 `app/src/desktop/styles/ios.css`（`.desktop-ios`），手机覆盖 `app/src/mobile/styles/clean.css`（`.mobile-clean`）；组件只引用语义令牌；主题运行时见 [frontend-architecture.md](../frontend-architecture.md#6-样式规范)。
+- 具体数值看可视化总表 [style-guide.html](./style-guide.html)：字号 / 行高 / 文字间距 / 间距刻度 / 圆角 / 阴影与组件几何，含深浅两套实物与标本；改令牌时同步该页。
 - 图集状态映射写入 [engineering/pet-runtime.md](../engineering/pet-runtime.md)；不在 UI 组件里硬编码状态行/帧号。
 - 新视觉资产登记来源、许可证、体积到 [dependency-policy.md](../dependency-policy.md) 的资源规则。
 - 任何视觉方案变更影响 PRD/SPEC 时同步更新文档；两套主题的改动要同时验证深浅色与对比度。

@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>小跟班 · 视觉规范</title>
+<!--
+  视觉规范的可视化总表。数值取自：
+    app/src/desktop/styles/ios.css        （桌面令牌 / 材质 / 组件几何）
+    app/src/mobile/styles/clean.css       （手机令牌 / 字体 / 动效）
+    app/src/shared/styles/tokens.css      （圆角 / 阴影 / 动效基线）
+    desktop/shell/*.tsx、mobile/features/settings/more-page.tsx（排版落地值）
+  规则与取舍见 docs/standards/visual.md；本页只呈现数值与实物。
+-->
+<style>
+/* 与手机端同一份随包字体：HarmonyOS Sans SC Regular（原始 TTF，不做子集化） */
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  src: url("../../app/src/mobile/assets/fonts/HarmonyOS_SansSC_Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+/* ===================== 令牌（复刻产品两套作用域） ===================== */
+:root {
+  --bg: #f2f2f7;
+  --card: #ffffff;
+  --pop: #ffffff;
+  --ink: #1c1c1e;
+  --muted: #8a8a8e;
+  --tertiary: #b9b9c0;
+  --border: #e4e4e9;
+  --sep: rgba(60, 60, 67, 0.14);
+  --signal: #0a7764;
+  --wash: #eaf5f2;
+  --secondary: rgba(120, 120, 128, 0.12);
+  --secondary-hover: rgba(120, 120, 128, 0.18);
+  --seg-thumb: #ffffff;
+  --sidebar: #ececef;
+  --hi: rgba(255, 255, 255, 0.9);
+  --card-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.045), 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 10px 28px -24px rgba(0, 0, 0, 0.4);
+  --glass-bg: rgba(247, 247, 251, 0.84);
+  --glass-border: rgba(0, 0, 0, 0.07);
+  --glass-hi: rgba(255, 255, 255, 0.72);
+  --glass-shadow: 0 0.5px 0 var(--glass-border), 0 8px 28px -22px rgba(0, 0, 0, 0.35);
+  --pop-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --focus-ring: rgba(10, 119, 100, 0.28);
+  --amb-a: rgba(10, 119, 100, 0.1);
+  --amb-b: rgba(40, 97, 140, 0.08);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans CJK SC",
+    "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Cascadia Mono", monospace;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --bg: #000000;
+  --card: #1c1c1e;
+  --pop: #2c2c2e;
+  --ink: #f2f2f7;
+  --muted: #98989d;
+  --tertiary: #5c5c61;
+  --border: #38383a;
+  --sep: rgba(255, 255, 255, 0.09);
+  --signal: #3fc4a0;
+  --wash: #2a2a2d;
+  --secondary: rgba(120, 120, 128, 0.24);
+  --secondary-hover: rgba(120, 120, 128, 0.34);
+  --seg-thumb: #636366;
+  --sidebar: #111113;
+  --hi: rgba(255, 255, 255, 0.07);
+  --card-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 10px 30px -26px rgba(0, 0, 0, 0.9);
+  --glass-bg: rgba(32, 32, 35, 0.86);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-hi: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.06), 0 12px 32px -24px rgba(0, 0, 0, 0.9);
+  --pop-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.8), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  --focus-ring: rgba(63, 196, 160, 0.34);
+  --amb-a: rgba(63, 196, 160, 0.14);
+  --amb-b: rgba(10, 132, 255, 0.07);
+  color-scheme: dark;
+}
+
+/* ===================== 基底 ===================== */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 520px at 18% -12%, var(--amb-a), transparent 68%),
+    radial-gradient(900px 480px at 92% 0%, var(--amb-b), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+code {
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--wash);
+  color: var(--ink);
+  white-space: nowrap;
+}
+h1 { margin: 0; font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -0.022em; }
+h2.sec {
+  margin: 0 0 8px 6px;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--muted);
+}
+p { margin: 0; }
+a { color: inherit; }
+::selection { background: var(--signal); color: var(--card); }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+/* ===================== 外壳：224 侧栏 + 730 内容 ===================== */
+.layout { display: flex; min-height: 100vh; }
+.side {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 224px;
+  height: 100vh;
+  padding: 14px 12px 16px;
+  background: var(--sidebar);
+  box-shadow: inset -0.5px 0 0 var(--glass-border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 8px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.brand .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--signal);
+  box-shadow: 0 0 0 3px var(--wash);
+}
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.nav a:hover { background: rgba(120, 120, 128, 0.08); color: var(--ink); }
+.nav a[aria-current="true"] { background: var(--card); color: var(--ink); box-shadow: var(--card-shadow); }
+.nav a .idx { width: 16px; font-family: var(--mono); font-size: 11px; color: var(--tertiary); }
+.nav a[aria-current="true"] .idx { color: var(--signal); }
+.side-foot {
+  margin-top: auto;
+  padding: 10px;
+  border-top: 0.5px solid var(--sep);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.main { min-width: 0; flex: 1; }
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  max-width: 730px;
+  margin: 0 auto;
+  padding: 0 8px;
+  border-radius: 18px;
+  transition: background-color 220ms ease, box-shadow 220ms ease;
+}
+.topbar[data-scrolled="true"] {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-hi);
+}
+.tb-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.topbar[data-scrolled="true"] .tb-title { opacity: 1; transform: none; }
+
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--secondary);
+}
+.seg button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--seg-thumb);
+  color: var(--ink);
+  box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.18), inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
+}
+
+.page { max-width: 730px; margin: 0 auto; padding: 18px 28px 72px; }
+.lede { margin-top: 12px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.chip b { margin-right: 4px; color: var(--ink); font-weight: 400; }
+
+section { margin-top: 32px; scroll-margin-top: 64px; }
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow), inset 0 0.5px 0 var(--hi);
+  overflow: hidden;
+}
+.pad { padding: 16px; }
+.hint { margin-top: 8px; padding: 0 6px; font-size: 12px; line-height: 1.55; color: var(--muted); }
+.hint + .hint { margin-top: 4px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1100px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* 行与分隔线 */
+.row { position: relative; display: flex; align-items: center; gap: 14px; min-height: 54px; padding: 10px 16px; }
+.row + .row::before,
+.sp + .sp::before,
+.srow + .srow::before,
+.qrow + .qrow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 0.5px;
+  background: var(--sep);
+}
+
+/* 表格 */
+table { width: 100%; border-collapse: collapse; }
+th {
+  padding: 10px 16px;
+  font-size: 11.5px;
+  font-weight: 400;
+  text-align: left;
+  color: var(--muted);
+  white-space: nowrap;
+}
+td { padding: 10px 16px; font-size: 13px; vertical-align: top; border-top: 0.5px solid var(--sep); }
+td.num, th.num { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+/* 速查 */
+.qrow { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr) 190px; gap: 12px; align-items: center; padding: 11px 16px; }
+.qrow .qn { font-family: var(--mono); font-size: 11px; color: var(--tertiary); }
+.qrow .qt { font-size: 14px; }
+.qrow .qv { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; }
+
+/* 字体 */
+.frow { position: relative; padding: 14px 16px; }
+.frow + .frow::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 0.5px; background: var(--sep); }
+.frow .fh { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.frow .fh b { font-size: 14px; font-weight: 500; }
+.frow .fh span { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.frow .fs { margin-top: 6px; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: var(--muted); word-break: break-word; }
+.frow .fd { margin-top: 10px; font-size: 15px; line-height: 1.4; }
+.mb { font-family: "HarmonyOS Sans SC", system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif; }
+
+/* 字号标本 */
+.sp { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: 20px; align-items: center; padding: 13px 16px; }
+.sp .sample { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp .meta { text-align: right; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.sp .meta .val { display: block; color: var(--ink); }
+.sp .meta .use { display: block; font-family: var(--font); font-size: 11.5px; color: var(--muted); }
+@media (max-width: 560px) {
+  .sp { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .sp .meta { text-align: left; }
+}
+
+/* 标杆 */
+.bar-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 210px; gap: 16px; align-items: center; padding: 7px 16px; }
+.bar-row .bv { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; }
+.bar-track { height: 8px; background: var(--wash); border-radius: 2px; overflow: hidden; }
+.bar { height: 100%; background: var(--signal); border-radius: 2px; }
+.bar-row .bl { font-size: 12px; color: var(--muted); }
+
+/* 布局示意图 */
+.win {
+  display: flex;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 0.5px var(--border);
+}
+.win-side {
+  flex: 0 0 19%;
+  padding: 12px 10px;
+  background: var(--sidebar);
+  box-shadow: inset -0.5px 0 0 var(--glass-border);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.win-side b { display: block; color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 400; }
+.win-main { flex: 1; min-width: 0; padding: 10px 12px 14px; }
+.win-top {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  box-shadow: inset 0 0 0 0.5px var(--border);
+  font-size: 10px;
+  color: var(--muted);
+}
+.win-h1 { margin: 10px 0 8px; font-size: 16px; font-weight: 600; letter-spacing: -0.022em; }
+.win-col { padding: 0 10px; }
+.mini-card { height: 46px; border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow); margin-bottom: 8px; }
+.win-dim { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+.phone {
+  position: relative;
+  width: 300px;
+  margin: 0 auto;
+  padding: 10px;
+  border-radius: 30px;
+  background: var(--card);
+  box-shadow: var(--card-shadow), inset 0 0 0 0.5px var(--border);
+}
+.phone-screen {
+  position: relative;
+  height: 420px;
+  border-radius: 24px;
+  background: var(--bg);
+  overflow: hidden;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.p-top {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--wash);
+  font-size: 11px;
+  color: var(--signal);
+}
+.p-card {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 0.5px var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.p-mic {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  margin: 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: var(--signal);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.p-dim { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: center; }
+
+/* 圆角 */
+.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 12px; padding: 16px; }
+.rcell { text-align: center; }
+.rsq {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 8px;
+  background: var(--wash);
+  box-shadow: inset 0 0 0 1px var(--signal);
+}
+.rcell b { display: block; font-family: var(--mono); font-size: 12px; font-weight: 400; }
+.rcell span { font-size: 11px; color: var(--muted); }
+
+.conc { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; }
+.conc-box { border-radius: 18px; background: var(--wash); padding: 10px; }
+.conc-card { border-radius: 16px; background: var(--card); box-shadow: var(--card-shadow); padding: 10px; }
+.conc-row { display: flex; align-items: center; gap: 10px; }
+.conc-tile { width: 30px; height: 30px; border-radius: 10px; background: var(--signal); }
+.conc-nav { height: 30px; width: 96px; border-radius: 9px; background: var(--wash); }
+.conc-lbl { margin-top: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+
+/* 阴影舞台 */
+.stage {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 28px 20px;
+  border-radius: 16px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.blob { position: absolute; border-radius: 999px; filter: blur(46px); pointer-events: none; }
+.blob.a { width: 260px; height: 200px; left: 12%; top: -30px; background: var(--signal); opacity: 0.16; }
+.blob.b { width: 240px; height: 180px; right: 6%; bottom: -40px; background: #28618c; opacity: 0.14; }
+.demo {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 150px;
+  min-height: 96px;
+  padding: 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.demo b { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.demo .v { display: block; margin-top: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; }
+.demo.card { background: var(--card); box-shadow: var(--card-shadow), inset 0 0.5px 0 var(--hi); }
+.demo.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  backdrop-filter: blur(30px) saturate(190%);
+  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-hi);
+}
+.demo.pop { background: var(--pop); box-shadow: var(--pop-shadow); }
+
+.srow { position: relative; display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; padding: 11px 16px; align-items: baseline; }
+.srow .sn { font-size: 13px; }
+.srow .sn span { display: block; font-size: 11.5px; color: var(--muted); }
+.srow .sv { font-family: var(--mono); font-size: 11px; line-height: 1.55; color: var(--muted); word-break: break-word; }
+@media (max-width: 640px) { .srow { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+/* 组件小样 */
+.ui-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 22px; padding: 18px 16px; }
+.ui { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ui > .cap { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.d-btn {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--signal);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.d-btn.sm { height: 30px; padding: 0 12px; font-size: 13px; }
+.d-btn.xs { height: 26px; padding: 0 10px; font-size: 12.5px; }
+.d-btn.ghost { background: var(--secondary); color: var(--ink); box-shadow: inset 0 0.5px 0 var(--glass-hi); }
+.d-input {
+  height: 38px;
+  width: 150px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--wash);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+}
+.d-input::placeholder { color: var(--muted); }
+.d-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  width: 150px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--muted);
+  font-size: 14px;
+}
+.d-select {
+  height: 34px;
+  padding: 0 30px 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--wash);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  appearance: none;
+}
+.d-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--secondary); }
+.d-seg span {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.d-seg span[data-on="true"] {
+  background: var(--seg-thumb);
+  color: var(--ink);
+  box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.18), inset 0 0.5px 0 rgba(255, 255, 255, 0.5);
+}
+.d-switch { position: relative; width: 40px; height: 24px; border-radius: 999px; background: var(--signal); }
+.d-switch i {
+  position: absolute;
+  top: 2px;
+  left: 18px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22), 0 0.5px 0 rgba(255, 255, 255, 0.6);
+}
+.d-tile { width: 30px; height: 30px; border-radius: 10px; background: #0a84ff; box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.32); }
+.d-check { width: 18px; height: 18px; border-radius: 5px; background: var(--signal); position: relative; }
+.d-check::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  width: 5px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg);
+}
+.m-btn {
+  height: 44px;
+  min-width: 96px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--signal);
+  color: #fff;
+  font-family: "HarmonyOS Sans SC", var(--font);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.m-toggle { position: relative; width: 51px; height: 31px; border-radius: 999px; background: var(--signal); }
+.m-toggle i {
+  position: absolute;
+  top: 2px;
+  left: 22px;
+  width: 27px;
+  height: 27px;
+  border-radius: 999px;
+  background: #fff;
+}
+.m-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; background: var(--secondary); }
+.m-seg span {
+  display: grid;
+  place-items: center;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-family: "HarmonyOS Sans SC", var(--font);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.m-seg span[data-on="true"] { background: var(--seg-thumb); color: var(--ink); }
+
+/* 不一致清单 */
+.gaps { display: flex; flex-direction: column; }
+.gap { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 12px 16px; font-size: 13px; line-height: 1.55; }
+.gap + .gap::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 0.5px; background: var(--sep); }
+.gap .gi { font-family: var(--mono); font-size: 11px; color: var(--tertiary); padding-top: 2px; }
+.gap b { font-weight: 500; }
+.gap .tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--signal);
+  font-size: 11px;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+.gap .sub { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+
+footer { margin-top: 40px; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+
+#toast {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  z-index: 60;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--pop);
+  color: var(--ink);
+  box-shadow: var(--pop-shadow);
+  font-size: 12px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+}
+#toast[data-show="true"] { opacity: 1; transform: none; }
+#fontwarn {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--wash);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.55;
+}
+#fontwarn code { white-space: normal; word-break: break-all; }
+[data-copy] { cursor: pointer; }
+
+@media (max-width: 720px) {
+  td, .qrow .qt { font-size: 12.5px; }
+  td.num, th.num { white-space: normal; }
+  .qrow { grid-template-columns: 22px minmax(0, 1fr); }
+  .qrow .qv { grid-column: 2; text-align: left; }
+}
+@media (max-width: 900px) {
+  .side { display: none; }
+  .page { padding-left: 20px; padding-right: 20px; }
+  .topbar { max-width: none; margin: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand"><span class="dot"></span>小跟班 · 规范</div>
+    <nav class="nav" aria-label="章节">
+      <a href="#quick"><span class="idx">01</span>速查</a>
+      <a href="#fonts"><span class="idx">02</span>字体</a>
+      <a href="#type"><span class="idx">03</span>字号与行高</a>
+      <a href="#rhythm"><span class="idx">04</span>文字间距</a>
+      <a href="#space"><span class="idx">05</span>间距刻度</a>
+      <a href="#layout"><span class="idx">06</span>布局容器</a>
+      <a href="#radius"><span class="idx">07</span>圆角</a>
+      <a href="#shadow"><span class="idx">08</span>阴影与材质</a>
+      <a href="#components"><span class="idx">09</span>组件几何</a>
+      <a href="#gaps"><span class="idx">10</span>文档与实现</a>
+      <a href="#sources"><span class="idx">11</span>来源</a>
+    </nav>
+    <div class="side-foot">
+      v1 · 2026-11-06<br />
+      覆盖桌面与手机两个作用域
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar" id="topbar">
+      <span class="tb-title">视觉规范</span>
+      <div class="seg" role="group" aria-label="主题">
+        <button type="button" data-theme-btn="light" aria-pressed="true">浅色</button>
+        <button type="button" data-theme-btn="dark" aria-pressed="false">深色</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <h1>视觉规范</h1>
+      <p class="lede">
+        字号、行高、文字间距、圆角、阴影的一页总表。数值取自
+        <code>desktop/styles/ios.css</code>、<code>mobile/styles/clean.css</code>、
+        <code>shared/styles/tokens.css</code> 与组件的落地值；规则语义见
+        <code>docs/standards/visual.md</code>。
+      </p>
+      <p class="lede" style="margin-top: 6px">
+        两个作用域互不影响：桌面是 <code>.desktop-ios</code>（Liquid Glass），手机是
+        <code>.mobile-clean</code>（干净版 + 鸿蒙字体）。
+      </p>
+      <div class="chips">
+        <span class="chip"><b>16</b>档字号</span>
+        <span class="chip"><b>11</b>档圆角</span>
+        <span class="chip"><b>4</b>级阴影</span>
+        <span class="chip"><b>4</b>px 基距</span>
+        <span class="chip"><b>2</b>套主题</span>
+      </div>
+      <div id="fontwarn" hidden></div>
+
+      <!-- 01 速查 -->
+      <section id="quick">
+        <h2 class="sec">01 · 速查</h2>
+        <div class="card">
+          <div class="qrow"><span class="qn">01</span><span class="qt">中文行高不低于 1.4，段落不超过 1.6</span><span class="qv">21/15 · 19/13</span></div>
+          <div class="qrow"><span class="qn">02</span><span class="qt">单行标题与数字才用 1.0 行高</span><span class="qv">34/34 · 30/30</span></div>
+          <div class="qrow"><span class="qn">03</span><span class="qt">文字之间的垂直间距只用 2 / 4 / 6 / 8 / 12 / 16</span><span class="qv">块间距另算 20 / 24</span></div>
+          <div class="qrow"><span class="qn">04</span><span class="qt">行内标题与说明之间：桌面 2，手机 4</span><span class="qv">gap-0.5 / mt-1</span></div>
+          <div class="qrow"><span class="qn">05</span><span class="qt">组标题与卡 8；组与组 24（桌面）/ 20（手机）</span><span class="qv">gap-2 · gap-6/5</span></div>
+          <div class="qrow"><span class="qn">06</span><span class="qt">页面左右 28（桌面）/ 16（手机）；卡内距 16</span><span class="qv">px-7 · px-4</span></div>
+          <div class="qrow"><span class="qn">07</span><span class="qt">圆角同心：外层减内距，18 → 16 → 10 / 9</span><span class="qv">工具栏→卡→块</span></div>
+          <div class="qrow"><span class="qn">08</span><span class="qt">描边 1px，列表分隔线 0.5px，不用粗边</span><span class="qv">hairline</span></div>
+          <div class="qrow"><span class="qn">09</span><span class="qt">阴影分四级：卡 / 玻璃 / 弹层 / 焦点环，控件另带一层小影</span><span class="qv">card·glass·pop</span></div>
+          <div class="qrow"><span class="qn">10</span><span class="qt">触控 ≥44；桌面控件 26–38，列表行 54</span><span class="qv">麦克风 56</span></div>
+        </div>
+        <p class="hint">这一页只回答「用多少」。为什么这么定、什么不许做，见 <code>visual.md</code> §1 与 §13。</p>
+      </section>
+
+      <!-- 02 字体 -->
+      <section id="fonts">
+        <h2 class="sec">02 · 字体</h2>
+        <div class="card">
+          <div class="frow">
+            <div class="fh"><b>桌面 UI</b><span>系统字 · 不随包</span></div>
+            <div class="fs">-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif</div>
+            <div class="fd">小跟班 Sidekick · 服务端口 47810</div>
+          </div>
+          <div class="frow">
+            <div class="fh"><b>手机 UI</b><span>随包 8.1 MB · D91</span></div>
+            <div class="fs">"HarmonyOS Sans SC", system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif</div>
+            <div class="fd mb">小跟班 Sidekick · 服务端口 47810</div>
+          </div>
+          <div class="frow">
+            <div class="fh"><b>等宽（数据）</b><span>地址 / 版本 / 快捷键</span></div>
+            <div class="fs">ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Cascadia Mono", monospace</div>
+            <div class="fd" style="font-family: var(--mono); font-size: 13px">192.168.1.27:47810 · 0.1.0 · ⌘1</div>
+          </div>
+        </div>
+        <p class="hint">手机字重统一 400（<code>!important</code>），标题层级只靠字号与颜色：鸿蒙 Regular 已比 OPPO Sans 轻一档，再用 300 会发虚，500/600 会被 Android 合成成假粗体。</p>
+        <p class="hint">许可禁止改字形：不转 WOFF2、不 subset，随包原始 TTF；软件内与 README 需注明来源（华为，免费商用）。</p>
+        <p class="hint">全局 <code>font-variant-numeric: tabular-nums</code>，数字在列表与图表里必须对齐；桌面另有 <code>font-synthesis-weight: none</code>。</p>
+      </section>
+
+      <!-- 03 字号与行高 -->
+      <section id="type">
+        <h2 class="sec">03 · 字号与行高 · 桌面</h2>
+        <div class="card">
+          <div class="sp">
+            <div class="sample" style="font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -0.022em">概览</div>
+            <div class="meta"><span class="val">34 / 34 · 600 · −0.022em</span><span class="use">一级页大标题</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 30px; line-height: 1; font-weight: 600; letter-spacing: -0.022em">12.84</div>
+            <div class="meta"><span class="val">30 / 30 · 600 · −0.022em</span><span class="use">用量数字（tabular）</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 18px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em">删除这条会话？</div>
+            <div class="meta"><span class="val">18 / — · 600 · −0.01em</span><span class="use">弹层标题</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 17px; line-height: 1.2; font-weight: 600; letter-spacing: -0.015em">语音输入</div>
+            <div class="meta"><span class="val">17 / — · 600 · −0.015em</span><span class="use">滚动后紧凑标题</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 15px; line-height: 1.25; font-weight: 400">服务端口</div>
+            <div class="meta"><span class="val">15 / 1.25 · 400</span><span class="use">列表行标题与行值</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 14px; line-height: 1.2; font-weight: 500; letter-spacing: -0.005em">概览</div>
+            <div class="meta"><span class="val">14 / — · 500 · −0.005em</span><span class="use">侧栏导航项</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 13px; line-height: 1.25; font-weight: 400">断线自动重连</div>
+            <div class="meta"><span class="val">13 / 1.25 · 400</span><span class="use">行说明（组标题用 1.0）</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 13px; line-height: 1.4; font-weight: 400; letter-spacing: -0.01em; font-family: var(--mono)">192.168.1.27:47810</div>
+            <div class="meta"><span class="val">13 / — · 400 · −0.01em</span><span class="use">mono 值（地址 / 版本）</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 14px; line-height: 1.2; font-weight: 500; letter-spacing: -0.01em">取消</div>
+            <div class="meta"><span class="val">14 / — · 500 · −0.01em</span><span class="use">按钮（sm 13 / xs 12.5）</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 13px; line-height: 1.2; font-weight: 500">跟随系统</div>
+            <div class="meta"><span class="val">13 / — · 500</span><span class="use">分段控件</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 12px; line-height: 1; font-weight: 400; color: var(--muted)">AI 空闲 · 手机 1 台</div>
+            <div class="meta"><span class="val">12 / 12 · 400</span><span class="use">侧栏状态摘要</span></div>
+          </div>
+        </div>
+        <p class="hint">桌面行高只有两种：单行内容 <code>leading-none</code>（1.0）与列表/说明 <code>leading-tight</code>（1.25）；正文段落用 1.45。</p>
+      </section>
+
+      <section>
+        <h2 class="sec">03 · 字号与行高 · 手机</h2>
+        <div class="card mb">
+          <div class="sp">
+            <div class="sample" style="font-size: 17px; line-height: 1.29">设置</div>
+            <div class="meta"><span class="val">17 / 22 · 400</span><span class="use">二级页标题</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 30px; line-height: 1">12.84</div>
+            <div class="meta"><span class="val">30 / 30 · 400</span><span class="use">用量数字（tabular）</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 16px; line-height: 1.31">已输入</div>
+            <div class="meta"><span class="val">16 / 21 · 400</span><span class="use">结果卡标题</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 15px; line-height: 1.4">外观</div>
+            <div class="meta"><span class="val">15 / 21 · 400</span><span class="use">设置行标题</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 15px; line-height: 1.33">已连接 · 30.166.162.198</div>
+            <div class="meta"><span class="val">15 / 20 · 400</span><span class="use">顶部连接状态</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 15px; line-height: 1.33">清空</div>
+            <div class="meta"><span class="val">15 / 20 · 400</span><span class="use">卡尾动作、按钮</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 13px; line-height: 1.46">局域网直连 · 断线自动重连</div>
+            <div class="meta"><span class="val">13 / 19 · 400</span><span class="use">行说明</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 13px; line-height: 1.54">外观跟随系统，深色与浅色都按系统切换。</div>
+            <div class="meta"><span class="val">13 / 20 · 400</span><span class="use">卡外说明</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 13px; line-height: 1.38">跟随系统</div>
+            <div class="meta"><span class="val">13 / 18 · 400</span><span class="use">分段控件</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 12px; line-height: 1.33">已完成 · 当前步骤</div>
+            <div class="meta"><span class="val">12 / 16 · 400</span><span class="use">状态小标签</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 11px; line-height: 1.4">2</div>
+            <div class="meta"><span class="val">11 / — · 400</span><span class="use">步骤序号</span></div>
+          </div>
+          <div class="sp">
+            <div class="sample" style="font-size: 10px; line-height: 1.4">SK</div>
+            <div class="meta"><span class="val">10 / — · 400</span><span class="use">装饰微标签</span></div>
+          </div>
+        </div>
+        <p class="hint">手机行高落在两档：标题 1.29–1.4、正文 1.46–1.54；单行数字与微标签才用 1.0。说明文字最松不超过 1.55。</p>
+      </section>
+
+      <section>
+        <h2 class="sec">03 · 行高规则</h2>
+        <div class="card">
+          <table>
+            <thead><tr><th>场景</th><th class="num">比例</th><th>实测</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>单行标题 / 数字 / 导航</td><td class="num">1.0</td><td class="num">34/34 · 30/30</td><td>只给不换行的内容；中文段落不能用</td></tr>
+              <tr><td>卡片行标题</td><td class="num">1.25–1.4</td><td class="num">15/21 · 15/1.25</td><td>手机取 1.4，桌面取 1.25</td></tr>
+              <tr><td>正文说明</td><td class="num">1.45–1.55</td><td class="num">13/19 · 13/20</td><td>桌面 14/1.45</td></tr>
+              <tr><td>多行输入</td><td class="num">1.55</td><td class="num">14/1.55</td><td>textarea 固定</td></tr>
+              <tr><td>段落上限</td><td class="num">1.6</td><td class="num">—</td><td>1.625 曾用在设置页，显松，已收到 1.45</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 04 文字间距 -->
+      <section id="rhythm">
+        <h2 class="sec">04 · 文字间距（margin / padding）</h2>
+        <div class="card">
+          <table>
+            <thead><tr><th>关系</th><th class="num">桌面</th><th class="num">手机</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr><td>行标题 ↔ 行说明</td><td class="num">2</td><td class="num">4</td><td>list.tsx <code>gap-0.5</code> / more-page <code>mt-1</code></td></tr>
+              <tr><td>组标题 ↔ 卡</td><td class="num">8</td><td class="num">—</td><td>ListGroup <code>gap-2</code></td></tr>
+              <tr><td>页标题 ↔ 第一组</td><td class="num">24</td><td class="num">—</td><td>PageBody <code>mt-6</code></td></tr>
+              <tr><td>组 ↔ 组</td><td class="num">24</td><td class="num">20</td><td><code>gap-6</code> / <code>gap-5</code></td></tr>
+              <tr><td>卡内边距（左右）</td><td class="num">16</td><td class="num">16</td><td>dsl-row / 设置行 <code>px-4</code></td></tr>
+              <tr><td>卡内边距（上下）</td><td class="num">10</td><td class="num">0</td><td>手机由 56 / 60 行高撑开</td></tr>
+              <tr><td>行最小高</td><td class="num">54</td><td class="num">56–60</td><td>带说明的设置行为 60</td></tr>
+              <tr><td>文本 ↔ 右侧控件</td><td class="num">14</td><td class="num">16</td><td>dsl-row <code>gap</code> / <code>gap-4</code></td></tr>
+              <tr><td>说明 ↔ 分段 / 控件</td><td class="num">—</td><td class="num">12</td><td>手机 <code>mt-3</code></td></tr>
+              <tr><td>分隔线左缩进</td><td class="num">16 / 60</td><td class="num">无行内线</td><td>带图标块时 60</td></tr>
+              <tr><td>页面左右</td><td class="num">28</td><td class="num">16</td><td><code>px-7</code> / <code>mx-4</code></td></tr>
+              <tr><td>内容底部</td><td class="num">64</td><td class="num">24 + 安全区</td><td><code>pb-16</code> / 麦克风</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">不给 <code>p</code> 单独写 margin：垂直节奏由行高、卡内距与组间距决定，文字之间只有 2 / 4 / 6 / 8 / 12 / 16 这几档，块间距另算 20 / 24。</p>
+        <p class="hint">例外只有一处：<code>.mobile-clean p.leading-relaxed</code> 被统一压到 1.45，用来兜住旧页面的 1.625；新代码不要依赖它。</p>
+      </section>
+
+      <!-- 05 间距刻度 -->
+      <section id="space">
+        <h2 class="sec">05 · 间距刻度</h2>
+        <div class="card">
+          <div class="bar-row"><span class="mono bv">4</span><div class="bar-track"><div class="bar" style="width: 4%"></div></div><span class="bl">图标与文字、标签内缝</span></div>
+          <div class="bar-row"><span class="mono bv">8</span><div class="bar-track"><div class="bar" style="width: 8%"></div></div><span class="bl">控件之间、组标题与卡</span></div>
+          <div class="bar-row"><span class="mono bv">12</span><div class="bar-track"><div class="bar" style="width: 12%"></div></div><span class="bl">卡内元素、表单行</span></div>
+          <div class="bar-row"><span class="mono bv">16</span><div class="bar-track"><div class="bar" style="width: 16%"></div></div><span class="bl">卡内距、手机页边距</span></div>
+          <div class="bar-row"><span class="mono bv">20</span><div class="bar-track"><div class="bar" style="width: 20%"></div></div><span class="bl">手机卡间距（组件常量）</span></div>
+          <div class="bar-row"><span class="mono bv">24</span><div class="bar-track"><div class="bar" style="width: 24%"></div></div><span class="bl">桌面页内距、组间距</span></div>
+          <div class="bar-row"><span class="mono bv">32</span><div class="bar-track"><div class="bar" style="width: 32%"></div></div><span class="bl">分区间距</span></div>
+          <div class="bar-row"><span class="mono bv">48</span><div class="bar-track"><div class="bar" style="width: 48%"></div></div><span class="bl">大区块之间</span></div>
+          <div class="bar-row"><span class="mono bv">64</span><div class="bar-track"><div class="bar" style="width: 64%"></div></div><span class="bl">页面底部留白</span></div>
+        </div>
+        <p class="hint">只有 4 的倍数。组件常量（20 卡间距、28 页边距、56 麦克风、60 带说明行）都是 4 的倍数，但不进刻度表。</p>
+      </section>
+
+      <!-- 06 布局 -->
+      <section id="layout">
+        <h2 class="sec">06 · 布局容器</h2>
+        <div class="card pad">
+          <div class="win">
+            <div class="win-side"><b>224</b>侧栏 · 玻璃<br />项高 34 · r9<br />顶部 38 交通灯区</div>
+            <div class="win-main">
+              <div class="win-top">工具栏 48 · r18 · sticky</div>
+              <div class="win-h1">概览</div>
+              <div class="win-col">
+                <div class="mini-card"></div>
+                <div class="mini-card"></div>
+                <div class="win-dim">730 · 左右 28 · 组间 24 · 行 54 · 底 64</div>
+              </div>
+            </div>
+          </div>
+          <p class="hint" style="padding: 0; margin-top: 10px">桌面窗口 1180×760（最小 960×640）；内容列 730 居中，单列不写两栏。</p>
+        </div>
+        <div class="card pad" style="margin-top: 16px">
+          <div class="phone">
+            <div class="phone-screen">
+              <div class="p-top">顶栏 · 44</div>
+              <div class="p-card" style="height: 56px">行 56 · px 16 · r16</div>
+              <div class="p-card" style="height: 60px">行 60（带说明）</div>
+              <div class="p-dim" style="margin-top: auto">页边距 16 · 卡间距 20</div>
+              <div class="p-mic">56</div>
+            </div>
+          </div>
+          <p class="hint" style="padding: 0; margin-top: 10px">手机 359×802 dp（实测），单列竖屏；麦克风 56 圆钮距底 24，卡片 16 圆角 + 0.5px 描边、无投影。</p>
+        </div>
+      </section>
+
+      <!-- 07 圆角 -->
+      <section id="radius">
+        <h2 class="sec">07 · 圆角</h2>
+        <div class="card">
+          <div class="rgrid">
+            <div class="rcell"><div class="rsq" style="border-radius: 2px"></div><b>2</b><span>grabber</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 5px"></div><b>5</b><span>checkbox</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 9px"></div><b>9</b><span>导航项 · 分段项</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 10px"></div><b>10</b><span>图标块 · 下拉</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 11px"></div><b>11</b><span>输入框 · 分段轨</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 12px"></div><b>12</b><span>textarea</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 14px"></div><b>14</b><span>提示块</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 16px"></div><b>16</b><span>白卡 · 手机卡</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 18px"></div><b>18</b><span>桌面工具栏</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 20px"></div><b>20</b><span>弹层 · 结果卡</span></div>
+            <div class="rcell"><div class="rsq" style="border-radius: 999px"></div><b>999</b><span>胶囊 · 开关 · 麦克风</span></div>
+          </div>
+        </div>
+        <p class="hint">令牌在 <code>tokens.css</code> 是 10 / 12 / 14 / 16 / 20 / 24 / 28 / 999；9、11、18 是组件常量（导航项与分段项、桌面输入与手机分段轨道、桌面工具栏），2 与 5 是控件内部细节。24 / 28 目前几乎不用，属预留。</p>
+
+        <div class="card" style="margin-top: 16px">
+          <div class="conc">
+            <div class="conc-box">
+              <div class="conc-card">
+                <div class="conc-row">
+                  <div class="conc-tile"></div>
+                  <div class="conc-nav"></div>
+                </div>
+              </div>
+              <div class="conc-lbl">18 → 16 → 10 / 9</div>
+            </div>
+            <div style="flex: 1 1 260px; font-size: 12.5px; line-height: 1.6; color: var(--muted)">
+              同心圆角：新组件的圆角 = 外层圆角 − 它到外层的距离。工具栏 18 里放白卡取 16，卡里放图标块取 10、导航项取 9；不要随手写一个新数字。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 08 阴影 -->
+      <section id="shadow">
+        <h2 class="sec">08 · 阴影与材质</h2>
+        <div class="card">
+          <div class="pad" style="padding-bottom: 0">
+            <div class="stage">
+              <div class="blob a"></div>
+              <div class="blob b"></div>
+              <div class="demo card"><b>内容白卡</b>不透明，双层阴影 + 顶部 0.5px 高光<span class="v">--card-shadow</span></div>
+              <div class="demo glass"><b>玻璃控件层</b>blur 30 · saturate 190%<span class="v">--glass-bg / --glass-shadow</span></div>
+              <div class="demo pop"><b>弹层</b>r20 · 单层远影<span class="v">--popover-shadow</span></div>
+            </div>
+          </div>
+          <div style="padding: 6px 0 4px">
+            <div class="srow"><span class="sn">白卡<span>--card-shadow</span></span><span class="sv">0 0 0 .5px rgba(0,0,0,.045), 0 1px 2px rgba(0,0,0,.04), 0 10px 28px -24px rgba(0,0,0,.4)</span></div>
+            <div class="srow"><span class="sn">卡顶高光<span>--card-highlight</span></span><span class="sv">inset 0 .5px 0 rgba(255,255,255,.9)　深色 .07</span></div>
+            <div class="srow"><span class="sn">玻璃<span>--glass-shadow</span></span><span class="sv">0 .5px 0 rgba(0,0,0,.07), 0 8px 28px -22px rgba(0,0,0,.35)</span></div>
+            <div class="srow"><span class="sn">弹层<span>--popover-shadow</span></span><span class="sv">0 12px 32px -8px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.06)</span></div>
+            <div class="srow"><span class="sn">侧栏滑块<span>--sidebar-item-active-shadow</span></span><span class="sv">0 0 0 .5px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.07), 0 6px 16px -12px rgba(0,0,0,.3)</span></div>
+            <div class="srow"><span class="sn">分段滑块</span><span class="sv">0 .5px 2px rgba(0,0,0,.18) + inset 0 .5px 0 rgba(255,255,255,.6)</span></div>
+            <div class="srow"><span class="sn">开关滑块</span><span class="sv">0 1px 3px rgba(0,0,0,.22) + 0 .5px 0 rgba(255,255,255,.6)</span></div>
+            <div class="srow"><span class="sn">焦点环<span>不是阴影，是 3.5px 柔光</span></span><span class="sv">0 0 0 3.5px rgba(10,119,100,.28)　深色 rgba(63,196,160,.34)</span></div>
+            <div class="srow"><span class="sn">手机卡<span>0.5px 描边，无投影</span></span><span class="sv">border: .5px solid var(--border)</span></div>
+            <div class="srow"><span class="sn">手机结果卡</span><span class="sv">0 12px 32px -12px rgba(20,30,35,.18)</span></div>
+          </div>
+        </div>
+        <p class="hint">玻璃只出现在控件层（侧栏、工具栏、动作组、分段轨道、次级按钮、提示卡）；白卡、列表、表单、图表一律不透明，不叠 <code>backdrop-filter</code>。</p>
+        <p class="hint"><code>prefers-reduced-transparency: reduce</code> 时玻璃去掉模糊、退回 <code>--card</code> 实底；<code>prefers-reduced-motion</code> 时所有位移与缩放取消。</p>
+      </section>
+
+      <!-- 09 组件几何 -->
+      <section id="components">
+        <h2 class="sec">09 · 组件几何</h2>
+        <div class="card">
+          <div class="ui-row">
+            <div class="ui"><button class="d-btn" type="button">取消</button><span class="cap">36 · 14/500</span></div>
+            <div class="ui"><button class="d-btn sm ghost" type="button">取消</button><span class="cap">30 · 13/500</span></div>
+            <div class="ui"><button class="d-btn xs ghost" type="button">取消</button><span class="cap">26 · 12.5/500</span></div>
+            <div class="ui"><input class="d-input" placeholder="搜索" /><span class="cap">38 · r11 · 14</span></div>
+            <div class="ui"><div class="d-search">搜索</div><span class="cap">40 · 胶囊</span></div>
+            <div class="ui"><div class="d-seg"><span data-on="true">跟随系统</span><span>浅色</span></div><span class="cap">轨 r999 · 项 28 · 13/500</span></div>
+            <div class="ui"><div class="d-switch"><i></i></div><span class="cap">40×24 · 滑块 20</span></div>
+            <div class="ui"><div class="d-tile"></div><span class="cap">30×30 · r10</span></div>
+            <div class="ui"><div class="d-check"></div><span class="cap">18 · r5</span></div>
+            <div class="ui"><select class="d-select"><option>跟随系统</option></select><span class="cap">34 · r10</span></div>
+          </div>
+        </div>
+        <div class="card mb" style="margin-top: 16px">
+          <div class="ui-row">
+            <div class="ui"><button class="m-btn" type="button">清空</button><span class="cap">44 · 15/20</span></div>
+            <div class="ui"><div class="m-seg"><span data-on="true">跟随系统</span><span>浅色</span><span>深色</span></div><span class="cap">轨 r11 · 项 36 · 13/18</span></div>
+            <div class="ui"><div class="m-toggle"><i></i></div><span class="cap">51×31 · 滑块 27 · 热区 44</span></div>
+            <div class="ui"><div class="p-mic" style="position: static">56</div><span class="cap">麦克风 56 · 距底 24</span></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 16px">
+          <table>
+            <thead><tr><th>组件</th><th class="num">桌面</th><th class="num">手机</th></tr></thead>
+            <tbody>
+              <tr><td>按钮</td><td class="num">36 / 30 / 26，胶囊，px 16 / 12 / 10</td><td class="num">44，胶囊</td></tr>
+              <tr><td>输入 / 搜索</td><td class="num">38 r11 px12 ／ 40 胶囊</td><td class="num">44，1px 描边</td></tr>
+              <tr><td>分段</td><td class="num">轨 r999 p3，项 28</td><td class="num">轨 r11 p3，项 36，px 10</td></tr>
+              <tr><td>开关</td><td class="num">40×24，滑块 20</td><td class="num">51×31，滑块 27，热区 44</td></tr>
+              <tr><td>行</td><td class="num">54，px16，gap14</td><td class="num">56–60，px16，gap16</td></tr>
+              <tr><td>图标</td><td class="num">16 / 17 / 20 / 22，线宽 1.8</td><td class="num">14–20</td></tr>
+              <tr><td>弹层</td><td class="num">r20，标题 18/600，描述 14/1.5</td><td class="num">r20，grabber 36×4</td></tr>
+              <tr><td>焦点 / 触控</td><td class="num">3.5px 柔光</td><td class="num">2px + 2px offset；目标 ≥44</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">一页最多一个实心按钮；工具栏里的相邻动作并进一个玻璃动作组，不排三个胶囊。</p>
+      </section>
+
+      <!-- 10 不一致 -->
+      <section id="gaps">
+        <h2 class="sec">10 · 文档与实现</h2>
+        <div class="card">
+          <div class="gaps">
+            <div class="gap"><span class="gi">1</span><span><b>手机字体文档已过期</b><span class="tag">待修</span><span class="sub"><code>visual.md</code> §2 / §5 / §10 仍写 MiSans 400（D81），实现是 HarmonyOS Sans SC（D91）；§10「不打包中文字体」与随包 8.1MB 直接冲突。</span></span></div>
+            <div class="gap"><span class="gi">2</span><span><b>手机开关尺寸</b><span class="tag">待修</span><span class="sub"><code>visual.md</code> §7 写 44×26，代码是轨道 51×31、滑块 27、热区 44（iOS 26 尺寸）。</span></span></div>
+            <div class="gap"><span class="gi">3</span><span><b>字号没有令牌</b><span class="tag">建议</span><span class="sub">16 个取值散在组件里：13px 出现 56 次、15px 33 次、10px 26 次。Tailwind v4 可用 <code>@theme</code> 收成 <code>--text-*</code>，否则规范只能靠约定。</span></span></div>
+            <div class="gap"><span class="gi">4</span><span><b>行高没有令牌</b><span class="tag">建议</span><span class="sub"><code>leading-none / tight / [19px] / [21px] / relaxed</code> 混用，其中 1.625 被局部覆盖成 1.45——这是补丁，不是规则。</span></span></div>
+            <div class="gap"><span class="gi">5</span><span><b>圆角有三套来源</b><span class="tag">建议</span><span class="sub">tokens（10/12/14/16/20/24/28）、ios.css（9/11/18/20/999）、组件内联（2/6/8）。改一处不会同步另外两处。</span></span></div>
+            <div class="gap"><span class="gi">6</span><span><b>旧表面不在新壳规范内</b><span class="tag">已知</span><span class="sub">价格表、麦克风浮层、手机聊天页仍是 mono 大写 9–10.5px 小字；它们还在包内，但不属于本页的字号表。</span></span></div>
+            <div class="gap"><span class="gi">7</span><span><b>注释与实现不符</b><span class="tag">待修</span><span class="sub"><code>list.tsx</code> 注释写图标块「9 圆角」，<code>ios.css</code> 实际是 10；以代码为准。</span></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11 来源 -->
+      <section id="sources">
+        <h2 class="sec">11 · 来源</h2>
+        <div class="card">
+          <table>
+            <thead><tr><th>文件</th><th>它负责</th></tr></thead>
+            <tbody>
+              <tr><td><code>app/src/desktop/styles/ios.css</code></td><td>桌面令牌、材质、行 / 按钮 / 输入 / 开关几何</td></tr>
+              <tr><td><code>app/src/mobile/styles/clean.css</code></td><td>手机令牌、字体、动效曲线</td></tr>
+              <tr><td><code>app/src/shared/styles/tokens.css</code></td><td>圆角、阴影、动效时长、颜色基线</td></tr>
+              <tr><td><code>desktop/shell/{list,page-header,page-shell}.tsx</code></td><td>桌面行、页头、内容列的落地值</td></tr>
+              <tr><td><code>mobile/features/settings/more-page.tsx</code></td><td>手机设置页排版与行几何</td></tr>
+              <tr><td><code>docs/standards/visual.md</code></td><td>语义、Do / Don't、对比度与动效规则</td></tr>
+              <tr><td><code>docs/engineering/desktop-ios-ui.md</code></td><td>桌面契约 v2：结构、材质、组件行为</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">改令牌时同步本页；只叙事不改数值的说明放 <code>visual.md</code>，不要把规则抄成第二份。</p>
+      </section>
+
+      <footer>
+        小跟班 · 视觉规范 v1 · 2026-11-06<br />
+        桌面 <code>.desktop-ios</code> ／ 手机 <code>.mobile-clean</code> · 点击数值可复制
+      </footer>
+    </main>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var KEY = "sidekick:styleguide:theme";
+
+  function applyTheme(theme) {
+    root.dataset.theme = theme;
+    var buttons = document.querySelectorAll("[data-theme-btn]");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute("aria-pressed", String(buttons[i].dataset.themeBtn === theme));
+    }
+  }
+
+  var saved = null;
+  try {
+    saved = localStorage.getItem(KEY);
+  } catch (error) {}
+  applyTheme(saved === "dark" ? "dark" : "light");
+
+  document.addEventListener("click", function (event) {
+    var target = event.target.closest("[data-theme-btn]");
+    if (!target) return;
+    applyTheme(target.dataset.themeBtn);
+    try {
+      localStorage.setItem(KEY, target.dataset.themeBtn);
+    } catch (error) {}
+  });
+
+  // 顶部玻璃栏 + 章节高亮
+  var topbar = document.getElementById("topbar");
+  var links = Array.prototype.slice.call(document.querySelectorAll(".nav a"));
+  var sections = links.map(function (link) {
+    return document.querySelector(link.getAttribute("href"));
+  });
+
+  function onScroll() {
+    topbar.dataset.scrolled = String(window.scrollY > 6);
+    var active = 0;
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i] && sections[i].getBoundingClientRect().top <= 140) active = i;
+    }
+    links.forEach(function (link, index) {
+      link.setAttribute("aria-current", index === active ? "true" : "false");
+    });
+  }
+
+  var queued = false;
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(function () {
+        queued = false;
+        onScroll();
+      });
+    },
+    { passive: true }
+  );
+  onScroll();
+
+  // 点击复制数值
+  var toast = document.getElementById("toast");
+  var toastTimer = 0;
+
+  function showToast(text) {
+    toast.textContent = text;
+    toast.dataset.show = "true";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toast.dataset.show = "false";
+    }, 1600);
+  }
+
+  function fallbackCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (error) {}
+    document.body.removeChild(area);
+    showToast(ok ? "已复制 " + text : "复制失败");
+  }
+
+  var copyable = document.querySelectorAll(".sp .meta .val, .srow .sv, .rcell b, .bar-row .bv, .cap");
+  copyable.forEach(function (node) {
+    node.setAttribute("data-copy", node.textContent.trim());
+  });
+
+  document.addEventListener("click", function (event) {
+    var target = event.target.closest("[data-copy]");
+    if (!target) return;
+    var text = target.getAttribute("data-copy");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () {
+          showToast("已复制 " + text);
+        },
+        function () {
+          fallbackCopy(text);
+        }
+      );
+    } else {
+      fallbackCopy(text);
+    }
+  });
+
+  // 鸿蒙字体是否真的加载（file:// 下浏览器可能拦截本地字体）
+  var probe = document.createElement("span");
+  probe.style.position = "absolute";
+  probe.style.visibility = "hidden";
+  probe.style.fontSize = "40px";
+  probe.style.whiteSpace = "nowrap";
+  probe.textContent = "Hamburgefonstiv 123";
+  document.body.appendChild(probe);
+
+  function width(family) {
+    probe.style.fontFamily = family;
+    return probe.getBoundingClientRect().width;
+  }
+
+  document.fonts.ready.then(function () {
+    var withFont = width('"HarmonyOS Sans SC", serif');
+    var fallback = width("serif");
+    document.body.removeChild(probe);
+    if (Math.abs(withFont - fallback) < 0.5) {
+      var warn = document.getElementById("fontwarn");
+      warn.hidden = false;
+      warn.innerHTML =
+        "鸿蒙字体没有加载：本页用相对路径读取 <code>app/src/mobile/assets/fonts/</code>，直接双击打开时部分浏览器会拦截本地字体。" +
+        "在仓库根目录跑 <code>python3 -m http.server 8000</code>，再打开 <code>http://localhost:8000/docs/standards/style-guide.html</code> 即可看到手机字体的真实字形。";
+    }
+  });
+})();
+</script>
+</body>
+</html>
