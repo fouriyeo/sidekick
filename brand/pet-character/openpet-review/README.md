@@ -1,6 +1,6 @@
 # deepseek-openpet.zip · 拆包检查
 
-对 `~/Downloads/deepseek-openpet.zip` 的检查与预览产物。原始 zip 保持不动（4MB），这里只放拆包分析和可预览的轻量文件。
+对 `~/Downloads/deepseek-openpet.zip` 的检查结论。原始 zip 保持不动（4MB）；本目录只保留来源/授权证据所需的最小文件，预览页与 GIF 已于 2026-11-06 清理（过程素材不入库，D71）。
 
 ## 原始内容
 
@@ -25,35 +25,20 @@ deepseek/
 
 | 文件 | 说明 |
 | --- | --- |
-| `preview.html` | 检查报告页（自包含，双击即开）：四态 GIF、整张图集、技术评估、接入方案 |
-| `preview.png` | 报告页截图 |
-| `contact-sheet.png` | 64 帧缩略总览（4 行 × 16 列） |
-| `idle.gif` / `working.gif` / `attention.gif` / `done.gif` | 按 pet.json 的帧序与时长还原的四段动画 |
+| `README.md` | 本说明：来源、格式、授权风险 |
 | `pet.json` | 原文件副本，便于对照 |
 
 ## 结论速览
 
 - **技术上可用**：动画是真的（相邻帧差异 2k–21k 像素），四态齐全，单帧 256px 对手机够用，10fps 的播放成本很低。
-- **体积偏大**：4MB PNG → 解码约 16MB 内存；建议转 WebP（无损）并按状态拆 4 张懒加载。
-- **品牌/授权要小心**：zip 内没有 LICENSE，角色是 DeepSeek 的鲸鱼 IP；可当占位或格式/美术参考，正式发版不建议直接使用。
-- **对 Sidekick 最有价值的是格式本身**：`pet.json + 图集 + 四态 + 事件驱动` 和我们 AI 联动四态（静态 / 工作中 / 等你决定 / 完成）完全对得上，可以把这个 schema 作为我们自绘宠物的交付目标。
-
-## 复现
-
-```bash
-# 拆包
-unzip -q ~/Downloads/deepseek-openpet.zip -d /tmp/openpet
-
-# 重新生成预览（Python + Pillow）
-# 见本目录的生成脚本思路：cell=256, cols=16，按 pet.json 的 row 切行，
-# contact-sheet 每格缩到 72px；GIF 用 PIL save_all + duration 列表。
-```
+- **体积偏大**：4MB PNG → 解码约 16MB 内存；已转 WebP（无损，764KB）进 App。
+- **品牌/授权要小心**：zip 内没有 LICENSE，角色是 DeepSeek 的鲸鱼 IP；可当占位或格式/美术参考，正式发版前必须确认授权。
+- **对 Sidekick 最有价值的是格式本身**：`pet.json + 图集 + 四态 + 事件驱动` 和我们 AI 联动四态（静态 / 工作中 / 等你决定 / 完成）完全对得上，已作为宠物资产的交付格式。
 
 ## 相关
 
 - [OpenPets Docs · Pets](https://docs.openpets.dev/pets/)
 - 社区同类资产示例：[blue-whale-maid](https://github.com/YuSec2021/blue-whale-maid)、[deepseek-fat-fish-codex-pet](https://github.com/gmskywalker/deepseek-fat-fish-codex-pet)
-
 
 ## 已接入 App（2026-11-02）
 
@@ -61,9 +46,9 @@ unzip -q ~/Downloads/deepseek-openpet.zip -d /tmp/openpet
 
 - 资产：`app/src/mobile/features/pet/assets/openpet/`（`spritesheet.webp` q85 764KB + `poster.webp` 14KB + `pet.json`，`image` 改为 webp）。
 - 播放器：`sprite-pet.tsx`（rAF + ResizeObserver + 解码/尺寸校验 + poster 降级）；manifest 校验在 `sprite-manifest.ts`；状态候选链在 `sprite-state-map.ts`；帧推进纯函数在 `sprite-player.ts`。
-- 四态映射：AI working → working、asking → attention、completed → done（播一次 + 末帧定格）；sleeping/listening/petting/celebrate 等为预留候选，当前资产没有对应行会自动回落 idle。
+- 四态映射：AI working → working、asking → attention、completed → done（循环播放，D77 起不再末帧定格）；sleeping/listening/petting/celebrate 等为预留候选，当前资产没有对应行会自动回落 idle。
 - 协议约束：一列一帧；单状态 1–32 帧、兼容 16；行号由 `states.*.row` 声明，行数可扩展、不要求连续。
-- 浏览器验证截图：`app-sprite-states.png`（四态在 App 里的实际渲染；AI 状态用 dev mock `?ai=` 驱动）。
-- 构建验证：图集与 poster 只进 mobile chunk（`pnpm build` 产物里 desktop chunk 不引用）；`pnpm typecheck/lint/test` 全绿（356 个测试）。
+- 浏览器/真机验证：用 dev mock `?ai=` 驱动四态；验证截图不入库。
+- 构建验证：图集与 poster 只进 mobile chunk（`pnpm build` 产物里 desktop chunk 不引用）。
 
 新增状态行：图集底部加一行 + `pet.json` 登记 `states.<name>`（可选调整 `sprite-state-map.ts` 候选链），渲染器不用改。

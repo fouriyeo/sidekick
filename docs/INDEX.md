@@ -2,7 +2,7 @@
 doc: INDEX
 title: Sidekick 文档总索引
 status: active
-updated: 2026-11-05
+updated: 2026-11-06
 load: always
 children:
   - product/INDEX.md
@@ -83,7 +83,8 @@ docs/
 │  ├─ pet-runtime.md            # 帧动画图集、状态机、持久化、性能
 │  └─ quality.md                # 测试矩阵、真机验收、发布门
 ├─ design/                      # 设计归档（已落地：mobile-ui-v16 / token-dashboard-v1）
-│  ├─ mobile-ui-v16/            # INDEX + README / 定稿图 / 真机图 / 字体对比
+│  ├─ mobile-ui-v16/            # INDEX + README（无过程素材）
+│  └─ token-dashboard-v1/       # INDEX + README（无过程素材）
 ├─ architecture.md              # 现有：系统架构与接口
 ├─ frontend-architecture.md     # 现有：前端目标架构与规范
 ├─ dependency-policy.md         # 现有：依赖准入与许可证
@@ -94,14 +95,13 @@ docs/
 ```
 
 > 文档体量、读法与叶子行数上限见 [standards/documentation.md](./standards/documentation.md)。
-
 ## 4. 当前阶段（2026-11-05）
 
 - 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风（百炼云端唯一）代码、模型页 + 用量统计、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感、双主题（D71/D76）。
 - 已完成：首次命名/改名下线（2026-11-05）；D69/D77/D78 继续有效。
-- 已完成（代码，待真机回归）：**指挥舱 A 重设计**（D79，2026-11-05）——桌面 5 视图 + 手机 3 档 + 状态语言 + 首用清单；产品规则见 [prd/shell](./prd/shell/INDEX.md)，结构见 [frontend-architecture.md](./frontend-architecture.md)。
-- 进行中：**AI 联动（DSH hook）**——产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
-- 进行中（2026-11-06）：**Token 用量看板 V1**——桌面第 6 导航「用量」+ 手机「设置 › 用量」+ 模型价格表；产品规则见 [prd/usage](./prd/usage/INDEX.md)，技术方案见 [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md)（D82–D84）。
+- 已完成（代码，待真机回归）：**指挥舱 A 重设计**（D79，2026-11-05）——桌面 5 视图 + 手机两页壳（D80）+ 状态语言 + 首用清单；产品规则见 [prd/shell](./prd/shell/INDEX.md)，结构见 [frontend-architecture.md](./frontend-architecture.md)。
+- 代码完成（待真机/隐私验收）：**AI 联动（DSH hook）**——产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
+- 代码完成（待验收，2026-11-06）：**Token 用量看板 V1**——桌面第 6 导航「用量」+ 手机「设置 › 用量」+ 模型价格表；产品规则见 [prd/usage](./prd/usage/INDEX.md)，技术方案见 [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md)（D82–D84）。
 - 未开始：手机回答 AI 提问、Claude Code / Qoder hook、配对鉴权、iOS。
 - 平台边界：单仓库、双产物；桌面与手机各自固定布局，不做跨端自适应。
 

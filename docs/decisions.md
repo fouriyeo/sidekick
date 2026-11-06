@@ -414,7 +414,7 @@
 - 背景：宠物形象没定美术方向；用户提供了可直接播放的 `deepseek-openpet.zip`（OpenPets / Codex schema 2：`pet.json` + `spritesheet`，4 状态 × 16 帧、256px），要求直接复用并压缩为 WebP 内置，协议要「一列一帧、单状态最多 32 帧、兼容 16 帧」，架构预留其它状态行。
 - 决策：删除内联 SVG 画层（`pet-fallback.tsx` / `pet-ai-props.tsx` / `pet-canvas.tsx`）与 Rive 预留（`@rive-app/react-canvas` 依赖移除、状态机里的 `rive` effect 与 `riveSignal` 删除）。新增 `sprite-manifest.ts`（严格校验 schema 2：cols ≤32、帧数 1–32、多行/非连续行、行数以解码图高为准）、`sprite-state-map.ts`（App 语义 → 状态候选链）、`sprite-player.ts`（纯函数帧推进）、`sprite-pet.tsx`（rAF + ResizeObserver + 解码校验 + poster 降级）。资产在 `app/src/mobile/features/pet/assets/openpet/`：`spritesheet.webp`（q85，764KB）、`poster.webp`（14KB）、`pet.json`（原样，`image` 改为 webp）。映射：working→working、asking→attention、completed→done（once + 末帧定格）；sleeping/listening/petting/celebrate 为预留候选，图集没有对应行时自动回落 idle。
 - 原因：复用现成资产最快验证「图集 + 状态机 + 播放」链路；schema 2 是公开格式，四态与 AI 联动一一对应；候选链让以后补状态行只改美术与 manifest，不动渲染器；WebP 比原 PNG 小 81%，绘制成本远低于 Rive。
-- 放弃：继续自绘 SVG 猫与参数化生成图集（`brand/pet-character/` 保留为存档）；Rive 运行时与 `.riv` 资产；把四态写死在渲染器里。
+- 放弃：继续自绘 SVG 猫与参数化生成图集（角色探索稿 2026-11-06 已清理；鲸鱼来源与授权风险保留在 `brand/pet-character/openpet-review/`）；Rive 运行时与 `.riv` 资产；把四态写死在渲染器里。
 - 代价：只有四态，摸摸/倾听没有专属表情（爱心/气泡/触感保留）；单帧 256px 在约 500px 舞台是 2 倍放大、边缘偏软；4096×1024 解码约 16.8MB；资产为 DeepSeek 鲸鱼且 zip 无 LICENSE，正式发版前需确认授权或替换。
 - 规范：`app/src/mobile/features/pet/sprite-*.ts(x)`、`assets/openpet/`、`docs/engineering/pet-runtime.md`、`docs/standards/visual.md` §6–§7、`docs/dependency-policy.md`、`docs/prd/pet/SPEC.md` §8。
 
@@ -670,7 +670,7 @@
 - 放弃：保留动态页但隐藏 tab（仍是两套会话 UI，维护面不降）；保留胶囊麦克风（用户要圆钮居中）；结果卡保留复制文案行（card 162px，脚重、盖宠物，改为 header 内 icon-only 复制）；全站改 tokens.css 换肤（会污染桌面，改为 mobile-scope 变量）。
 - 代价：动态页的「最近发生」活动流暂时没有 UI（activity-store 保留，未删）；设置多一次点击；结果卡正文单行可能截断，完整文本已在电脑插入/可在复制中取；旧的 3 档测试与文档需同步；真机未回归。
 - 验收：`pnpm typecheck` / `pnpm lint` / `pnpm test`（591 tests）/ `pnpm build` 全绿；浏览器 390×844、320×640、浅/深主题截图通过；桌面端无视觉变化。
-- 规范：`app/src/mobile/{app.tsx,ui-store.ts,styles/clean.css}`、`app/src/mobile/features/{pet,sessions,settings,mic}/**`、`app/src/entries/mobile.tsx`、`app/src/mobile/shell/{pet-top-bar,page-header}.tsx`、`docs/design/mobile-ui-v16/{IMPLEMENTATION.md,screens-v16.html}`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`docs/frontend-architecture.md`、`docs/status.md`、`AGENTS.md`。
+- 规范：`app/src/mobile/{app.tsx,ui-store.ts,styles/clean.css}`、`app/src/mobile/features/{pet,sessions,settings,mic}/**`、`app/src/entries/mobile.tsx`、`app/src/mobile/shell/{pet-top-bar,page-header}.tsx`、`docs/design/mobile-ui-v16/`（已归档，过程素材清理）、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`docs/frontend-architecture.md`、`docs/status.md`、`AGENTS.md`。
 
 ## D81 · 手机端改用 MiSans Normal + 收紧字号/行高（2026-11-05，取代 D80 中「全站 OPPO Sans / 400 字重」的字体部分）
 
@@ -683,7 +683,7 @@
 - 原因：真机实测 OPPO Sans 的字面宽度/笔画厚度是「老年机」感的主要来源；MiSans Normal 更紧凑、现代，15 号标题比 16 号更接近 iOS 的视觉密度；300 的 OPPO Sans Light 太虚，不建议。行高从 1.625 收到 1.45 让设置页说明不再松垮。
 - 放弃：仅调 300 字重（发虚、仍保留 OPPO 字形）；仅缩小到 14（会伤可读性且字形仍宽）；用系统 `system-ui`/`Noto Sans CJK`（Android 实际仍落 OEM 字体，不可控）；把 PingFang 打包（Apple 字体授权不允许）。
 - 代价：APK +3.9 MB；首次渲染有极短 `font-display: swap` 替换；MiSans 缺字时回退系统字体会混排；LICENSE 需随包/文档保留。
-- 规范：`app/src/mobile/assets/fonts/MiSans-Normal.woff2`、`app/src/mobile/styles/clean.css`、`app/src/mobile/features/sessions/session-row.tsx`、`app/src/mobile/features/settings/more-page.tsx`；真机字体对比截图见 `docs/design/mobile-ui-v16/font-compare.png`。
+- 规范：`app/src/mobile/assets/fonts/MiSans-Normal.woff2`、`app/src/mobile/styles/clean.css`、`app/src/mobile/features/sessions/session-row.tsx`、`app/src/mobile/features/settings/more-page.tsx`。
 
 ## D82 · 新增 Token 用量看板：桌面第 6 导航「用量」+ 手机「设置 › 用量」（2026-11-06）
 

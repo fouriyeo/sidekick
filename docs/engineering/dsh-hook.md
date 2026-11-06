@@ -2,7 +2,7 @@
 doc: engineering/dsh-hook
 title: DSH Hook 技术方案
 status: active
-updated: 2026-11-05
+updated: 2026-11-06
 load: on-demand
 owner: engineering
 related:
@@ -42,12 +42,12 @@ DSH session/event
 | `app/src/desktop/features/hook/` | 桌面系统 › 联动段与 store |
 | `app/src/mobile/features/pet/ai-status.ts` | 手机 AI 状态、完成定时器、优先级 |
 | `app/src/mobile/features/sessions/session-store.ts` | 会话列表、排序、清除标记、focus 结果 |
-| `app/src/mobile/features/sessions/session-row.tsx` | 手机会话行（状态/工具动作/清除标记，宠物页与动态页共用） |
-| `app/src/mobile/features/stream/stream-page.tsx` | 手机「动态」页：会话列表（固定最多 5 行）+ 最近发生 |
+| `app/src/mobile/features/sessions/session-row.tsx` | 手机会话行（状态/工具动作/清除标记） |
+| `app/src/mobile/features/sessions/session-feed.tsx` | 宠物页会话卡：header 折叠 / 展开、footer、行列表（最多 5 行） |
 | `app/src/mobile/features/sessions/session-storage.ts` | 本地清除标记（`sidekick-sessions.json`，只存 id + 时间） |
 | `app/src-tauri/src/app_focus.rs` | 手机 focus 请求 → 激活/启动 DSH（macOS `open -a`） |
 | `app/src/mobile/features/pet/sound.ts` | Web Audio 三音效 |
-| `app/src/mobile/features/pet/pet-fallback.tsx` / `pet.module.css` | 四态动作、道具、减少动效 |
+| `app/src/mobile/features/pet/pet-stage.tsx` / `sprite-pet.tsx` / `pet.module.css` | 宠物舞台与帧动画图集播放（四态姿态）；只 transform/opacity |
 
 ## 3. DSH 注入
 
@@ -195,11 +195,11 @@ DSH session/event
   - asking 持久；working 覆盖 sleep；away 优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
 - `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
 - `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音。
-- `pet-fallback.tsx` / `pet.module.css`：`data-ai-state`；短爪层 + 道具层；四套 SVG 表情；只 transform/opacity。
-- `pet-status-caption.tsx`：气泡位；working 5s、asking 持续、completed 3s；AI 状态优先。
+- `pet-stage.tsx` / `sprite-pet.tsx`：`data-ai-state`；帧动画图集按状态候选链播放；只 transform/opacity。
+- `pet-page.tsx`：宠物页组装（顶部条 → 会话卡 → 鲸鱼 → 麦克风）。
 - `app.tsx`：上线/回前台 `sendStatusRequest()`；状态不追加到聊天。
 - 旧存档 schema 不变；AI 状态只存内存。
-- 会话列表：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；完整列表在「动态」页固定最多 5 行（无展开/收起、无自动展开），宠物页只显示最近 1 条（asking 优先，点按直接 focus）。工作中行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。
+- 会话卡：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；`session-feed` 置顶在宠物页，折叠 1 行 / 展开最多 5 行（无自动展开），超出的只保留 header 计数；点 asking 行进「等你决定」页，其他行只读。工作中行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。
 - 清除标记存 `sidekick-sessions.json`（只存 id/at/through，7 天 TTL、最多 200 条），不存标题/列表；有更新事件自动解除。
 - focus：手机生成 requestId 发 `focus.request`，3s 超时提示；`focus.result` 只处理匹配 requestId 的结果。
 
@@ -241,7 +241,7 @@ DSH session/event
 - Rust：`cargo test --lib`（status 解析/token/body/timer/patch/端口/profile/工具白名单折叠）。
 - 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流、工具类别归一）。
 - 协议：`pnpm exec vitest run src/protocol`。
-- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/动态页列表/最近 1 条/工作行工具动作）。
+- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/会话卡/工作行工具动作）。
 - 桌面：`pnpm exec vitest run src/desktop/features/hook`。
 - 全量：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`；`cargo test`；`node scripts/check-docs.mjs`；`node scripts/check-boundaries.mjs`。
 - 真机：安装/重启/四态/声音/杀 DSH/重连/录音/夜间/减少动效。

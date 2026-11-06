@@ -2,7 +2,7 @@
 doc: design/mobile-ui-v16
 title: 手机端 v16 干净版 UI 归档
 status: archived
-updated: 2026-11-05
+updated: 2026-11-06
 load: on-demand
 owner: design
 related:
@@ -13,18 +13,9 @@ related:
 
 # 手机端 v16 干净版 UI 归档
 
-> 这是 2026-11-05 定稿并已落到手机端的 v16 视觉稿，配合 D80（两页壳）与 D81（MiSans 字体）阅读。
+> 2026-11-05 定稿并已落到手机端的 v16 视觉方案，配合 D80（两页壳）与 D81（MiSans 字体）阅读。
 > 设计原则：iOS 的「内容优先 + 克制 tint + 清楚层级」，但不照搬 Liquid Glass / SF 蓝；手机端只留宠物页与设置二级页，没有底部 tab。
-
-## 文件
-
-| 文件 | 说明 |
-| --- | --- |
-| `screens-v16.png` | 定稿视觉稿（2×2：宠物折叠 / 展开 / 结果卡 / 设置） |
-| `screens-v16.html` | 可交互静态原型；`assets/poster.webp` 是鲸鱼海报（不重绘） |
-| `final-apk-pet.png` | 最终 APK 真机宠物页（Realme RMX3370，MiSans） |
-| `final-apk-more.png` | 最终 APK 真机设置页（MiSans，说明行高 1.45） |
-| `font-compare.png` | 字体前后对比：OPPO Sans Regular → MiSans Normal；标题 16→15 |
+> **本归档不保留 HTML 原型与截图**：视觉以已落地页面为准（`app/src/mobile/`）；过程素材按 D71 与 [git.md](../../standards/git.md) 不入库，2026-11-06 已清理。
 
 ## 关键规格
 
@@ -37,6 +28,6 @@ related:
 
 ## 实现与决策
 
-- 计划与阶段：已归档到本目录的历史版本见 `IMPLEMENTATION.md`（如仍需要）；代码落点见 `docs/frontend-architecture.md`。
+- 代码落点：`app/src/mobile/{app.tsx,ui-store.ts,styles/clean.css}`、`app/src/mobile/features/{pet,sessions,settings,mic}/**`、`app/src/mobile/shell/{pet-top-bar,page-header}.tsx`。
 - 决策：D80（两页壳 / 删动态页 / 会话置顶 / 结果卡三段）、D81（MiSans + 字号/行高）。
 - 验收：`docs/prd/shell/ACCEPTANCE.md` 的 SHL-AC-26…47、SHL-AC-55…59；真机基础页已验，录音禁切页 / 结果卡清空 / 320 宽待补。
