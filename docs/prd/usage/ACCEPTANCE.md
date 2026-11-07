@@ -2,7 +2,7 @@
 doc: prd/usage/ACCEPTANCE
 title: Token 用量看板验收用例
 status: draft
-updated: 2026-11-06
+updated: 2026-11-07
 load: on-demand
 owner: qa
 children: []
@@ -102,12 +102,12 @@ related:
 ## U-14 文档
 
 - **步骤** 检查本次文档、决策、设计归档与关联索引/协议。
-- **期望** SPEC/ACCEPTANCE/PRD 与 D97/D98、`docs/engineering/desktop-ios-ui.md` v3、`docs/design/usage-dashboard-v2/` 前后一致；frontmatter 齐全、`status: draft`、`updated: 2026-11-06`；`check-docs` 通过；`protocol/README.md` 含 `usage.request` / `usage`；`decisions.md` 含 D83/D97/D98；`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/design/INDEX.md`、`docs/INDEX.md` 有入口且链接可点。
+- **期望** SPEC/ACCEPTANCE/PRD 与 D97/D98/D108、`docs/engineering/desktop-ios-ui.md` v3、`docs/design/usage-dashboard-v2/`、`docs/engineering/desktop-usage-panel.md` 前后一致；frontmatter 齐全、`status: draft`、`updated: 2026-11-07`；`check-docs` 通过；`protocol/README.md` 含 `usage.request` / `usage`；`decisions.md` 含 D83/D97/D98/D108；`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/design/INDEX.md`、`docs/INDEX.md` 有入口且链接可点。
 
 ## U-15 非目标
 
 - **步骤** 全量走查 + 代码/协议审查。
-- **期望** 无菜单栏/状态栏入口；无预算、5 小时额度、余额、时段节律、星期分布、热力、半年回顾；未解析 Claude Code / Codex / Qoder 日志；ASR 费用未并入本页；无云同步/导出/告警/分享图；账本零写入；零新增遥测；视觉稿里的主题切换按钮、4 项导航**没有**进入实现（主题仍走系统/设置，导航仍是 D94 的 5 项）；宠物页/设置壳未重做。
+- **期望** 无菜单栏常驻数字 / 状态徽标（点击图标弹出的小看板属于 D108，见 U-18）；无预算、5 小时额度、余额、时段节律、星期分布、热力、半年回顾；未解析 Claude Code / Codex / Qoder 日志；ASR 费用未并入本页；无云同步/导出/告警/分享图；账本零写入；零新增遥测；视觉稿里的主题切换按钮、4 项导航**没有**进入实现（主题仍走系统/设置，导航仍是 D94 的 5 项）；宠物页/设置壳未重做。
 
 ## U-16 图表（v2）
 
@@ -119,3 +119,16 @@ related:
 
 - **步骤** `pnpm dev --host 127.0.0.1` + `node scripts/qa-desktop-ios.mjs`。
 - **期望** 桌面 QA 全页截图全量生成；用量页 1180/960 × 浅/深、滚动态、弹层均无横向溢出、无 console error；1180 首屏完整（账本 8 行 + 价格行），960 首屏允许滚动但不裁切关键金额；vibrancy 契约段通过（浏览器 mock 不加 `.dsl-vibrancy`）；其余 3 个一级页与二级页截图与 D85/D86 基线一致。
+
+## U-18 菜单栏用量小看板（D108）
+
+- **Given** 桌面端已启动、菜单栏托盘图标就绪；账本有今天数据（另备账本缺失 fixture）。
+- **步骤** 左键图标；再点图标；点桌面/其它 App；按 Esc；点「打开用量页」；关主窗口后再点图标；副屏再点一次；`pnpm dev --host 127.0.0.1` + `node scripts/qa-desktop-ios.mjs`。
+- **期望**
+  - 卡片 320×432、窗 348×460，贴在图标正下方 6pt，圆角/阴影无直角或白边；浅/深主题各一次；多屏不越界。
+  - 内容与用量页同一区间一致：花费 + 环比 + Token/会话/缓存命中 + 近 7 天迷你柱（今天高亮）+ 客户端/会话/模型 Top 3 分组（4px 底轨占比条，按整组金额算）+ 打开用量页；切今天/7 天数字随之变化，切三个分组列表随之变化。
+  - 再点图标 / 点外部 / Esc 收起；Cmd+W 不销毁；「打开用量页」唤起主窗口并落到用量页；右键菜单三项不变、仍是唯一退出入口。
+  - 账本缺失 → 一句结论 + 重试；缺价 → 「—」；无记账 → 「这个区间还没有记账」；不显示假数字。
+  - 主窗口隐藏时面板照常可开；HTTP/发现/hook 桥/手机连接不受影响；关闭面板不产生第二实例。
+  - 浏览器 QA 生成 6 张面板截图（浅/深 × 正常/空态 + 悬停），卡片实测 320×432、内部不裁切，无横向溢出、无 console error；悬停截图能看到柱子加亮与「日期 · 金额」气泡。
+  - 自动化：`cargo test usage_panel`（定位 6 例）、`usage-panel.test.tsx`（6 例）、全量质量门通过。

@@ -2,7 +2,7 @@
 doc: prd/usage/INDEX
 title: Token 用量看板 · 一页摘要
 status: draft
-updated: 2026-11-06
+updated: 2026-11-07
 load: on-demand
 owner: product
 children:
@@ -18,12 +18,14 @@ related:
 # Token 用量看板 · 一页摘要
 
 > 桌面一级页「用量」（⌘3）+ 手机宠物页顶栏「今日花费」数字（点开全屏二级页，D93）：只读本机 DSH cost-meter 账本，展示今天 / 近 7 天 / 近 30 天 / 近半年（180 天）的 Token 与人民币估算花费。
-> 本期定位：**应用内看板**。不做菜单栏/状态栏常驻，不做预算、5 小时额度、时段/热力等洞察，不解析其它 AI 工具日志。
+> 本期定位：**应用内看板 + 菜单栏点击小看板**。不做菜单栏常驻数字/徽标，不做预算、5 小时额度、时段/热力等洞察，不解析其它 AI 工具日志。
 > v2（D97/D98）：桌面宽幅「深潜仪表」、手机无卡片「紧凑仪表」；数据口径/协议不变，见 [SPEC](./SPEC.md) 与 [D97/D98](../../decisions.md)。
+> v3（2026-11-07，D108）：菜单栏左键图标弹出 320×432 只读小看板（今天/7 天 + 7 天迷你柱 + 客户端/会话/模型 Top 3 分组 + 打开用量页），复用同一份账本数据；不新增协议，见 [engineering/desktop-usage-panel.md](../../engineering/desktop-usage-panel.md)。
 
 ## 本期做什么
 
 - 桌面：一级视图「用量」，导航顺序 概览 / 内容 / **用量** / 语音 / 设置；快捷键 ⌘1–⌘5（用量 ⌘3、语音 ⌘4、设置 ⌘5，D85 结构 + D104）。
+- 菜单栏小看板（D108）：左键托盘图标弹出/收起约 320×432 的只读卡片（花费 + 三读数 + 近 7 天迷你柱 + 客户端/会话/模型 Top 3 分组 + 打开用量页），点其它 App / Esc / 再点图标收起；主窗口走右键菜单或看板按钮。
 - 手机：宠物页顶栏右侧显示「今天」花费数字（无快照/账本缺失时退回仪表盘图标），点开全屏只读二级页，页头返回宠物（v17 / D93）；设置页不再有「用量」入口。
 - 数据：只读 `<DSH_HOME>/storages/cost-meter/ledger.json`（`SIDEKICK_DSH_HOME` > `DSH_HOME` > `~/.dsh`），四区间花费 hero + 当前区间花费剖面 + 五桶构成。
 - 分组：客户端（P0 仅 DSH）/ 会话（按 id 跨天合并）/ 模型（`provider:model`），每组 Top 8 + 其他。
@@ -35,7 +37,7 @@ related:
 
 ## 不做什么
 
-- 菜单栏 / 状态栏数字与图标、always-on-top 悬浮窗（用户明确不要）。
+- 菜单栏常驻数字 / 状态徽标、always-on-top 悬浮窗（用户明确不要）；点击图标弹出的小看板已纳入本期（D108），不做常驻数字。
 - 月预算、5 小时额度、余额、大额会话榜（V2 预算舱）。
 - 时段节律、星期分布、18 周热力、近半年回顾/分享图（V3 潮汐）。
 - Claude Code / Codex / Qoder 日志解析；ASR 费用合并；云同步、导出、告警。
@@ -60,14 +62,14 @@ related:
 | --- | --- | --- |
 | 产品/评审 | [PRD.md](./PRD.md) | 0–3 节 + 范围外 |
 | 设计/前端 | [SPEC.md](./SPEC.md) | 布局、格式化、文案、价格面板 |
-| 测试 | [ACCEPTANCE.md](./ACCEPTANCE.md) | U-01–U-17 |
+| 测试 | [ACCEPTANCE.md](./ACCEPTANCE.md) | U-01–U-18 |
 | 技术方案 | [engineering/token-usage-pricing.md](../../engineering/token-usage-pricing.md) | 全部；协议见 [protocol/README.md](../../../protocol/README.md) |
 
 交互规则见 [standards/ux.md](../../standards/ux.md)；视觉令牌见 [standards/visual.md](../../standards/visual.md)；价格来源与 tokei 调研见 [设计归档](../../design/token-dashboard-v1/README.md) 与 [engineering/token-usage-pricing.md](../../engineering/token-usage-pricing.md)。
 
 ## 已定决策
 
-- 只做应用内看板，不做菜单栏常驻（用户明确要求）。
+- 应用内看板 + 菜单栏**点击弹出**的小看板（D108）；不做菜单栏常驻数字/徽标（用户 2026-11-07 改口：要点击弹出的小框，不要常驻数字）。
 - 数据只读本机 DSH 账本；只做 DSH 一家，其它客户端占位「未接入」。
 - 手机模型分组默认显示、可关闭（D83）；`status.sessionList` 保持不含模型名（D78 不变）；价格来源与刷新策略见 D84。
 - 桌面新增一级「用量」（D82 时是第 6 项；D85 后 4 项导航里位于 ⌘3；D94 短暂挪到 ⌘4；D101/D104 调整后用量仍在 ⌘3，语音占 ⌘4）；价格表入口在分组列表卡尾。

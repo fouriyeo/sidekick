@@ -2,7 +2,7 @@
 //!
 //! 关窗只隐藏窗口，进程（HTTP 服务、UDP 发现、剪贴板监听、DSH hook 回环桥、
 //! 语音/价格后台任务）继续跑——这是「手机在电脑窗口关掉后还能连上、AI 状态
-//! 还能推」的前提。入口只在菜单栏：**左键显示主窗口，右键菜单里退出**；
+//! 还能推」的前提。入口只在菜单栏：**左键弹用量小看板，右键菜单显示主窗口/退出**；
 //! Dock 图标隐藏（`ActivationPolicy::Accessory`），不出现在 Cmd+Tab。
 //!
 //! 图标是单色模板图（`icons/tray.png`，猫头剪影 + 眼睛镂空），
@@ -10,6 +10,9 @@
 //!
 //! 托盘创建失败时下面 `lib.rs` 的关闭处理会退回旧行为（关窗即退出），
 //! 否则会出现「窗口没了、菜单栏也没有、还退不掉」的死局。
+//!
+//! 2026-11-07（D108）：左键改为弹出「Token 用量小看板」（`usage_panel`），
+//! 主窗口改走右键菜单「显示主窗口」或看板底部「打开用量页」；右键菜单不变。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -19,6 +22,8 @@ use tauri::{
     menu::{MenuBuilder, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
+
+use crate::usage_panel;
 
 const MAIN_WINDOW: &str = "main";
 const TRAY_ID: &str = "sidekick-tray";
@@ -56,9 +61,9 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .icon_as_template(true)
-        .tooltip("小跟班 Sidekick")
+        .tooltip("小跟班 Sidekick · 点按查看用量")
         .menu(&menu)
-        // 左键直接显示窗口，菜单（含退出）只在右键弹出。
+        // 左键开用量小看板（D108），菜单（含退出）只在右键弹出。
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             MENU_SHOW => show_main_window(app),
@@ -72,15 +77,17 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
+                rect,
                 ..
             } = event
             {
-                show_main_window(tray.app_handle());
+                // 看板自己处理「可见则收起 / 否则定位显示」，失败会回退主窗口。
+                usage_panel::toggle(tray.app_handle(), rect);
             }
         })
         .build(app)?;
 
     TRAY_READY.store(true, Ordering::Relaxed);
-    eprintln!("[tray] 菜单栏图标已就绪（左键显示窗口 / 右键菜单退出）");
+    eprintln!("[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）");
     Ok(())
 }

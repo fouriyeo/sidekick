@@ -2,7 +2,7 @@
 doc: engineering/token-usage-pricing
 title: Token 用量与价格技术方案
 status: draft
-updated: 2026-11-06
+updated: 2026-11-07
 load: on-demand
 owner: engineering
 children: []
@@ -32,7 +32,7 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 ```
 
 - 不写账本、不改 DSH 配置、不上传用量；价格刷新只 GET OpenRouter 公开目录。
-- 手机不参与聚合，只消费桌面快照；桌面是唯一计算方。
+- 手机不参与聚合，只消费桌面快照；桌面是唯一计算方（用量页与菜单栏小看板共用 `token_usage_stats`）。
 
 ## 2. 文件与职责
 
@@ -50,6 +50,8 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 | `app/src/shared/lib/tauri.ts` | `getTokenUsageStats` / `sendUsageRequest` / 4 个 pricing 命令绑定 |
 | `app/src/desktop/features/usage/` | 桌面用量页 store 与「模型价格」Sheet（460px）；价格表入口在分组列表卡尾，不在导航 |
 | `app/src/desktop/pages/usage-page.tsx` | 桌面用量页（一级「用量」；D85 后 4 项导航里是 ⌘3） |
+| `app/src/desktop/panel/usage-panel.tsx` | 菜单栏用量小看板（D108，第二窗口）：复用 `useUsageStore` 与同一命令，固定今天/7 天 + 7 天迷你柱 + 客户端/会话/模型 Top 3 分组 |
+| `app/src-tauri/src/usage_panel.rs` | 小看板窗口（`usage-panel`）：预创建/贴图标定位/显示收起、`hide_usage_panel` / `open_usage_page` 命令 |
 | `app/src/mobile/features/usage/` | 手机只读页与快照缓存（进入/切区间/回前台请求） |
 
 ## 3. 数据源与容错
@@ -204,6 +206,8 @@ override（用户覆盖）
 | `token_pricing_set_auto` | `enabled: bool` | `Result<PricingStatus, string>` | 持久化到缓存文件 settings |
 | `token_pricing_set_mobile_models` | `enabled: bool` | `Result<PricingStatus, string>` | D83 开关持久化 |
 | `send_usage_request`（手机） | `range` | `Result<(), string>` | 非法 range 回「用量区间无效」 |
+| `hide_usage_panel`（小看板） | — | `void` | Esc / 点外部后收起第二窗口，不销毁（D108） |
+| `open_usage_page`（小看板） | — | `void` | 显示并激活主窗口，再发 `sidekick-navigate` 落到用量页 |
 
 - 数字类型：Token 与微元均为 `u64`；百分比 `f64`（0–100，可空）；时间戳为毫秒 `u64`。
 

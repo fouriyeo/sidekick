@@ -1009,6 +1009,34 @@
 - 代价：今天之前漏记的会话无法精确补回（服务端 usage 未落盘），只能按日志音频帧数近似回填；修复从下一次会话起生效，需要重启桌面端。
 - 规范：`app/src-tauri/src/bailian_asr.rs`、`app/src-tauri/src/asr_usage.rs`、`docs/engineering/{asr-model,asr-cloud-bailian}.md`、`AGENTS.md`。
 
+## D108 · 菜单栏左键改为 Token 用量小看板（2026-11-07，取代 D88 的「左键显示主窗口」与 usage PRD 的「不做菜单栏」非目标）
+
+- 背景：用户明确要求「点状态栏（菜单栏图标）→ 从屏幕上方弹一个不要太大的小框看板，显示 Token 用量」。此前 D82–D84 的 usage PRD 把「菜单栏 / 状态栏入口」写成非目标（用户当时不要），现在改口；要的是**点击弹出的小看板**，不是菜单栏常驻数字/徽标。
+- 决策：
+  - 新增独立的 `usage-panel` 第二窗口（348×420 逻辑像素，可见卡片 320×392 + 四周 14 透明留白），启动时预创建并隐藏；`transparent` 只用于圆角/阴影，卡片不透明（D86 内容层不透明）。
+  - 托盘左键从「显示主窗口」改为 `usage_panel::toggle`：可见则收起，否则按 `TrayIconEvent::Click.rect` 贴图标下方 6pt 居中显示，再按图标所在显示器左右 8pt 夹取；主窗口改走右键菜单「显示主窗口」或面板底部「打开用量页」（Rust 显示主窗口后发 `sidekick-navigate`，主窗口切到「用量」页）。
+  - 收起：再点图标 / 点其它 App（`Focused(false)`）/ Esc（`hide_usage_panel`）/ Cmd+W（`CloseRequested` → prevent + hide，不销毁）；窗口留着下次秒开。创建/显示失败回退 `show_main_window`，左键绝不「点了没反应」；托盘没建起来就不预创建面板。
+  - 面板只读、复用现有 `token_usage_stats` 与 `useUsageStore`：今天/7 天两个区间、花费 + 环比、Token/会话/缓存命中、近 7 天迷你柱（固定取 `daysForRange(days,"7d")`，今天高亮）、Top 3 模型（按金额）、底部「打开用量页」。账本缺失/缺价/无记账沿用现有口径（一句结论、`—`、不造假），不新增协议、不写账本、不发遥测。
+  - 新增 `capabilities/panel.json`（`usage-panel` 窗口 `core:default`）、`entries/panel.tsx` + `desktop/panel/usage-panel.tsx` + `desktop/styles/panel.css`、`shared/lib/tauri.ts` 的 `hideUsagePanel` / `openUsagePage` / `subscribeNavigate`；`main.tsx` 在 `?window=panel` 时先于 `app_role` 挂面板（dev mock 同名入口用于浏览器 QA）。
+  - 顺带修复：`Cargo.toml` 的 `tauri` 依赖必须保留 `macos-private-api`（`tauri.macos.conf.json › macOSPrivateApi: true` 的硬前提，透明窗口/材质依赖它；删掉后 `tauri-build` 的 feature allowlist 检查会让 `cargo test` 直接失败）。
+- 原因：菜单栏是电脑端常驻入口，左键是用户唯一会点的位置；小看板解决「扫一眼今天花了多少」，比打开主窗口再切页少两次操作。独立小窗不加载桌面壳（不连 WS、不初始化导航），比复用主窗口更轻。
+- 放弃：`tauri-plugin-positioner`（只省几十行定位数学，多一个依赖，违反 dependency-policy）；`tauri-nspanel` / 自写 NSPanel（更接近原生 popover、不抢焦点，但引插件或扩 ObjC surface，v1 不做）；always-on-top 常驻悬浮窗（不是用户要的形态，且遮挡桌面）；菜单栏常驻数字（用户明确不要）。
+- 代价：普通 `NSWindow` 显示时会激活 App（抢焦点），失焦收起是启发式；别的 App 全屏 Space 时面板可能不覆盖该 Space；菜单栏区域无法自动截图，观感必须人工目检；多一个常驻隐藏 WebView（几十 MB）换「点开即出」；预创建/定位逻辑新增约 300 行 Rust（含 6 个定位单测）。
+- 验证：`cargo test` 184 passed（含 `usage_panel` 6 个定位单测）、`pnpm typecheck / lint / 692→698 tests / build`、`check-boundaries`、`check-docs` 全绿；浏览器 QA 58 张截图（含面板 4 张：浅/深 × 正常/空态），面板卡片实测 320×392、无横向溢出/console error。菜单栏点击/收起/位置、多屏、Cmd+W、打开用量页仍待人工 `pnpm tauri dev` 目检（清单见 `docs/engineering/desktop-usage-panel.md` §6）。
+- 编号说明：并行中的手机端改动已占用 D106/D107，本条按时间顺序记 D108；D106/D107 由对应改动自行补记。
+- 规范：`app/src-tauri/src/{usage_panel.rs,tray.rs,lib.rs}`、`app/src-tauri/capabilities/panel.json`、`app/src-tauri/Cargo.toml`、`app/src/{main.tsx,entries/panel.tsx,shared/lib/tauri.ts,desktop/app.tsx,desktop/panel/usage-panel.tsx,desktop/styles/panel.css,dev/tauri-mock.ts}`、`app/src/desktop/panel/usage-panel.test.tsx`、`scripts/qa-desktop-ios.mjs`、`docs/engineering/desktop-usage-panel.md`、`docs/engineering/{desktop-tray,token-usage-pricing,INDEX}.md`、`docs/prd/usage/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/{status.md,INDEX.md}`、`AGENTS.md`。
+
+## D109 · 菜单栏看板分组区加「客户端 / 会话 / 模型」tab + 占比条加粗（2026-11-07，补充 D108）
+
+- 背景：D108 的小看板只展示「模型」一组；用户看过后要求「模型下面也加上那三个 tab」，并指出行底占比条现在 2px 太细、看不出是百分比。
+- 决策：
+  - 面板分组区改为与用量页一致的三档下划线 tab：**客户端 / 会话 / 模型**，默认「模型」（沿用 `useUsageStore.group`，切 tab 只换列表、不重新读账本）；每组仍只展示按金额 Top 3，右侧标「花费」。
+  - 占比条从 2px 细线改为 **4px 圆角底轨 + 填充**：底轨 `--panel-divider`，填充主色 75% 不透明度，宽度按**整组**金额占比（不是 Top 3 归一），组内无数据时显示一行「这个区间没有数据」。
+- 原因：三档 tab 让「钱花在哪个客户端 / 会话 / 模型」在看板上一次可达；底轨 + 4px 让百分比和组内总量都有参照，不再像一条装饰线。
+- 代价：分组区多一行 tab（高度不变，原「模型 / 花费」表头位替换）；会话/客户端名称过长会省略号截断（title 保留全名）。
+- 验证：`usage-panel.test.tsx` 7 例（新增「切三个分组换列表」）；`pnpm typecheck / lint / test / build` 全绿；浏览器 QA 面板 4 张截图更新（暗/浅主题下三 tab + 4px 占比条清晰可见，卡片仍 320×392、无溢出/console error）。
+- 规范：`app/src/desktop/panel/usage-panel.tsx`、`app/src/desktop/styles/panel.css`、`app/src/desktop/panel/usage-panel.test.tsx`、`docs/prd/usage/{SPEC,PRD,INDEX,ACCEPTANCE}.md`、`docs/engineering/{desktop-usage-panel,token-usage-pricing,INDEX}.md`、`docs/status.md`、`AGENTS.md`。
+
 ## D110 · 动效图标统一到 shared/ui/motion（2026-11-07，承接 D107 会话卡 / D100 语音结果卡）
 
 - 背景：用户评审了 10 个加载/提示动效试样，反馈「都要有呼吸和弹性的感觉」「有些环不要太细，要胖一点、慵懒一点」；选定方向后要求「这些图标统一存放、注意目录结构」，并清理试样 HTML 与生成文件。
@@ -1022,3 +1050,14 @@
 - 清理：试样台 `artifacts/loading-lab/`（HTML + GIF + PNG 帧）与 `/tmp` 临时脚本全部删除，不入库、不提交；动效只以组件 + 一个 CSS 文件的形式统一存放。
 - 验证：706 tests（新增 motion 8 例；会话行/麦克风断言改用 `sk-orbit` / `sk-ask` 新类名）、tsc / lint / build / check-docs / check-boundaries 全绿；真机 Realme 安装走查。
 - 规范：`app/src/shared/ui/motion/{index.tsx,motion.css,motion.test.tsx}`、`app/src/mobile/features/sessions/{session-row.tsx,session-row.test.tsx}`、`app/src/mobile/features/mic/{mic-button.tsx,mic-button.test.tsx}`、`app/src/mobile/features/connect/offline-page.tsx`、`docs/prd/shell/SPEC.md`、`docs/status.md`、`AGENTS.md`。
+
+## D111 · 菜单栏看板留白加高 + 近 7 天柱悬停气泡（2026-11-07，补充 D108/D109）
+
+- 背景：用户看过 D108/D109 的看板后反馈两点——分组 tab 下每行「离得太近、字的上下行高也不够，没有留白的呼吸感」；近 7 天柱图「鼠标一上去应该能显示东西」。
+- 决策：
+  - 卡片从 **320×392 加高到 320×432**（窗口 348×420 → **348×460**，仍贴图标下方 6pt、水平居中，位置算法不变）：分组行 26→32 高、行间 gap 5、名称 12/17 行高、Token 10.5、金额 12；tab 间距 12→16、分组区上边距 14→18；读数上边距 10→12、柱区 40→42；底部「打开用量页」用 `margin-top: auto` 贴底，多出的高度落在分组区与按钮之间。行 hover 给淡底反馈。
+  - 近 7 天迷你柱加悬停：鼠标在柱区移动按横向比例命中一根柱子，命中柱 `opacity: 1` 加亮，柱区顶部弹「日期 · 金额」气泡（今天显示「今天」），移出即消失；气泡 `pointer-events: none`，不会打断 mousemove。
+- 原因：小窗信息密度高，26px 行距 + 11.5 字号读起来挤；加高 40px 换呼吸感，仍属于「小看板」尺寸。柱图原本只有静态高度，悬停能把日期与金额一次读出来，避免再去打开用量页。
+- 代价：窗口高 40px（约 +10%）；气泡在首/末柱会略微贴边（卡片 overflow 裁切，实测不挡信息）。
+- 验证：`usage-panel.test.tsx` 8 例（新增悬停气泡「11-06 · ¥29.84」+ 移出消失）；QA 60 张截图（新增 2 张悬停，CDP 真实鼠标移动，能看到柱子加亮与气泡），卡片实测 320×432、`scrollHeight <= clientHeight` 无裁切、无溢出/console error；`pnpm typecheck / lint / test / build`、`cargo test`（184）、`check-docs`、`check-boundaries` 全绿；桌面端已重启，`[panel] 已创建隐藏窗口 348×460`，真实点击验证「显示 → 348×460 窗口 → 再点收起」。
+- 规范：`app/src-tauri/src/usage_panel.rs`（CARD_H）、`app/src/desktop/panel/usage-panel.tsx`、`app/src/desktop/styles/panel.css`、`app/src/desktop/panel/usage-panel.test.tsx`、`scripts/qa-desktop-ios.mjs`、`docs/prd/usage/{SPEC,PRD,INDEX,ACCEPTANCE}.md`、`docs/engineering/{desktop-usage-panel,desktop-tray,INDEX}.md`、`docs/status.md`、`AGENTS.md`。

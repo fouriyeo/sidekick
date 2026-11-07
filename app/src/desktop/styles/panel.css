@@ -1,0 +1,476 @@
+/* ============================================================================
+   菜单栏 Token 用量小看板（第二窗口，320×392 卡片）
+   ----------------------------------------------------------------------------
+   只由 entries/panel.tsx 引入，作用域独立于主窗口。窗口是透明的（Rust 建窗时
+   transparent(true)），因此：
+   - html/body/#root 必须透明，透明留白只用来放 .dsl-panel-card 的 CSS 阴影；
+   - 卡片自己铺不透明背景（D86：内容层不透明，不假装毛玻璃）；
+   - 颜色全部 hex，不依赖 oklch/color-mix；深浅两套跟随 html[data-theme]/.dark。
+   ========================================================================== */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+body {
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dsl-panel {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  color: var(--foreground);
+}
+
+/* 用 :where() 把重置的权重降到最低：普通 `.dsl-panel button`(0,1,1) 会压过
+   `.dsl-panel-tab`(0,1,0) / `.dsl-panel-open`(0,1,0) 的 font-size 与背景色，
+   表现为「分段控件变纯文字、底部主按钮没有底色」。这里也不能写 `font: inherit`
+   简写（它同样会重置字号）。 */
+:where(.dsl-panel) button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.dsl-panel button:focus-visible {
+  outline: 2px solid var(--panel-accent);
+  outline-offset: 2px;
+}
+
+.dsl-panel-card {
+  --panel-bg: #ffffff;
+  --panel-fg: #1c1c1e;
+  --panel-muted: #8a8a8e;
+  --panel-border: rgba(15, 45, 38, 0.1);
+  --panel-divider: rgba(15, 45, 38, 0.09);
+  --panel-shadow:
+    0 18px 44px rgba(15, 45, 38, 0.16), 0 2px 8px rgba(15, 45, 38, 0.08);
+  --panel-accent: #0a7764;
+  --panel-accent-fg: #ffffff;
+  --panel-seg-bg: #eceef1;
+  --panel-seg-active: #ffffff;
+  --panel-hover: rgba(15, 45, 38, 0.06);
+  --panel-up: #c0522f;
+  --panel-down: #1d7a4f;
+  --panel-tip-bg: #1c1c1e;
+  --panel-tip-fg: #ffffff;
+  --panel-mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, "Roboto Mono", monospace;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+  color: var(--panel-fg);
+}
+
+html[data-theme="dark"] .dsl-panel-card,
+html.dark .dsl-panel-card {
+  --panel-bg: #1c1c1e;
+  --panel-fg: #f2f2f7;
+  --panel-muted: #98989d;
+  --panel-border: rgba(255, 255, 255, 0.11);
+  --panel-divider: rgba(255, 255, 255, 0.1);
+  --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --panel-accent: #46d6b0;
+  --panel-accent-fg: #062b24;
+  --panel-seg-bg: rgba(118, 118, 128, 0.24);
+  --panel-seg-active: #3a3a3c;
+  --panel-hover: rgba(255, 255, 255, 0.07);
+  --panel-up: #ff8f6d;
+  --panel-down: #46d6b0;
+  --panel-tip-bg: #48484a;
+  --panel-tip-fg: #f2f2f7;
+}
+
+/* ---------------- 头部 ---------------- */
+.dsl-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+}
+
+.dsl-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.dsl-panel-tabs {
+  display: flex;
+  margin: 0 0 0 auto;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--panel-seg-bg);
+}
+
+.dsl-panel-tab {
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 18px;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-tab[aria-pressed="true"] {
+  background: var(--panel-seg-active);
+  color: var(--panel-fg);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+
+.dsl-panel-refresh {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-refresh:hover {
+  background: var(--panel-hover);
+}
+
+.dsl-panel-refresh[aria-busy="true"] svg {
+  animation: dsl-panel-spin 1s linear infinite;
+}
+
+@keyframes dsl-panel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------- 内容 ---------------- */
+.dsl-panel-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 10px;
+}
+
+.dsl-panel-eyebrow {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--panel-muted);
+  letter-spacing: 0.02em;
+}
+
+.dsl-panel-amount-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.dsl-panel-amount {
+  font-family: var(--panel-mono);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dsl-panel-delta {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-delta[data-direction="up"] {
+  color: var(--panel-up);
+}
+
+.dsl-panel-delta[data-direction="down"] {
+  color: var(--panel-down);
+}
+
+.dsl-panel-readouts {
+  display: flex;
+  margin-top: 12px;
+}
+
+.dsl-panel-readout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dsl-panel-readout + .dsl-panel-readout {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--panel-divider);
+}
+
+.dsl-panel-readout-label {
+  font-size: 10px;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-readout-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dsl-panel-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 16px;
+  font-size: 10.5px;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-chart {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 42px;
+  margin-top: 6px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--panel-divider);
+}
+
+.dsl-panel-chart i {
+  flex: 1;
+  min-width: 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--panel-accent);
+  opacity: 0.34;
+  transition:
+    opacity 120ms ease-out,
+    background-color 120ms ease-out;
+}
+
+.dsl-panel-chart i[data-today="true"] {
+  opacity: 1;
+}
+
+.dsl-panel-chart i[data-hover="true"] {
+  background: var(--panel-accent);
+  opacity: 1;
+}
+
+.dsl-panel-chart-tip {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--panel-tip-bg);
+  color: var(--panel-tip-fg);
+  font-size: 10px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+/* 分组：与用量页同一套维度（客户端 / 会话 / 模型），小窗只取 Top 3。 */
+.dsl-panel-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 18px;
+}
+
+.dsl-panel-groups-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.dsl-panel-group-tabs {
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dsl-panel-group-tab {
+  position: relative;
+  padding: 0 0 4px;
+  font-size: 10.5px;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-group-tab[aria-pressed="true"] {
+  color: var(--panel-fg);
+  font-weight: 600;
+}
+
+.dsl-panel-group-tab[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--panel-accent);
+}
+
+.dsl-panel-groups-sort {
+  font-size: 10px;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px;
+  border-radius: 8px;
+}
+
+.dsl-panel-group:hover {
+  background: var(--panel-hover);
+}
+
+/* 占比条：4px 的底轨 + 填充，比原来的 2px 细线更容易看出「占整组多少」。 */
+.dsl-panel-group-track {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  left: 4px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-divider);
+}
+
+.dsl-panel-group-track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--panel-accent);
+  opacity: 0.75;
+}
+
+.dsl-panel-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsl-panel-group-tokens {
+  font-size: 10.5px;
+  color: var(--panel-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dsl-panel-group-cost {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsl-panel-note {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  color: var(--panel-muted);
+}
+
+/* ---------------- 底部 ---------------- */
+.dsl-panel-foot {
+  flex: none;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.dsl-panel-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--panel-accent);
+  color: var(--panel-accent-fg);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dsl-panel-open:hover {
+  filter: brightness(1.06);
+}
+
+.dsl-panel-open:active {
+  transform: scale(0.992);
+}
+
+/* ---------------- 状态 ---------------- */
+.dsl-panel-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dsl-panel-state p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-retry {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--panel-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsl-panel-refresh[aria-busy="true"] svg {
+    animation: none;
+  }
+
+  .dsl-panel-open:active {
+    transform: none;
+  }
+}

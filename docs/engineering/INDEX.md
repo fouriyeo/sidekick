@@ -2,11 +2,12 @@
 doc: engineering/INDEX
 title: 工程方案分支索引
 status: active
-updated: 2026-11-06
+updated: 2026-11-07
 load: on-demand
 children:
   - desktop-ios-ui.md
   - desktop-tray.md
+  - desktop-usage-panel.md
   - audio-pipeline.md
   - protocol-audio.md
   - asr-model.md
@@ -37,6 +38,7 @@ children:
 | 做 Token 用量看板、读 DSH 账本、模型价格与估算 | [token-usage-pricing.md](./token-usage-pricing.md) | M |
 | 改电脑端界面（简约 iOS 结构 / 导航 / 列表 / 文案红线） | [desktop-ios-ui.md](./desktop-ios-ui.md) | S |
 | 做菜单栏常驻 / 关窗隐藏 / Dock 图标 / 退出入口 | [desktop-tray.md](./desktop-tray.md) | S |
+| 做菜单栏 Token 用量小看板 / 第二窗口 / 图标下方定位 | [desktop-usage-panel.md](./desktop-usage-panel.md) | M |
 | 做宠物：帧动画图集、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
 | 写测试、真机验收、发版 | [quality.md](./quality.md) | M |
 
@@ -48,6 +50,7 @@ children:
 - Token 用量看板（2026-11-06）：只读 DSH cost-meter 账本 + OpenRouter/DeepSeek 价格表 + 缺价估算；见 [token-usage-pricing.md](./token-usage-pricing.md)（D82–D84）。
 - 电脑端「简约 iOS」壳（2026-11-06，D85；D104 把语音升为第 4 个一级入口后，一级为 5 个：概览/内容/用量/语音/设置）+ 224 侧栏 + iOS 分组列表 + 设置二级页；同日 D86 第二轮升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏 / 彩色图标块 / 胶囊控件 / spring 动效，玻璃只做控件层）；实现契约见 [desktop-ios-ui.md](./desktop-ios-ui.md)。
 - 电脑端菜单栏常驻（2026-11-06，D88）：关窗只隐藏窗口，HTTP/发现/hook 桥继续跑；Dock 图标隐藏（Accessory），左键图标显示窗口、右键菜单退出；见 [desktop-tray.md](./desktop-tray.md)。
+- 电脑端菜单栏 Token 用量小看板（2026-11-07，D108）：左键图标弹出 320×432 只读卡片（今天/7 天、7 天迷你柱、客户端/会话/模型 Top 3 分组、打开用量页），失焦/Esc/再点收起；独立 `usage-panel` 窗口预创建隐藏，复用 `token_usage_stats`；见 [desktop-usage-panel.md](./desktop-usage-panel.md)。
 - 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
 - 云端识别：[asr-cloud-bailian.md](./asr-cloud-bailian.md)（桌面中转、Keychain、50ms partial、失败不降级）；模型页/用量见 [asr-model.md](./asr-model.md)。
 - 现有架构事实：[architecture.md](../architecture.md)、[frontend-architecture.md](../frontend-architecture.md)。

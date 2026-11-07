@@ -15,6 +15,12 @@ function FatalError({ message }: { message: string }) {
   );
 }
 
+/** 是否菜单栏用量小看板窗口（`?window=panel`）；浏览器 dev 也用同一入口做 QA。 */
+function isUsagePanelWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("window") === "panel";
+}
+
 async function bootstrap() {
   const container = document.getElementById("root");
   if (!container) throw new Error("缺少 #root 挂载点");
@@ -28,6 +34,14 @@ async function bootstrap() {
   const root = createRoot(container);
 
   try {
+    // 菜单栏用量小看板（D108）：Rust 用 `index.html?window=panel` 创建第二个窗口，
+    // 这里先于 app_role 判定，直接挂紧凑面板，不加载桌面主壳。
+    if (isUsagePanelWindow()) {
+      const { mountUsagePanel } = await import("./entries/panel");
+      mountUsagePanel(root);
+      return;
+    }
+
     const role = await getAppRole();
     if (role === "mobile") {
       const { mountMobile } = await import("./entries/mobile");

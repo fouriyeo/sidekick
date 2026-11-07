@@ -45,8 +45,8 @@ const SETTINGS_PAGES = [
 const PAGES = [...PRIMARY_PAGES, ...SETTINGS_PAGES];
 
 /**
- * 菜单栏用量小看板（D107）：第二窗口 `?window=panel`。
- * 真实窗口 348×420（卡片 320×392 + 四周 14 透明留白），这里按同样的逻辑像素截图。
+ * 菜单栏用量小看板（D108）：第二窗口 `?window=panel`。
+ * 真实窗口 348×460（卡片 320×432 + 四周 14 透明留白），这里按同样的逻辑像素截图。
  */
 const PANEL_PAGES = [
   { name: "panel", query: "" },
@@ -202,7 +202,7 @@ async function snapshot(cdp, name, meta, theme) {
 async function main() {
   mkdirSync(OUT, { recursive: true });
   const chrome = launchChrome();
-  const report = { base: BASE, desktop: [], panel: [] };
+  const report = { base: BASE, desktop: [], panel: [], panelHover: [] };
   try {
     const page = await waitForDevtools();
     const cdp = new CDP(page.webSocketDebuggerUrl);
@@ -276,9 +276,9 @@ async function main() {
       }
     }
 
-    // 菜单栏用量小看板（D107）：按真实窗口 348×420 截图，并校验卡片固定 320×392。
+    // 菜单栏用量小看板（D108）：按真实窗口 348×460 截图，并校验卡片固定 320×432。
     for (const theme of ["dark", "light"]) {
-      await setViewport(cdp, 348, 420);
+      await setViewport(cdp, 348, 460);
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
       for (const entry of PANEL_PAGES) {
         await navigate(cdp, `${BASE}/?role=desktop&window=panel${entry.query}`);
@@ -294,12 +294,37 @@ async function main() {
               height: Math.round(rect.height),
               radius: style.borderRadius,
               background: style.backgroundColor,
+              scrollHeight: el.scrollHeight,
+              clientHeight: el.clientHeight,
               text: document.body.innerText.slice(0, 600),
             };
           })()`,
         );
         report.panel.push(
           await snapshot(cdp, `panel-${entry.name}`, { view: entry.name, card }, theme),
+        );
+      }
+
+      // 悬停交互：CDP 发真实鼠标移动，验证近 7 天柱子气泡（截图留证）。
+      await navigate(cdp, `${BASE}/?role=desktop&window=panel`);
+      const box = await js(
+        cdp,
+        `(() => {
+          const el = document.querySelector(".dsl-panel-chart");
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height };
+        })()`,
+      );
+      if (box) {
+        await cdp.send("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: Math.round(box.x + box.w * 0.12),
+          y: Math.round(box.y + box.h / 2),
+        });
+        await sleep(250);
+        report.panelHover.push(
+          await snapshot(cdp, "panel-hover", { view: "panel-hover", box }, theme),
         );
       }
     }
@@ -424,14 +449,18 @@ async function main() {
       (row) => row.overflowX || (row.consoleErrors && row.consoleErrors.length > 0),
     );
     const cardWarnings = report.panel.filter(
-      (row) => !row.card || row.card.width !== 320 || row.card.height !== 392,
+      (row) =>
+        !row.card ||
+        row.card.width !== 320 ||
+        row.card.height !== 432 ||
+        row.card.scrollHeight > row.card.clientHeight + 1,
     );
     if (cardWarnings.length > 0) problems.push(...cardWarnings);
     report.problems = problems;
     writeFileSync(resolve(OUT, "qa.json"), JSON.stringify(report, null, 2));
     console.log(
-      `截图 ${report.desktop.length + report.panel.length} 张（含面板 ${report.panel.length} 张）→ ${OUT}` +
-        (problems.length ? `\n⚠️ ${problems.length} 页有问题，见 qa.json` : "\n✅ 无横向溢出/控制台错误，面板卡片 320×392"),
+      `截图 ${report.desktop.length + report.panel.length + report.panelHover.length} 张（含面板 ${report.panel.length + report.panelHover.length} 张）→ ${OUT}` +
+        (problems.length ? `\n⚠️ ${problems.length} 页有问题，见 qa.json` : "\n✅ 无横向溢出/控制台错误，面板卡片 320×432"),
     );
   } finally {
     chrome.kill();

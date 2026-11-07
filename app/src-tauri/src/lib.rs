@@ -46,6 +46,8 @@ mod token_usage;
 mod transcript;
 #[cfg(desktop)]
 mod tray;
+#[cfg(desktop)]
+mod usage_panel;
 
 #[cfg(desktop)]
 #[tauri::command]
@@ -115,19 +117,38 @@ pub fn run() {
             if let Err(err) = tray::init(&handle) {
                 // 托盘建不起来就退回「关窗即退出」，不能留下没有退出入口的隐藏窗口。
                 eprintln!("[tray] 初始化失败，保持关窗即退出行为: {err}");
+            } else if let Err(err) = usage_panel::init(&handle) {
+                // 预创建失败不阻断启动：第一次左键 `toggle` 会再建一次。
+                eprintln!("[panel] 预创建失败（首次点按再试）: {err}");
             }
             // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
             tray::show_main_window(&handle);
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 关窗只隐藏（D88）：HTTP 服务、UDP 发现、DSH hook 桥继续跑，
-            // 手机连接与 AI 状态不因用户关窗而断掉。退出走菜单栏右键菜单。
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" && tray::ready() {
+            match event {
+                // 关窗只隐藏（D88）：HTTP 服务、UDP 发现、DSH hook 桥继续跑，
+                // 手机连接与 AI 状态不因用户关窗而断掉。退出走菜单栏右键菜单。
+                tauri::WindowEvent::CloseRequested { api, .. }
+                    if window.label() == "main" && tray::ready() =>
+                {
                     api.prevent_close();
                     let _ = window.hide();
                 }
+                // 用量小看板（D108）：Cmd+W / Esc 一类关闭请求只收起，窗口留着下次秒开。
+                tauri::WindowEvent::CloseRequested { api, .. }
+                    if window.label() == usage_panel::PANEL_WINDOW =>
+                {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                // 点其它 App / 桌面：失焦即收起。右键菜单与托盘点击不会让面板失焦。
+                tauri::WindowEvent::Focused(false)
+                    if window.label() == usage_panel::PANEL_WINDOW =>
+                {
+                    let _ = window.hide();
+                }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -160,7 +181,9 @@ pub fn run() {
             dsh_hook::dsh_hook_install,
             dsh_hook::dsh_hook_set_enabled,
             dsh_hook::dsh_hook_remove,
-            dsh_hook::dsh_hook_test
+            dsh_hook::dsh_hook_test,
+            usage_panel::hide_usage_panel,
+            usage_panel::open_usage_page
         ]);
 
     #[cfg(mobile)]

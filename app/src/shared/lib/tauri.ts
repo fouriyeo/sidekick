@@ -183,6 +183,8 @@ const COMMANDS = {
   tokenPricingRefresh: "token_pricing_refresh",
   tokenPricingSetAuto: "token_pricing_set_auto",
   tokenPricingSetMobileModels: "token_pricing_set_mobile_models",
+  hideUsagePanel: "hide_usage_panel",
+  openUsagePage: "open_usage_page",
 } as const;
 
 const EVENTS = {
@@ -190,6 +192,7 @@ const EVENTS = {
   conn: "conn",
   clipboardChanged: "clipboard-changed",
   dshHookStatus: "dsh-hook-status",
+  navigate: "sidekick-navigate",
 } as const;
 
 type Listener<T> = (payload: T) => void;
@@ -253,6 +256,7 @@ const chatChannel = createEventChannel(EVENTS.chat);
 const connChannel = createEventChannel(EVENTS.conn);
 const clipboardChannel = createEventChannel(EVENTS.clipboardChanged);
 const dshHookChannel = createEventChannel(EVENTS.dshHookStatus);
+const navigateChannel = createEventChannel(EVENTS.navigate);
 
 export async function getAppRole(): Promise<AppRole> {
   const role = await invoke<string>(COMMANDS.appRole);
@@ -394,6 +398,28 @@ export function setTokenPricingAuto(enabled: boolean): Promise<PricingStatus> {
 
 export function setTokenPricingMobileModels(enabled: boolean): Promise<PricingStatus> {
   return invoke<PricingStatus>(COMMANDS.tokenPricingSetMobileModels, { enabled });
+}
+
+/** 菜单栏用量小看板（D108）：Esc / 点外部收起，不退出进程。 */
+export function hideUsagePanel(): Promise<void> {
+  return invoke<void>(COMMANDS.hideUsagePanel);
+}
+
+/** 小看板「打开用量页」：唤起主窗口并切到用量页（Rust 发 `sidekick-navigate`）。 */
+export function openUsagePage(): Promise<void> {
+  return invoke<void>(COMMANDS.openUsagePage);
+}
+
+/**
+ * 桌面主窗口导航事件（目前只有 `"usage"`）。
+ *
+ * 由 Rust 在「看板 → 打开用量页」时 `emit_to("main", …)`；主窗口隐藏时也会收到，
+ * 因为 WebView 仍在内存里跑。StrictMode 下的异步 listen 清理复用 `createEventChannel`。
+ */
+export function subscribeNavigate(handler: (view: string) => void): Unsubscribe {
+  return navigateChannel((payload) => {
+    if (typeof payload === "string") handler(payload);
+  });
 }
 
 export function clearUsageStats(): Promise<UsageStats> {
