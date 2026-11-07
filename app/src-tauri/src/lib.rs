@@ -50,6 +50,8 @@ mod tray;
 mod usage_panel;
 #[cfg(target_os = "macos")]
 mod activation;
+#[cfg(target_os = "macos")]
+mod menu;
 
 #[cfg(desktop)]
 #[tauri::command]
@@ -122,6 +124,11 @@ pub fn run() {
             } else if let Err(err) = usage_panel::init(&handle) {
                 // 预创建失败不阻断启动：第一次左键 `toggle` 会再建一次。
                 eprintln!("[panel] 预创建失败（首次点按再试）: {err}");
+            }
+            // 菜单栏中文化（D113）：在窗口出现前替换 Tauri 默认英文菜单。
+            #[cfg(target_os = "macos")]
+            if let Err(err) = menu::install(&handle) {
+                eprintln!("[menu] 中文菜单安装失败，保留默认菜单: {err}");
             }
             // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
             tray::show_main_window(&handle);

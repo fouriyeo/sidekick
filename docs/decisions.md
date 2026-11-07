@@ -1072,3 +1072,17 @@
 - 代价：窗口开着时 Dock 会出现 Sidekick 图标、Cmd+Tab 也出现（普通 App 手感，接受）；⌘Q 在窗口开着时能退出（关窗后仍只能走菜单栏右键「退出 Sidekick」）。调试用裸二进制时 App 菜单名显示 `desktop`，打包后是 `Sidekick`。
 - 验证（AX + Swift 合成事件）：窗口显示时 `NSRunningApplication.activationPolicy = regular`、系统菜单栏 = `Apple / desktop / File / Edit / View / Window / Help`、Dock 有 desktop；点关闭按钮后 `policy = accessory`、Dock 无 desktop、菜单栏回到前台 App、`lsof -nP -iTCP:47810` 仍在监听；再次二次启动实例 → 回到 regular + 菜单栏接管。
 - 规范：`app/src-tauri/src/activation.rs`、`tray.rs`、`lib.rs`、`docs/engineering/desktop-tray.md`、`AGENTS.md`（D88 行 + §8 坑）。
+
+## D113 · macOS 菜单栏中文化（2026-11-07，替换 Tauri 默认英文菜单）
+
+- 问题：D112 让主窗口显示时接管菜单栏，但接管到的是 Tauri 默认英文菜单（File / Edit / View / Window / Help），中文产品里显得突兀。
+- 决定：新增 `app/src-tauri/src/menu.rs`，setup 里 `app.set_menu(...)` 重建同结构中文菜单，行为不变：
+  - 小跟班：关于小跟班 / 服务 / 隐藏小跟班 / 隐藏其他 / 全部显示 / 退出小跟班（⌘Q）
+  - 文件：关闭窗口（⌘W）
+  - 编辑：撤销（⌘Z）/ 重做（⇧⌘Z）/ 剪切（⌘X）/ 复制（⌘C）/ 粘贴（⌘V）/ 全选（⌘A）——WebView 输入框依赖这组预置项
+  - 显示：切换全屏（⌃⌘F）
+  - 窗口：最小化（⌘M）/ 缩放 / 前置全部窗口
+- 实现要点：全部用 `PredefinedMenuItem`（快捷键由系统按键盘布局给出，不手写 key equivalent）；`AboutMetadata.name = 小跟班`；只在 macOS 编译，安装失败只打日志、保留默认菜单，不阻断启动。
+- 已知限制：第一项「应用菜单」的标题由系统按应用名显示（调试裸二进制 `desktop`、打包后 `Sidekick`），自定义菜单改不了；要在菜单栏显示「小跟班」得改 bundle 名（productName），会连带改 .app / Dock / Cmd+Tab 的名称，本次未做。
+- 验证：启动日志出现 `[menu] 已安装中文菜单`；AX 读 process 菜单栏 = `Apple / desktop / 文件 / 编辑 / 显示 / 窗口`；`cargo build` 干净（仅原有 `system_message` dead_code 警告）。
+- 规范：`app/src-tauri/src/menu.rs`、`lib.rs`（setup 安装）、`docs/engineering/desktop-tray.md`、`AGENTS.md`。
