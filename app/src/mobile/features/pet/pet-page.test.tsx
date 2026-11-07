@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { useSessionStore } from "@/mobile/features/sessions/session-store";
+import { clearBackHandlers, handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import type { SessionSummary } from "@/protocol/messages";
 import { createIdleAiStatus } from "./ai-status";
@@ -23,6 +24,14 @@ vi.mock("@/mobile/features/mic/mic-button", () => ({
   ),
 }));
 
+// jsdom 没有 PointerEvent，用 MouseEvent 顶替（照 session-feed.test.tsx 的写法）。
+beforeAll(() => {
+  Object.defineProperty(window, "PointerEvent", {
+    configurable: true,
+    value: window.MouseEvent,
+  });
+});
+
 function session(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: "s-1",
@@ -41,6 +50,9 @@ function seedSessions(list: SessionSummary[]) {
     raw: list,
     cleared: {},
     hydrated: true,
+    hasBaseline: true,
+    pendingExpand: false,
+    freshIds: [],
     notice: null,
     noticeId: 0,
     pendingFocusId: null,
@@ -50,6 +62,7 @@ function seedSessions(list: SessionSummary[]) {
 
 beforeEach(() => {
   localStorage.clear();
+  clearBackHandlers();
   useUiStore.setState({ view: "pet", scanOpen: false, offlineReturnView: "pet" });
   useConnectionStore.setState({ status: "connected", addr: "192.168.1.5:47810" });
   useSessionStore.getState().clearAll();
@@ -73,6 +86,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  useSessionStore.getState().clearAll();
+  clearBackHandlers();
 });
 
 describe("PetPage v16 顶栏", () => {
@@ -201,5 +216,133 @@ describe("PetPage v16 消息卡", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("PetPage v18 会话卡浮层（D107）", () => {
+  /** 鲸鱼居中容器的顶部预留（px）；展开/收起都不应变。 */
+  function reserveTopOf(container: HTMLElement): string {
+    const stage = container.querySelector("[data-phase]");
+    const inner = stage?.firstElementChild;
+    if (!(inner instanceof HTMLElement)) throw new Error("宠物舞台未渲染");
+    return inner.style.top;
+  }
+
+  function twoSessions() {
+    const now = Date.now();
+    return [
+      session({ id: "s-1", title: "重构登录模块", lastEventAt: now }),
+      session({
+        id: "s-2",
+        title: "修一下设置页",
+        state: "idle",
+        completedAt: now - 5 * 60 * 1000,
+        lastEventAt: now - 5 * 60 * 1000,
+      }),
+    ];
+  }
+
+  it("展开/收起会话卡时宠物预留高度不变（鲸鱼不位移）", () => {
+    seedSessions(twoSessions());
+    const { container } = render(<PetPage />);
+
+    const before = reserveTopOf(container);
+    expect(before).toBe("130px");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开会话列表" }));
+    expect(reserveTopOf(container)).toBe(before);
+    expect(screen.getByText("收起")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "收起会话列表" }));
+    expect(reserveTopOf(container)).toBe(before);
+  });
+
+  it("点卡片外空白收起列表", () => {
+    seedSessions(twoSessions());
+    const { container } = render(<PetPage />);
+    fireEvent.click(screen.getByRole("button", { name: "展开会话列表" }));
+
+    const catcher = container.querySelector("[data-feed-catcher]");
+    if (!(catcher instanceof HTMLElement)) throw new Error("点空白层未渲染");
+    fireEvent.pointerDown(catcher);
+
+    expect(screen.getByText("还有 1 条")).toBeInTheDocument();
+    expect(container.querySelector("[data-feed-catcher]")).toBeNull();
+  });
+
+  it("返回键先收起列表，收起后不再消费返回", () => {
+    seedSessions(twoSessions());
+    render(<PetPage />);
+    fireEvent.click(screen.getByRole("button", { name: "展开会话列表" }));
+    expect(screen.getByText("收起")).toBeInTheDocument();
+
+    act(() => {
+      expect(handleBack()).toBe(true);
+    });
+    expect(screen.getByText("还有 1 条")).toBeInTheDocument();
+    expect(handleBack()).toBe(false);
+  });
+
+  it("新完成时自动展开，并给刚完成的行铺薄荷脉冲", () => {
+    const now = Date.now();
+    seedSessions([
+      session({ id: "s-1", title: "正在做的事", state: "working", lastEventAt: now }),
+      session({
+        id: "s-2",
+        title: "旧会话",
+        state: "idle",
+        completedAt: now - 60 * 60 * 1000,
+        lastEventAt: now - 60 * 60 * 1000,
+      }),
+    ]);
+    render(<PetPage />);
+    expect(screen.queryByText("收起")).toBeNull();
+
+    act(() => {
+      useSessionStore.getState().apply([
+        session({
+          id: "s-1",
+          title: "正在做的事",
+          state: "idle",
+          completedAt: Date.now(),
+          lastEventAt: Date.now(),
+        }),
+        session({
+          id: "s-2",
+          title: "旧会话",
+          state: "idle",
+          completedAt: now - 60 * 60 * 1000,
+          lastEventAt: now - 60 * 60 * 1000,
+        }),
+      ]);
+    });
+
+    expect(screen.getByText("收起")).toBeInTheDocument();
+    expect(document.querySelector(".ms-row-fresh")).not.toBeNull();
+  });
+
+  it("点已完成行请求把电脑上的 DSH 切到前台（focus.request）", () => {
+    const requestFocus = vi.fn();
+    useSessionStore.setState({ requestFocus });
+    seedSessions([
+      session({
+        id: "s-done",
+        title: "写完了",
+        state: "idle",
+        completedAt: Date.now() - 60_000,
+        lastEventAt: Date.now() - 60_000,
+      }),
+    ]);
+
+    render(<PetPage />);
+    fireEvent.click(screen.getByRole("button", { name: "在电脑上打开 写完了" }));
+    expect(requestFocus).toHaveBeenCalledWith("s-done");
+  });
+
+  it("focus 结果提示显示在麦克风上方", () => {
+    seedSessions([]);
+    useSessionStore.setState({ noticeId: 1, notice: "已在电脑上打开 DeepSeek Harness。" });
+    render(<PetPage />);
+    expect(screen.getByText("已在电脑上打开 DeepSeek Harness。")).toBeInTheDocument();
   });
 });

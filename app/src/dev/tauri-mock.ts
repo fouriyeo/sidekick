@@ -316,6 +316,58 @@ export function installTauriMock(): void {
     }
   }
 
+  /** 浏览器验收：?sessions=N（1–8，默认 1）补多行，方便看折叠/展开/浮层。 */
+  function mockSessionCount(): number {
+    const value = Number(params.get("sessions") ?? "1");
+    if (!Number.isFinite(value)) return 1;
+    return Math.max(1, Math.min(8, Math.trunc(value)));
+  }
+
+  /** 多行 mock：第 1 行跟随 ?ai=，其余固定是已完成（方便看完成态与行高）。 */
+  function mockSessionList(state: MockHookState, count: number) {
+    const now = Date.now();
+    return Array.from({ length: count }, (_, index) => {
+      if (index === 0) {
+        return {
+          id: "mock-session-1",
+          title: "预览会话",
+          source: "dsh",
+          state: state === "asking" ? "asking" : state === "working" ? "working" : "idle",
+          askKind: state === "asking" ? "question" : null,
+          tool: state === "working" ? "bash" : null,
+          lastEventAt: now,
+          completedAt: state === "completed" ? now : null,
+        };
+      }
+      const at = now - index * 7 * 60_000;
+      return {
+        id: `mock-session-${index + 1}`,
+        title: `历史会话 ${index + 1}`,
+        source: "dsh",
+        state: "idle",
+        askKind: null,
+        tool: null,
+        lastEventAt: at,
+        completedAt: at,
+      };
+    });
+  }
+
+  function emitMockStatus(state: MockHookState, sessionList: ReturnType<typeof mockSessionList>) {
+    const message = {
+      type: "status",
+      v: 1,
+      source: "test",
+      state,
+      sessions: sessionList.length,
+      resume: state === "completed" ? mockAiResume : null,
+      remainingMs: state === "completed" ? 3000 : null,
+      sessionList,
+      ts: Date.now(),
+    };
+    emit("chat", JSON.stringify(message));
+  }
+
   function emitMockAiStatus() {
     if (mockAiTimer !== null) {
       window.clearTimeout(mockAiTimer);
@@ -323,55 +375,25 @@ export function installTauriMock(): void {
     }
     const requested: MockHookState =
       aiParam === "working" || aiParam === "asking" || aiParam === "completed" ? aiParam : "idle";
-    const completed = requested === "completed";
-    const now = Date.now();
-    const sessionList =
-      requested === "idle"
-        ? []
-        : [
-            {
-              id: "mock-session-1",
-              title: "预览会话",
-              source: "dsh",
-              state:
-                requested === "asking" ? "asking" : requested === "working" ? "working" : "idle",
-              askKind: requested === "asking" ? "question" : null,
-              tool: requested === "working" ? "bash" : null,
-              lastEventAt: now,
-              completedAt: completed ? now : null,
-            },
-          ];
-    const message = {
-      type: "status",
-      v: 1,
-      source: "test",
-      state: requested,
-      sessions: requested === "idle" ? 0 : 1,
-      resume: completed ? mockAiResume : null,
-      remainingMs: completed ? 3000 : null,
-      sessionList,
-      ts: now,
-    };
-    emit("chat", JSON.stringify(message));
-    if (completed) {
+    const count = mockSessionCount();
+
+    if (requested === "completed") {
+      // 先一份 working、600ms 后 completed：浏览器里能直接看到「完成即自动展开」。
+      emitMockStatus("working", mockSessionList("working", count));
       mockAiTimer = window.setTimeout(() => {
         mockAiTimer = null;
-        emit(
-          "chat",
-          JSON.stringify({
-            type: "status",
-            v: 1,
-            source: "test",
-            state: mockAiResume,
-            sessions: 0,
-            resume: null,
-            remainingMs: null,
-            sessionList: sessionList.map((session) => ({ ...session, state: "idle" })),
-            ts: Date.now(),
-          }),
-        );
-      }, 3000);
+        const doneList = mockSessionList("completed", count);
+        emitMockStatus("completed", doneList);
+        // 3 秒后 AI 聚合态回落（完成行保留，方便继续点它）。
+        mockAiTimer = window.setTimeout(() => {
+          mockAiTimer = null;
+          emitMockStatus(mockAiResume, doneList);
+        }, 3000);
+      }, 600);
+      return;
     }
+
+    emitMockStatus(requested, requested === "idle" ? [] : mockSessionList(requested, count));
   }
 
   function applyTestHookState(state: MockHookState) {
@@ -409,8 +431,10 @@ export function installTauriMock(): void {
 
   function mockUsageStats(range: string) {
     const dayCount = mockUsageRanges[range] ?? 7;
-    // 连同上一区间一起生成，previous 才有真实可比基数。
-    const windowDays = dayCount * 2;
+    // 连同上一区间一起生成，previous 才有真实可比基数；历史最少保留 180 天，
+    // 与协议一致（`days` 是「最近最多 180 个真实日期」，不按区间裁剪）——
+    // 菜单栏小看板的近 7 天迷你柱在「今天」区间下也才有 7 根柱子。
+    const windowDays = Math.max(180, dayCount * 2);
     const rnd = mockUsageRng(20_261_106 + dayCount);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -469,7 +493,7 @@ export function installTauriMock(): void {
     };
 
     const current = entries.slice(-dayCount);
-    const previous = entries.slice(0, dayCount);
+    const previous = entries.slice(-2 * dayCount, -dayCount);
     const summary = summarize(current);
     const totalTokens = Math.max(1, summary.tokens);
     const totalCost = Math.max(1, summary.costCnyMicros);
@@ -564,8 +588,9 @@ export function installTauriMock(): void {
       generatedAt: Date.now(),
       summary,
       previous: summarize(previous),
-      days: current.map(
-        ({ date, tokens, input, output, cacheRead, cacheWrite, costCnyMicros, calls }) => ({
+      days: entries
+        .slice(-180)
+        .map(({ date, tokens, input, output, cacheRead, cacheWrite, costCnyMicros, calls }) => ({
           date,
           tokens,
           input,
@@ -574,8 +599,7 @@ export function installTauriMock(): void {
           cacheWrite,
           costCnyMicros,
           calls,
-        }),
-      ),
+        })),
       groups: {
         clients,
         sessions,
@@ -709,6 +733,8 @@ export function installTauriMock(): void {
         mockMobileModels = args?.enabled !== false;
         return mockUsageStats("7d").pricing;
       }
+      // 菜单栏用量小看板（D108）：浏览器里没有真实窗口，两个窗口操作用空实现占位。
+      if (command === "hide_usage_panel" || command === "open_usage_page") return null;
       if (command === "send_focus_request") {
         const requestId = typeof args?.requestId === "string" ? args.requestId : "";
         window.setTimeout(() => {

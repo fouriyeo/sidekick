@@ -79,12 +79,14 @@ function renderRow(data = row(), props: Partial<Parameters<typeof SessionRow>[0]
   );
 }
 
-describe("SessionRow v16 结构", () => {
-  it("标题 15/400，副行 13/400 且合并状态与时间", () => {
+describe("SessionRow v18 结构（D107）", () => {
+  it("标题 13/18、副行 11.5/16 且合并状态与时间", () => {
     renderRow(row({ state: "working", tool: null }));
 
     const title = screen.getByText("修复登录");
-    expect(title.className).toContain("text-[15px]");
+    expect(title.className).toContain("text-[13px]");
+    expect(title.className).toContain("leading-[18px]");
+    expect(title.className).toContain("font-normal");
     expect(screen.getByText("正在思考 · 2 分钟前")).toBeInTheDocument();
   });
 
@@ -103,7 +105,8 @@ describe("SessionRow v16 结构", () => {
       row({ title: "写完了", state: "idle", completedAt: Date.now() - 8 * 60 * 60 * 1000 }),
     );
 
-    expect(screen.getByText("已完成 · 8 小时前")).toBeInTheDocument();
+    expect(screen.getByText("已完成")).toHaveClass("text-signal");
+    expect(screen.getByText(/8 小时前/)).toBeInTheDocument();
     expect(container.querySelector(".animate-spin")).toBeNull();
   });
 

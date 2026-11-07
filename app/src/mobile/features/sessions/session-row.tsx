@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Check, Dot, Loader2 } from "lucide-react";
+import { Check, ChevronRight, Dot, Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import {
   displayStateText,
@@ -13,8 +13,8 @@ import { useSwipeRow } from "./use-swipe-row";
 /**
  * 宠物页会话行（v16）。
  *
- * 左侧 20 状态图标：working = 薄荷 spinner / completed = 灰 check /
- * asking = 8px 琥珀点 + 轻外圈 / idle = 灰点；标题 15/400、副行 13/400。
+ * 左侧 20 状态图标：working = 薄荷 spinner / completed = 薄荷 check + 行尾 › /
+ * asking = 8px 琥珀点 + 轻外圈 / idle = 灰点；标题 13/18、副行 11.5/16，行高 50（D107）。
  *
  * 清除：左滑行内容露出右侧 72×52「清除」按钮，点按钮才清除（D95）。
  * 行内容整体左移，分隔线/白卡底随内容一起走；按钮常驻 DOM、可聚焦，
@@ -33,7 +33,8 @@ function StatusIcon({ display }: { display: SessionRowData["display"] }) {
         />
       );
     case "completed":
-      return <Check aria-hidden="true" className={cn("size-5", TERTIARY_TEXT)} />;
+      // 薄荷对勾 = 可以点它把电脑上的 DSH 切到前台（D107）。
+      return <Check aria-hidden="true" className="size-5 text-signal" />;
     case "asking":
       return (
         <span aria-hidden="true" className="relative flex size-4 items-center justify-center">
@@ -58,6 +59,8 @@ type SessionRowProps = {
   /** 缺省表示只读行（不渲染主按钮），清除等动作仍可用。 */
   onOpen?: () => void;
   onClear?: () => void;
+  /** 刚完成：行内容铺 1.4s 薄荷脉冲，帮用户指出是哪一条（D107）。 */
+  fresh?: boolean;
   className?: string;
 };
 
@@ -76,11 +79,14 @@ export function SessionRow({
   onReveal,
   onOpen,
   onClear,
+  fresh = false,
   className,
 }: SessionRowProps) {
   const asking = row.display === "asking";
+  const completed = row.display === "completed";
   const title = sessionTitle(row);
-  const actionLabel = asking ? `在电脑上打开 ${title}` : `会话 ${title}`;
+  // 可点行（asking / 已完成）统一说「在电脑上打开」；只读行不渲染按钮。
+  const actionLabel = `在电脑上打开 ${title}`;
   const statusText =
     row.display === "working" ? workingActionText(row.tool) : displayStateText(row);
 
@@ -106,15 +112,23 @@ export function SessionRow({
 
   const text = (
     <>
-      <span className="block truncate text-[15px] leading-5 text-foreground">{title}</span>
-      <span
-        className={cn(
-          "mt-px block truncate text-[13px] leading-[17px] font-normal",
-          asking ? "text-decide" : "text-muted-foreground",
-        )}
-      >
-        {statusText} · {rowTime(row)}
+      <span className="block truncate text-[13px] leading-[18px] font-normal text-foreground">
+        {title}
       </span>
+      {completed ? (
+        <span className="mt-[3px] block truncate text-[11.5px] leading-4 font-normal text-muted-foreground">
+          <span className="text-signal">{statusText}</span> · {rowTime(row)}
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "mt-[3px] block truncate text-[11.5px] leading-4 font-normal",
+            asking ? "text-decide" : "text-muted-foreground",
+          )}
+        >
+          {statusText} · {rowTime(row)}
+        </span>
+      )}
     </>
   );
 
@@ -122,7 +136,7 @@ export function SessionRow({
     <li
       ref={rootRef}
       data-session-tool={row.tool ?? "none"}
-      className={cn("ms-row relative h-[52px] overflow-hidden", className)}
+      className={cn("ms-row relative h-[50px] overflow-hidden", className)}
     >
       <div
         ref={contentRef}
@@ -130,6 +144,7 @@ export function SessionRow({
         className={cn(
           "ms-swipe-content relative z-10 flex h-full items-center gap-2.5 px-3.5",
           row.display === "working" ? "bg-[var(--wash)]" : "bg-card",
+          fresh && "ms-row-fresh",
         )}
         {...handlers}
         onClickCapture={(event) => {
@@ -169,19 +184,21 @@ export function SessionRow({
           <div className="flex min-w-0 flex-1 flex-col justify-center">{text}</div>
         )}
 
-        {pendingFocus && (
+        {pendingFocus ? (
           <Loader2
             aria-hidden="true"
             className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
           />
-        )}
+        ) : onOpen && completed ? (
+          <ChevronRight aria-hidden="true" className={cn("size-3.5 shrink-0", TERTIARY_TEXT)} />
+        ) : null}
       </div>
 
       {/* 露出的清除按钮：在行内容下面，内容左移后可见。 */}
       <button
         type="button"
         aria-label={`清除会话 ${title}`}
-        className="absolute inset-y-0 right-0 z-0 flex w-[72px] items-center justify-center bg-destructive text-[15px] leading-none text-destructive-foreground"
+        className="absolute inset-y-0 right-0 z-0 flex w-[72px] items-center justify-center bg-destructive text-[14px] leading-none text-destructive-foreground"
         onFocus={() => onOpenChange?.(true)}
         onClick={() => {
           onOpenChange?.(false);

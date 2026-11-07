@@ -187,6 +187,26 @@ html[data-theme="dark"] .mobile-clean {
   animation-delay: 96ms;
 }
 
+/* 会话卡浮层（D107）：展开时卡片 max-height 平滑长高；收起直接切回折叠态。
+   注意：展开只加高卡片，宠物舞台高度固定，鲸鱼不位移。 */
+.mobile-clean .ms-feed {
+  transition: max-height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 刚完成的会话行：1.4s 薄荷底色脉冲，指出是哪一条完成（D107） */
+@keyframes ms-row-fresh {
+  from {
+    background-color: var(--pet-wash);
+  }
+  to {
+    background-color: var(--card);
+  }
+}
+
+.mobile-clean .ms-row-fresh {
+  animation: ms-row-fresh 1400ms ease-out both;
+}
+
 /* 会话行左滑：拖动时直接跟手（data-dragging），松手走回弹过渡（D95） */
 .mobile-clean .ms-swipe-content {
   touch-action: pan-y;
@@ -279,6 +299,8 @@ html[data-theme="dark"] .mobile-clean {
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-clean .ms-row,
+  .mobile-clean .ms-row-fresh,
+  .mobile-clean .ms-feed,
   .mobile-clean .ms-swipe-content,
   .mobile-clean .press-spring,
   .mobile-clean .toggle-knob {

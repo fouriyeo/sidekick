@@ -14,18 +14,15 @@ html[data-theme="dark"] .stage {
   --tertiary: #636366;
 }
 
-/* 鲸鱼槽位：固定方形（v16 230，展开 220），由外层 flex 居中；只做姿态位移/缩放。 */
+/* 鲸鱼槽位：固定方形 230（D107 起不再随会话卡展开缩到 220），由外层 flex 居中。 */
 .petSlot {
   position: relative;
-  width: min(var(--pet-size, 230px), 62vw);
+  width: min(230px, 62vw);
   aspect-ratio: 1 / 1;
-  /* 消息卡展开后舞台变矮：按可用高度再收一次，保证鲸鱼不被裁切。 */
+  /* 舞台高度不足时按可用高度再收一次，保证鲸鱼不被裁切。 */
   max-height: calc(100% - 36px);
-  transform: translate3d(var(--pet-x, 0%), calc(var(--pet-y, 0%) + var(--pet-session-shift, 0px)), 0)
-    scale(var(--pet-scale, 1));
-  transition:
-    transform 320ms var(--ease-out-soft),
-    width 240ms var(--ease-out-soft);
+  transform: translate3d(var(--pet-x, 0%), var(--pet-y, 0%), 0) scale(var(--pet-scale, 1));
+  transition: transform 320ms var(--ease-out-soft);
   will-change: transform;
 }
 

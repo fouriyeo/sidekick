@@ -36,14 +36,14 @@ function session(overrides: Partial<SessionSummary> = {}): SessionSummary {
 }
 
 function resetStore() {
+  // clearAll 会顺带清掉 notice / focus / fresh 的模块级计时器，避免跨用例干扰。
+  useSessionStore.getState().clearAll();
   useSessionStore.setState({
-    raw: [],
-    cleared: {},
     hydrated: true,
-    notice: null,
+    hasBaseline: false,
+    pendingExpand: false,
+    freshIds: [],
     noticeId: 0,
-    pendingFocusId: null,
-    pendingRequestId: null,
   });
   storage.load.mockReset();
   storage.load.mockResolvedValue({});
@@ -176,5 +176,55 @@ describe("session-store", () => {
     store.clearAll();
     expect(useSessionStore.getState().raw).toEqual([]);
     expect(useSessionStore.getState().pendingFocusId).toBeNull();
+  });
+});
+
+describe("session-store 新完成（D107）", () => {
+  it("第一份快照只做基线：已有的 completed 不触发自动展开", () => {
+    useSessionStore
+      .getState()
+      .apply([session({ id: "s-done", state: "idle", completedAt: 5, lastEventAt: 5 })]);
+
+    expect(useSessionStore.getState().pendingExpand).toBe(false);
+    expect(useSessionStore.getState().freshIds).toEqual([]);
+  });
+
+  it("working → completed 时置 pendingExpand + freshIds，消费后只清 pendingExpand", () => {
+    const store = useSessionStore.getState();
+    store.apply([session({ id: "s-1", state: "working", lastEventAt: 10 })]);
+    store.apply([session({ id: "s-1", state: "idle", completedAt: 20, lastEventAt: 20 })]);
+
+    expect(useSessionStore.getState().pendingExpand).toBe(true);
+    expect(useSessionStore.getState().freshIds).toEqual(["s-1"]);
+
+    store.consumePendingExpand();
+    expect(useSessionStore.getState().pendingExpand).toBe(false);
+    expect(useSessionStore.getState().freshIds).toEqual(["s-1"]);
+  });
+
+  it("同一份 completed 快照重复到达不会再次触发", () => {
+    const store = useSessionStore.getState();
+    store.apply([session({ id: "s-1", state: "working", lastEventAt: 10 })]);
+    const done = [session({ id: "s-1", state: "idle", completedAt: 20, lastEventAt: 20 })];
+    store.apply(done);
+    store.consumePendingExpand();
+
+    store.apply(done);
+    expect(useSessionStore.getState().pendingExpand).toBe(false);
+  });
+
+  it("freshIds 4 秒后自动清空", () => {
+    vi.useFakeTimers();
+    try {
+      const store = useSessionStore.getState();
+      store.apply([session({ id: "s-1", state: "working", lastEventAt: 10 })]);
+      store.apply([session({ id: "s-1", state: "idle", completedAt: 20, lastEventAt: 20 })]);
+      expect(useSessionStore.getState().freshIds).toEqual(["s-1"]);
+
+      vi.advanceTimersByTime(4000);
+      expect(useSessionStore.getState().freshIds).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
