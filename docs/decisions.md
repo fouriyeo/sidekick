@@ -978,3 +978,11 @@
 - 原因：默认「今天」回答「现在花了多少」，默认「模型」回答「钱花在哪个模型」；按金额排行与用户看花费的视角一致；缩字 + 行高补偿让账本从「挤」变成可扫读。
 - 代价：凌晨的「今天」可能只有很少金额（单日柱已做刻度/昨日文字化处理，不再压扁）；「其他」的语义从 Token 尾部变为金额尾部；桌面账本 8 行高度 +8px，1180 首屏仍完整（QA 复核）。
 - 规范：`app/src/desktop/features/usage/usage-store.ts`、`app/src/desktop/styles/usage.css`、`app/src/mobile/features/usage/{usage-store.ts,usage-page.tsx}`、`app/src-tauri/src/token_usage.rs`、`app/src/desktop/pages/usage-page.test.tsx`、`app/src/mobile/features/usage/{usage-page.test.tsx,usage-store.test.ts}`、`docs/prd/usage/{PRD,SPEC,ACCEPTANCE}.md`、`docs/engineering/token-usage-pricing.md`、`docs/design/usage-dashboard-v2/README.md`、`AGENTS.md`。
+
+## D103 · 用量会话行标题从 DSH 会话缓存回填（2026-11-07，补充 D102 的会话排行）
+
+- 背景：用户指出电脑端用量页「会话」分组里有些行显示的是会话 id（如「会话 35ebc56e」），问能否用会话名称。检查账本：最近 8 天 108 个会话里 21 个没有 `title`，今天 5 个会话全部没有；但 DSH 会话缓存里有对应标题。
+- 决策：会话标签优先账本 `sessions[].title`；缺失时只读 `<DSH_HOME>/storages/session_projcache/sessions/<id>.json` 的 `record.rows.title.val` 回填（≤80 字符、单行、去控制字符）；只回填进入 Top 8 的会话行；缓存也没有才显示「会话 + 8 位短 id」。
+- 隐私边界：只读 `title` 字段，不读 `titleInput`、消息、工具调用；不写 DSH、不上传；日志仍不记录标题。会话 id 只允许字母数字/`-`/`_`，防目录穿越。
+- 代价：DSH 缓存路径/结构变化时回填失效，自动退回短 id；每次统计最多读 8 个小 JSON（≤2MB 上限）。
+- 规范：`app/src-tauri/src/token_usage.rs`（`session_cache_dir` / `cached_session_title` / `build_groups` 回填）、Rust 测试 `session_rows_backfill_title_from_dsh_cache`、`docs/engineering/token-usage-pricing.md`、`docs/prd/usage/{PRD,SPEC,ACCEPTANCE}.md`、`docs/design/usage-dashboard-v2/README.md`、`AGENTS.md`。
