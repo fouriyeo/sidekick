@@ -7,7 +7,7 @@
 //! - 总 Token = input + output + cacheRead + cacheWrite + reasoning；
 //! - 缓存命中 = cacheRead / (input + cacheRead + cacheWrite)；
 //! - 有 `costCny` 用实际记账（人民币微元）；缺失才用价格表估算并标 `estimated`；
-//! - 会话按 id 跨天合并，标题 ≤80 字符；模型按 `provider:model` 拆分；
+//! - 会话按 id 跨天合并，标题优先账本 `sessions[].title`，缺失时只读 DSH 会话缓存的 `record.rows.title.val` 回填（不读提示词），仍无才用短 id；标题 ≤80 字符；模型按 `provider:model` 拆分；
 //! - 客户端 P0 只有 DSH 一行，其他客户端由前端以「未接入」占位。
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -330,6 +330,38 @@ impl TokenUsageStore {
         })
     }
 
+    /// DSH 的会话缓存目录：`<DSH_HOME>/storages/session_projcache/sessions`。
+    /// 账本里的 `sessions[].title` 有时缺失，这里只补标题，不读提示词/消息。
+    fn session_cache_dir(&self) -> PathBuf {
+        self.path()
+            .parent()
+            .and_then(Path::parent)
+            .map(|storages| storages.join("session_projcache").join("sessions"))
+            .unwrap_or_default()
+    }
+
+    /// 从 DSH 会话缓存只读 `record.rows.title.val`；失败/缺失返回 None。
+    /// 会话 id 只允许字母数字、`-`、`_`，避免拼接出目录穿越路径。
+    fn cached_session_title(&self, session_id: &str) -> Option<String> {
+        if !session_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+        {
+            return None;
+        }
+        let path = self
+            .session_cache_dir()
+            .join(format!("{session_id}.json"));
+        let meta = fs::metadata(&path).ok()?;
+        if !meta.is_file() || meta.len() > 2 * 1024 * 1024 {
+            return None;
+        }
+        let bytes = fs::read(&path).ok()?;
+        let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+        let title = value.pointer("/record/rows/title/val")?.as_str()?;
+        sanitize_title(title)
+    }
+
     /// 读取并聚合指定区间；文件缺失/损坏返回空数据 + 明确原因，不编造。
     pub fn stats(&self, range: &str) -> TokenUsageStats {
         self.stats_at(range, Local::now().date_naive())
@@ -589,6 +621,20 @@ impl TokenUsageStore {
                 .cmp(&a.cost_cny_micros)
                 .then_with(|| b.tokens.cmp(&a.tokens))
         });
+        // 账本没有会话标题时，从 DSH 会话缓存回填（只补展示名，不读消息）；
+        // 只处理会计入 Top 8 的行，避免每次统计读上百个缓存文件。
+        let missing_titles: HashSet<&str> = sessions
+            .iter()
+            .filter(|session| session.title.is_none())
+            .map(|session| session.id.as_str())
+            .collect();
+        for row in session_rows.iter_mut().take(TOP_ROWS) {
+            if missing_titles.contains(row.key.as_str()) {
+                if let Some(title) = self.cached_session_title(&row.key) {
+                    row.label = title;
+                }
+            }
+        }
 
         let mut model_rows: Vec<UsageRow> = models
             .iter()
@@ -1268,6 +1314,47 @@ mod tests {
         }
       }
     }"#;
+
+    #[test]
+    fn session_rows_backfill_title_from_dsh_cache() {
+        let seq = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "sidekick-session-title-{}-{seq}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("storages/cost-meter")).unwrap();
+        fs::create_dir_all(dir.join("storages/session_projcache/sessions")).unwrap();
+        let ledger = r#"{
+          "days": {
+            "2026-11-05": {
+              "input": 1000000, "output": 0, "cacheRead": 0,
+              "cacheWrite": 0, "reasoning": 0, "calls": 1,
+              "costCny": 1.0,
+              "sessions": [
+                { "id": "session-title-test", "at": 1793800000000,
+                  "input": 1000000, "output": 0, "cacheRead": 0,
+                  "cacheWrite": 0, "reasoning": 0, "calls": 1, "costCny": 1.0 }
+              ]
+            }
+          }
+        }"#;
+        fs::write(dir.join("storages/cost-meter/ledger.json"), ledger).unwrap();
+        let cache = r#"{"record":{"rows":{"title":{"ver":1,"seq":1,"val":"缓存里的会话名"}}}}"#;
+        fs::write(
+            dir.join("storages/session_projcache/sessions/session-title-test.json"),
+            cache,
+        )
+        .unwrap();
+        let pricing: Arc<dyn PriceLookup> = Arc::new(FakePricing { quote: None });
+        let store = TokenUsageStore::with_ledger_path(
+            pricing,
+            dir.join("storages/cost-meter/ledger.json"),
+        );
+        let stats = store.stats_at("today", today());
+        assert_eq!(stats.groups.sessions.len(), 1);
+        assert_eq!(stats.groups.sessions[0].label, "缓存里的会话名");
+    }
 
     #[test]
     fn groups_rank_by_cost_not_tokens() {

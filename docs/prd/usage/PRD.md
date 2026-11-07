@@ -126,7 +126,7 @@ Sidekick 把本机 DSH 已经记账的 LLM Token 用量搬进应用内：桌面�
 **业务规则**
 
 1. **客户端**：本期只接入 DSH，显示真实数据（100% 占比）；未接入的客户端不显示占位行，也不带任何数字（V1 收口去掉「未接入」占位）。
-2. **会话**：账本 `days[].sessions[]` 按 `id` 跨天合并；标题优先用账本 `title`（单行 ≤80 字符），无标题显示「会话 + 短 id」，不猜内容。
+2. **会话**：账本 `days[].sessions[]` 按 `id` 跨天合并；标题优先用账本 `title`（单行 ≤80 字符）；账本无标题时只读 DSH 会话缓存 `storages/session_projcache/sessions/<id>.json` 的 `record.rows.title.val` 回填（只读标题、不读提示词/消息）；仍无才显示「会话 + 短 id」，不猜内容。
 3. **模型**：来自 `days[].byProviderModel` 的 `provider: model` 键，按**金额降序**（同额再按 Token）；每行显示模型 id、接入方（provider 中文名）、缓存命中率、当前价格来源（override / DeepSeek 官方 / 远程目录 / seed / 无价）。
 4. 每组最多 8 行明细 + 1 行「其他 N 个」汇总；「其他」行的 Token/金额/调用数为其余行之和，会话组另计剩余会话数。
 5. 分组金额以账本/估算聚合为准；页面不重新定价账本已有金额。

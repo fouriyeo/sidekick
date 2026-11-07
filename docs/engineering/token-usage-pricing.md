@@ -102,6 +102,7 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 - 读取失败但内存有上一次解析结果：返回缓存数据，`ledger.available=true`、`ledger.reason=<失败码>`，页面提示「账本这次没读成功，显示的是上次数据」。
 - 不存在/损坏时**不创建、不修复、不重写**账本。
 - 解析规则：`days` 中日期键不是 `YYYY-MM-DD` 的跳过；单日/单会话/单模型字段缺失按 0；`sessions[].id` 空白的会话丢弃；会话标题去控制字符、压成单行、截 80 码点，空标题视为无标题。
+- 会话标题回填：账本 `sessions[].title` 为空时，只读 `<DSH_HOME>/storages/session_projcache/sessions/<id>.json` 的 `record/rows/title/val`（≤2MB、id 只允许字母数字/`-`/`_`，不读 `titleInput`/消息），仍无才用「会话 + 8 位短 id」；只回填进入 Top 8 的会话行，避免每次统计读上百个缓存文件。
 
 ### 3.4 缓存
 
