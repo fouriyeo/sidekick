@@ -48,6 +48,8 @@ mod transcript;
 mod tray;
 #[cfg(desktop)]
 mod usage_panel;
+#[cfg(target_os = "macos")]
+mod activation;
 
 #[cfg(desktop)]
 #[tauri::command]
@@ -134,6 +136,9 @@ pub fn run() {
                 {
                     api.prevent_close();
                     let _ = window.hide();
+                    // 交还菜单栏（D112）：窗口没了就回到「只剩菜单栏图标」的形态。
+                    #[cfg(target_os = "macos")]
+                    activation::window_hidden(window.app_handle());
                 }
                 // 用量小看板（D108）：Cmd+W / Esc 一类关闭请求只收起，窗口留着下次秒开。
                 tauri::WindowEvent::CloseRequested { api, .. }

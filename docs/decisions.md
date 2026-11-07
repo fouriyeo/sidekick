@@ -1061,3 +1061,14 @@
 - 代价：窗口高 40px（约 +10%）；气泡在首/末柱会略微贴边（卡片 overflow 裁切，实测不挡信息）。
 - 验证：`usage-panel.test.tsx` 8 例（新增悬停气泡「11-06 · ¥29.84」+ 移出消失）；QA 60 张截图（新增 2 张悬停，CDP 真实鼠标移动，能看到柱子加亮与气泡），卡片实测 320×432、`scrollHeight <= clientHeight` 无裁切、无溢出/console error；`pnpm typecheck / lint / test / build`、`cargo test`（184）、`check-docs`、`check-boundaries` 全绿；桌面端已重启，`[panel] 已创建隐藏窗口 348×460`，真实点击验证「显示 → 348×460 窗口 → 再点收起」。
 - 规范：`app/src-tauri/src/usage_panel.rs`（CARD_H）、`app/src/desktop/panel/usage-panel.tsx`、`app/src/desktop/styles/panel.css`、`app/src/desktop/panel/usage-panel.test.tsx`、`scripts/qa-desktop-ios.mjs`、`docs/prd/usage/{SPEC,PRD,INDEX,ACCEPTANCE}.md`、`docs/engineering/{desktop-usage-panel,desktop-tray,INDEX}.md`、`docs/status.md`、`AGENTS.md`。
+
+## D112 · 菜单栏归属随窗口状态切换：显示窗口切 Regular、关窗回 Accessory（2026-11-07，修 D88 副作用）
+
+- 问题：D88 用 `ActivationPolicy::Accessory` 让 Sidekick 藏在菜单栏，代价是 macOS 不允许 Accessory 应用有菜单栏——主窗口开着时左上角还是上一个普通 App（DeepSeek Harness / Qoder）的菜单，⌘Q、编辑菜单、窗口菜单都不属于 Sidekick，观感像「这不是当前软件」。
+- 决定：按窗口状态动态切激活策略，不做常驻 Dock、也不改成永远 Regular：
+  - 主窗口显示（`tray::show_main_window`：托盘右键「显示主窗口」/ 看板「打开用量页」/ 单实例二次启动 / 启动时）→ `ActivationPolicy::Regular`，Dock 图标、菜单栏（Tauri 默认菜单：关于/文件/编辑/显示/窗口/帮助）、Cmd+Tab 一起回来，⌘Q 也可用；
+  - 关窗隐藏（`CloseRequested` → `prevent_close` + `hide`）→ 切回 `Accessory`，Dock 图标消失、菜单栏交还前台 App，保留 D88「关窗不退出、只剩菜单栏图标」。
+- 新增 `app/src-tauri/src/activation.rs`（`window_shown` / `window_hidden`，失败只打日志不阻断），调用点只有 `tray.rs` 与 `lib.rs` 两处；菜单用 Tauri 的 macOS 默认菜单，不另建（中文菜单后续可再定制）。
+- 代价：窗口开着时 Dock 会出现 Sidekick 图标、Cmd+Tab 也出现（普通 App 手感，接受）；⌘Q 在窗口开着时能退出（关窗后仍只能走菜单栏右键「退出 Sidekick」）。调试用裸二进制时 App 菜单名显示 `desktop`，打包后是 `Sidekick`。
+- 验证（AX + Swift 合成事件）：窗口显示时 `NSRunningApplication.activationPolicy = regular`、系统菜单栏 = `Apple / desktop / File / Edit / View / Window / Help`、Dock 有 desktop；点关闭按钮后 `policy = accessory`、Dock 无 desktop、菜单栏回到前台 App、`lsof -nP -iTCP:47810` 仍在监听；再次二次启动实例 → 回到 regular + 菜单栏接管。
+- 规范：`app/src-tauri/src/activation.rs`、`tray.rs`、`lib.rs`、`docs/engineering/desktop-tray.md`、`AGENTS.md`（D88 行 + §8 坑）。

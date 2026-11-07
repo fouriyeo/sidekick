@@ -27,9 +27,10 @@ related:
 | 右键点菜单栏图标 | 弹出菜单：`显示主窗口` / 分隔线 / `退出 Sidekick`；主窗口也从看板底部「打开用量页」进入 |
 | 再次启动 App（Finder/Spotlight/命令行） | 单实例插件把已有主窗口叫回前台，新进程退出（D60 不变） |
 | 菜单「退出 Sidekick」 | `app.exit(0)`，进程结束、托盘图标消失 |
-| Dock / Cmd+Tab | 不出现（`ActivationPolicy::Accessory`），Dock 图标常驻隐藏 |
+| Dock / Cmd+Tab | **随窗口状态切换（D112）**：主窗口显示时 `Regular`（Dock 图标 + 菜单栏 + Cmd+Tab，⌘Q 可用）；关窗隐藏后 `Accessory`（Dock / Cmd+Tab 不出现、无 App 菜单） |
 
-**唯一退出入口是菜单栏右键菜单**：Accessory 应用没有 App 菜单，关窗后 ⌘Q 也收不到；
+**关窗后唯一退出入口是菜单栏右键菜单**：主窗口开着时是普通 App（`Regular`），App 菜单「退出」/⌘Q 能退（D112）；
+关窗隐藏后回到 `Accessory`，没有 App 菜单、⌘Q 也收不到；
 文档、排障提示、给用户的说明里都不要再写「关掉窗口就退出」。
 
 ## 2. 实现位置
@@ -38,6 +39,7 @@ related:
 | --- | --- |
 | `app/src-tauri/src/tray.rs` | 托盘图标/菜单/点击事件；`TRAY_READY` 全局开关；`show_main_window()`；左键转 `usage_panel::toggle` |
 | `app/src-tauri/src/usage_panel.rs` | 用量小看板窗口：预创建/定位/显示收起、`hide_usage_panel` / `open_usage_page` 命令（D108） |
+| `app/src-tauri/src/activation.rs` | 激活策略：主窗口显示切 `Regular`、隐藏切 `Accessory`（D112，`window_shown` / `window_hidden`） |
 | `app/src-tauri/src/lib.rs` | setup 里设 Accessory、建托盘、预创建看板、首次把窗口叫到前台；`on_window_event` 拦 `CloseRequested`（main 与 `usage-panel`）与 `Focused(false)`（面板收起）；单实例回调复用 `show_main_window` |
 | `app/src-tauri/Cargo.toml` | **桌面目标**才开 `tauri` 的 `tray-icon` + `image-png` feature（Android 不带 tray 依赖） |
 | `app/src-tauri/icons/tray.png` | 36×36 单色模板图（随身卡剪影：卡身实心 + 挂孔与灯镂空），18pt @2x |
@@ -55,7 +57,8 @@ related:
 
 ## 4. 已知代价 / 风险
 
-- **没有 Dock 图标与 App 菜单**：Cmd+Q / Cmd+Tab / 顶部 App 菜单都用不了，这是用户明确选择（D88）。
+- **窗口状态决定 Dock / 菜单栏（D112 调整 D88）**：主窗口显示时切 `Regular`，Dock 图标、Cmd+Tab、顶部 App 菜单（关于/文件/编辑/显示/窗口/帮助）和 ⌘Q 都正常；关窗隐藏后切回 `Accessory`，Dock / Cmd+Tab / App 菜单消失，只剩菜单栏图标。切换瞬间菜单栏归属会有一次变化（约 1 帧），可接受。
+- **菜单栏文案是 Tauri 默认英文菜单**（File / Edit / View / Window / Help，App 菜单名取进程/包名）；要中文菜单得自建 `Menu` 并逐项替换，当前先沿用默认。
 - **隐藏窗口的 WebView 仍在内存里**（约 100–200MB）；Rust 侧服务不受影响，隐藏期间 WebView 定时器可能被系统节流，
   与「连接/AI 状态」无关（那些都在 Rust）。
 - `window.set_focus()` 在 macOS 上会 `makeKeyAndOrderFront` + `activate`；Accessory 应用也能到前台，不需要额外私有 API。

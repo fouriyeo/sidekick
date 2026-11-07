@@ -46,6 +46,9 @@ pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     };
     let _ = window.show();
     let _ = window.unminimize();
+    // 接管菜单栏（D112）：Accessory 应用没有自己的菜单栏，窗口显示时切到 Regular。
+    #[cfg(target_os = "macos")]
+    crate::activation::window_shown(app);
     // set_focus 在 macOS 上会 makeKeyAndOrderFront + activate，Accessory 应用也能到前台。
     let _ = window.set_focus();
 }
