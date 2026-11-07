@@ -153,6 +153,9 @@ async fn run_session(
     let start_deadline = tokio::time::Instant::now() + START_TIMEOUT;
     let mut emitter = PartialEmitter::default();
     let mut assembler = Assembler::default();
+    // 该模型的 usage 可能只在 result-generated 的 payload.usage 里出现，
+    // task-finished 的 payload 可能为空；这里累计最近一次，收尾时兜底。
+    let mut usage_snapshot: Option<CloudUsage> = None;
 
     // 等 task-started：期间的音频全部缓存，收到后再倍速补发。
     loop {
@@ -170,7 +173,7 @@ async fn run_session(
                 }
             }
             message = read.next() => {
-                match handle_server_message(message, &mut assembler, &partial_tx, &session, &mut emitter)? {
+                match handle_server_message(message, &mut assembler, &partial_tx, &session, &mut emitter, &mut usage_snapshot)? {
                     ServerEvent::Started => break,
                     ServerEvent::Finished(transcript) => return Ok(transcript),
                     ServerEvent::Ignored => {}
@@ -241,7 +244,7 @@ async fn run_session(
                 }
             }
             message = read.next() => {
-                match handle_server_message(message, &mut assembler, &partial_tx, &session, &mut emitter)? {
+                match handle_server_message(message, &mut assembler, &partial_tx, &session, &mut emitter, &mut usage_snapshot)? {
                     ServerEvent::Finished(transcript) => return Ok(transcript),
                     ServerEvent::Started | ServerEvent::Ignored => {}
                 }
@@ -262,6 +265,7 @@ fn handle_server_message(
     partial_tx: &broadcast::Sender<String>,
     session: &str,
     emitter: &mut PartialEmitter,
+    usage_snapshot: &mut Option<CloudUsage>,
 ) -> Result<ServerEvent, CloudError> {
     let Some(message) = message else {
         return Err(CloudError::new("cloud_network", "云端连接已关闭"));
@@ -283,6 +287,11 @@ fn handle_server_message(
     match event {
         "task-started" => Ok(ServerEvent::Started),
         "result-generated" => {
+            // usage 是累计值；可能挂在只有 usage、没有句子的 result-generated 上，
+            // 所以必须在任何 early return 之前解析。
+            if let Some(usage) = parse_usage(&value) {
+                *usage_snapshot = Some(usage);
+            }
             let Some(sentence) = value.pointer("/payload/output/sentence").cloned() else {
                 return Ok(ServerEvent::Ignored);
             };
@@ -307,7 +316,10 @@ fn handle_server_message(
             Ok(ServerEvent::Ignored)
         }
         "task-finished" => {
-            let usage = parse_usage(&value);
+            // 正常情况 task-finished 自带 usage；实测 qwen-audio-3.1 流式接口
+            // 会把 usage 提前放在 result-generated 里、task-finished 的 payload 为空，
+            // 因此用累计快照兜底。
+            let usage = parse_usage(&value).or_else(|| usage_snapshot.clone());
             let (text, truncated) = normalize_transcript(&assembler.final_text());
             Ok(ServerEvent::Finished(CloudTranscript {
                 text,
@@ -861,6 +873,162 @@ mod tests {
 
         let audio_bytes = server.await.unwrap();
         assert!(audio_bytes >= 320);
+    }
+
+    #[test]
+    fn falls_back_to_usage_from_result_generated() {
+        let (partial_tx, _partial_rx) = broadcast::channel::<String>(8);
+        let mut assembler = Assembler::default();
+        let mut emitter = PartialEmitter::default();
+        let mut usage: Option<CloudUsage> = None;
+
+        // 只有 usage、没有句子的 result-generated（服务端把 usage 挂在收尾帧上）。
+        let message = json!({
+            "header": {"event": "result-generated", "task_id": "t"},
+            "payload": {"usage": {
+                "input_tokens": 85,
+                "output_tokens": 4,
+                "total_tokens": 89,
+                "duration": 2
+            }}
+        });
+        let event = handle_server_message(
+            Some(Ok(Message::Text(message.to_string().into()))),
+            &mut assembler,
+            &partial_tx,
+            "session",
+            &mut emitter,
+            &mut usage,
+        )
+        .unwrap();
+        assert!(matches!(event, ServerEvent::Ignored));
+        assert_eq!(usage.as_ref().unwrap().total_tokens, 89);
+
+        // 带句子的 result-generated 不会清掉已有 usage。
+        let message = json!({
+            "header": {"event": "result-generated", "task_id": "t"},
+            "payload": {"output": {"sentence": {
+                "sentence_id": 1,
+                "text": "你好",
+                "sentence_end": true
+            }}}
+        });
+        handle_server_message(
+            Some(Ok(Message::Text(message.to_string().into()))),
+            &mut assembler,
+            &partial_tx,
+            "session",
+            &mut emitter,
+            &mut usage,
+        )
+        .unwrap();
+
+        // task-finished 的 payload 为空（实测行为）→ 用快照兜底。
+        let message = json!({
+            "header": {"event": "task-finished", "task_id": "t"},
+            "payload": {"output": {}}
+        });
+        let event = handle_server_message(
+            Some(Ok(Message::Text(message.to_string().into()))),
+            &mut assembler,
+            &partial_tx,
+            "session",
+            &mut emitter,
+            &mut usage,
+        )
+        .unwrap();
+        match event {
+            ServerEvent::Finished(transcript) => {
+                assert_eq!(transcript.text, "你好");
+                let usage = transcript.usage.expect("应回退到 result-generated 的 usage");
+                assert_eq!(usage.total_tokens, 89);
+                assert_eq!(usage.audio_duration_ms, 2000);
+            }
+            _ => panic!("task-finished 应返回 Finished"),
+        }
+    }
+
+    #[tokio::test]
+    async fn records_usage_reported_only_in_result_generated() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let first = ws.next().await.unwrap().unwrap();
+            assert!(first.to_text().unwrap().contains("run-task"));
+            ws.send(Message::Text(
+                json!({
+                    "header": {"event": "task-started", "task_id": "t"},
+                    "payload": {}
+                })
+                .to_string()
+                .into(),
+            ))
+            .await
+            .unwrap();
+            // 实测 qwen-audio-3.1 流式接口：usage 只在 result-generated 上，
+            // task-finished 的 payload 是空的。
+            ws.send(Message::Text(
+                json!({
+                    "header": {"event": "result-generated", "task_id": "t"},
+                    "payload": {
+                        "output": {"sentence": {
+                            "sentence_id": 1,
+                            "text": "你好，世界。",
+                            "sentence_end": true,
+                            "heartbeat": false
+                        }},
+                        "usage": {
+                            "input_tokens": 93,
+                            "output_tokens": 21,
+                            "total_tokens": 114,
+                            "duration": 7
+                        }
+                    }
+                })
+                .to_string()
+                .into(),
+            ))
+            .await
+            .unwrap();
+            ws.send(Message::Text(
+                json!({
+                    "header": {"event": "task-finished", "task_id": "t"},
+                    "payload": {"output": {}}
+                })
+                .to_string()
+                .into(),
+            ))
+            .await
+            .unwrap();
+            // 收完客户端可能在收尾前补发的音频 / finish-task，避免它写已关闭的 socket。
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                while let Some(Ok(_)) = ws.next().await {}
+            })
+            .await;
+        });
+
+        let (tx, _rx) = broadcast::channel(64);
+        let mut config = config();
+        config.endpoint = format!("ws://{addr}/api-ws/v1/inference");
+        let handle = spawn(
+            config,
+            "0f8fad5b-d9cb-469f-a165-70867728951e".to_string(),
+            tx,
+        );
+        assert!(handle.send_frame(vec![0u8; 320]));
+        handle.stop();
+
+        let transcript = handle.wait().await.unwrap();
+        assert_eq!(transcript.text, "你好，世界。");
+        let usage = transcript.usage.expect("task-finished 为空时应回退到 result-generated 的 usage");
+        assert_eq!(usage.total_tokens, 114);
+        assert_eq!(usage.input_tokens, 93);
+        assert_eq!(usage.output_tokens, 21);
+        assert_eq!(usage.audio_duration_ms, 7000);
+        server.await.unwrap();
     }
 
     #[test]

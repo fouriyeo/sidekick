@@ -72,7 +72,12 @@ function SummaryRows({ summary }: { summary: UsageSummary }) {
   return (
     <>
       <ListRow title="费用" meta={formatCnyMicros(summary.costCnyMicros)} />
-      <ListRow title="Token" meta={formatTokens(summary.totalTokens)} />
+      {/* 输入/输出单价不同（¥6 / ¥4.5 每百万），只给总数会让费用不可解释，必须拆开显示。 */}
+      <ListRow
+        title="Token"
+        meta={formatTokens(summary.totalTokens)}
+        detail={`输入 ${formatTokens(summary.inputTokens)} · 输出 ${formatTokens(summary.outputTokens)}`}
+      />
       <ListRow title="会话" meta={`${formatTokens(summary.sessions)} 次`} />
       <ListRow title="时长" meta={formatAudioDuration(summary.audioDurationMs)} />
     </>

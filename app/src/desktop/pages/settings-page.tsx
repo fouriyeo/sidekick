@@ -40,6 +40,7 @@ type SettingsPageProps = {
  *
  * 首页只放「会改的东西」：外观、自动输入、手机连接、AI 联动、剪贴板、关于；
  * 每一项右侧只有一个短值，不放解释性长句。二级页共用同一个返回壳。
+ * 语音是独立一级页（D104），不占设置的行与二级页。
  */
 export function SettingsPage({ connection, section, onSectionChange, nav }: SettingsPageProps) {
   if (section === "root") {

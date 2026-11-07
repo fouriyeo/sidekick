@@ -1,24 +1,22 @@
 import { cn } from "cn";
-import { AudioLines, Clipboard, Gauge, LayoutGrid, Settings } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import type { ReactNode } from "react";
 import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import {
   deviceCountFromClients,
   useDesktopClientsStore,
 } from "@/desktop/lib/desktop-clients-store";
-import { DESKTOP_NAV, type DesktopView, type SettingsSection } from "@/desktop/lib/desktop-nav";
+import {
+  DESKTOP_NAV,
+  DESKTOP_PRIMARY_NAV,
+  type DesktopView,
+  type SettingsSection,
+} from "@/desktop/lib/desktop-nav";
 import { useDesktopStatusStore } from "@/desktop/lib/desktop-status-store";
 import { SPRING_SLIDE } from "@/desktop/lib/motion";
 import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { AI_STATE_LABEL } from "@/shared/lib/status";
 import { SignalDot, type SignalStatus } from "@/shared/ui/signal-dot";
-
-const PRIMARY_NAV = [
-  { id: "overview", label: "概览", icon: LayoutGrid },
-  { id: "voice", label: "语音", icon: AudioLines },
-  { id: "content", label: "内容", icon: Clipboard },
-  { id: "usage", label: "用量", icon: Gauge },
-] as const satisfies ReadonlyArray<{ id: DesktopView; label: string; icon: typeof LayoutGrid }>;
 
 type SidebarProps = {
   view: DesktopView;
@@ -30,7 +28,7 @@ type SidebarProps = {
 
 /**
  * 侧栏（224）：Liquid Glass 导航层 —— 顶部 38 留给 mac 交通灯，
- * 下面 logo + 4 个一级入口（白色滑块用 spring 在入口之间 morph），
+ * 下面 logo + 4 个一级入口（概览/内容/用量/语音，白色滑块用 spring 在入口之间 morph），
  * 底部设置 + 三行状态摘要。内容层不进入玻璃。
  */
 export function Sidebar({ view, section, onSelect, onOpenSettings, connection }: SidebarProps) {
@@ -46,7 +44,7 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
 
   return (
     <aside className="dsl-sidebar relative flex w-[224px] shrink-0 flex-col">
-      <div data-tauri-drag-region className="h-[38px] shrink-0" />
+      <div data-tauri-drag-region="deep" className="h-[38px] shrink-0" />
 
       <div className="flex items-center gap-2 px-4 pb-4">
         <img src="/logo-icon.svg" alt="" className="size-[22px]" />
@@ -54,11 +52,11 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
       </div>
 
       <nav aria-label="主导航" className="flex flex-col gap-1 px-2.5">
-        {PRIMARY_NAV.map((item) => (
+        {DESKTOP_PRIMARY_NAV.map((item) => (
           <NavItem
             key={item.id}
             label={item.label}
-            shortcut={DESKTOP_NAV.find((nav) => nav.id === item.id)?.shortcut}
+            shortcut={item.shortcut}
             icon={<item.icon aria-hidden="true" className="size-[17px]" strokeWidth={2.1} />}
             active={view === item.id}
             badge={item.id === "voice" && cloudStatus !== null && !cloudStatus.configured}
@@ -71,7 +69,7 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
         <NavItem
           label="设置"
           shortcut={DESKTOP_NAV.find((nav) => nav.id === "settings")?.shortcut}
-          icon={<Settings aria-hidden="true" className="size-[17px]" strokeWidth={2.1} />}
+          icon={<SettingsIcon />}
           active={view === "settings"}
           onClick={() => onOpenSettings("root")}
         />
@@ -102,6 +100,12 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
   );
 }
 
+/** 设置项图标与一级导航共用同一个 lucide 组件，避免两处硬编码。 */
+function SettingsIcon() {
+  const Icon = DESKTOP_NAV.find((item) => item.id === "settings")?.icon;
+  return Icon ? <Icon aria-hidden="true" className="size-[17px]" strokeWidth={2.1} /> : null;
+}
+
 function NavItem({
   label,
   shortcut,
@@ -112,8 +116,9 @@ function NavItem({
 }: {
   label: string;
   shortcut?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   active: boolean;
+  /** 未配置提示：只在「语音」未配置时显示 6px 琥珀点。 */
   badge?: boolean;
   onClick: () => void;
 }) {

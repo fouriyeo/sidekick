@@ -964,8 +964,8 @@
 - 原因：配置类不与主任务平级——壳的目标是「主任务 ≤1 次操作、配置与排障收进设置二级页」，语音属于配置与低频维护；D94 提升一级并没有减少可达次数，反而让 5 个入口挤在 224 侧栏、⌘ 编号二次迁移。收回后设置首页仍 ≤2 次可达，未配置信号仍在设置行可见。
 - 放弃：保留 5 入口但把语音根页平铺（导航仍多一项，根页信息与设置列表重复）；语音留在设置里但仍带 3 个 push 子页（用户明确不要二级页，内部再 push 层次过深）；把关键词并进百炼配置表单（关键词是用户内容，需要独立保存与逐行校验）；删掉语音用量统计（费用仍需可见）。
 - 代价：⌘2–⌘4 第二次迁移（D94 刚把 内容 / 用量 前移过一轮），需一次性刷新测试、QA 脚本与文档；设置首页多一行，960×640 下开始出现滚动（设置页本就是列表，可接受）；语音页要滚动才能看全三段（配置 / 关键词 / 用量），不再有「根页摘要」；`?pane=` 调试参数失效。
-- 编号说明：同日手机「语音录音 / 结果 UI 重做」已先占用 D100，本条按时间顺序记为 D101；`desktop-nav.ts` / `app.tsx` 注释里的 D100 均指本条。
 - 规范：`app/src/desktop/{lib/desktop-nav.ts,app.tsx,shell/sidebar.tsx,pages/settings-page.tsx}`、`app/src/desktop/features/models/{voice-settings.tsx,keywords-panel.tsx,cloud-asr-form.tsx,usage-stats.tsx}`、`app/src/desktop/pages/{voice-page.tsx,voice-page.test.tsx}`（删除）、`app/src/desktop/{app.test.tsx,pages/settings-page.test.tsx,features/models/voice-settings.test.tsx}`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/*`、`docs/prd/mic/*`、`docs/prd/usage/*`、`docs/standards/ux.md`、`docs/engineering/{desktop-ios-ui,asr-model,asr-cloud-bailian,audio-pipeline,protocol-audio,quality}.md`、`docs/{INDEX,status,frontend-architecture,setup}.md`、`AGENTS.md`。
+
 
 ## D102 · 用量页默认「今天 / 模型」、分组排行改按金额、桌面账本字号下调一档（2026-11-07，取代 D97/D98 的默认 7 天/会话与「后端按 Token 选 Top 8」）
 
@@ -979,6 +979,7 @@
 - 代价：凌晨的「今天」可能只有很少金额（单日柱已做刻度/昨日文字化处理，不再压扁）；「其他」的语义从 Token 尾部变为金额尾部；桌面账本 8 行高度 +8px，1180 首屏仍完整（QA 复核）。
 - 规范：`app/src/desktop/features/usage/usage-store.ts`、`app/src/desktop/styles/usage.css`、`app/src/mobile/features/usage/{usage-store.ts,usage-page.tsx}`、`app/src-tauri/src/token_usage.rs`、`app/src/desktop/pages/usage-page.test.tsx`、`app/src/mobile/features/usage/{usage-page.test.tsx,usage-store.test.ts}`、`docs/prd/usage/{PRD,SPEC,ACCEPTANCE}.md`、`docs/engineering/token-usage-pricing.md`、`docs/design/usage-dashboard-v2/README.md`、`AGENTS.md`。
 
+
 ## D103 · 用量会话行标题从 DSH 会话缓存回填（2026-11-07，补充 D102 的会话排行）
 
 - 背景：用户指出电脑端用量页「会话」分组里有些行显示的是会话 id（如「会话 35ebc56e」），问能否用会话名称。检查账本：最近 8 天 108 个会话里 21 个没有 `title`，今天 5 个会话全部没有；但 DSH 会话缓存里有对应标题。
@@ -986,3 +987,24 @@
 - 隐私边界：只读 `title` 字段，不读 `titleInput`、消息、工具调用；不写 DSH、不上传；日志仍不记录标题。会话 id 只允许字母数字/`-`/`_`，防目录穿越。
 - 代价：DSH 缓存路径/结构变化时回填失效，自动退回短 id；每次统计最多读 8 个小 JSON（≤2MB 上限）。
 - 规范：`app/src-tauri/src/token_usage.rs`（`session_cache_dir` / `cached_session_title` / `build_groups` 回填）、Rust 测试 `session_rows_backfill_title_from_dsh_cache`、`docs/engineering/token-usage-pricing.md`、`docs/prd/usage/{PRD,SPEC,ACCEPTANCE}.md`、`docs/design/usage-dashboard-v2/README.md`、`AGENTS.md`。
+
+## D104 · 语音升为第 4 个一级入口（放在用量下）+ 设置回到 4 个入口（2026-11-07，取代 D101 的导航部分）
+
+- 背景：D101 把语音收回「设置 › 语音输入」后，用户实际用起来觉得语音（配置 / 关键词 / 费用）是高频维护面，放在设置里不够顺手，明确要求「拿出来，就放在用量下面」。
+- 决策：
+  - 一级导航改为 **5 个：概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 设置 ⌘5**；侧栏 224 上半 4 个入口（概览 / 内容 / 用量 / 语音），设置固定底部；三行状态摘要不变；⌘1–⌘5 全部有效。
+  - 语音 = **单个一级页面**（`VoicePage`，fade 进入、页头 34/600「语音」）：页内纵向三段 = 百炼配置 `CloudAsrForm` / 关键词 `KeywordsPanel` / 语音用量 `UsageStatsPanel`，**内部不再 push**（沿用 D101 的单页结论）；侧栏「语音」项未配置时右侧 6px 琥珀点。
+  - 设置删除「语音输入」行与 `SettingsSection = voice`；设置首页「功能」组回到 手机连接 / AI 联动 / 剪贴板；设置首页仍不承载配置表单。
+  - `?view=voice` / `?view=models` 调试别名落到一级「语音」页；`?view=settings&section=voice` 不再有效。
+- 原因：语音是高频维护面（配置、关键词、费用），固定在一级且位置紧跟「用量」，符合用户「看完用量顺手看语音」的路径；单页形态保留 D101 去掉「二级页套二级页」的收益。
+- 放弃：留在设置（用户明确要求拿出来）；恢复 D94 的「根页摘要 + 三个 push 二级页」（D101 已确认一页看完、不再 push）；换别的顺序（用户指定在用量后）。
+- 代价：⌘ 编号第三次调整（内容/用量为 ⌘2/⌘3、语音 ⌘4、设置 ⌘5），需一次性刷新测试、QA 脚本与文档；设置首页少一行；侧栏从 3 个入口回到 4 个，密度回到 D94 水平。
+- 规范：`app/src/desktop/{lib/desktop-nav.ts,app.tsx,shell/sidebar.tsx,pages/settings-page.tsx,pages/voice-page.tsx,features/models/voice-settings.tsx}`、`app/src/desktop/{app.test.tsx,pages/voice-page.test.tsx,features/models/voice-settings.test.tsx}`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/*`、`docs/prd/mic/*`、`docs/prd/usage/*`、`docs/standards/ux.md`、`docs/engineering/{desktop-ios-ui,asr-model,asr-cloud-bailian,audio-pipeline,protocol-audio,quality,INDEX}.md`、`docs/{INDEX,status,frontend-architecture,setup}.md`、`docs/product/{scope,INDEX}.md`、`docs/prd/INDEX.md`、`AGENTS.md`。
+
+## D105 · 修复语音用量记账：usage 从 result-generated 兜底（2026-11-07，补充 D82–D84 的用量统计）
+
+- 背景：用户反馈「今天语音输入了好几条，语音用量一直是 0」。排查发现 `qwen-audio-3.1-asr-flash-streaming` 的 `task-finished` 实测只返回 `payload.output={}`，usage 实际出现在**部分 `result-generated.payload.usage`**（累计值）；旧实现只在 `task-finished` 解析 usage，于是有识别结果、也有计费，但本地账本一条都不记。直连百炼 WS 的探针复现：7.4s 真人语音会话的 `task-finished` 同样为空 payload，其中一帧 `result-generated` 带 `{duration:7, input_tokens:93, output_tokens:21, total_tokens:114}`。
+- 决策：`bailian_asr` 在解析每条服务端事件时累计最近一次 usage（`result-generated` 也要读，且必须在任何 early return 之前）；`task-finished` 自带 usage 优先、为空时用快照兜底。`CloudTranscript.usage` 因此对两种服务端行为都成立。
+- 价格与口径核对：该模型官方价（北京输入 ¥6 / 输出 ¥4.5 每百万 Token，新加坡 ¥6.781 / ¥5.104）与 `asr_pricing.rs` 一致；`cost_micros` 微元换算与历史账本一致（如 368×6 + 46×4.5 = 2415 微元）；音频 Token 官方按「音频秒数 × 12.5」折算，服务端 usage 直接给 input/output tokens，无需本地折算。
+- 代价：今天之前漏记的会话无法精确补回（服务端 usage 未落盘），只能按日志音频帧数近似回填；修复从下一次会话起生效，需要重启桌面端。
+- 规范：`app/src-tauri/src/bailian_asr.rs`、`app/src-tauri/src/asr_usage.rs`、`docs/engineering/{asr-model,asr-cloud-bailian}.md`、`AGENTS.md`。

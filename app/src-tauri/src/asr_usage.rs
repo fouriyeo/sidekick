@@ -1,6 +1,7 @@
 //! 云端 ASR 用量与费用统计。
 //!
-//! 每次百炼 task-finished 返回 usage 后按本机日期累加到一天；`asr_usage.json`
+//! 每次百炼会话收尾返回 usage 后按本机日期累加到一天（usage 可能来自
+//! `result-generated` 的累计值，`task-finished` 可能为空）；`asr_usage.json`
 //! （0600）只存每日汇总（Token、音频时长、人民币微元），不存文本/Key/音频。
 //! 查询时按今天/近 7 天/近 30 天/近 1 年汇总，并返回最近 14 天明细。
 

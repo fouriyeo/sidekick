@@ -7,8 +7,6 @@ import {
   validateKeywords,
 } from "@/desktop/features/models/keywords";
 import { ListActionRow, ListEmpty, ListGroup } from "@/desktop/shell/list";
-import { PageHeader } from "@/desktop/shell/page-header";
-import { PageBody, PageShell } from "@/desktop/shell/page-shell";
 import { normalizeError } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -26,10 +24,14 @@ function makeRows(nextId: React.RefObject<number>, words: readonly string[]): Ke
 }
 
 /**
- * 语音 › 关键词：一张表单，一行一个词；加号加一行，保存写入 asr.json。
- * 不做分组/启停/权重；录音时整份列表作为即时热词（权重 4）发送。
+ * 设置 › 语音输入 › 关键词：一段可嵌进单页的分组列表，一行一个词；
+ * 加号加一行，保存写入 asr.json。不做分组/启停/权重；
+ * 录音时整份列表作为即时热词（权重 4）发送。
+ *
+ * 配置状态的读取由所在页面负责（本组件只读 store 的 status），
+ * 读到了再初始化表单，避免把已有词覆盖成空表。
  */
-export function KeywordsPage({ onBack }: { onBack: () => void }) {
+export function KeywordsPanel() {
   const status = useCloudAsrStore((state) => state.status);
   const loadError = useCloudAsrStore((state) => state.error);
   const saveKeywords = useCloudAsrStore((state) => state.saveKeywords);
@@ -99,13 +101,11 @@ export function KeywordsPage({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <PageShell transition="push">
-      <PageHeader
+    <div className="flex flex-col gap-2">
+      <ListGroup
         title="关键词"
-        backLabel="语音"
-        onBack={onBack}
-        actions={
-          <>
+        action={
+          <div className="flex items-center gap-2">
             <span className="text-[13px] text-muted-foreground tabular-nums">
               {keywords.length} / {MAX_KEYWORDS}
             </span>
@@ -118,70 +118,67 @@ export function KeywordsPage({ onBack }: { onBack: () => void }) {
               {saving && <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />}
               保存
             </Button>
-          </>
+          </div>
         }
-      />
-      <PageBody>
-        <ListGroup>
-          {!initialized ? (
-            <ListEmpty>正在读取关键词…</ListEmpty>
-          ) : (
-            rows.map((row, index) => (
-              <div key={row.id} className="dsl-row">
-                <span
-                  aria-hidden="true"
-                  className="w-[22px] shrink-0 text-[13px] text-muted-foreground tabular-nums"
-                >
-                  {index + 1}
-                </span>
-                <Input
-                  value={row.value}
-                  placeholder="输入关键词"
-                  aria-label={`第 ${index + 1} 个关键词`}
-                  // 新加的一行自动聚焦；其余行按普通输入框处理。
-                  autoFocus={focusId === row.id}
-                  className="min-w-0 flex-1"
-                  onChange={(event) => updateRow(row.id, event.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`删除第 ${index + 1} 行`}
-                  onClick={() => removeRow(row.id)}
-                >
-                  <X aria-hidden="true" className="size-3.5" />
-                </Button>
-              </div>
-            ))
-          )}
-          <ListActionRow disabled={!initialized} onClick={addRow}>
-            <Plus aria-hidden="true" className="size-3.5" />
-            加一行
-          </ListActionRow>
-        </ListGroup>
+      >
+        {!initialized ? (
+          <ListEmpty>正在读取关键词…</ListEmpty>
+        ) : (
+          rows.map((row, index) => (
+            <div key={row.id} className="dsl-row">
+              <span
+                aria-hidden="true"
+                className="w-[22px] shrink-0 text-[13px] text-muted-foreground tabular-nums"
+              >
+                {index + 1}
+              </span>
+              <Input
+                value={row.value}
+                placeholder="输入关键词"
+                aria-label={`第 ${index + 1} 个关键词`}
+                // 新加的一行自动聚焦；其余行按普通输入框处理。
+                autoFocus={focusId === row.id}
+                className="min-w-0 flex-1"
+                onChange={(event) => updateRow(row.id, event.target.value)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`删除第 ${index + 1} 行`}
+                onClick={() => removeRow(row.id)}
+              >
+                <X aria-hidden="true" className="size-3.5" />
+              </Button>
+            </div>
+          ))
+        )}
+        <ListActionRow disabled={!initialized} onClick={addRow}>
+          <Plus aria-hidden="true" className="size-3.5" />
+          加一行
+        </ListActionRow>
+      </ListGroup>
 
-        <div className="flex flex-col gap-1 px-1.5">
-          <p className="text-[13px] leading-[1.45] text-muted-foreground">
-            关键词只在本机 asr.json 与百炼识别请求中使用，不写日志、不上传其他位置。
+      <div className="flex flex-col gap-1 px-1.5">
+        <p className="text-[13px] leading-[1.45] text-muted-foreground">
+          关键词只在本机 asr.json 与百炼识别请求中使用，不写日志、不上传其他位置。
+        </p>
+        {errors.slice(0, 4).map((message) => (
+          <p key={message} role="alert" className="text-[13px] leading-[1.45] text-destructive">
+            {message}
           </p>
-          {errors.slice(0, 4).map((message) => (
-            <p key={message} role="alert" className="text-[13px] leading-[1.45] text-destructive">
-              {message}
-            </p>
-          ))}
-          {errors.length > 4 && (
-            <p className="text-[13px] leading-[1.45] text-destructive">
-              还有 {errors.length - 4} 条问题
-            </p>
-          )}
-          {saved && (
-            <p role="status" className="text-[13px] leading-[1.45] text-signal">
-              {saved}
-            </p>
-          )}
-        </div>
-      </PageBody>
-    </PageShell>
+        ))}
+        {errors.length > 4 && (
+          <p className="text-[13px] leading-[1.45] text-destructive">
+            还有 {errors.length - 4} 条问题
+          </p>
+        )}
+        {saved && (
+          <p role="status" className="text-[13px] leading-[1.45] text-signal">
+            {saved}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }

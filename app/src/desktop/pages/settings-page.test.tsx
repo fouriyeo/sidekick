@@ -14,11 +14,6 @@ const api = vi.hoisted(() => ({
   requestAccessibility: vi.fn(),
   openAccessibilitySettings: vi.fn(),
   revealAccessibilityApp: vi.fn(),
-  getCloudAsrStatus: vi.fn(),
-  saveCloudAsr: vi.fn(),
-  testCloudAsr: vi.fn(),
-  getAsrUsageStats: vi.fn(),
-  clearAsrUsage: vi.fn(),
   normalizeError: (error: unknown): string =>
     error instanceof Error ? error.message : String(error),
 }));
@@ -26,7 +21,6 @@ const api = vi.hoisted(() => ({
 vi.mock("@/shared/lib/tauri", () => api);
 
 import { useClipboardStore } from "@/desktop/features/clipboard/clipboard-store";
-import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import type { DesktopNav } from "@/desktop/lib/desktop-nav";
 import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { SettingsPage } from "./settings-page";
@@ -69,28 +63,33 @@ function makeNav(): DesktopNav {
   return { go: vi.fn(), goSettings: vi.fn() };
 }
 
+async function renderRoot(onSectionChange = vi.fn()) {
+  render(
+    <SettingsPage
+      connection={makeConnection()}
+      section="root"
+      onSectionChange={onSectionChange}
+      nav={makeNav()}
+    />,
+  );
+  // 根页会异步读剪贴板摘要，等它落定再断言，避免 act 警告。
+  await waitFor(() => expect(useClipboardStore.getState().snapshot).not.toBeNull());
+  return onSectionChange;
+}
+
 beforeEach(() => {
   useClipboardStore.setState({ snapshot: null, loading: false, error: null });
-  useCloudAsrStore.setState({ status: null });
   vi.clearAllMocks();
   api.listClipboard.mockResolvedValue(snapshot);
   api.setClipboardEnabled.mockResolvedValue({ ...snapshot, enabled: false });
   api.clearClipboard.mockResolvedValue({ ...snapshot, items: [] });
-  api.getCloudAsrStatus.mockResolvedValue({ configured: false });
 });
 
 afterEach(cleanup);
 
 describe("SettingsPage 设置", () => {
   it("设置首页只有一张列表，每项一个短值", async () => {
-    render(
-      <SettingsPage
-        connection={makeConnection()}
-        section="root"
-        onSectionChange={vi.fn()}
-        nav={makeNav()}
-      />,
-    );
+    await renderRoot();
 
     expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("记录中 · 1 条")).toBeInTheDocument());
@@ -106,19 +105,24 @@ describe("SettingsPage 设置", () => {
     ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
+    // 语音已是一级页，设置里不再有「语音输入」。
+    expect(screen.queryByText("语音输入")).toBeNull();
     expect(screen.getByText("192.168.1.23:47810")).toBeInTheDocument();
   });
 
-  it("点「手机连接」进二级页，返回回到设置", () => {
-    const onSectionChange = vi.fn();
-    render(
-      <SettingsPage
-        connection={makeConnection()}
-        section="root"
-        onSectionChange={onSectionChange}
-        nav={makeNav()}
-      />,
+  it("「功能」组顺序：手机连接 / AI 联动 / 剪贴板", async () => {
+    await renderRoot();
+
+    const texts = screen.getAllByRole("button").map((node) => node.textContent ?? "");
+    const order = ["手机连接", "AI 联动", "剪贴板"].map((title) =>
+      texts.findIndex((text) => text.startsWith(title)),
     );
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+  });
+
+  it("点「手机连接」进二级页，返回回到设置", async () => {
+    const onSectionChange = await renderRoot();
 
     fireEvent.click(screen.getByRole("button", { name: /手机连接/ }));
     expect(onSectionChange).toHaveBeenCalledWith("connection");
@@ -154,9 +158,11 @@ describe("SettingsPage 设置", () => {
 
     fireEvent.click(screen.getByRole("switch", { name: /记录剪贴板/ }));
     expect(api.setClipboardEnabled).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(useClipboardStore.getState().snapshot?.enabled).toBe(false));
 
     fireEvent.click(screen.getByRole("button", { name: "清空历史" }));
     fireEvent.click(screen.getByRole("button", { name: "清空" }));
     expect(api.clearClipboard).toHaveBeenCalled();
+    await waitFor(() => expect(useClipboardStore.getState().snapshot?.items).toHaveLength(0));
   });
 });

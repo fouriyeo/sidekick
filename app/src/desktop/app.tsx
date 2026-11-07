@@ -7,7 +7,6 @@ import {
   type DesktopView,
   initialRoute,
   type SettingsSection,
-  type VoicePane,
   viewForShortcut,
 } from "@/desktop/lib/desktop-nav";
 import { ContentPage } from "@/desktop/pages/content-page";
@@ -17,6 +16,7 @@ import { UsagePage } from "@/desktop/pages/usage-page";
 import { VoicePage } from "@/desktop/pages/voice-page";
 import { Sidebar } from "@/desktop/shell/sidebar";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
+import { subscribeNavigate } from "@/shared/lib/tauri";
 import { Toaster } from "@/shared/ui/sonner";
 import "@/desktop/styles/ios.css";
 import "@/desktop/styles/usage.css";
@@ -30,10 +30,10 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * 电脑端「简约 iOS」外壳（2026-11-06）。
+ * 电脑端「简约 iOS」外壳（2026-11-07，D104 语音升为第 4 个一级入口）。
  *
- * 结构固定：左侧 224 玻璃侧栏（3 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
- * （大标题 + iOS 分组列表）。⌘1–⌘4 切换一级页；默认概览。
+ * 结构固定：左侧 224 玻璃侧栏（4 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
+ * （大标题 + iOS 分组列表）。⌘1–⌘5 切换一级页；默认概览。
  * 麦克风浮层、辅助功能提示与 toast 是全局层。
  */
 export function DesktopApp() {
@@ -42,15 +42,11 @@ export function DesktopApp() {
   useMotionPause();
 
   const go = useCallback((view: DesktopView) => {
-    setRoute({ view, section: "root", pane: "root" });
+    setRoute({ view, section: "root" });
   }, []);
 
   const goSettings = useCallback((section: SettingsSection) => {
-    setRoute({ view: "settings", section, pane: "root" });
-  }, []);
-
-  const openVoicePane = useCallback((pane: VoicePane) => {
-    setRoute((current) => ({ ...current, view: "voice", pane }));
+    setRoute({ view: "settings", section });
   }, []);
 
   const nav = useMemo<DesktopNav>(() => ({ go, goSettings }), [go, goSettings]);
@@ -68,10 +64,20 @@ export function DesktopApp() {
     void useHookStore.getState().refresh();
   }, []);
 
-  // 侧栏「语音」未配置圆点需要状态，所以在壳层先读一次本地 asr.json。
+  // 侧栏「语音」未配置时需要琥珀点，所以在壳层先读一次本地 asr.json。
   useEffect(() => {
     void useCloudAsrStore.getState().load();
   }, []);
+
+  // 菜单栏用量小看板的「打开用量页」（D106）：Rust 先把主窗口叫回来，再发导航事件。
+  // 主窗口隐藏时 WebView 仍在跑，所以这里能收到；非 usage 的视图忽略。
+  useEffect(
+    () =>
+      subscribeNavigate((view) => {
+        if (view === "usage") setRoute({ view: "usage", section: "root" });
+      }),
+    [],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -80,7 +86,7 @@ export function DesktopApp() {
       const view = viewForShortcut(event.key);
       if (!view) return;
       event.preventDefault();
-      setRoute({ view, section: "root", pane: "root" });
+      setRoute({ view, section: "root" });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -99,8 +105,8 @@ export function DesktopApp() {
       <main className="dsl-main flex min-h-0 min-w-0 flex-1 flex-col">
         {route.view === "overview" && <OverviewPage connection={connection} nav={nav} />}
         {route.view === "content" && <ContentPage />}
-        {route.view === "voice" && <VoicePage pane={route.pane} onPaneChange={openVoicePane} />}
         {route.view === "usage" && <UsagePage />}
+        {route.view === "voice" && <VoicePage />}
         {route.view === "settings" && (
           <SettingsPage
             connection={connection}

@@ -8,16 +8,13 @@ const tauri = vi.hoisted(() => ({
   testCloudAsr: vi.fn(),
   clearCloudAsr: vi.fn(),
   saveCloudKeywords: vi.fn(),
-  getUsageStats: vi.fn(),
-  clearUsageStats: vi.fn(),
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
 vi.mock("@/shared/lib/tauri", () => tauri);
 
 import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
-import { useUsageStore } from "@/desktop/features/models/usage-store";
-import { VoicePage } from "./voice-page";
+import { KeywordsPanel } from "./keywords-panel";
 
 const STATUS: CloudAsrStatus = {
   configured: true,
@@ -36,73 +33,38 @@ const STATUS: CloudAsrStatus = {
   },
 };
 
-async function renderKeywordsPane() {
-  render(<VoicePage pane="keywords" onPaneChange={vi.fn()} />);
+async function renderKeywordsPanel() {
+  render(<KeywordsPanel />);
   await screen.findByLabelText("第 1 个关键词");
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   useCloudAsrStore.getState().reset();
-  useUsageStore.getState().reset();
   vi.resetAllMocks();
   tauri.getCloudAsrStatus.mockResolvedValue(STATUS);
   tauri.saveCloudKeywords.mockResolvedValue(STATUS);
-  tauri.getUsageStats.mockResolvedValue({
-    today: {
-      sessions: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      audioDurationMs: 0,
-      costCnyMicros: 0,
-    },
-    last7Days: {
-      sessions: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      audioDurationMs: 0,
-      costCnyMicros: 0,
-    },
-    last30Days: {
-      sessions: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      audioDurationMs: 0,
-      costCnyMicros: 0,
-    },
-    last365Days: {
-      sessions: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      audioDurationMs: 0,
-      costCnyMicros: 0,
-    },
-    days: [],
-    priceNote: "",
-  });
+  // 面板只读 store，配置由所在页面加载；测试里先手动读一次。
+  await useCloudAsrStore.getState().load();
 });
 
 afterEach(() => {
   cleanup();
   useCloudAsrStore.getState().reset();
-  useUsageStore.getState().reset();
 });
 
-describe("VoicePage 关键词", () => {
+describe("KeywordsPanel 关键词", () => {
   it("一行一个词，显示数量与已有关键词", async () => {
-    await renderKeywordsPane();
+    await renderKeywordsPanel();
 
-    expect(screen.getByRole("heading", { name: "关键词", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "关键词", level: 2 })).toBeInTheDocument();
     expect(screen.getByText("2 / 2000")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
     expect(screen.getByLabelText("第 1 个关键词")).toHaveValue("异步");
     expect(screen.getByLabelText("第 2 个关键词")).toHaveValue("剪贴板");
   });
 
   it("点加号加一行，保存时提交整份列表", async () => {
-    await renderKeywordsPane();
+    await renderKeywordsPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "加一行" }));
     fireEvent.change(await screen.findByLabelText("第 3 个关键词"), {
@@ -116,7 +78,7 @@ describe("VoicePage 关键词", () => {
   });
 
   it("去空行与重复词后再保存", async () => {
-    await renderKeywordsPane();
+    await renderKeywordsPanel();
 
     fireEvent.change(screen.getByLabelText("第 1 个关键词"), { target: { value: " 异步 " } });
     fireEvent.change(screen.getByLabelText("第 2 个关键词"), { target: { value: "异步" } });
@@ -129,7 +91,7 @@ describe("VoicePage 关键词", () => {
   });
 
   it("删除一行后保存剩余关键词", async () => {
-    await renderKeywordsPane();
+    await renderKeywordsPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "删除第 1 行" }));
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
@@ -139,7 +101,7 @@ describe("VoicePage 关键词", () => {
   });
 
   it("超长中文阻止保存并给出行号", async () => {
-    await renderKeywordsPane();
+    await renderKeywordsPanel();
 
     fireEvent.change(screen.getByLabelText("第 1 个关键词"), {
       target: { value: "一二三四五六七八九十一二三四五六" },

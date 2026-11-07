@@ -4,10 +4,11 @@
  *
  * 前置：cd app && pnpm dev --host 127.0.0.1（默认 http://127.0.0.1:1420）
  * 用法：node scripts/qa-desktop-ios.mjs [--no-shots]
+ *       端口被占用时：SIDEKICK_QA_BASE=http://127.0.0.1:1421 node scripts/qa-desktop-ios.mjs
  * 输出：artifacts/desktop-ios-qa/*.png + qa.json
  *
  * 检查：控制台错误、横向溢出、视口、浅/深两套主题、1180 与 960 两个宽度、
- * 5 个一级页 + 语音/设置二级页。只读，不改代码。
+ * 5 个一级视图（含设置）+ 6 个设置二级页 +「语音」一级页三段（滚动截图）。只读，不改代码。
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -18,26 +19,38 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = resolve(ROOT, "artifacts/desktop-ios-qa");
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PORT = 9520 + (process.pid % 200);
-const BASE = "http://127.0.0.1:1420";
+const BASE = process.env.SIDEKICK_QA_BASE ?? "http://127.0.0.1:1420";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const noShots = process.argv.includes("--no-shots");
 
-/** 一级页与设置二级页：url 参数即 dev mock 的初始路由。 */
-const PAGES = [
+/** 一级页（显式列出；侧栏上半 概览/内容/用量/语音，设置固定在底部）。 */
+const PRIMARY_PAGES = [
   { name: "overview", view: "", label: "概览", query: "&ai=asking" },
-  { name: "voice", view: "voice", label: "语音" },
   { name: "content", view: "content", label: "内容" },
   { name: "usage", view: "usage", label: "用量" },
+  { name: "voice", view: "voice", label: "语音" },
   { name: "settings", view: "settings", label: "设置" },
-  { name: "voice-config", view: "voice", pane: "config", label: "连接与识别" },
-  { name: "voice-keywords", view: "voice", pane: "keywords", label: "关键词" },
-  { name: "voice-usage", view: "voice", pane: "usage", label: "语音用量" },
+];
+
+/** 设置二级页：url 参数即 dev mock 的初始路由（语音是一级页，不再是设置二级页）。 */
+const SETTINGS_PAGES = [
   { name: "settings-connection", view: "connection", label: "手机连接" },
   { name: "settings-hook", view: "hook", label: "AI 联动" },
   { name: "settings-accessibility", view: "accessibility", label: "自动输入" },
   { name: "settings-clipboard", view: "clipboard", label: "剪贴板" },
   { name: "settings-about", view: "about", label: "关于本机" },
   { name: "settings-messages", view: "messages", label: "消息通道" },
+];
+
+const PAGES = [...PRIMARY_PAGES, ...SETTINGS_PAGES];
+
+/**
+ * 菜单栏用量小看板（D107）：第二窗口 `?window=panel`。
+ * 真实窗口 348×420（卡片 320×392 + 四周 14 透明留白），这里按同样的逻辑像素截图。
+ */
+const PANEL_PAGES = [
+  { name: "panel", query: "" },
+  { name: "panel-empty", query: "&usage=empty" },
 ];
 
 function launchChrome() {
@@ -163,8 +176,8 @@ async function navigate(cdp, url) {
 
 function urlFor(page) {
   const view = page.view ? `&view=${page.view}` : "";
-  const pane = page.pane ? `&pane=${page.pane}` : "";
-  return `${BASE}/?role=desktop${view}${pane}${page.query ?? ""}`;
+  const section = page.section ? `&section=${page.section}` : "";
+  return `${BASE}/?role=desktop${view}${section}${page.query ?? ""}`;
 }
 
 async function snapshot(cdp, name, meta, theme) {
@@ -189,7 +202,7 @@ async function snapshot(cdp, name, meta, theme) {
 async function main() {
   mkdirSync(OUT, { recursive: true });
   const chrome = launchChrome();
-  const report = { base: BASE, desktop: [] };
+  const report = { base: BASE, desktop: [], panel: [] };
   try {
     const page = await waitForDevtools();
     const cdp = new CDP(page.webSocketDebuggerUrl);
@@ -208,13 +221,86 @@ async function main() {
       }
     }
 
+    // 「语音」是一级页、单页三块（百炼 / 关键词 / 语音用量），一屏装不下：
+    // 滚到中段与底部各截一张，并校验三段都在（PAGES 循环里已截过顶部）。
+    for (const theme of ["dark", "light"]) {
+      await setViewport(cdp, 1180, 760);
+      await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
+      await navigate(cdp, urlFor({ view: "voice" }));
+      const maxScroll = await js(
+        cdp,
+        `(() => {
+          const el = document.querySelector('[data-page-scroll]');
+          return el ? Math.max(0, el.scrollHeight - el.clientHeight) : 0;
+        })()`,
+      );
+      const segments = await js(
+        cdp,
+        `(() => {
+          const text = document.body.innerText;
+          return {
+            baiLian: text.includes("百炼"),
+            keywords: text.includes("关键词"),
+            usage: text.includes("语音用量"),
+          };
+        })()`,
+      );
+      for (const [suffix, ratio] of [
+        ["mid", 0.5],
+        ["bottom", 1],
+      ]) {
+        const top = Math.round(ratio * maxScroll);
+        await js(
+          cdp,
+          `(() => { const el = document.querySelector('[data-page-scroll]'); if (el) el.scrollTop = ${top}; return true; })()`,
+        );
+        await sleep(450);
+        report.desktop.push(
+          await snapshot(
+            cdp,
+            `1180-voice-${suffix}`,
+            { view: `voice-${suffix}`, segments, maxScroll },
+            theme,
+          ),
+        );
+      }
+    }
+
     // 960×640 最小窗口：只过一级页，确认不裁切
     for (const theme of ["dark", "light"]) {
       await setViewport(cdp, 960, 640);
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
-      for (const entry of PAGES.slice(0, 5)) {
+      for (const entry of PRIMARY_PAGES) {
         await navigate(cdp, urlFor(entry));
         report.desktop.push(await snapshot(cdp, `960-${entry.name}`, { view: entry.label }, theme));
+      }
+    }
+
+    // 菜单栏用量小看板（D107）：按真实窗口 348×420 截图，并校验卡片固定 320×392。
+    for (const theme of ["dark", "light"]) {
+      await setViewport(cdp, 348, 420);
+      await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
+      for (const entry of PANEL_PAGES) {
+        await navigate(cdp, `${BASE}/?role=desktop&window=panel${entry.query}`);
+        const card = await js(
+          cdp,
+          `(() => {
+            const el = document.querySelector(".dsl-panel-card");
+            if (!el) return null;
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            return {
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+              radius: style.borderRadius,
+              background: style.backgroundColor,
+              text: document.body.innerText.slice(0, 600),
+            };
+          })()`,
+        );
+        report.panel.push(
+          await snapshot(cdp, `panel-${entry.name}`, { view: entry.name, card }, theme),
+        );
       }
     }
 
@@ -228,7 +314,7 @@ async function main() {
     for (const theme of ["dark", "light"]) {
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
       for (const dialog of dialogs) {
-        await navigate(cdp, urlFor({ view: dialog.view, pane: dialog.pane }));
+        await navigate(cdp, urlFor({ view: dialog.view }));
         const opened = await js(
           cdp,
           `(() => {
@@ -258,7 +344,7 @@ async function main() {
     // 滚动后：验证 sticky 玻璃工具栏 + 紧凑标题（内容从玻璃下经过）
     for (const theme of ["dark", "light"]) {
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
-      for (const view of ["", "voice", "content", "usage", "settings"]) {
+      for (const view of ["", "content", "usage", "voice", "settings"]) {
         await navigate(cdp, urlFor({ view }));
         await js(
           cdp,
@@ -334,14 +420,18 @@ async function main() {
       realTauriDetect: injectedMetadata,
     };
 
-    const problems = report.desktop.filter(
+    const problems = [...report.desktop, ...report.panel].filter(
       (row) => row.overflowX || (row.consoleErrors && row.consoleErrors.length > 0),
     );
+    const cardWarnings = report.panel.filter(
+      (row) => !row.card || row.card.width !== 320 || row.card.height !== 392,
+    );
+    if (cardWarnings.length > 0) problems.push(...cardWarnings);
     report.problems = problems;
     writeFileSync(resolve(OUT, "qa.json"), JSON.stringify(report, null, 2));
     console.log(
-      `截图 ${report.desktop.length} 张 → ${OUT}` +
-        (problems.length ? `\n⚠️ ${problems.length} 页有问题，见 qa.json` : "\n✅ 无横向溢出/控制台错误"),
+      `截图 ${report.desktop.length + report.panel.length} 张（含面板 ${report.panel.length} 张）→ ${OUT}` +
+        (problems.length ? `\n⚠️ ${problems.length} 页有问题，见 qa.json` : "\n✅ 无横向溢出/控制台错误，面板卡片 320×392"),
     );
   } finally {
     chrome.kill();
