@@ -53,7 +53,7 @@ export function PageHeader({
         data-scrolled={scrolled ? "true" : "false"}
       >
         <header
-          data-tauri-drag-region
+          data-tauri-drag-region="deep"
           className="dsl-topbar flex h-12 items-center gap-2 rounded-[18px] px-2"
           data-scrolled={scrolled ? "true" : "false"}
         >

@@ -44,7 +44,7 @@ related:
 - 语音是第 4 个一级页：单个一级页（fade 进入、页头 34/600「语音」），页内三段（百炼配置 `CloudAsrForm` / 关键词面板 `KeywordsPanel` / 语音用量 `UsageStatsPanel`）纵向排列，**内部不再 push**；侧栏语音项未配置时右侧 6px 琥珀点。
 - 设置是 iOS 式「列表 → 二级页」：首页一张分组列表，点进手机连接 / AI 联动 / 自动输入 / 剪贴板 / 关于本机 / 消息通道；二级页从右侧 push 进入，工具栏左侧「‹ 设置」返回。
 - 窗口 1180×760（最小 960×640）；macOS `titleBarStyle: Overlay` + `hiddenTitle`，交通灯浮在侧栏顶部 38 区域内。
-- **拖动区**：侧栏顶部 38 与 sticky 工具栏（含二级页返回行）是 `data-tauri-drag-region`；工具栏里的按钮必须另有可用入口，不能把拖动区当唯一可点目标。
+- **拖动区**：侧栏顶部 38 与 sticky 工具栏（含二级页返回行）是 `data-tauri-drag-region="deep"`（整块可拖，按钮/输入等可点元素仍优先）；`data-tauri-drag-region` 不是纯 CSS，`drag.js` 会 IPC 调 `plugin:window|start_dragging`，**必须保留 `capabilities/default.json` 的 `core:window:allow-start-dragging`**，缺了会静默失效（2026-11-07 踩过）。工具栏里的按钮必须另有可用入口，不能把拖动区当唯一可点目标。
 - 单列布局：内容列最大宽 730、左右 28；不写 `lg:` 两栏、不出现横向滚动。
 
 ## 2. 三层结构（v2 的核心规则）
