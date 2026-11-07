@@ -1,0 +1,358 @@
+/* ============================================================================
+   Sidekick 动效图标（加载 / 提示）
+   ----------------------------------------------------------------------------
+   统一放在 shared/ui/motion，手机与桌面共用。规则：
+   - 颜色一律 currentColor：调用方用 text-signal / text-decide / text-destructive
+     决定色相，组件不写死薄荷/琥珀/珊瑚；
+   - 尺寸用 props：SVG 走 width/height，em 类图标走 font-size；
+   - 只做图标本体的动效，不撑布局：display:block，宽高由 size 决定；
+   - 全部尊重系统的「减少动态效果」。
+   ========================================================================== */
+
+@keyframes sk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sk-arc-breath {
+  0%,
+  100% {
+    stroke-dasharray: 21 79;
+  }
+  50% {
+    stroke-dasharray: 31 69;
+  }
+}
+
+@keyframes sk-orbit-scale {
+  0%,
+  100% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes sk-wave {
+  0%,
+  100% {
+    transform: translateY(0.055em) scale(0.7);
+    opacity: 0.38;
+  }
+  40% {
+    transform: translateY(-0.08em) scale(1.1);
+    opacity: 1;
+  }
+  58% {
+    transform: translateY(-0.03em) scale(0.97);
+    opacity: 0.92;
+  }
+}
+
+@keyframes sk-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sk-ring-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sk-halo {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.06;
+    transform: scale(1.07);
+  }
+}
+
+@keyframes sk-pop {
+  0% {
+    transform: scale(0.52);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  76% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes sk-ask-ripple {
+  0% {
+    transform: scale(0.42);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.52;
+  }
+  70% {
+    transform: scale(0.9);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+
+@keyframes sk-ask-bob {
+  0%,
+  100% {
+    transform: scale(0.9);
+  }
+  45% {
+    transform: scale(1.14);
+  }
+  62% {
+    transform: scale(1);
+  }
+}
+
+@keyframes sk-err-shake {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+  16% {
+    transform: translateX(-0.055em) scale(0.985);
+  }
+  38% {
+    transform: translateX(0.05em) scale(1.012);
+  }
+  60% {
+    transform: translateX(-0.028em) scale(0.998);
+  }
+  78% {
+    transform: translateX(0.016em);
+  }
+  90% {
+    transform: translateX(-0.006em);
+  }
+}
+
+/* ── 加载 · 轨道弧 ─────────────────────────────────────────── */
+.sk-orbit {
+  display: block;
+  overflow: visible;
+  transform-origin: 50% 50%;
+  animation: sk-orbit-scale 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.sk-orbit__track {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.2;
+  stroke-opacity: 0.22;
+}
+.sk-orbit__arc {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.6;
+  stroke-linecap: round;
+  stroke-dasharray: 24 76;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    sk-spin 1.7s cubic-bezier(0.55, 0.06, 0.45, 0.94) infinite,
+    sk-arc-breath 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* ── 加载 · 三点波 ─────────────────────────────────────────── */
+.sk-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12em;
+  line-height: 0;
+}
+.sk-dots i {
+  width: 0.19em;
+  height: 0.19em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: sk-wave 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.sk-dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.sk-dots i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+/* ── 提示 · 通用 glyph ─────────────────────────────────────── */
+.sk-glyph {
+  display: block;
+  overflow: visible;
+}
+.sk-glyph circle,
+.sk-glyph path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sk-check__ring,
+.sk-check__mark,
+.sk-check__halo,
+.sk-check__disc-mark,
+.sk-check__disc-halo,
+.sk-error__ring,
+.sk-error__cross {
+  fill: none;
+}
+
+/* 完成 · 描线 */
+.sk-check__ring {
+  stroke: currentColor;
+  stroke-opacity: 0.22;
+  stroke-width: 3.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sk-ring-in 0.56s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+.sk-check__mark {
+  stroke: currentColor;
+  stroke-width: 3.4;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: sk-draw 0.38s cubic-bezier(0.3, 0.8, 0.2, 1) 0.2s both;
+}
+.sk-check__halo {
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sk-halo 2.6s cubic-bezier(0.45, 0, 0.55, 1) 0.7s infinite;
+}
+
+/* 完成 · 弹起 */
+.sk-check__disc,
+.sk-check__disc-mark {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.sk-check__disc {
+  fill: currentColor;
+  animation: sk-pop 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.sk-check__disc-mark {
+  stroke: #f4fffb;
+  stroke-width: 3.4;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: sk-draw 0.26s cubic-bezier(0.3, 0.8, 0.2, 1) 0.15s both;
+}
+.sk-check__disc-halo {
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sk-halo 2.6s cubic-bezier(0.45, 0, 0.55, 1) 0.62s infinite;
+}
+
+/* 等待 · 涟漪 */
+.sk-ask {
+  position: relative;
+  display: block;
+}
+.sk-ask__ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 0.085em solid currentColor;
+  opacity: 0;
+  animation: sk-ask-ripple 2.6s cubic-bezier(0.22, 0.7, 0.25, 1) infinite;
+}
+.sk-ask__ripple:nth-child(2) {
+  animation-delay: 1.3s;
+}
+.sk-ask__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.21em;
+  height: 0.21em;
+  margin: -0.105em 0 0 -0.105em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: sk-ask-bob 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* 失败 · 珊瑚 */
+.sk-error {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sk-err-shake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.3s both;
+}
+.sk-error__ring {
+  stroke: currentColor;
+  stroke-opacity: 0.22;
+  stroke-width: 3.2;
+}
+.sk-error__cross {
+  stroke: currentColor;
+  stroke-width: 3.4;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: sk-draw 0.34s cubic-bezier(0.3, 0.8, 0.2, 1) both;
+}
+
+/* ── 减少动态效果：冻结在可读的静态帧 ───────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .sk-orbit,
+  .sk-orbit__arc,
+  .sk-dots i,
+  .sk-check__ring,
+  .sk-check__mark,
+  .sk-check__halo,
+  .sk-check__disc,
+  .sk-check__disc-mark,
+  .sk-check__disc-halo,
+  .sk-ask__ripple,
+  .sk-ask__core,
+  .sk-error,
+  .sk-error__cross {
+    animation: none !important;
+  }
+  .sk-check__halo,
+  .sk-check__disc-halo {
+    opacity: 0 !important;
+  }
+  .sk-check__mark,
+  .sk-check__disc-mark,
+  .sk-error__cross {
+    stroke-dashoffset: 0 !important;
+  }
+  .sk-check__disc {
+    opacity: 1;
+    transform: none;
+  }
+  .sk-ask__ripple {
+    opacity: 0.28;
+    transform: scale(0.78);
+  }
+  .sk-ask__ripple:nth-child(2) {
+    opacity: 0;
+  }
+}

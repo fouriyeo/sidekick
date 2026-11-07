@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { ChevronDown, ChevronUp, Loader2, QrCode, RefreshCw, RotateCw, Wifi } from "lucide-react";
+import { ChevronDown, ChevronUp, QrCode, RefreshCw, RotateCw, Wifi } from "lucide-react";
 import { useState } from "react";
 import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
@@ -7,6 +7,7 @@ import { useUiStore } from "@/mobile/ui-store";
 import type { DiscoveredServer } from "@/protocol/discovery";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { LoadingOrbit } from "@/shared/ui/motion";
 import { SignalBars } from "@/shared/ui/signal-bars";
 import { useConnectionStore } from "./connection-store";
 import { useRetryCountdown } from "./connection-view";
@@ -89,7 +90,7 @@ export function OfflinePage() {
           connected ? (
             <SignalBars level={3} tone="signal" />
           ) : connecting ? (
-            <Loader2 aria-hidden="true" className="size-4 animate-spin text-muted-foreground" />
+            <LoadingOrbit size={16} className="text-muted-foreground" />
           ) : (
             <SignalBars level={1} tone="muted" />
           )
@@ -116,7 +117,7 @@ export function OfflinePage() {
           ) : connecting ? (
             <>
               <div className="flex items-center gap-2">
-                <Loader2 aria-hidden="true" className="size-4 animate-spin text-muted-foreground" />
+                <LoadingOrbit size={16} className="text-muted-foreground" />
                 <span role="status" className="text-sm font-medium text-foreground">
                   正在连接…
                 </span>

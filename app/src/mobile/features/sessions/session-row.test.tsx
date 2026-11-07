@@ -90,30 +90,33 @@ describe("SessionRow v18 结构（D107）", () => {
     expect(screen.getByText("正在思考 · 2 分钟前")).toBeInTheDocument();
   });
 
-  it("working 行左侧是 spinner，不再有信号格/左侧竖条", () => {
+  it("working 行左侧是轨道弧，不再有信号格/左侧竖条", () => {
     const { container } = renderRow(row({ state: "working", tool: "bash" }));
 
-    const spinner = container.querySelector(".animate-spin");
+    const spinner = container.querySelector(".sk-orbit");
     expect(spinner).not.toBeNull();
     expect(container.querySelector("[data-signal-bars]")).toBeNull();
     expect(container.querySelector(".border-decide")).toBeNull();
     expect(contentOf(container).className).toContain("bg-[var(--wash)]");
   });
 
-  it("完成行显示 check（无 spinner）", () => {
+  it("完成行显示描线对勾（无轨道弧）", () => {
     const { container } = renderRow(
       row({ title: "写完了", state: "idle", completedAt: Date.now() - 8 * 60 * 60 * 1000 }),
     );
 
     expect(screen.getByText("已完成")).toHaveClass("text-signal");
     expect(screen.getByText(/8 小时前/)).toBeInTheDocument();
-    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(container.querySelector(".sk-orbit")).toBeNull();
+    expect(container.querySelector(".sk-check__mark")).not.toBeNull();
   });
 
-  it("asking 行用琥珀点 + 外圈，副行是琥珀色", () => {
+  it("asking 行用琥珀涟漪，副行是琥珀色", () => {
     const { container } = renderRow(row({ state: "asking", askKind: "question" }));
 
-    expect(container.querySelector(".border-decide")).not.toBeNull();
+    const ask = container.querySelector(".sk-ask");
+    expect(ask).not.toBeNull();
+    expect(ask?.className).toContain("text-decide");
     const sub = screen.getByText("等你决定 · 2 分钟前");
     expect(sub.className).toContain("text-decide");
   });

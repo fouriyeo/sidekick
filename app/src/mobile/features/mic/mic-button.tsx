@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { CornerDownLeft, Loader2, Mic, ShieldAlert, Trash2 } from "lucide-react";
+import { CornerDownLeft, Mic, ShieldAlert, Trash2 } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -21,6 +21,7 @@ import {
   writeLocal,
 } from "@/shared/lib/local-storage";
 import { sendMicFrame, sendMicStart, sendMicStop } from "@/shared/lib/tauri";
+import { LoadingOrbit } from "@/shared/ui/motion";
 import { formatDuration, MIC_COPY, micLocalErrorText } from "./mic-copy";
 import { useMicStore } from "./mic-store";
 import { PermissionPrimer } from "./permission-primer";
@@ -798,7 +799,7 @@ export function MicButton({
               processing ? "opacity-100" : "opacity-0",
             )}
           >
-            <Loader2 aria-hidden="true" className="size-5 animate-spin" />
+            <LoadingOrbit size={20} />
           </span>
 
           <span

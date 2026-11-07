@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Check, ChevronRight, Dot, Loader2 } from "lucide-react";
+import { ChevronRight, Dot } from "lucide-react";
 import { useEffect, useRef } from "react";
 import {
   displayStateText,
@@ -8,13 +8,15 @@ import {
   sessionTitle,
   workingActionText,
 } from "@/shared/lib/sessions";
+import { HintAsk, HintCheck, LoadingOrbit } from "@/shared/ui/motion";
 import { useSwipeRow } from "./use-swipe-row";
 
 /**
  * 宠物页会话行（v16）。
  *
- * 左侧 20 状态图标：working = 薄荷 spinner / completed = 薄荷 check + 行尾 › /
- * asking = 8px 琥珀点 + 轻外圈 / idle = 灰点；标题 13/18、副行 11.5/16，行高 50（D107）。
+ * 左侧 20 状态图标（统一取自 shared/ui/motion，D109）：working = 薄荷轨道弧 /
+ * completed = 薄荷描线对勾 + 行尾 › / asking = 琥珀涟漪 / idle = 灰点；
+ * 标题 13/18、副行 11.5/16，行高 50（D107）。
  *
  * 清除：左滑行内容露出右侧 72×52「清除」按钮，点按钮才清除（D95）。
  * 行内容整体左移，分隔线/白卡底随内容一起走；按钮常驻 DOM、可聚焦，
@@ -26,22 +28,12 @@ const TERTIARY_TEXT = "text-[color:var(--tertiary,var(--muted-foreground))]";
 function StatusIcon({ display }: { display: SessionRowData["display"] }) {
   switch (display) {
     case "working":
-      return (
-        <Loader2
-          aria-hidden="true"
-          className="size-5 animate-spin text-signal motion-reduce:animate-none"
-        />
-      );
+      return <LoadingOrbit size={20} className="shrink-0 text-signal" />;
     case "completed":
-      // 薄荷对勾 = 可以点它把电脑上的 DSH 切到前台（D107）。
-      return <Check aria-hidden="true" className="size-5 text-signal" />;
+      // 薄荷对勾 = 可以点它把电脑上的 DSH 切到前台（D107），描线动画只在挂载时播一次。
+      return <HintCheck size={20} mode="draw" className="shrink-0 text-signal" />;
     case "asking":
-      return (
-        <span aria-hidden="true" className="relative flex size-4 items-center justify-center">
-          <span className="absolute inset-0 rounded-full border border-decide opacity-30" />
-          <span className="size-2 rounded-full bg-decide" />
-        </span>
-      );
+      return <HintAsk size={20} className="shrink-0 text-decide" />;
     default:
       return <Dot aria-hidden="true" className="size-5 text-muted-foreground" strokeWidth={3} />;
   }
@@ -185,10 +177,7 @@ export function SessionRow({
         )}
 
         {pendingFocus ? (
-          <Loader2
-            aria-hidden="true"
-            className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
-          />
+          <LoadingOrbit size={14} className="shrink-0 text-muted-foreground" />
         ) : onOpen && completed ? (
           <ChevronRight aria-hidden="true" className={cn("size-3.5 shrink-0", TERTIARY_TEXT)} />
         ) : null}

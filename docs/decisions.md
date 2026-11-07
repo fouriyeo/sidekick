@@ -1008,3 +1008,17 @@
 - 价格与口径核对：该模型官方价（北京输入 ¥6 / 输出 ¥4.5 每百万 Token，新加坡 ¥6.781 / ¥5.104）与 `asr_pricing.rs` 一致；`cost_micros` 微元换算与历史账本一致（如 368×6 + 46×4.5 = 2415 微元）；音频 Token 官方按「音频秒数 × 12.5」折算，服务端 usage 直接给 input/output tokens，无需本地折算。
 - 代价：今天之前漏记的会话无法精确补回（服务端 usage 未落盘），只能按日志音频帧数近似回填；修复从下一次会话起生效，需要重启桌面端。
 - 规范：`app/src-tauri/src/bailian_asr.rs`、`app/src-tauri/src/asr_usage.rs`、`docs/engineering/{asr-model,asr-cloud-bailian}.md`、`AGENTS.md`。
+
+## D110 · 动效图标统一到 shared/ui/motion（2026-11-07，承接 D107 会话卡 / D100 语音结果卡）
+
+- 背景：用户评审了 10 个加载/提示动效试样，反馈「都要有呼吸和弹性的感觉」「有些环不要太细，要胖一点、慵懒一点」；选定方向后要求「这些图标统一存放、注意目录结构」，并清理试样 HTML 与生成文件。
+- 决策：新增 `app/src/shared/ui/motion/`（`index.tsx` + `motion.css` + `motion.test.tsx`），只放 5 个基础动效件：`LoadingOrbit`（轨道弧，通用加载）、`LoadingDots`（三点波）、`HintCheck`（`draw` 描线 / `pop` 弹起）、`HintAsk`（琥珀涟漪）、`HintError`（珊瑚画叉）。规则：
+  - 颜色只吃 `currentColor`——调用方用 `text-signal` / `text-decide` / `text-destructive` 决定色相，组件不写死薄荷/琥珀/珊瑚；
+  - 尺寸只走 `size`（px，默认 20）：SVG 用 width/height，点/涟漪用 font-size + em，避免各页面各写一套；
+  - 默认 `aria-hidden`（纯装饰），需要语义时传 `label` 变成 `role="img"`；
+  - 全部尊重 `prefers-reduced-motion`（冻结在可读的静态帧，不闪不跳）。
+  - 动效语言：环类加粗（描线 2.4→3.2/3.4、呼吸环 0.075em、涟漪 0.085em）、时长放慢 20–40%，用带过冲的 cubic-bezier 取代匀速，所有循环都留“一口气”的呼吸相位。
+- 接入范围（手机）：会话行 working → `LoadingOrbit`、completed → `HintCheck draw`、asking → `HintAsk`、pendingFocus → `LoadingOrbit 14`；麦克风处理中 → `LoadingOrbit`；连接页「连接中」两处 → `LoadingOrbit`。桌面暂未替换，同一套组件可直接复用。
+- 清理：试样台 `artifacts/loading-lab/`（HTML + GIF + PNG 帧）与 `/tmp` 临时脚本全部删除，不入库、不提交；动效只以组件 + 一个 CSS 文件的形式统一存放。
+- 验证：706 tests（新增 motion 8 例；会话行/麦克风断言改用 `sk-orbit` / `sk-ask` 新类名）、tsc / lint / build / check-docs / check-boundaries 全绿；真机 Realme 安装走查。
+- 规范：`app/src/shared/ui/motion/{index.tsx,motion.css,motion.test.tsx}`、`app/src/mobile/features/sessions/{session-row.tsx,session-row.test.tsx}`、`app/src/mobile/features/mic/{mic-button.tsx,mic-button.test.tsx}`、`app/src/mobile/features/connect/offline-page.tsx`、`docs/prd/shell/SPEC.md`、`docs/status.md`、`AGENTS.md`。

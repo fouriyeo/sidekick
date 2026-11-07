@@ -313,7 +313,7 @@ describe("MicButton 流式识别回显", () => {
     expect(mic.className).toContain("h-14");
     expect(mic.className).toContain("bg-pet-primary");
 
-    const spinner = mic.querySelector("svg.animate-spin");
+    const spinner = mic.querySelector("svg.sk-orbit");
     expect(spinner).not.toBeNull();
     expect(spinner?.closest("span")?.className).toContain("opacity-100");
     expect(screen.queryByText(/云端收尾/)).toBeNull();
