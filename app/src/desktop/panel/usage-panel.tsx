@@ -2,7 +2,7 @@ import { ChevronRight, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type UsageGroupMode, useUsageStore } from "@/desktop/features/usage/usage-store";
 import type { TokenUsageDay, TokenUsageStats, UsageRange } from "@/protocol/messages";
-import { hideUsagePanel, openUsagePage } from "@/shared/lib/tauri";
+import { hideUsagePanel, openUsagePage, panelGlassReady } from "@/shared/lib/tauri";
 import {
   formatCny,
   formatCount,
@@ -74,6 +74,23 @@ export function UsagePanel() {
     lastLoadedAt.current = now;
     void load();
   }, [load]);
+
+  // 卡片区玻璃底衬由 Rust 铺（D120）：只有真的铺上了，CSS 才切半透明 tint。
+  // 查不到/失败就保持不透明实色卡，别让正文压在清晰的壁纸上。
+  useEffect(() => {
+    let cancelled = false;
+    void panelGlassReady()
+      .then((ready) => {
+        if (cancelled || !ready) return;
+        document.documentElement.dataset.panelGlass = "on";
+      })
+      .catch(() => {
+        /* 命令缺失（旧内核/浏览器 QA）就按没有玻璃处理 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     loadNow();

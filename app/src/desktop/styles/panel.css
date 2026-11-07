@@ -5,7 +5,10 @@
    transparent(true)），因此：
    - html/body/#root 必须透明；留白非对称（左右 20 / 上 8 / 下 28），
      只用来放 .dsl-panel-card 向外延伸的 CSS 阴影；
-   - 卡片自己铺不透明背景（D86：内容层不透明，不假装毛玻璃）；
+   - 卡片默认铺不透明背景（D86：内容层不透明，不假装毛玻璃）；只有当 Rust 真的在
+     WebView 下垫了系统玻璃层（D120：Liquid Glass / NSVisualEffectView）时，
+     `html[data-panel-glass="on"]` 才把
+     底色换成一层薄 tint —— CSS 自己是糊不到桌面的，属性缺失时必须保持实色；
    - 颜色全部 hex，不依赖 oklch/color-mix；深浅两套跟随 html[data-theme]/.dark。
    ========================================================================== */
 
@@ -86,6 +89,21 @@ body {
   color: var(--panel-fg);
 }
 
+/* ---------------- 真玻璃态（D120） ----------------
+   前提：Rust 已在 WebView 之下垫好系统玻璃层（面板窗口的卡片矩形），
+   由 `panel_glass_ready` 命令确认后才给 <html> 打 data-panel-glass="on"。
+   这里只负责「一层薄 tint + 更轻的边界」：模糊由系统材质做，CSS 不再叠
+   backdrop-filter（透明窗口里它没有可采样的像素，只会白烧 GPU）。 */
+html[data-panel-glass="on"] .dsl-panel-card {
+  --panel-bg: rgba(255, 255, 255, 0.3);
+  --panel-border: rgba(15, 45, 38, 0.08);
+  --panel-seg-bg: rgba(118, 118, 128, 0.14);
+  --panel-seg-active: rgba(255, 255, 255, 0.92);
+  --panel-hover: rgba(15, 45, 38, 0.07);
+  --panel-shadow:
+    0 8px 18px rgba(15, 45, 38, 0.14), 0 2px 6px rgba(15, 45, 38, 0.05);
+}
+
 html[data-theme="dark"] .dsl-panel-card,
 html.dark .dsl-panel-card {
   --panel-bg: #1c1c1e;
@@ -93,7 +111,9 @@ html.dark .dsl-panel-card {
   --panel-muted: #98989d;
   --panel-border: rgba(255, 255, 255, 0.11);
   --panel-divider: rgba(255, 255, 255, 0.1);
-  --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  /* 阴影必须落在窗口留白里（左右 20 / 上 8 / 下 28），否则会被窗口边界裁成
+     「卡片外一圈灰框」。曾用的 0 18px 44px 向下延伸约 62px，必然被裁。 */
+  --panel-shadow: 0 8px 18px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.32);
   --panel-accent: #46d6b0;
   --panel-accent-fg: #062b24;
   --panel-seg-bg: rgba(118, 118, 128, 0.24);
@@ -103,6 +123,15 @@ html.dark .dsl-panel-card {
   --panel-down: #46d6b0;
   --panel-tip-bg: #48484a;
   --panel-tip-fg: #f2f2f7;
+}
+
+html[data-panel-glass="on"][data-theme="dark"] .dsl-panel-card,
+html[data-panel-glass="on"].dark .dsl-panel-card {
+  --panel-bg: rgba(28, 28, 30, 0.38);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --panel-seg-bg: rgba(118, 118, 128, 0.22);
+  --panel-seg-active: rgba(72, 72, 74, 0.9);
+  --panel-shadow: 0 8px 18px rgba(0, 0, 0, 0.46), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 /* ---------------- 头部 ---------------- */

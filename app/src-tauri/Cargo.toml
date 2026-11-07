@@ -63,6 +63,21 @@ jni = "0.21"
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.2"
 security-framework = "3"
+# 菜单栏看板的真玻璃底衬（D117，见 src/panel_glass.rs）：CSS 的 backdrop-filter
+# 采样不到窗口背后的桌面，只能在 WebView 之下垫一块 NSVisualEffectView。
+# 这几个 crate 的版本与 tauri 的传递依赖完全一致（objc2 0.6.5 / objc2-app-kit 0.3.2 /
+# objc2-quartz-core 0.3.2），不新增任何 crate，只是显式声明 feature 合并。
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = [
+  "NSGlassEffectView",
+  "NSGraphics",
+  "NSResponder",
+  "NSView",
+  "NSVisualEffectView",
+  "objc2-quartz-core",
+] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSThread"] }
+objc2-quartz-core = { version = "0.3", features = ["CALayer"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

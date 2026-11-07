@@ -26,8 +26,11 @@ pub const PANEL_WINDOW: &str = "usage-panel";
 pub const NAVIGATE_EVENT: &str = "sidekick-navigate";
 
 /// 可见卡片尺寸（逻辑像素）。用户要求「不要太大」，320 宽是菜单栏 popover 的常见尺度。
-const CARD_W: f64 = 320.0;
-const CARD_H: f64 = 432.0;
+pub const CARD_W: f64 = 320.0;
+pub const CARD_H: f64 = 432.0;
+/// 卡片圆角。原生玻璃底衬必须用同一个值（`panel_glass.rs` 铺 layer 圆角），
+/// 否则卡片圆角下面会露出直角玻璃；两边不一致时以这里为准。
+pub const CARD_RADIUS: f64 = 18.0;
 /// 左右透明留白：只用来让卡片阴影向外延伸、自然淡出，不参与视觉卡片。
 pub const SIDE_PAD: f64 = 20.0;
 /// 顶部留白刻意做小：窗口顶边保持在菜单栏底线（30pt），
@@ -116,6 +119,32 @@ pub fn open_usage_page(app: AppHandle) {
     open_main_usage(&app);
 }
 
+/// QA 预览期间不要因失焦自动收起。
+///
+/// 只有 debug 构建 + `SIDEKICK_PANEL_PREVIEW` 时成立：截图脚本没法把面板再点回来，
+/// 而预览一启动窗口焦点就会被别的 App 拿走，`Focused(false)` 会立刻把面板收掉。
+pub fn preview_holds_open() -> bool {
+    #[cfg(all(desktop, debug_assertions))]
+    let holds = std::env::var_os("SIDEKICK_PANEL_PREVIEW").is_some();
+    #[cfg(not(all(desktop, debug_assertions)))]
+    let holds = false;
+    holds
+}
+
+/// 卡片区玻璃底衬是否已就位（D120）。
+///
+/// 前端据此决定卡片用半透明 tint 还是不透明实色：原生材质垫不上时（非 macOS /
+/// `SIDEKICK_UI_VIBRANCY=off` / AppKit 调用失败）必须退回实色，否则卡片会变成
+/// 一层薄纱、桌面直接透过正文。
+#[tauri::command]
+pub fn panel_glass_ready() -> bool {
+    #[cfg(target_os = "macos")]
+    let ready = crate::panel_glass::ready();
+    #[cfg(not(target_os = "macos"))]
+    let ready = false;
+    ready
+}
+
 fn ensure_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R>> {
     if let Some(window) = app.get_webview_window(PANEL_WINDOW) {
         return Ok(window);
@@ -140,6 +169,10 @@ fn ensure_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<
     .visible(false)
     .focused(false)
     .build()?;
+
+    // 卡片区真玻璃底衬（D120）：失败只打日志，CSS 会继续用不透明实色卡。
+    #[cfg(target_os = "macos")]
+    crate::panel_glass::apply(&window);
 
     eprintln!("[panel] 已创建隐藏窗口 {WINDOW_W}×{WINDOW_H}");
     Ok(window)

@@ -1120,3 +1120,15 @@
 - 代价：`PageShell` 多一个 `ResizeObserver`（窗口 resize / 列宽变化时重算一次），首帧 `--dsl-bleed: 0`。
 - 验证：浏览器 CDP 量 `.dsl-topbar-wrap` 宽度 = 956（=滚动视口）、胶囊仍 674；浅/深 × 1180/960 截图顶部渐隐层左右到边、无直边、无横向溢出；`tsc` / `biome` / 707 tests 全绿。
 - 规范：`app/src/desktop/shell/page-shell.tsx`、`app/src/desktop/styles/ios.css`、`docs/engineering/desktop-ios-ui.md`、`AGENTS.md`。
+
+## D120 · 菜单栏看板卡片区铺原生磨砂（真玻璃，NSVisualEffectView）（2026-11-08，补充 D108/D116）
+
+- 背景：用户问「HTML/CSS 能不能做毛玻璃 / iOS 那种玻璃」。研究结论：`backdrop-filter` 的采样上界是**文档根元素**（backdrop root），透明窗口背后没有可采样像素，所以纯 CSS 永远糊不到桌面；`-webkit-backdrop-filter` 只是同一实现的前缀别名，`filter: blur()` 糊的是元素自己。macOS 上唯一正解是窗口级系统材质——主窗口早在 D87 就用 `windowEffects: underWindowBackground`，只是看板窗口没接。
+- 决策：给 `usage-panel` 的**卡片区**（320×432、圆角 18）单独垫一块 `NSVisualEffectView`（`Popover` 材质 / `BehindWindow` / `Active` / layer 圆角 18），垫在 WebView 之下；**不铺整窗**。
+- 为什么只铺卡片区：原生材质铺的是 `contentView.bounds()`，整窗铺会把左右 20 / 上 8 / 下 28 的透明留白也变成一圈磨砂（与 D116 修掉的「卡片外一圈别的颜色」是同一类观感问题），卡片阴影还会叠在模糊壁纸上发灰发脏。
+- 配套契约：新增 `panel_glass_ready` 命令把「是不是真铺上了」告诉前端；只有返回 `true` 时才由 `html[data-panel-glass="on"]` 把卡片底色换成薄 tint（浅 `rgba(255,255,255,.3)` / 深 `rgba(28,28,30,.38)`），否则保持 D116 的不透明实色卡。回退开关 `SIDEKICK_UI_VIBRANCY=off`；AppKit 调用失败只打 `[panel] 玻璃底衬失败` 日志并静默降级，绝不阻断弹面板。
+- 不在 CSS 里加 `backdrop-filter`：透明窗口里没有可采样像素，视觉零收益、GPU 白付；此外 `prefers-reduced-transparency` 在 WKWebView 上根本不匹配（Safari 全版本不支持），玻璃的降级只能走原生开关。
+- 代价：macOS 目标显式声明 `objc2` / `objc2-app-kit` / `objc2-quartz-core`（版本与 tauri 的传递依赖一致 0.6.5 / 0.3.2 / 0.3.2，**不新增 crate**），Android 目标 `cfg` 隔离不受影响；圆角只能落在 layer 上（`NSVisualEffectView` 没有公开的 `cornerRadius`），靠 `setCornerRadius + masksToBounds` 裁掉直角。
+- 验证：日志 `[panel] 卡片区玻璃已就位（NSVisualEffectView · popover · 圆角 18）`；同屏同位置 A/B 实测（tint 压到 0.04）——`SIDEKICK_UI_VIBRANCY=off` 时卡片里能看清背后正文（区块 stdev 69.6），开启后正文被糊成均匀磨砂（stdev 48.2、无文字残留）；卡片实测 320×432、18px 圆角无直角玻璃外露；`cargo test` 184 / 708 前端 tests / tsc / lint / `check-docs` / `check-boundaries` 全绿。
+- 调整（同日晚，用户反馈「看不出来太大的区别」）：确认不是没生效，而是**浅色背景下密集磨砂与不透明卡几乎同观感**。据此把默认材质换成 macOS 26 的 **`NSGlassEffectView`（`liquidGlassRegular`）**——背景颜色真正透进来、带边缘高光，最接近「iOS 26 玻璃」；低版本或类不存在时自动退回经典磨砂 `popover`。同时把材质做成可切档：`SIDEKICK_GLASS_MATERIAL=liquidGlass|liquidGlassClear|popover|underWindowBackground|sidebar|menu|contentBackground`（`liquidGlassClear` 实测在数据卡上小字对比不足，不建议）。QA 预览同步增强：`SIDEKICK_PANEL_PREVIEW="x,y"`（逻辑像素）可把面板放到任意位置对着深色/彩色背景截图，且预览期间不因失焦自动收起（截图脚本点不回来）。
+- 规范：`app/src-tauri/src/panel_glass.rs`、`app/src-tauri/src/usage_panel.rs`（`CARD_RADIUS` + `panel_glass_ready`）、`app/src-tauri/src/lib.rs`（预览改为不弹主窗口）、`app/src/desktop/styles/panel.css`、`app/src/desktop/panel/usage-panel.tsx`、`app/src/shared/lib/tauri.ts`、`app/src/dev/tauri-mock.ts`、`docs/engineering/desktop-usage-panel.md`、`docs/status.md`、`AGENTS.md`。

@@ -44,7 +44,12 @@ related:
 | 位置 | 卡片顶边 = 图标事件矩形底边（GAP 0，视觉约在菜单栏下 8pt）；水平居中对齐图标；再夹到图标所在显示器的左右 8pt 安全边 |
 | 创建时机 | 启动 setup 时预创建并隐藏（第一次点按也秒开）；失败时首次点按再试 |
 | URL | `index.html?window=panel`（`main.tsx` 按查询参数挂 `entries/panel.tsx`，不再走 `app_role` 分支） |
-| 内容层 | 不透明卡片（D86：内容层不透明），透明窗口只服务于圆角和阴影；**不设 NSVisualEffectView** |
+| 内容层 | 默认不透明卡片（D86：内容层不透明）；**卡片区单独铺一块原生玻璃层**（D120）：macOS 26+ 用 `NSGlassEffectView`（`liquidGlassRegular`），低版本退回 `NSVisualEffectView`（popover/BehindWindow/Active）；圆角 18、垫在 WebView 之下；前端拿到 `panel_glass_ready=true` 后才把底色换成薄 tint |
+| 材质档位 | `SIDEKICK_GLASS_MATERIAL=liquidGlass`（默认）`|liquidGlassClear|popover|underWindowBackground|sidebar|menu|contentBackground`；`liquidGlassClear` 在数据卡上小字对比不足，不建议 |
+| 玻璃只铺卡片 | 原生材质铺的是 `contentView.bounds()`，整窗铺会让 20/8/28 的透明留白也变成磨砂、阴影叠在模糊壁纸上发脏；所以 view 的 frame 就是卡片矩形，留白/阴影/圆角仍归 CSS（D116） |
+| QA 预览 | `SIDEKICK_PANEL_PREVIEW=1` 启动即弹面板并收起主窗口；`SIDEKICK_PANEL_PREVIEW="x,y"`（逻辑像素）可指定位置，便于对着深色/彩色背景截图；预览期间不因失焦收起 |
+| 玻璃回退 | `SIDEKICK_UI_VIBRANCY=off` 不铺 view（等价 D116 实色卡）；AppKit 失败只打日志静默降级。回退必须在 Rust 侧——原生 view 插进去以后 CSS 关不掉 |
+| 为什么不用 CSS backdrop-filter | 采样上界是文档根元素，透明窗口背后没有像素可采样（见 D120）；`prefers-reduced-transparency` 在 WKWebView 上不匹配，不能当降级手段 |
 | 页面透明 | 面板入口把 `.desktop-ios` 挂在 `<html>`，ios.css 会因此给 html 铺页面底色；`panel.css` 必须用 `html.desktop-ios { background: transparent }` 压过它，否则整窗（含透明留白）是一圈灰/黑，和壁纸冲突 |
 
 定位数学在 `usage_panel::panel_origin`（纯函数，单测覆盖主屏居中、右/左边缘夹取、副屏负坐标、拿不到显示器、非法 scale）。托盘矩形来自 `TrayIconEvent::Click.rect`（tauri/tray-icon 在 macOS 上已换算成顶部原点的 `dpi::Position/Size`，统一 `to_physical(scale)` 后再算）。
@@ -63,15 +68,16 @@ related:
 
 | 文件 | 职责 |
 | --- | --- |
-| `app/src-tauri/src/usage_panel.rs` | 窗口预创建/定位/toggle/收起、两个命令（`hide_usage_panel` / `open_usage_page`）、导航事件、定位单测 |
+| `app/src-tauri/src/usage_panel.rs` | 窗口预创建/定位/toggle/收起、三个命令（`hide_usage_panel` / `open_usage_page` / `panel_glass_ready`）、导航事件、`CARD_RADIUS` 常量、定位单测 |
+| `app/src-tauri/src/panel_glass.rs` | 卡片区原生磨砂底衬（D120）：`NSVisualEffectView` 只铺 320×432、圆角 18、垫在 WebView 下；失败静默降级 |
 | `app/src-tauri/src/tray.rs` | 左键改调 `usage_panel::toggle`；tooltip 文案；右键菜单不变 |
 | `app/src-tauri/src/lib.rs` | setup 预创建、`CloseRequested`/`Focused(false)` 拦截、注册命令 |
 | `app/src-tauri/capabilities/panel.json` | 给 `usage-panel` 窗口 `core:default` |
 | `app/src/main.tsx` | `?window=panel` 分支（先于 `app_role`） |
 | `app/src/entries/panel.tsx` | 挂 `.desktop-ios` 令牌、引入 `ios.css` + `panel.css`、mount 面板 |
 | `app/src/desktop/panel/usage-panel.tsx` | 紧凑卡片（hero / 三读数 / 7 天迷你柱 / 客户端/会话/模型 Top 3 分组 + 占比条 / 打开用量页 / 状态） |
-| `app/src/desktop/styles/panel.css` | 卡片令牌与布局（深浅两套） |
-| `app/src/shared/lib/tauri.ts` | `hideUsagePanel` / `openUsagePage` 命令、`subscribeNavigate` |
+| `app/src/desktop/styles/panel.css` | 卡片令牌与布局（深浅两套）；`html[data-panel-glass="on"]` 下切半透明 tint，否则实色 |
+| `app/src/shared/lib/tauri.ts` | `hideUsagePanel` / `openUsagePage` / `panelGlassReady` 命令、`subscribeNavigate` |
 | `app/src/desktop/app.tsx` | 订阅 `sidekick-navigate`，收到 `usage` 切页 |
 | `app/src/dev/tauri-mock.ts` | 浏览器 QA 的两个命令空实现；`token_usage_stats` 的 180 天历史 |
 | `scripts/qa-desktop-ios.mjs` | 360×468 × 浅/深 + 空态 + 悬停截图，校验卡片 320×432、内部不裁切、无溢出/控制台错误 |

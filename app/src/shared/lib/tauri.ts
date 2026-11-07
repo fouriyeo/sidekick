@@ -185,6 +185,7 @@ const COMMANDS = {
   tokenPricingSetMobileModels: "token_pricing_set_mobile_models",
   hideUsagePanel: "hide_usage_panel",
   openUsagePage: "open_usage_page",
+  panelGlassReady: "panel_glass_ready",
 } as const;
 
 const EVENTS = {
@@ -408,6 +409,18 @@ export function hideUsagePanel(): Promise<void> {
 /** 小看板「打开用量页」：唤起主窗口并切到用量页（Rust 发 `sidekick-navigate`）。 */
 export function openUsagePage(): Promise<void> {
   return invoke<void>(COMMANDS.openUsagePage);
+}
+
+/**
+ * 小看板卡片区是否铺上了原生玻璃底衬（D120）。
+ *
+ * CSS 的 `backdrop-filter` 采不到窗口背后的桌面，磨砂只能由 Rust 在 WebView 下垫
+ * `NSVisualEffectView` 提供。铺上了卡片才能用半透明 tint；没铺上（非 macOS /
+ * `SIDEKICK_UI_VIBRANCY=off` / AppKit 失败）必须继续用不透明实色，否则正文会直接
+ * 压在清晰的壁纸上。
+ */
+export function panelGlassReady(): Promise<boolean> {
+  return invoke<boolean>(COMMANDS.panelGlassReady);
 }
 
 /**

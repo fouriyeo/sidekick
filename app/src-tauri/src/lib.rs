@@ -52,6 +52,9 @@ mod transcript;
 mod tray;
 #[cfg(desktop)]
 mod usage_panel;
+/// 看板卡片区的原生玻璃底衬（D120）。
+#[cfg(all(desktop, target_os = "macos"))]
+mod panel_glass;
 
 #[cfg(desktop)]
 #[tauri::command]
@@ -130,15 +133,42 @@ pub fn run() {
             if let Err(err) = menu::install(&handle) {
                 eprintln!("[menu] 中文菜单安装失败，保留默认菜单: {err}");
             }
-            // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
-            tray::show_main_window(&handle);
             // QA 预览开关（仅 debug 构建）：没有辅助功能权限时脚本点不到菜单栏图标，
             // 用 SIDEKICK_PANEL_PREVIEW=1 启动即弹面板，便于桌面截图验收。
+            // 预览时**不弹主窗口**：面板后面要留桌面壁纸，截图才能看清玻璃糊到了什么。
             #[cfg(all(desktop, debug_assertions))]
-            if std::env::var_os("SIDEKICK_PANEL_PREVIEW").is_some() {
-                let tray_rect = tauri::Rect {
-                    position: tauri::Position::Physical(tauri::PhysicalPosition::new(2518, 28)),
-                    size: tauri::Size::Physical(tauri::PhysicalSize::new(72, 48)),
+            let panel_preview = std::env::var_os("SIDEKICK_PANEL_PREVIEW").is_some();
+            #[cfg(not(all(desktop, debug_assertions)))]
+            let panel_preview = false;
+
+            // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
+            if !panel_preview {
+                tray::show_main_window(&handle);
+            }
+            #[cfg(all(desktop, debug_assertions))]
+            if panel_preview {
+                // 主窗口由 tauri.conf.json 的 windows 自动创建并可见，这里显式收起来，
+                // 面板后面才真的是桌面壁纸（否则玻璃糊的是一张白卡，截图看不出效果）。
+                if let Some(main) = handle.get_webview_window("main") {
+                    let _ = main.hide();
+                }
+                // SIDEKICK_PANEL_PREVIEW="x,y"（逻辑像素）可把面板放到任意位置，
+                // 方便把玻璃挪到深色/彩色窗口前面截图对比；只写 1 用默认右上角。
+                let custom = std::env::var("SIDEKICK_PANEL_PREVIEW")
+                    .ok()
+                    .and_then(|value| {
+                        let (x, y) = value.split_once(',')?;
+                        Some((x.trim().parse::<f64>().ok()?, y.trim().parse::<f64>().ok()?))
+                    });
+                let tray_rect = match custom {
+                    Some((x, y)) => tauri::Rect {
+                        position: tauri::Position::Logical(tauri::LogicalPosition::new(x, y)),
+                        size: tauri::Size::Logical(tauri::LogicalSize::new(36.0, 24.0)),
+                    },
+                    None => tauri::Rect {
+                        position: tauri::Position::Physical(tauri::PhysicalPosition::new(2518, 28)),
+                        size: tauri::Size::Physical(tauri::PhysicalSize::new(72, 48)),
+                    },
                 };
                 usage_panel::toggle(&handle, tray_rect);
             }
@@ -168,7 +198,10 @@ pub fn run() {
                 tauri::WindowEvent::Focused(false)
                     if window.label() == usage_panel::PANEL_WINDOW =>
                 {
-                    let _ = window.hide();
+                    // QA 预览时不收：预览一启动焦点就被别的 App 拿走，截图脚本又点不回来。
+                    if !usage_panel::preview_holds_open() {
+                        let _ = window.hide();
+                    }
                 }
                 _ => {}
             }
@@ -205,7 +238,8 @@ pub fn run() {
             dsh_hook::dsh_hook_remove,
             dsh_hook::dsh_hook_test,
             usage_panel::hide_usage_panel,
-            usage_panel::open_usage_page
+            usage_panel::open_usage_page,
+            usage_panel::panel_glass_ready
         ]);
 
     #[cfg(mobile)]

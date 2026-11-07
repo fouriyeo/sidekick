@@ -735,6 +735,8 @@ export function installTauriMock(): void {
       }
       // 菜单栏用量小看板（D108）：浏览器里没有真实窗口，两个窗口操作用空实现占位。
       if (command === "hide_usage_panel" || command === "open_usage_page") return null;
+      // 浏览器里没有原生材质（D120）：看板保持不透明实色卡，与真机回退态一致。
+      if (command === "panel_glass_ready") return false;
       if (command === "send_focus_request") {
         const requestId = typeof args?.requestId === "string" ? args.requestId : "";
         window.setTimeout(() => {

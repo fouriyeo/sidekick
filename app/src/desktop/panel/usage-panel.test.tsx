@@ -10,6 +10,8 @@ const tauri = vi.hoisted(() => ({
   setTokenPricingMobileModels: vi.fn(),
   hideUsagePanel: vi.fn(),
   openUsagePage: vi.fn(),
+  // 测试环境没有原生材质（D117），一律按「没铺玻璃」处理 → 卡片保持不透明实色。
+  panelGlassReady: vi.fn(),
   normalizeError: (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
 }));
 
@@ -210,6 +212,8 @@ beforeEach(() => {
   tauri.hideUsagePanel.mockResolvedValue(undefined);
   tauri.openUsagePage.mockReset();
   tauri.openUsagePage.mockResolvedValue(undefined);
+  tauri.panelGlassReady.mockReset();
+  tauri.panelGlassReady.mockResolvedValue(false);
 });
 
 afterEach(() => cleanup());
