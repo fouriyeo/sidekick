@@ -28,16 +28,21 @@ pub const NAVIGATE_EVENT: &str = "sidekick-navigate";
 /// 可见卡片尺寸（逻辑像素）。用户要求「不要太大」，320 宽是菜单栏 popover 的常见尺度。
 const CARD_W: f64 = 320.0;
 const CARD_H: f64 = 432.0;
-/// 窗口四周的透明留白：只用来放 CSS 阴影，不参与视觉卡片。
-pub const PADDING: f64 = 14.0;
-/// 卡片顶边与菜单栏图标底边的间距。
-const GAP: f64 = 6.0;
+/// 左右透明留白：只用来让卡片阴影向外延伸、自然淡出，不参与视觉卡片。
+pub const SIDE_PAD: f64 = 20.0;
+/// 顶部留白刻意做小：窗口顶边保持在菜单栏底线（30pt），
+/// 否则透明窗口会盖住托盘图标下半区，再点图标关不掉面板。
+pub const TOP_PAD: f64 = 8.0;
+/// 底部留白最大：阴影向下偏移，需要空间淡出。
+pub const BOTTOM_PAD: f64 = 28.0;
+/// 卡片顶边与菜单栏图标矩形底边的间距（0 = 紧贴事件矩形，视觉约在菜单栏下 8pt）。
+const GAP: f64 = 0.0;
 /// 夹取时与显示器左右边缘保留的安全边。
 const EDGE: f64 = 8.0;
 
-/// 窗口整体尺寸 = 卡片 + 两侧透明留白。
-pub const WINDOW_W: f64 = CARD_W + PADDING * 2.0;
-pub const WINDOW_H: f64 = CARD_H + PADDING * 2.0;
+/// 窗口整体尺寸 = 卡片 + 非对称透明留白（360×468）。
+pub const WINDOW_W: f64 = CARD_W + SIDE_PAD * 2.0;
+pub const WINDOW_H: f64 = CARD_H + TOP_PAD + BOTTOM_PAD;
 
 /// 启动时预创建隐藏窗口。失败只打日志：第一次点按 `toggle` 会再试一次。
 pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
@@ -200,7 +205,7 @@ fn physical_tray_rect(rect: &Rect, scale: f64) -> (f64, f64, f64, f64) {
 /// 面板左上角位置（物理像素）的纯数学部分，单测覆盖。
 ///
 /// - 水平：图标中心对齐窗口中心，再夹到显示器左右安全边内；
-/// - 垂直：卡片顶边 = 图标底边 + `GAP`，窗口顶边再减掉透明留白；
+/// - 垂直：卡片顶边 = 图标底边 + `GAP`，窗口顶边再减掉顶部透明留白（`TOP_PAD`）；
 /// - `bounds` 为 None（拿不到显示器）时不夹取。
 #[allow(clippy::too_many_arguments)]
 fn panel_origin(
@@ -223,7 +228,7 @@ fn panel_origin(
 
     let mut x = tray_x + tray_w / 2.0 - win_w_f / 2.0;
     // 卡片顶边贴图标底边，窗口顶边回退一个透明留白。
-    let mut y = tray_y + tray_h + GAP * scale - PADDING * scale;
+    let mut y = tray_y + tray_h + GAP * scale - TOP_PAD * scale;
 
     if let Some((monitor_x, monitor_y, monitor_w, monitor_h)) = bounds {
         let left = f64::from(monitor_x) + EDGE * scale;
@@ -265,8 +270,8 @@ mod tests {
         let (ww, wh) = window_size();
         let (x, y) = panel_origin(tx, ty, tw, th, ww, wh, Some((0, 0, 3840, 2160)), 2.0);
 
-        // 图标中心 1736，窗口宽 696 → 左上角 1388；卡片顶边 = 48 + 12，窗口顶边再 -28。
-        assert_eq!(x, 1388);
+        // 图标中心 1736，窗口宽 720 → 左上角 1376；卡片顶边 = 48，窗口顶边再 -16。
+        assert_eq!(x, 1376);
         assert_eq!(y, 32);
     }
 
@@ -283,15 +288,15 @@ mod tests {
             Some((0, 0, 3840, 2160)),
             2.0,
         );
-        // 右边缘 = 3840 - 16 - 696 = 3128。
-        assert_eq!(x, 3128);
+        // 右边缘 = 3840 - 16 - 720 = 3104。
+        assert_eq!(x, 3104);
     }
 
     #[test]
     fn clamps_when_tray_is_at_left_edge() {
         let (ww, wh) = window_size();
         let (x, _) = panel_origin(0.0, 0.0, 72.0, 48.0, ww, wh, Some((0, 0, 3840, 2160)), 2.0);
-        // 左边缘 = 0 + 16；居中的 -312 会被夹回 16。
+        // 左边缘 = 0 + 16；居中的 -324 会被夹回 16。
         assert_eq!(x, 16);
     }
 
@@ -309,8 +314,8 @@ mod tests {
             Some((-1920, 0, 1920, 2160)),
             2.0,
         );
-        // 副屏右边缘 = -1920 + 1920 - 16 - 696 = -712。
-        assert_eq!(x, -712);
+        // 副屏右边缘 = -1920 + 1920 - 16 - 720 = -736。
+        assert_eq!(x, -736);
         assert_eq!(y, 32);
     }
 
@@ -318,7 +323,7 @@ mod tests {
     fn falls_back_without_monitor_bounds() {
         let (ww, wh) = window_size();
         let (x, y) = panel_origin(100.0, 0.0, 72.0, 48.0, ww, wh, None, 2.0);
-        assert_eq!(x, -212);
+        assert_eq!(x, -224);
         assert_eq!(y, 32);
     }
 
@@ -326,7 +331,7 @@ mod tests {
     fn tolerates_broken_scale_factor() {
         let (ww, wh) = window_size();
         let (_, y) = panel_origin(100.0, 0.0, 72.0, 48.0, ww, wh, None, 0.0);
-        // scale 非法时按 1.0：48 + 6 - 14。
+        // scale 非法时按 1.0：48 + 0 - 8。
         assert_eq!(y, 40);
     }
 }

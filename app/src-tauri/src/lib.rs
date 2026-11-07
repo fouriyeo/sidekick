@@ -1,5 +1,7 @@
 use tauri::Manager;
 
+#[cfg(target_os = "macos")]
+mod activation;
 #[cfg(desktop)]
 mod app_focus;
 #[cfg(desktop)]
@@ -33,6 +35,8 @@ mod dsh_hook_install;
 mod haptics;
 #[cfg(mobile)]
 mod keep_awake;
+#[cfg(target_os = "macos")]
+mod menu;
 mod mic_protocol;
 #[cfg(mobile)]
 mod mobile_client;
@@ -48,10 +52,6 @@ mod transcript;
 mod tray;
 #[cfg(desktop)]
 mod usage_panel;
-#[cfg(target_os = "macos")]
-mod activation;
-#[cfg(target_os = "macos")]
-mod menu;
 
 #[cfg(desktop)]
 #[tauri::command]
@@ -132,6 +132,16 @@ pub fn run() {
             }
             // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
             tray::show_main_window(&handle);
+            // QA 预览开关（仅 debug 构建）：没有辅助功能权限时脚本点不到菜单栏图标，
+            // 用 SIDEKICK_PANEL_PREVIEW=1 启动即弹面板，便于桌面截图验收。
+            #[cfg(all(desktop, debug_assertions))]
+            if std::env::var_os("SIDEKICK_PANEL_PREVIEW").is_some() {
+                let tray_rect = tauri::Rect {
+                    position: tauri::Position::Physical(tauri::PhysicalPosition::new(2518, 28)),
+                    size: tauri::Size::Physical(tauri::PhysicalSize::new(72, 48)),
+                };
+                usage_panel::toggle(&handle, tray_rect);
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

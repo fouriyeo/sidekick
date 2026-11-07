@@ -38,12 +38,14 @@ related:
 | 项 | 值 |
 | --- | --- |
 | label | `usage-panel`（`capabilities/panel.json` 的 windows 必须与它一致） |
-| 窗口 | 348×460 逻辑像素；`decorations(false)`、`transparent(true)`、`shadow(false)`、`resizable(false)`、`always_on_top(true)`、`skip_taskbar(true)`、`accept_first_mouse(true)` |
-| 可见卡片 | 320×432，四周 14px 透明留白只用来放 CSS 阴影 |
-| 位置 | 卡片顶边 = 图标底边 + 6pt；水平居中对齐图标；再夹到图标所在显示器的左右 8pt 安全边 |
+| 窗口 | 360×468 逻辑像素；`decorations(false)`、`transparent(true)`、`shadow(false)`、`resizable(false)`、`always_on_top(true)`、`skip_taskbar(true)`、`accept_first_mouse(true)` |
+| 可见卡片 | 320×432，透明留白非对称（左右 20 / 上 8 / 下 28），只用来放向外延伸的 CSS 阴影 |
+| 阴影 | 卡片自身 `0 8px 18px` + `0 2px 6px` 柔和阴影；窗口层不铺任何底色/阴影，阴影随留白自然淡出，不再被 14px 窄边裁成灰框 |
+| 位置 | 卡片顶边 = 图标事件矩形底边（GAP 0，视觉约在菜单栏下 8pt）；水平居中对齐图标；再夹到图标所在显示器的左右 8pt 安全边 |
 | 创建时机 | 启动 setup 时预创建并隐藏（第一次点按也秒开）；失败时首次点按再试 |
 | URL | `index.html?window=panel`（`main.tsx` 按查询参数挂 `entries/panel.tsx`，不再走 `app_role` 分支） |
 | 内容层 | 不透明卡片（D86：内容层不透明），透明窗口只服务于圆角和阴影；**不设 NSVisualEffectView** |
+| 页面透明 | 面板入口把 `.desktop-ios` 挂在 `<html>`，ios.css 会因此给 html 铺页面底色；`panel.css` 必须用 `html.desktop-ios { background: transparent }` 压过它，否则整窗（含透明留白）是一圈灰/黑，和壁纸冲突 |
 
 定位数学在 `usage_panel::panel_origin`（纯函数，单测覆盖主屏居中、右/左边缘夹取、副屏负坐标、拿不到显示器、非法 scale）。托盘矩形来自 `TrayIconEvent::Click.rect`（tauri/tray-icon 在 macOS 上已换算成顶部原点的 `dpi::Position/Size`，统一 `to_physical(scale)` 后再算）。
 
@@ -72,7 +74,7 @@ related:
 | `app/src/shared/lib/tauri.ts` | `hideUsagePanel` / `openUsagePage` 命令、`subscribeNavigate` |
 | `app/src/desktop/app.tsx` | 订阅 `sidekick-navigate`，收到 `usage` 切页 |
 | `app/src/dev/tauri-mock.ts` | 浏览器 QA 的两个命令空实现；`token_usage_stats` 的 180 天历史 |
-| `scripts/qa-desktop-ios.mjs` | 348×460 × 浅/深 + 空态 + 悬停截图，校验卡片 320×432、内部不裁切、无溢出/控制台错误 |
+| `scripts/qa-desktop-ios.mjs` | 360×468 × 浅/深 + 空态 + 悬停截图，校验卡片 320×432、内部不裁切、无溢出/控制台错误 |
 
 ## 5. 已知代价 / 风险
 
@@ -93,7 +95,7 @@ related:
 
 **人工（菜单栏只能目检）**
 
-1. `pnpm tauri dev` → 终端出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）` 与 `[panel] 已创建隐藏窗口 348×460`。
+1. `pnpm tauri dev` → 终端出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）` 与 `[panel] 已创建隐藏窗口 360×468`。
 2. 左键图标 → 卡片出现在图标正下方，宽 320、高 432，圆角/阴影正常（浅/深主题各看一次）；日志出现 `[panel] 显示`，再点图标/点其它 App 后出现 `[panel] 收起`。
 3. 鼠标在近 7 天柱上横向移动 → 命中柱加亮、顶部浮出「日期 · 金额」气泡（今天显示「今天」），移出消失；分组行 hover 有淡底。
 4. 再点图标收起；点桌面/其它 App 收起；Esc 收起；Cmd+W 后隐藏但下次仍能开。

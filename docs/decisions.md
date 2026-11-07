@@ -1099,3 +1099,16 @@
 - 历史：D1 的中文命名按「历史 D 条原文不重写」保留；App 名以本条为准。
 - 验证：重启后 AX 读应用菜单 = `关于 Sidekick / 服务 / 隐藏 Sidekick / 隐藏其他 / 全部显示 / 退出 Sidekick`；窗口截图侧栏显示 `Sidekick`；`cargo build` / `pnpm build` 干净。
 - 规范：`app/src-tauri/src/menu.rs`、`tray.rs`、`app/src/desktop/shell/sidebar.tsx`、`docs/engineering/desktop-tray.md`、`AGENTS.md`。
+
+## D116 · 看板卡片上移 + 阴影改为向外延伸（2026-11-07，补充 D108–D111）
+
+- 背景：D111 的阴影 `0 18px 44px` 远大于 14pt 透明留白，被窗口边界裁断成「卡片外一圈灰框」，用户误以为是第二层背景色；同时觉得卡片位置偏下。
+- 决策：
+  - 卡片上移：`GAP` 6 → 0（卡片顶边贴 `TrayIconEvent::Click.rect` 的底边，视觉约在菜单栏下 8pt）。
+  - 透明留白从「四周 14」改为非对称：左右 20 / 上 8 / 下 28（窗口 348×460 → 360×468）；顶部刻意保持窗口顶边在菜单栏底线（30pt），否则透明窗口会盖住托盘图标下半区、再点图标关不掉面板。
+  - 阴影改为 `0 8px 18px rgba(15,45,38,.16) + 0 2px 6px rgba(15,45,38,.06)`，落在留白内向外自然淡出；窗口层不铺任何底色或阴影，阴影只属于卡片。
+- 原因：去掉「贴边灰框」的观感，同时保留轻微浮起；卡片与菜单栏之间更紧凑。
+- 代价：窗口宽 +12pt、高 +8pt（都不可见）；顶部留白只有 8pt，上侧阴影较弱（阴影本来就朝下）。
+- 验证：`cargo test` 184（定位单测的 x/y 期望已按新窗口宽度/留白更新）；QA 60 张截图（视口 360×468，卡片仍 320×432、不裁切）；真实桌面截图 + 像素采样确认卡片外只剩柔和阴影、没有灰框。
+- 规范：`app/src-tauri/src/usage_panel.rs`、`app/src/desktop/styles/panel.css`、`scripts/qa-desktop-ios.mjs`、`docs/prd/usage/{SPEC,PRD,INDEX,ACCEPTANCE}.md`、`docs/engineering/{desktop-usage-panel,desktop-tray,INDEX}.md`、`docs/status.md`、`AGENTS.md`。
+

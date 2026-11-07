@@ -46,7 +46,7 @@ const PAGES = [...PRIMARY_PAGES, ...SETTINGS_PAGES];
 
 /**
  * 菜单栏用量小看板（D108）：第二窗口 `?window=panel`。
- * 真实窗口 348×460（卡片 320×432 + 四周 14 透明留白），这里按同样的逻辑像素截图。
+ * 真实窗口 360×468（卡片 320×432 + 左右 20 / 上 8 / 下 28 透明留白），这里按同样的逻辑像素截图。
  */
 const PANEL_PAGES = [
   { name: "panel", query: "" },
@@ -276,9 +276,9 @@ async function main() {
       }
     }
 
-    // 菜单栏用量小看板（D108）：按真实窗口 348×460 截图，并校验卡片固定 320×432。
+    // 菜单栏用量小看板（D108）：按真实窗口 360×468 截图，并校验卡片固定 320×432。
     for (const theme of ["dark", "light"]) {
-      await setViewport(cdp, 348, 460);
+      await setViewport(cdp, 360, 468);
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
       for (const entry of PANEL_PAGES) {
         await navigate(cdp, `${BASE}/?role=desktop&window=panel${entry.query}`);
