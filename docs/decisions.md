@@ -1077,12 +1077,25 @@
 
 - 问题：D112 让主窗口显示时接管菜单栏，但接管到的是 Tauri 默认英文菜单（File / Edit / View / Window / Help），中文产品里显得突兀。
 - 决定：新增 `app/src-tauri/src/menu.rs`，setup 里 `app.set_menu(...)` 重建同结构中文菜单，行为不变：
-  - 小跟班：关于小跟班 / 服务 / 隐藏小跟班 / 隐藏其他 / 全部显示 / 退出小跟班（⌘Q）
+  - Sidekick：关于 Sidekick / 服务 / 隐藏 Sidekick / 隐藏其他 / 全部显示 / 退出 Sidekick（⌘Q）
   - 文件：关闭窗口（⌘W）
   - 编辑：撤销（⌘Z）/ 重做（⇧⌘Z）/ 剪切（⌘X）/ 复制（⌘C）/ 粘贴（⌘V）/ 全选（⌘A）——WebView 输入框依赖这组预置项
   - 显示：切换全屏（⌃⌘F）
   - 窗口：最小化（⌘M）/ 缩放 / 前置全部窗口
-- 实现要点：全部用 `PredefinedMenuItem`（快捷键由系统按键盘布局给出，不手写 key equivalent）；`AboutMetadata.name = 小跟班`；只在 macOS 编译，安装失败只打日志、保留默认菜单，不阻断启动。
+- 实现要点：全部用 `PredefinedMenuItem`（快捷键由系统按键盘布局给出，不手写 key equivalent）；`AboutMetadata.name = Sidekick`；只在 macOS 编译，安装失败只打日志、保留默认菜单，不阻断启动。
 - 已知限制：第一项「应用菜单」的标题由系统按应用名显示（调试裸二进制 `desktop`、打包后 `Sidekick`），自定义菜单改不了；要在菜单栏显示「小跟班」得改 bundle 名（productName），会连带改 .app / Dock / Cmd+Tab 的名称，本次未做。
 - 验证：启动日志出现 `[menu] 已安装中文菜单`；AX 读 process 菜单栏 = `Apple / desktop / 文件 / 编辑 / 显示 / 窗口`；`cargo build` 干净（仅原有 `system_message` dead_code 警告）。
 - 规范：`app/src-tauri/src/menu.rs`、`lib.rs`（setup 安装）、`docs/engineering/desktop-tray.md`、`AGENTS.md`。
+
+## D114 · App 名只用英文 Sidekick，界面不再出现「小跟班」（2026-11-07，取代 D1 的中文名部分）
+
+- 背景：用户确认产品没有中文名，应用就叫 Sidekick；D1 的「中文名列小跟班」不再作为 App 名使用。
+- 改动（中文菜单本身保留 D113 的中文化，只把名字换成英文）：
+  - `menu.rs`：应用菜单标 Sidekick，子项 关于 Sidekick / 隐藏 Sidekick / 退出 Sidekick；`AboutMetadata.name = Sidekick`
+  - `app/src/desktop/shell/sidebar.tsx`：侧栏 logo 旁名称 小跟班 → Sidekick
+  - `app/src-tauri/src/tray.rs`：托盘悬停提示 → `Sidekick · 点按查看用量`
+  - 菜单栏第一项标题仍由系统按应用名显示（调试裸二进制 `desktop`、打包后 `Sidekick`）
+- 未动：手机宠物角色名（`PET_DISPLAY_NAME = "小跟班"`、首见气泡「你来了。我是小跟班。」）——它是宠物角色名，不是 App 名；是否一并改需产品确认。
+- 历史：D1 的中文命名按「历史 D 条原文不重写」保留；App 名以本条为准。
+- 验证：重启后 AX 读应用菜单 = `关于 Sidekick / 服务 / 隐藏 Sidekick / 隐藏其他 / 全部显示 / 退出 Sidekick`；窗口截图侧栏显示 `Sidekick`；`cargo build` / `pnpm build` 干净。
+- 规范：`app/src-tauri/src/menu.rs`、`tray.rs`、`app/src/desktop/shell/sidebar.tsx`、`docs/engineering/desktop-tray.md`、`AGENTS.md`。

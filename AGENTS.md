@@ -5,7 +5,7 @@
 
 ## 1. 项目是什么
 
-- 名称：小跟班 · Sidekick
+- 名称：Sidekick（英文名；App 名不用中文，D114。「小跟班」只作为手机宠物角色名）
 - 一句话：把手机变成电脑的「外设 + AI 宠物」——电脑把 AI/任务状态推给手机，用户在手机上收通知、回答 AI 的提问、发快捷指令、语音输入。
 - 仓库：https://github.com/fouriyeo/sidekick （私有，owner 项目维护者 / fouriyeo）
 - 本地路径：`/Users/dev/code/sidekick`

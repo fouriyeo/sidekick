@@ -64,7 +64,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .icon_as_template(true)
-        .tooltip("小跟班 Sidekick · 点按查看用量")
+        .tooltip("Sidekick · 点按查看用量")
         .menu(&menu)
         // 左键开用量小看板（D108），菜单（含退出）只在右键弹出。
         .show_menu_on_left_click(false)

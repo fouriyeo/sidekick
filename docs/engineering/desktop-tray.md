@@ -40,7 +40,7 @@ related:
 | `app/src-tauri/src/tray.rs` | 托盘图标/菜单/点击事件；`TRAY_READY` 全局开关；`show_main_window()`；左键转 `usage_panel::toggle` |
 | `app/src-tauri/src/usage_panel.rs` | 用量小看板窗口：预创建/定位/显示收起、`hide_usage_panel` / `open_usage_page` 命令（D108） |
 | `app/src-tauri/src/activation.rs` | 激活策略：主窗口显示切 `Regular`、隐藏切 `Accessory`（D112，`window_shown` / `window_hidden`） |
-| `app/src-tauri/src/menu.rs` | macOS 中文菜单：重建 小跟班 / 文件 / 编辑 / 显示 / 窗口（D113） |
+| `app/src-tauri/src/menu.rs` | macOS 中文菜单：重建 Sidekick / 文件 / 编辑 / 显示 / 窗口（D113，应用名用英文见 D114） |
 | `app/src-tauri/src/lib.rs` | setup 里设 Accessory、建托盘、预创建看板、首次把窗口叫到前台；`on_window_event` 拦 `CloseRequested`（main 与 `usage-panel`）与 `Focused(false)`（面板收起）；单实例回调复用 `show_main_window` |
 | `app/src-tauri/Cargo.toml` | **桌面目标**才开 `tauri` 的 `tray-icon` + `image-png` feature（Android 不带 tray 依赖） |
 | `app/src-tauri/icons/tray.png` | 36×36 单色模板图（随身卡剪影：卡身实心 + 挂孔与灯镂空），18pt @2x |
@@ -59,7 +59,7 @@ related:
 ## 4. 已知代价 / 风险
 
 - **窗口状态决定 Dock / 菜单栏（D112 调整 D88）**：主窗口显示时切 `Regular`，Dock 图标、Cmd+Tab、顶部 App 菜单（关于/文件/编辑/显示/窗口/帮助）和 ⌘Q 都正常；关窗隐藏后切回 `Accessory`，Dock / Cmd+Tab / App 菜单消失，只剩菜单栏图标。切换瞬间菜单栏归属会有一次变化（约 1 帧），可接受。
-- **菜单已中文化（D113）**：`app/src-tauri/src/menu.rs` 用 `Submenu` + `PredefinedMenuItem` 重建 macOS 菜单——小跟班（关于/服务/隐藏/隐藏其他/全部显示/退出）、文件（关闭窗口 ⌘W）、编辑（撤销/重做/剪切/复制/粘贴/全选）、显示（切换全屏）、窗口（最小化/缩放/前置全部窗口）；标准快捷键由预置项自带，不要手写 key equivalent。第一项应用菜单的标题由系统按应用名显示（调试裸二进制 `desktop`、打包后 `Sidekick`），不是菜单能改的。
+- **菜单已中文化（D113）**：`app/src-tauri/src/menu.rs` 用 `Submenu` + `PredefinedMenuItem` 重建 macOS 菜单——Sidekick（关于/服务/隐藏/隐藏其他/全部显示/退出）、文件（关闭窗口 ⌘W）、编辑（撤销/重做/剪切/复制/粘贴/全选）、显示（切换全屏）、窗口（最小化/缩放/前置全部窗口）；标准快捷键由预置项自带，不要手写 key equivalent。第一项应用菜单的标题由系统按应用名显示（调试裸二进制 `desktop`、打包后 `Sidekick`），不是菜单能改的。
 - **隐藏窗口的 WebView 仍在内存里**（约 100–200MB）；Rust 侧服务不受影响，隐藏期间 WebView 定时器可能被系统节流，
   与「连接/AI 状态」无关（那些都在 Rust）。
 - `window.set_focus()` 在 macOS 上会 `makeKeyAndOrderFront` + `activate`；Accessory 应用也能到前台，不需要额外私有 API。

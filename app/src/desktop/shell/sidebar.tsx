@@ -48,7 +48,7 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
 
       <div className="flex items-center gap-2 px-4 pb-4">
         <img src="/logo-icon.svg" alt="" className="size-[22px]" />
-        <span className="text-[15px] leading-none font-semibold tracking-[-0.015em]">小跟班</span>
+        <span className="text-[15px] leading-none font-semibold tracking-[-0.015em]">Sidekick</span>
       </div>
 
       <nav aria-label="主导航" className="flex flex-col gap-1 px-2.5">

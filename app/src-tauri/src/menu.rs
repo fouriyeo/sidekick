@@ -1,7 +1,7 @@
 //! macOS 应用菜单中文化（D113）。
 //!
 //! Tauri 在没有自定义菜单时会挂一份英文默认菜单（File / Edit / View / Window / Help）。
-//! 这里按同一结构重建一份中文菜单：小跟班（关于/服务/隐藏/退出）、文件（关闭窗口）、
+//! 这里按同一结构重建一份中文菜单：Sidekick（关于/服务/隐藏/退出）、文件（关闭窗口）、
 //! 编辑（撤销/重做/剪切/复制/粘贴/全选）、显示（切换全屏）、窗口（最小化/缩放/前置全部窗口）。
 //!
 //! 说明：
@@ -19,25 +19,25 @@ use tauri::{
 pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let pkg = app.package_info();
     let about = AboutMetadata {
-        name: Some("小跟班".into()),
+        name: Some("Sidekick".into()),
         version: Some(pkg.version.to_string()),
         ..Default::default()
     };
 
     let app_menu = Submenu::with_items(
         app,
-        "小跟班",
+        "Sidekick",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some("关于小跟班"), Some(about))?,
+            &PredefinedMenuItem::about(app, Some("关于 Sidekick"), Some(about))?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, Some("服务"))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, Some("隐藏小跟班"))?,
+            &PredefinedMenuItem::hide(app, Some("隐藏 Sidekick"))?,
             &PredefinedMenuItem::hide_others(app, Some("隐藏其他"))?,
             &PredefinedMenuItem::show_all(app, Some("全部显示"))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, Some("退出小跟班"))?,
+            &PredefinedMenuItem::quit(app, Some("退出 Sidekick"))?,
         ],
     )?;
 
@@ -87,6 +87,6 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
     )?;
     app.set_menu(menu)?;
-    eprintln!("[menu] 已安装中文菜单（小跟班 / 文件 / 编辑 / 显示 / 窗口）");
+    eprintln!("[menu] 已安装中文菜单（Sidekick / 文件 / 编辑 / 显示 / 窗口）");
     Ok(())
 }
