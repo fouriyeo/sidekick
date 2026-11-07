@@ -124,6 +124,7 @@ related:
 
 - `PageShell({ transition = "fade", size = "regular", tone = "default", bottomGap = "regular" })`：滚动容器 + 内容列（regular 730 / 28 / 底 64；wide 956 / 28 / 底 24）；`tone="usage"` 给滚动容器加 `dsl-usage-canvas`（用量页画布）；`fade` = 一级页切换（`dsl-page-in`），`push` = 设置二级页从右侧推入（`dsl-page-push`）；滚动 > 6px 时把「已滚动」状态提供给页头。
 - `PageBody`：组间距 24。
+- **顶部滚动边缘必须铺满整个滚动视口**：`PageShell` 量出「内容列 → 滚动视口」的左右留白，写成 `--dsl-bleed` 挂在滚动容器外层，`.dsl-topbar-wrap` 用 `margin-inline: -bleed` + 等量 `padding-inline` 横向铺满、里面的玻璃胶囊仍对齐内容列。**不要**只让渐隐层按内容列宽度走（1180 窗口会剩 141px 直边，看起来是「中间一条白条」），也不要把渐隐层做成滚动容器的兄弟节点（内容列有进入动画的 `transform`，会自己成层，渐隐层会被压到内容下面）。
 - `PageHeader({ title, actions?, onBack?, backLabel?, compact? })`：sticky 玻璃工具栏 + 34/600 大标题；二级页在工具栏左侧显示「‹ 设置」；不写 description（旧参数仅兼容）；`compact` 用于宽幅数据页——不渲染大标题、工具栏标题常显、保留 `sr-only h1`。
 - `shell/segmented-control.tsx`：胶囊玻璃轨道 + 白色滑块，spring morph；选中语义用 `aria-pressed`。
 - `shell/sidebar.tsx`：224 玻璃侧栏 + 导航滑块 + 三行状态摘要。

@@ -848,7 +848,17 @@ html[data-theme="dark"] .desktop-ios .dsl-sidebar::before {
 /* ----------------------------------------------------------------------------
    滚动边缘（scroll edge effect）：内容接近顶部时先模糊+渐隐，再被玻璃工具栏盖住，
    避免卡片从玻璃上方的 8px 缝隙里露头。
+   渐隐层铺满整个滚动视口（main 区宽度），不跟着 730 内容列走——否则左右两侧
+   会留出两条直边，看起来是「中间一条白条」。`.dsl-scroll-edge` 由 PageShell 渲染，
+   是滚动容器（含 sticky 工具栏）的兄弟节点，只负责背板，不参与布局。
    -------------------------------------------------------------------------- */
+
+.dsl-topbar-wrap {
+  /* 负外边距吃掉内容列到视口两边的留白，让渐隐层铺满整个滚动视口；
+     等量内边距保证里面的玻璃胶囊仍对齐内容列。 */
+  margin-inline: calc(-1 * var(--dsl-bleed, 0px));
+  padding-inline: var(--dsl-bleed, 0px);
+}
 
 .dsl-topbar-wrap[data-scrolled="true"] {
   background: linear-gradient(
@@ -865,8 +875,8 @@ html[data-theme="dark"] .desktop-ios .dsl-sidebar::before {
   opacity: 0;
   transition: opacity 220ms ease;
   top: -8px;
-  right: -28px;
-  left: -28px;
+  right: 0;
+  left: 0;
   height: 86px;
   z-index: -1;
   pointer-events: none;

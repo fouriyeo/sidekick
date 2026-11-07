@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { PageScrollContext } from "@/desktop/shell/page-header";
 
 /**
@@ -28,11 +28,41 @@ export function PageShell({
   bottomGap?: "regular" | "compact";
 }) {
   const [scrolled, setScrolled] = useState(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  /**
+   * 内容列到滚动视口两边的留白（1180 窗口 = 141px）。
+   *
+   * 页头那层「滚动边缘」必须铺满整个滚动视口：只铺内容列宽度的话，两侧会留下
+   * 直边，看起来就是「中间一条白条」。列宽在 CSS 里是 max-w 固定值、视口宽度是
+   * 任意值，所以这里量一次给 `.dsl-topbar-wrap` 做负外边距 + 等量内边距。
+   */
+  const [bleed, setBleed] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const scroller = scrollerRef.current;
+      const column = columnRef.current;
+      if (!scroller || !column) return;
+      const columnPadding = 28 * 2; // px-7
+      const inner = column.offsetWidth - columnPadding;
+      setBleed(Math.max(0, Math.round((scroller.clientWidth - inner) / 2)));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (scrollerRef.current) observer.observe(scrollerRef.current);
+    if (columnRef.current) observer.observe(columnRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <PageScrollContext.Provider value={scrolled}>
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+        style={{ "--dsl-bleed": `${bleed}px` } as CSSProperties}
+      >
         <div
+          ref={scrollerRef}
           data-page-scroll
           className={cn(
             "min-h-0 flex-1 overflow-y-auto overscroll-contain",
@@ -44,6 +74,7 @@ export function PageShell({
           }}
         >
           <div
+            ref={columnRef}
             className={cn(
               "mx-auto flex w-full flex-col px-7",
               size === "wide" ? "max-w-[956px]" : "max-w-[730px]",

@@ -1112,3 +1112,11 @@
 - 验证：`cargo test` 184（定位单测的 x/y 期望已按新窗口宽度/留白更新）；QA 60 张截图（视口 360×468，卡片仍 320×432、不裁切）；真实桌面截图 + 像素采样确认卡片外只剩柔和阴影、没有灰框。
 - 规范：`app/src-tauri/src/usage_panel.rs`、`app/src/desktop/styles/panel.css`、`scripts/qa-desktop-ios.mjs`、`docs/prd/usage/{SPEC,PRD,INDEX,ACCEPTANCE}.md`、`docs/engineering/{desktop-usage-panel,desktop-tray,INDEX}.md`、`docs/status.md`、`AGENTS.md`。
 
+## D117 · 电脑端顶部滚动边缘铺满整页（2026-11-07）
+
+- 背景：用户反馈「向下滑动时顶部出现渐变白条，而且没充满整个页面、只在中间一段，看着很奇怪」。实测 1180 窗口：内容列 674 + 两侧 28 = 730，渐隐层只有 730 宽，两侧各留 141 直边，所以像一条贴在中间的白色带子。
+- 决策：滚动边缘（scroll edge）与玻璃工具栏的背板改为**横跨整个滚动视口**（main 区宽度），玻璃胶囊仍对齐 730 内容列。实现方式：`PageShell` 用 `ResizeObserver` 量出内容列到视口两侧的留白，写成 CSS 变量 `--dsl-bleed`；`.dsl-topbar-wrap` 用 `margin-inline: calc(-1 * var(--dsl-bleed))` + 等量 `padding-inline` 铺满。**不用**「滚动容器的兄弟绝对定位层」：内容列有 `dsl-page-in` 的 `transform` 动画会形成层叠上下文，渐隐层会被压到内容下面（实测整层效果消失、胶囊也被白色背板吞掉）。
+- 放弃：直接删掉渐隐层（只剩玻璃胶囊）——宽度问题解决，但内容会从工具栏上方的 8px 缝隙裸奔；让内容列变宽——违背 730 单列契约（D85）。
+- 代价：`PageShell` 多一个 `ResizeObserver`（窗口 resize / 列宽变化时重算一次），首帧 `--dsl-bleed: 0`。
+- 验证：浏览器 CDP 量 `.dsl-topbar-wrap` 宽度 = 956（=滚动视口）、胶囊仍 674；浅/深 × 1180/960 截图顶部渐隐层左右到边、无直边、无横向溢出；`tsc` / `biome` / 707 tests 全绿。
+- 规范：`app/src/desktop/shell/page-shell.tsx`、`app/src/desktop/styles/ios.css`、`docs/engineering/desktop-ios-ui.md`、`AGENTS.md`。
