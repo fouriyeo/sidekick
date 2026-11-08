@@ -71,7 +71,8 @@ scripts/      构建 / 安装 / 打包 / 发布 / QA / 文档检查
 - [docs/history.md](docs/history.md) — 变更历史
 - [docs/engineering/pitfalls.md](docs/engineering/pitfalls.md) — 踩过的坑与硬约束
 - [docs/architecture.md](docs/architecture.md) · [docs/frontend-architecture.md](docs/frontend-architecture.md) · [docs/dependency-policy.md](docs/dependency-policy.md)
-- [docs/setup.md](docs/setup.md) — 环境、构建、打包、调试
+- [docs/setup.md](docs/setup.md) — 环境、构建、调试
+- [docs/engineering/release.md](docs/engineering/release.md) — 发版 runbook（打包 / 签名 / GitHub Releases / 回滚）
 
 ## 路线
 

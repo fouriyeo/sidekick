@@ -68,7 +68,7 @@ pnpm tauri dev                 # 桌面开发（窗口出现即服务已启动�
 scripts/build-android.sh       # 构建 debug APK（首次需 pnpm tauri android init）
 scripts/install-android.sh     # adb install -r + 启动
 scripts/package-release.sh     # 先安卓后桌面 → release/（覆盖同名文件）
-scripts/publish-release.sh     # 上传 GitHub Releases（分发入口）
+scripts/publish-release.sh     # 上传 GitHub Releases（分发入口；流程见 docs/engineering/release.md）
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 node scripts/check-docs.mjs && node scripts/check-boundaries.mjs
 node scripts/qa-desktop-ios.mjs   # 桌面全页截图（需先 pnpm dev）

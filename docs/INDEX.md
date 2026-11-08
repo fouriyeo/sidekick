@@ -40,7 +40,8 @@ children:
 | 视觉、配色、动效、宠物资产 | [standards/INDEX.md](./standards/INDEX.md) | [standards/visual.md](./standards/visual.md) |
 | 实现任何功能（宠物 / 麦克风 / 备忘录 / 用量 / 外壳 / AI 联动） | [prd/INDEX.md](./prd/INDEX.md) | 该功能 INDEX + engineering 对应篇 |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
-| 环境、构建、打包、调试 | 直接读 | [setup.md](./setup.md) |
+| 环境、构建、调试 | 直接读 | [setup.md](./setup.md) |
+| 发版：打包、签名、上传 GitHub Releases、回滚补发 | [engineering/release.md](./engineering/release.md) | [setup.md](./setup.md) |
 | 维护文档体系 | [standards/documentation.md](./standards/documentation.md) | 本页 |
 
 ## 2. 目录树
@@ -72,6 +73,7 @@ docs/
 | 前端架构与目录 | [frontend-architecture.md](./frontend-architecture.md) |
 | 系统拓扑与模块 | [architecture.md](./architecture.md) |
 | 依赖准入 | [dependency-policy.md](./dependency-policy.md) |
+| 发版与分发流程 | [engineering/release.md](./engineering/release.md) |
 | 现有协议 / 音频协议 | [../protocol/README.md](../protocol/README.md) / [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
 | 语音输入链路 / 百炼云端 | [prd/mic/](./prd/mic/INDEX.md) / [engineering/audio-pipeline.md](./engineering/audio-pipeline.md) / [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 剪贴板 / AI 联动 / 用量 / 备忘录 / 外壳 | 各自 `prd/<feature>/` + 同名 `engineering/*.md` |
