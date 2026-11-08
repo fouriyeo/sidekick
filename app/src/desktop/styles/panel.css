@@ -96,12 +96,16 @@ body {
    backdrop-filter（透明窗口里它没有可采样的像素，只会白烧 GPU）。 */
 html[data-panel-glass="on"] .dsl-panel-card {
   --panel-bg: rgba(255, 255, 255, 0.3);
-  --panel-border: rgba(15, 45, 38, 0.08);
+  /* 玻璃态不要深色描边：它会在卡片边界画出一圈 1px 灰线（实测 214 → 197 的暗带），
+     叠在玻璃亮边上就像「周围一圈阴影」。边界交给系统玻璃层自己的边高光。 */
+  --panel-border: transparent;
   --panel-seg-bg: rgba(118, 118, 128, 0.14);
   --panel-seg-active: rgba(255, 255, 255, 0.92);
   --panel-hover: rgba(15, 45, 38, 0.07);
-  --panel-shadow:
-    0 8px 18px rgba(15, 45, 38, 0.14), 0 2px 6px rgba(15, 45, 38, 0.05);
+  /* 玻璃态**不要投影**：卡片边缘已经有系统玻璃的边高光做界定，
+     任何 box-shadow 都会在透明留白里画出一圈灰晕（实测边缘外侧 40px 内有 22 级亮度差，
+     关掉后同一区域是平的 247）。留白只留给「向外淡出」的幻觉，不放真阴影。 */
+  --panel-shadow: none;
 }
 
 html[data-theme="dark"] .dsl-panel-card,
@@ -128,10 +132,11 @@ html.dark .dsl-panel-card {
 html[data-panel-glass="on"][data-theme="dark"] .dsl-panel-card,
 html[data-panel-glass="on"].dark .dsl-panel-card {
   --panel-bg: rgba(28, 28, 30, 0.38);
-  --panel-border: rgba(255, 255, 255, 0.1);
+  /* 同浅色：不要白色描边，否则边界一圈亮线。 */
+  --panel-border: transparent;
   --panel-seg-bg: rgba(118, 118, 128, 0.22);
   --panel-seg-active: rgba(72, 72, 74, 0.9);
-  --panel-shadow: 0 8px 18px rgba(0, 0, 0, 0.46), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --panel-shadow: none;
 }
 
 /* ---------------- 头部 ---------------- */

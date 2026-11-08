@@ -48,6 +48,7 @@ related:
 | 材质档位 | `SIDEKICK_GLASS_MATERIAL=liquidGlass`（默认）`|liquidGlassClear|popover|underWindowBackground|sidebar|menu|contentBackground`；`liquidGlassClear` 在数据卡上小字对比不足，不建议 |
 | 玻璃只铺卡片 | 原生材质铺的是 `contentView.bounds()`，整窗铺会让 20/8/28 的透明留白也变成磨砂、阴影叠在模糊壁纸上发脏；所以 view 的 frame 就是卡片矩形，留白/阴影/圆角仍归 CSS（D116） |
 | QA 预览 | `SIDEKICK_PANEL_PREVIEW=1` 启动即弹面板并收起主窗口；`SIDEKICK_PANEL_PREVIEW="x,y"`（逻辑像素）可指定位置，便于对着深色/彩色背景截图；预览期间不因失焦收起 |
+| 玻璃边缘 | 玻璃态**不加描边、不加投影**（`--panel-border: transparent` / `--panel-shadow: none`）；`NSGlassEffectView` 必须套同尺寸 `masksToBounds` 容器，否则它自己的柔光会漏到透明留白里，看起来像「卡片外一圈阴影」 |
 | 玻璃回退 | `SIDEKICK_UI_VIBRANCY=off` 不铺 view（等价 D116 实色卡）；AppKit 失败只打日志静默降级。回退必须在 Rust 侧——原生 view 插进去以后 CSS 关不掉 |
 | 为什么不用 CSS backdrop-filter | 采样上界是文档根元素，透明窗口背后没有像素可采样（见 D120）；`prefers-reduced-transparency` 在 WKWebView 上不匹配，不能当降级手段 |
 | 页面透明 | 面板入口把 `.desktop-ios` 挂在 `<html>`，ios.css 会因此给 html 铺页面底色；`panel.css` 必须用 `html.desktop-ios { background: transparent }` 压过它，否则整窗（含透明留白）是一圈灰/黑，和壁纸冲突 |

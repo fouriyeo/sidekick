@@ -137,11 +137,29 @@ fn install<R: Runtime>(window: &WebviewWindow<R>) -> Result<&'static str, String
 
     match kind() {
         Kind::LiquidGlass(style) if liquid_glass_available() => {
-            let glass = NSGlassEffectView::initWithFrame(mtm.alloc(), frame);
+            // Liquid Glass 会往自己 frame 外面蹭一圈很淡的柔光（实测卡片外侧留白里
+            // 有约 5% 的暗晕、扩散 20pt）——用户看到的就是「卡片周围一圈阴影」。
+            // 套一个和卡片同尺寸、masksToBounds 的容器把它裁掉。
+            let holder = NSView::initWithFrame(mtm.alloc(), frame);
+            holder.setWantsLayer(true);
+            if let Some(layer) = holder.layer() {
+                layer.setCornerRadius(CARD_RADIUS);
+                layer.setMasksToBounds(true);
+            }
+            holder.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
+
+            let glass = NSGlassEffectView::initWithFrame(
+                mtm.alloc(),
+                NSRect {
+                    origin: NSPoint::new(0.0, 0.0),
+                    size: NSSize::new(CARD_W, CARD_H),
+                },
+            );
             glass.setStyle(style);
             glass.setCornerRadius(CARD_RADIUS);
             glass.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
-            content.addSubview_positioned_relativeTo(&glass, NSWindowOrderingMode::Below, None);
+            holder.addSubview(&glass);
+            content.addSubview_positioned_relativeTo(&holder, NSWindowOrderingMode::Below, None);
             return Ok(if style == NSGlassEffectViewStyle::Clear {
                 "liquidGlassClear"
             } else {
