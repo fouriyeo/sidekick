@@ -9,7 +9,8 @@ import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
 import { pushBackHandler } from "@/mobile/system-back";
 import { type MemoType, memoStatusLabel, memoTypeLabel } from "@/protocol/memo";
-import { normalizeError } from "@/shared/lib/tauri";
+import { copyText } from "@/shared/lib/clipboard";
+import { haptic, normalizeError } from "@/shared/lib/tauri";
 
 const CARD = "rounded-2xl border-[0.5px] border-border bg-card px-4 py-4";
 const TYPES: ReadonlyArray<{ value: MemoType; label: string }> = [
@@ -209,9 +210,27 @@ export function MemoDetailPage({ id, onBack }: { id: string; onBack: () => void 
             )}
 
             <section aria-label="全文" className="mt-5">
-              <h2 className="mb-2 px-1 text-[12px] leading-[17px] font-normal text-muted-foreground">
-                全文
-              </h2>
+              <div className="mb-2 flex items-center justify-between px-1">
+                <h2 className="m-0 text-[12px] leading-[17px] font-normal text-muted-foreground">
+                  全文
+                </h2>
+                {current.transcript && (
+                  <button
+                    type="button"
+                    className="flex min-h-8 items-center rounded-full px-2 text-[12px] text-primary active:bg-wash"
+                    onClick={() => {
+                      void copyText(current.transcript)
+                        .then(() => {
+                          toast.success("全文已复制");
+                          void haptic("success").catch(() => undefined);
+                        })
+                        .catch((error: unknown) => toast.error(normalizeError(error)));
+                    }}
+                  >
+                    复制全文
+                  </button>
+                )}
+              </div>
               <div className={CARD}>
                 {current.transcript ? (
                   <p className="m-0 whitespace-pre-wrap text-[14px] leading-[23px] text-foreground">

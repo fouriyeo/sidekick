@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { memoBusyNow } from "@/mobile/features/memo/memo-store";
 import { micBusyNow } from "@/mobile/features/mic/mic-store";
 
 /**
@@ -49,14 +50,14 @@ export const useUiStore = create<UiState>((set, get) => ({
   scanOpen: false,
   offlineReturnView: "pet",
 
-  // 录音中禁切页：所有换页入口统一在这里拦截。
+  // 录音中禁切页：所有换页入口统一在这里拦截（语音输入 + 备忘录录音）。
   setView: (view) => {
-    if (micBusyNow()) return;
+    if (micBusyNow() || memoBusyNow()) return;
     set({ view });
   },
 
   openOffline: () => {
-    if (micBusyNow()) return;
+    if (micBusyNow() || memoBusyNow()) return;
     const current = get().view;
     set({
       view: "offline",
@@ -65,7 +66,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
 
   closeOffline: () => {
-    if (micBusyNow()) return;
+    if (micBusyNow() || memoBusyNow()) return;
     set({ view: get().offlineReturnView });
   },
 

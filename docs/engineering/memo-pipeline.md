@@ -236,6 +236,7 @@ CREATE INDEX memos_created ON memos(created_at DESC);
 - 共享核心：`app/src-tauri/src/memo/{types,wav,db,storage}.rs`、`memo_protocol.rs`；手机 `memo/mobile/{mod,recording,cloud,llm,pipeline,keys,sync}.rs`；桌面 `memo/desktop/mod.rs`。
 - 手机命令：`memo_list/get/update/delete/delete_audio/storage_stats`、`memo_recording_{start,append,finish,cancel,status}`、`memo_recover/retry`、`memo_key_{status,save,clear}`、`memo_pair_{request,apply}`、`memo_sync_{now,pending}`。
 - 桌面命令：`memo_list`、`memo_get`、`memo_pair_code_create`；桌面服务新增 per-client 定向发送与 `memo.*`/`SK02` 路由。
-- UI：手机 `mobile/features/memo/*` + 顶栏 `NotebookPen` + 设置「备忘录/百炼 Key/从电脑配对」；桌面 `desktop/features/memo/*` + 剪贴板页「剪贴板/备忘录」分段 + 语音页「配对手机」。
-- 测试：Rust 201（新增 memo 13 + SK02 2）；前端 724（新增协议 5 + 格式化 4 + store 6，其余沿用），`tsc/lint/build/check-docs/check-boundaries` 全绿；debug APK 已构建。
+- UI：手机 `mobile/features/memo/*` + 顶栏 `NotebookPen` + 设置「备忘录/百炼 Key/从电脑配对」；桌面 `desktop/pages/memo-page.tsx` + `desktop/features/memo/*` + 语音页「配对手机」（D123 起为独立一级页，D124 起为左日历 + 右当日列表）。
+- 测试：Rust 201（新增 memo 13 + SK02 2）；前端 761（v0.3 新增日历 15 + 手势 7 + 手机页 6 + 桌面页 4 等），`tsc/lint/build/check-docs/check-boundaries` 全绿；浏览器 QA `scripts/qa-memo.mjs` 14 个用例无溢出/console error，并走通首录告知→锁定→保存；debug APK 已重打（314MB）。
 - 与设计稿的偏差：Key 用 App 私有文件（非 Keystore）；手机固定官方端点；没有 cursor/心跳，全量重推；桌面只读，无编辑/删除。
+- v0.3 交互改版（D124，2026-11-08）：两端新增周/月日历、手机底部录音条与 C 双模、首录隐私 Sheet、录音中 guard、详情复制全文；日期聚合走 `shared/lib/calendar.ts` + 前端 `Map<dayKey, MemoSummary[]>`，**没有新增 Tauri 命令、协议字段或 SQLite 迁移**。SPEC v0.2 的「顶部录音卡 + 今天/更早分组」是实现漂移，已删除；`memo_list` 仍全量倒序，>2000 条再评估区间查询。

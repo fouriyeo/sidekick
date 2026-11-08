@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { MemoRecorderPhase } from "@/mobile/features/memo/memo-recorder";
 import type {
   MemoDetail,
   MemoEvent,
@@ -49,6 +50,9 @@ function writeSettings(settings: MemoSettings): void {
 
 type MemoState = {
   items: MemoSummary[];
+  /** 录音条阶段：换页/返回的 guard 只看这个，不区分是点按还是按住。 */
+  recorderPhase: MemoRecorderPhase;
+  setRecorderPhase: (phase: MemoRecorderPhase) => void;
   loading: boolean;
   error: string | null;
   detail: MemoDetail | null;
@@ -75,6 +79,7 @@ type MemoState = {
 
 export const useMemoStore = create<MemoState>((set, get) => ({
   items: [],
+  recorderPhase: "idle",
   loading: false,
   error: null,
   detail: null,
@@ -83,6 +88,11 @@ export const useMemoStore = create<MemoState>((set, get) => ({
   key: null,
   storage: null,
   keepAudio: readSettings().keepAudio,
+
+  setRecorderPhase: (recorderPhase) => {
+    if (get().recorderPhase === recorderPhase) return;
+    set({ recorderPhase });
+  },
 
   load: async () => {
     set({ loading: true, error: null });
@@ -206,3 +216,12 @@ export const useMemoStore = create<MemoState>((set, get) => ({
     }
   },
 }));
+
+/**
+ * 备忘录录音是否正忙（启动中/录音中/保存中）。
+ * 与 `micBusyNow()` 同口径，供 ui-store 与页面入口统一拦截换页。
+ */
+export function memoBusyNow(): boolean {
+  const phase = useMemoStore.getState().recorderPhase;
+  return phase === "starting" || phase === "recording" || phase === "saving";
+}

@@ -1,12 +1,18 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Loader2, NotebookPen } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  type DesktopCalendarViewMode,
+  MemoCalendarPanel,
+} from "@/desktop/features/memo/memo-calendar-panel";
 import { useDesktopMemoStore } from "@/desktop/features/memo/memo-store";
 import { ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
 import { PageBody, PageShell } from "@/desktop/shell/page-shell";
-import type { MemoSummary } from "@/protocol/memo";
-import { memoStatusLabel, memoTypeLabel } from "@/protocol/memo";
+import { type MemoSummary, memoStatusLabel, memoTypeLabel } from "@/protocol/memo";
+import { dayKey, formatDayTitle, groupByDay } from "@/shared/lib/calendar";
+import { copyText } from "@/shared/lib/clipboard";
 import { formatDuration, formatRelativeTime } from "@/shared/lib/format";
 import { subscribeMemoChanged } from "@/shared/lib/tauri";
 import {
@@ -16,6 +22,35 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
+
+const CALENDAR_KEY = "sidekick:desktop:memo:calendar";
+
+/** 浏览器 QA 用：?memoView=week 直接打开周视角（仅 dev）。 */
+function initialCalendarView(): DesktopCalendarViewMode {
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    const requested = new URLSearchParams(window.location.search).get("memoView");
+    if (requested === "week" || requested === "month") return requested;
+  }
+  return readCalendarView();
+}
+
+function readCalendarView(): DesktopCalendarViewMode {
+  if (typeof localStorage === "undefined") return "month";
+  try {
+    return localStorage.getItem(CALENDAR_KEY) === "week" ? "week" : "month";
+  } catch {
+    return "month";
+  }
+}
+
+function writeCalendarView(view: DesktopCalendarViewMode): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(CALENDAR_KEY, view);
+  } catch {
+    // localStorage 不可用只影响记忆，不影响日历。
+  }
+}
 
 /** 字节 → 0 B / 12.3 MB。桌面端只显示数量级。 */
 function bytesLabel(bytes: number): string {
@@ -38,10 +73,10 @@ function metaLine(item: MemoSummary): string {
 }
 
 /**
- * 桌面「备忘录」一级页（D123）：手机单写者、电脑只读。
+ * 桌面「备忘录」一级页（D123 / D124）：手机单写者、电脑只读。
  *
- * 数据来自桌面自己的 SQLite 镜像；收到手机推送/音频提交后由 `memo-changed`
- * 事件触发刷新。播放走 Tauri asset 协议，不把整段音频塞进 IPC。
+ * 左栏日历（周/月）+ 右栏当日列表；数据来自桌面自己的 SQLite 镜像，
+ * 收到手机推送/音频提交后由 `memo-changed` 事件触发刷新。
  */
 export function MemoPage() {
   const items = useDesktopMemoStore((state) => state.items);
@@ -53,6 +88,9 @@ export function MemoPage() {
   const open = useDesktopMemoStore((state) => state.open);
   const close = useDesktopMemoStore((state) => state.close);
 
+  const [selectedKey, setSelectedKey] = useState(() => dayKey(Date.now()));
+  const [calendarView, setCalendarView] = useState<DesktopCalendarViewMode>(initialCalendarView);
+
   useEffect(() => {
     void load();
     return subscribeMemoChanged(() => {
@@ -60,8 +98,16 @@ export function MemoPage() {
     });
   }, [load]);
 
+  const groups = useMemo(() => groupByDay(items), [items]);
+  const dayItems = groups.get(selectedKey) ?? [];
+
+  const changeView = (next: DesktopCalendarViewMode) => {
+    setCalendarView(next);
+    writeCalendarView(next);
+  };
+
   return (
-    <PageShell>
+    <PageShell size="wide">
       <PageHeader title="备忘录" />
       <PageBody>
         {error && (
@@ -69,25 +115,38 @@ export function MemoPage() {
             {error}
           </p>
         )}
-        <ListGroup title={loading && items.length === 0 ? "备忘录" : `备忘录 · ${items.length} 条`}>
-          {items.length === 0 ? (
-            <ListEmpty>
-              {loading ? "正在读取…" : "手机还没同步过备忘录。在手机上录一条就会出现在这里。"}
-            </ListEmpty>
-          ) : (
-            items.map((item) => (
-              <ListRow
-                key={item.id}
-                icon={<NotebookPen aria-hidden="true" className="size-4" />}
-                title={item.title.trim() || "未命名备忘"}
-                detail={item.summary ?? metaLine(item)}
-                meta={formatRelativeTime(item.createdAt)}
-                chevron
-                onClick={() => void open(item.id)}
-              />
-            ))
-          )}
-        </ListGroup>
+
+        <div className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-6">
+          <MemoCalendarPanel
+            items={items}
+            selectedKey={selectedKey}
+            view={calendarView}
+            onSelect={setSelectedKey}
+            onViewChange={changeView}
+          />
+
+          <ListGroup title={`${formatDayTitle(selectedKey)} · ${dayItems.length} 条`}>
+            {dayItems.length === 0 ? (
+              <ListEmpty>
+                {loading && items.length === 0
+                  ? "正在读取…"
+                  : "这一天还没有记录。手机这天录的备忘录会同步到这里。"}
+              </ListEmpty>
+            ) : (
+              dayItems.map((item) => (
+                <ListRow
+                  key={item.id}
+                  icon={<NotebookPen aria-hidden="true" className="size-4" />}
+                  title={item.title.trim() || "未命名备忘"}
+                  detail={item.summary ?? metaLine(item)}
+                  meta={formatRelativeTime(item.createdAt)}
+                  chevron
+                  onClick={() => void open(item.id)}
+                />
+              ))
+            )}
+          </ListGroup>
+        </div>
       </PageBody>
 
       <Dialog open={detail !== null || detailLoading} onOpenChange={(next) => !next && close()}>
@@ -133,7 +192,22 @@ export function MemoPage() {
               )}
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-muted-foreground">全文</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] text-muted-foreground">全文</span>
+                  {detail.transcript && (
+                    <button
+                      type="button"
+                      className="flex h-7 items-center rounded-full px-2 text-[12px] text-signal hover:bg-wash"
+                      onClick={() => {
+                        void copyText(detail.transcript)
+                          .then(() => toast.success("全文已复制"))
+                          .catch(() => toast.error("复制失败"));
+                      }}
+                    >
+                      复制全文
+                    </button>
+                  )}
+                </div>
                 <p className="m-0 whitespace-pre-wrap text-[14px] leading-[23px] text-foreground">
                   {detail.transcript || "没有识别到文字。"}
                 </p>

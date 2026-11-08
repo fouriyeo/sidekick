@@ -1220,3 +1220,17 @@
 - 取代：D115/D118 中「桌面不新增一级页、放剪贴板分段」的入口部分；D119 的「视图 id 仍为 `content`」、剪贴板设置留在剪贴板页继续有效。
 - 代价：用量 / 语音 / 设置的快捷键各后移一位（⌘3→⌘4、⌘4→⌘5、⌘5→⌘6）；侧栏多一项，960×640 下需要确认状态摘要不被挤掉。
 - 规范：`app/src/desktop/{lib/desktop-nav.ts,app.tsx,shell/sidebar.tsx,pages/content-page.tsx,pages/memo-page.tsx}`、`app/src/desktop/features/clipboard/components/clipboard-section.tsx`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/**`、`docs/prd/memo/**`、`docs/engineering/{desktop-ios-ui,memo-pipeline}.md`、`docs/frontend-architecture.md`、`docs/standards/ux.md`、`docs/status.md`、`AGENTS.md`。
+
+## D124 · 语音备忘录交互改版：手机 C 双模 + 两端周/月日历（2026-11-08，取代 SPEC v0.2 的录音页布局）
+
+- 背景：owner 提出四件事——① 录音键应在下面；② 想在录音键上左右滑切换「按住说 / 点按」；③ 顶部用日历按天回看；④ 「备忘录」是否该换「日记」。三方评审（产品/UX/架构）两轮讨论后 owner 拍板：日历要周/月双视角，录音采用 C 双模，电脑端同步修改。
+- 决策：
+  - **手机**：录音键沉为固定底栏（64、距底 ≥24dp + safe-area），顶部改为**周/月日历**（44 高工具行 + 周条 68 / 月网格 296），列表只显示选中日；删除「今天/更早」分组与顶部录音卡。
+  - **C 双模**：按住 ≥400ms 松手保存；轻点 ≤400ms 锁定继续录、再点结束；按住上滑 80dp 取消；不做左右滑（TalkBack 左右滑是焦点导航、模式不可见、与系统手势冲突）。
+  - **不做「日记」数据实体**：仍叫「备忘录」；「日记」只作为阅读层视图名，等 5 人词测再定（一天多条与可编辑正文都还不存在）。
+  - **桌面**：备忘录页从单列列表改为**宽幅两栏**（956，D124 例外）：左周/月日历 300 + 右当日列表；详情 Dialog 补「复制全文」；保持只读。
+  - **同批补漂移**：首录隐私告知（底部 Sheet）、录音中 `memoBusyNow()` guard、取消二次确认、触感、`aria-live`、详情复制全文、空态文案。
+  - **日期语义**：本机时区、周一开头、按 `started_at`/`createdAt` 归日；月历固定 42 格（6 行）；320 宽月格允许左右各 6 边距达到 44×44；手机默认周、桌面默认月，各自 `localStorage` 记忆。
+- 不做：锁屏/后台录音（P1）、镜像开关（需 Rust 自发 sync 闸门，P1）、真·日记/`day_key` 迁移（P2）、埋点上报（P1）、`memo_list` 分页（>2000 条再说）。
+- 代价：手机 320×720 月视角列表只剩 3–4 行；桌面 960 窗口右栏偏窄（标题省略）；400/600/80/32 阈值需真机校准后冻结；`calendar.ts` 两端共用但日历 UI 各自实现。
+- 规范：`app/src/shared/lib/calendar.ts`、`app/src/mobile/features/memo/{memo-page,memo-calendar-view,memo-record-bar,memo-privacy-sheet,memo-gesture,memo-recorder}.tsx`、`app/src/desktop/pages/memo-page.tsx`、`app/src/desktop/features/memo/memo-calendar-panel.tsx`、`app/src/mobile/ui-store.ts`、`app/src/mobile/features/memo/memo-store.ts`、`docs/prd/memo/{PRD,SPEC,ACCEPTANCE}.md`、`docs/standards/ux.md`、`docs/engineering/memo-pipeline.md`。

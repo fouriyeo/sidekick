@@ -81,6 +81,8 @@ export function useMemoRecorder(options: UseMemoRecorderOptions = {}) {
   const [phase, setPhase] = useState<MemoRecorderPhase>("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [level, setLevel] = useState(0);
+  /** 本次录音的峰值（0–1）；用于“太短且没声音”时丢弃。 */
+  const [peak, setPeak] = useState(0);
 
   const sessionRef = useRef<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -93,6 +95,7 @@ export function useMemoRecorder(options: UseMemoRecorderOptions = {}) {
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
   const phaseRef = useRef<MemoRecorderPhase>("idle");
+  const peakRef = useRef(0);
   const mountedRef = useRef(true);
   const callbacksRef = useRef(options);
 
@@ -177,6 +180,7 @@ export function useMemoRecorder(options: UseMemoRecorderOptions = {}) {
         if (mountedRef.current) {
           setElapsedMs(0);
           setLevel(0);
+          setPeak(0);
         }
       }
     },
@@ -209,6 +213,14 @@ export function useMemoRecorder(options: UseMemoRecorderOptions = {}) {
           autoGainControl: true,
         },
       });
+      // 仅前台录音：权限弹窗/显卡等待期间用户可能已经切走，这时不要偷偷开录。
+      if (document.hidden) {
+        for (const track of stream.getTracks()) track.stop();
+        await memoRecordingCancel().catch(() => undefined);
+        setPhaseSafe("idle");
+        callbacksRef.current.onError?.("需要保持 App 在前台才能录音");
+        return;
+      }
       const context = (() => {
         try {
           return new AudioContext({ sampleRate: TARGET_RATE });
@@ -232,11 +244,18 @@ export function useMemoRecorder(options: UseMemoRecorderOptions = {}) {
       partsRef.current = [];
       chainRef.current = Promise.resolve();
       startedAtRef.current = performance.now();
+      peakRef.current = 0;
+      if (mountedRef.current) setPeak(0);
 
       processor.onaudioprocess = (event) => {
         if (phaseRef.current !== "recording") return;
         const input = event.inputBuffer.getChannelData(0);
-        if (mountedRef.current) setLevel(levelOf(input));
+        const nextLevel = levelOf(input);
+        if (nextLevel > peakRef.current) peakRef.current = nextLevel;
+        if (mountedRef.current) {
+          setLevel(nextLevel);
+          setPeak(peakRef.current);
+        }
         const resampled = resampler(input);
         if (resampled.length === 0) return;
         partsRef.current.push(toPcm16(resampled));
@@ -290,5 +309,5 @@ export function useMemoRecorder(options: UseMemoRecorderOptions = {}) {
     };
   }, []);
 
-  return { phase, elapsedMs, level, start, stop, cancel };
+  return { phase, elapsedMs, level, peak, start, stop, cancel };
 }
