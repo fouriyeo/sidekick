@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      web-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Tauri 工具链与 Rust 侧版本联动，升级单独做
+      - dependency-name: "@tauri-apps/*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: cargo
+    directory: /app/src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      rust-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
