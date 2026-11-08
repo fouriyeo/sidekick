@@ -41,13 +41,21 @@ for f in "$DMG" "$APK"; do
   fi
 done
 
-# APK 签名自检（可选：找不到 build-tools 就跳过，不阻塞发布）。
+# APK 签名自检（可选：找不到 build-tools / JDK 就跳过，不阻塞发布）。
+if [[ -z "${JAVA_HOME:-}" ]]; then
+  JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+fi
+if [[ -z "${JAVA_HOME:-}" && -x /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java ]]; then
+  JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+fi
+[[ -n "${JAVA_HOME:-}" ]] && export JAVA_HOME
+
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 BUILD_TOOLS_DIR="${BUILD_TOOLS_DIR:-$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)}"
-if [[ -n "${BUILD_TOOLS_DIR:-}" && -x "$BUILD_TOOLS_DIR/apksigner" ]]; then
+if [[ -n "${BUILD_TOOLS_DIR:-}" && -x "$BUILD_TOOLS_DIR/apksigner" && -n "${JAVA_HOME:-}" ]]; then
   "$BUILD_TOOLS_DIR/apksigner" verify --print-certs "$APK" | head -3
 else
-  echo "[publish] 跳过 apksigner 校验（找不到 build-tools）" >&2
+  echo "[publish] 跳过 apksigner 校验（找不到 build-tools 或 JDK）" >&2
 fi
 
 NOTES="$(mktemp -t sidekick-release-notes)"
