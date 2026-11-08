@@ -52,7 +52,9 @@ fn kind() -> Kind {
             Kind::LiquidGlass(NSGlassEffectViewStyle::Regular)
         }
         Some("liquidGlassClear") => Kind::LiquidGlass(NSGlassEffectViewStyle::Clear),
-        Some("underWindowBackground") => Kind::Frosted(NSVisualEffectMaterial::UnderWindowBackground),
+        Some("underWindowBackground") => {
+            Kind::Frosted(NSVisualEffectMaterial::UnderWindowBackground)
+        }
         Some("sidebar") => Kind::Frosted(NSVisualEffectMaterial::Sidebar),
         Some("menu") => Kind::Frosted(NSVisualEffectMaterial::Menu),
         Some("contentBackground") => Kind::Frosted(NSVisualEffectMaterial::ContentBackground),
