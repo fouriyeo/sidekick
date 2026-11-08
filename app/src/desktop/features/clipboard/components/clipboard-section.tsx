@@ -1,12 +1,13 @@
 import { cn } from "cn";
 import { Check, Pin, Search, Trash2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SPRING_POP, SPRING_SLIDE } from "@/desktop/lib/motion";
 import { ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
 import { PageBody, PageShell } from "@/desktop/shell/page-shell";
+import { SegmentedControl } from "@/desktop/shell/segmented-control";
 import { formatRelativeTime } from "@/shared/lib/format";
 import { type ClipboardItem, subscribeClipboardChanged } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
@@ -20,6 +21,7 @@ import {
 } from "@/shared/ui/dialog";
 import { Switch } from "@/shared/ui/switch";
 import {
+  CLIPBOARD_MAX_ITEM_OPTIONS,
   filterClipboardItems,
   formatClipboardCount,
   formatClipboardKind,
@@ -27,12 +29,13 @@ import {
 } from "../clipboard-store";
 
 /**
- * 内容页（剪贴板唯一归属）：页头一行计数 + 清空，正文是搜索、暂停开关与记录列表。
+ * 剪贴板页（一级页 ⌘2，D119；剪贴板唯一归属）：页头一行计数 + 清空，
+ * 正文是搜索、「设置」组（记录开关 / 密码框不记录）与记录列表。
  *
  * 每行只留「摘要 + 来源 · 时间」；置顶标记常显，置顶 / 删除只在 hover 或键盘聚焦时出现。
  * 点击整行复制并 toast 反馈，不再放详情弹层与页脚说明。
  */
-export function ClipboardSection() {
+export function ClipboardSection({ topSlot }: { topSlot?: ReactNode }) {
   const snapshot = useClipboardStore((state) => state.snapshot);
   const error = useClipboardStore((state) => state.error);
   const refresh = useClipboardStore((state) => state.refresh);
@@ -42,6 +45,7 @@ export function ClipboardSection() {
   const remove = useClipboardStore((state) => state.remove);
   const clear = useClipboardStore((state) => state.clear);
   const setEnabled = useClipboardStore((state) => state.setEnabled);
+  const setMaxItems = useClipboardStore((state) => state.setMaxItems);
 
   const [query, setQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -62,6 +66,7 @@ export function ClipboardSection() {
   const items = snapshot?.items ?? [];
   const filtered = filterClipboardItems(items, query);
   const enabled = snapshot?.enabled ?? true;
+  const maxItems = snapshot?.maxItems ?? 100;
 
   async function handleCopy(id: string) {
     await copy(id);
@@ -79,7 +84,7 @@ export function ClipboardSection() {
   return (
     <PageShell>
       <PageHeader
-        title="内容"
+        title="剪贴板"
         actions={
           <div className="dsl-action-group">
             <span className="px-2.5 text-[12.5px] leading-none text-muted-foreground tabular-nums">
@@ -99,6 +104,7 @@ export function ClipboardSection() {
       />
 
       <PageBody>
+        {topSlot && <div className="w-fit">{topSlot}</div>}
         <div className="dsl-search">
           <Search aria-hidden="true" className="size-4 shrink-0" />
           <input
@@ -111,7 +117,7 @@ export function ClipboardSection() {
           />
         </div>
 
-        <ListGroup>
+        <ListGroup title="设置">
           <ListRow
             title="记录剪贴板"
             control={
@@ -119,6 +125,21 @@ export function ClipboardSection() {
                 aria-label="记录剪贴板"
                 checked={enabled}
                 onCheckedChange={(value) => void setEnabled(value)}
+              />
+            }
+          />
+          <ListRow
+            title="最多保留"
+            control={
+              <SegmentedControl<string>
+                label="最多保留条数"
+                className="w-[232px]"
+                value={String(maxItems)}
+                options={CLIPBOARD_MAX_ITEM_OPTIONS.map((count) => ({
+                  value: String(count),
+                  label: String(count),
+                }))}
+                onChange={(value) => void setMaxItems(Number(value))}
               />
             }
           />

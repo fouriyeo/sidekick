@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AskingPage } from "@/mobile/features/asking/asking-page";
 import { ChatPage } from "@/mobile/features/chat/chat-page";
 import { useChatStore } from "@/mobile/features/chat/chat-store";
@@ -6,6 +7,8 @@ import { ScanView } from "@/mobile/features/connect/components/scan-view";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { OfflinePage } from "@/mobile/features/connect/offline-page";
 import { useFirstUseStore } from "@/mobile/features/first-use/store";
+import { MemoPage } from "@/mobile/features/memo/memo-page";
+import { useMemoStore } from "@/mobile/features/memo/memo-store";
 import { micBusyNow, useMicStore } from "@/mobile/features/mic/mic-store";
 import { PetPage } from "@/mobile/features/pet/pet-page";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
@@ -29,10 +32,12 @@ import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import {
   disableWebviewHaptics,
   exitApp,
+  memoSyncNow,
   sendStatusRequest,
   subscribeBackButton,
   subscribeChat,
   subscribeConn,
+  subscribeMemo,
 } from "@/shared/lib/tauri";
 
 /** 根页面「再按一次退出」的确认窗口。 */
@@ -128,6 +133,7 @@ export function MobileApp() {
         case "chat":
         case "asking":
         case "usage":
+        case "memo":
           ui.setView("pet");
           break;
         case "offline":
@@ -198,6 +204,8 @@ export function MobileApp() {
       connection.resumeRetry();
       // 回前台补一次状态快照；过期的 completed 会被 ai-status 的时钟检查忽略。
       requestStatusIfConnected();
+      // 备忘录：熄屏期间可能有未同步条目，回前台补一次。
+      void memoSyncNow().catch(() => undefined);
       // 顶栏的「今天」数字也补一次：熄屏期间账本可能已经变了。
       if (useConnectionStore.getState().status === "connected") {
         useMobileUsageStore.getState().requestToday();
@@ -274,6 +282,8 @@ export function MobileApp() {
       setOnline(event.online);
       if (event.online) {
         requestStatusIfConnected();
+        // 备忘录镜像：连上电脑后补一次同步（未配对时 Rust 侧静默返回）。
+        void memoSyncNow().catch(() => undefined);
         // 顶栏「今天」数字：连上后静默拉一次，断连期间不请求。
         useMobileUsageStore.getState().requestToday();
         // 用量页打开时补拉一次；其它页面不主动请求，避免无谓广播。
@@ -290,10 +300,25 @@ export function MobileApp() {
     };
   }, [append, setOnline]);
 
+  // 备忘录管道事件：录音完成 / 转写进度 / Key 变化都只刷新本地数据。
+  useEffect(
+    () =>
+      subscribeMemo((event) => {
+        useMemoStore.getState().applyEvent(event);
+        if (event.kind === "key" && event.message === "paired") {
+          toast.success("已配对，Key 已保存");
+        } else if (event.kind === "error" && event.message) {
+          toast.error(event.message);
+        }
+      }),
+    [],
+  );
+
   return (
     <>
       {view === "pet" && <PetPage />}
       {view === "settings" && <MorePage />}
+      {view === "memo" && <MemoPage />}
       {view === "usage" && <UsagePage />}
       {view === "chat" && <ChatPage />}
       {view === "asking" && <AskingPage />}

@@ -78,14 +78,14 @@ describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
     render(<DesktopApp />);
 
     expect(screen.getByText("overview-page")).toBeInTheDocument();
-    // 侧栏上半顺序：概览 / 内容 / 用量 / 语音；设置固定底部。
+    // 侧栏上半顺序：概览 / 剪贴板 / 用量 / 语音；设置固定底部。
     const nav = screen.getByRole("navigation", { name: "主导航" });
     expect(
       within(nav)
         .getAllByRole("button")
         .map((node) => node.textContent?.trim()),
-    ).toEqual(["概览", "内容", "用量", "语音"]);
-    for (const label of ["概览", "内容", "用量", "语音", "设置"]) {
+    ).toEqual(["概览", "剪贴板", "用量", "语音"]);
+    for (const label of ["概览", "剪贴板", "用量", "语音", "设置"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByText("服务")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
   it("点击侧栏切换 5 个一级页", () => {
     render(<DesktopApp />);
 
-    fireEvent.click(screen.getByRole("button", { name: "内容" }));
+    fireEvent.click(screen.getByRole("button", { name: "剪贴板" }));
     expect(screen.getByText("content-page")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "用量" }));

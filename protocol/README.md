@@ -334,6 +334,40 @@ AI 需要用户决策（权限确认、反问）。
 { "type": "input", "kind": "voice|shortcut|text", "text": "...", "ts": 1730000000000 }
 ```
 
+## 语音备忘录（memo.*，已实现）
+
+手机是唯一写者，电脑只读镜像。所有 `memo.*` 控制消息都**不进入聊天广播**；Key、token、音频 ack 通过定向发送只回给发起连接；配对结果由手机 Rust 直接落盘，Key 不进 WebView。
+
+### 配对（一次性 6 位码）
+
+- 桌面「语音 › 手机备忘录 › 配对手机 / 发送 Key」调用 `memo_pair_code_create` 生成 6 位码，2 分钟有效、错 3 次作废；
+- 手机 → 桌面：
+
+```json
+{ "v": 1, "type": "memo.pair.request", "code": "123456", "deviceId": "uuid", "deviceName": "Realme", "ts": 0 }
+```
+
+- 桌面 → 手机（定向）：
+
+```json
+{ "v": 1, "type": "memo.pair.result", "ok": true, "token": "64位hex", "key": "sk-...", "ts": 0 }
+```
+
+失败时 `ok:false` + `error`。`key` 可能为 `null`（电脑没配百炼）。手机把 token/Key 存 App 私有目录（MVP，Keystore 留 P1）。
+
+### 同步
+
+手机连上电脑后先 `memo.hello {deviceId, token}`，再推未同步条目：
+
+- `memo.push {memos:[...]}`：元数据批量（≤50/批），电脑 upsert 后回 `memo.push.ack {ids}`；墓碑用 `deletedAt`。
+- `memo.audio.begin {memoId, bytes, sha256}` → 电脑回 `memo.audio.begin.ack {memoId, offset}`；
+- 音频分块用二进制 `SK02` 帧：`SK02` + `memoId` 长度(u16 LE) + `memoId` + `offset`(u64 LE) + payload；
+- 每块电脑回 `memo.audio.ack {memoId, offset}`；偏移不连续直接 `memo.error`；
+- `memo.audio.commit {memoId}` → 电脑校验大小与 sha256，回 `memo.audio.committed {memoId, ok}`；手机收到 `ok:true` 才写 `synced_at`。
+- `memo.delete {memoId}` 可显式墓碑；当前实现也接受 `memo.push` 里的 `deletedAt`。
+
+未配对连接发 `memo.push/audio.*` 一律 `memo.error{code:"sync_failed"|"audio_*_failed"}`，不落库。同步是手机单写者，不做 CRDT/双向编辑。
+
 ## 音频通道（已实现）
 
 麦克风使用低开销的二进制音频帧，且**不能广播**给其它客户端：

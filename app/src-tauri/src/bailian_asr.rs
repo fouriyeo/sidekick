@@ -940,7 +940,9 @@ mod tests {
         match event {
             ServerEvent::Finished(transcript) => {
                 assert_eq!(transcript.text, "你好");
-                let usage = transcript.usage.expect("应回退到 result-generated 的 usage");
+                let usage = transcript
+                    .usage
+                    .expect("应回退到 result-generated 的 usage");
                 assert_eq!(usage.total_tokens, 89);
                 assert_eq!(usage.audio_duration_ms, 2000);
             }
@@ -1023,7 +1025,9 @@ mod tests {
 
         let transcript = handle.wait().await.unwrap();
         assert_eq!(transcript.text, "你好，世界。");
-        let usage = transcript.usage.expect("task-finished 为空时应回退到 result-generated 的 usage");
+        let usage = transcript
+            .usage
+            .expect("task-finished 为空时应回退到 result-generated 的 usage");
         assert_eq!(usage.total_tokens, 114);
         assert_eq!(usage.input_tokens, 93);
         assert_eq!(usage.output_tokens, 21);

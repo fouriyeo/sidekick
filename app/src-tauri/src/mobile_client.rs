@@ -75,6 +75,19 @@ fn send_binary(app: &tauri::AppHandle, payload: Vec<u8>) -> Result<(), String> {
     send_outbound(app, Outbound::Binary(payload))
 }
 
+/// 语音备忘录（D115）：手机 → 电脑的配对/同步 JSON 消息。
+pub fn send_memo_payload(
+    app: &tauri::AppHandle,
+    payload: serde_json::Value,
+) -> Result<(), String> {
+    send_payload(app, payload)
+}
+
+/// 语音备忘录同步：SK02 音频分块二进制帧。
+pub fn send_memo_binary(app: &tauri::AppHandle, frame: Vec<u8>) -> Result<(), String> {
+    send_binary(app, frame)
+}
+
 fn emit_offline(app: &tauri::AppHandle) {
     let _ = app.emit("conn", serde_json::json!({ "online": false }));
 }
@@ -137,7 +150,12 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
         while let Some(Ok(message)) = read.next().await {
             match message {
                 Message::Text(text) => {
-                    let _ = read_app.emit("chat", text.to_string());
+                    // 备忘录同步 ack 由 Rust 消费（落 synced_at），不进入聊天记录。
+                    let text = text.to_string();
+                    if crate::memo::mobile::sync::handle_server_message(&read_app, &text) {
+                        continue;
+                    }
+                    let _ = read_app.emit("chat", text);
                 }
                 Message::Close(_) => break,
                 _ => {}

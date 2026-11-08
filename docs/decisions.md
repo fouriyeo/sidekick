@@ -1112,6 +1112,24 @@
 - 验证：`cargo test` 184（定位单测的 x/y 期望已按新窗口宽度/留白更新）；QA 60 张截图（视口 360×468，卡片仍 320×432、不裁切）；真实桌面截图 + 像素采样确认卡片外只剩柔和阴影、没有灰框。
 - 规范：`app/src-tauri/src/usage_panel.rs`、`app/src/desktop/styles/panel.css`、`scripts/qa-desktop-ios.mjs`、`docs/prd/usage/{SPEC,PRD,INDEX,ACCEPTANCE}.md`、`docs/engineering/{desktop-usage-panel,desktop-tray,INDEX}.md`、`docs/status.md`、`AGENTS.md`。
 
+## D115 · 语音备忘录：手机独立 AI 管道 + 桌面局域网镜像（2026-11-07）
+
+- 背景：用户提出「类似备忘录、也类似录音卡」的新方向——手机录一段语音，AI 识别并归类成备忘录；人可能不在电脑旁、手机有网；希望锁屏也能录、录音默认保留；手机与电脑在同一局域网同步；手机能独立使用 AI 能力（此前口误说成「AI 绘画」，已澄清为「AI 会话/处理」）；可新增备忘录入口。用户明确要求先讨论、不写代码，讨论四轮后拍板。
+- 决策：
+  - **手机是主设备**：录音、转写、结构化、存储都在手机完成，不依赖电脑；电脑降级为只读镜像与回看端。这是对「手机是电脑外设」定位的有意扩展（语音输入链路不变）。
+  - **只做处理管道，不做完整 AI 会话**：录完 → 分段 ASR → LLM 输出 `{title, type ∈ memo|todo|idea, summary, todos[], tags[]}` → 入库；不做多轮聊天、不做对话式编辑。
+  - **锁屏与后台录音**：原生 `AudioRecord` + 前台服务（`microphone` 类型）+ 常驻通知 + partial wake lock + 5 分钟分段落盘；单次上限 2 小时；OEM 省电只能引导，不承诺 100% 存活。
+  - **音频默认保留**，设置可关；AAC-LC 16k mono 约 14MB/小时；详情可单独删音频。
+  - **Key 允许电脑下发到手机**：桌面生成 6 位一次性配对码（2 分钟、错 3 次作废），手机凭码经已连接 WS 一次性取走；手机存 Android Keystore（AES-GCM 包裹），只显示掩码；手动粘贴作兜底；手机不允许自定义云服务地址。
+  - **同步只在同一局域网**：手机为每条备忘录的所有者（单写者），电脑只读；音频分块（新 magic `SK02`）+ 字节偏移续传 + sha256 校验，电脑 `committed` 后手机才标记已同步；删除走墓碑；不做公网、不做账号、不做双向 CRDT。
+  - **入口**：手机宠物页顶栏新增「备忘录」图标 → 全屏二级页（不新增底部 tab、不改 D80 两页壳）；桌面不新增一级页，备忘录作为「内容」页的一个分段（与剪贴板并列）。
+- 放弃：完整 AI 聊天/多轮会话；公网同步与账号体系；多设备；自定义分类体系与标签管理；桌面编辑/删除；实时转写上屏；iOS（后续）。
+- 原因：四项需求里只有「语音备忘录」能靠现有百炼 + 新数据层闭环；同步与后台录音是真正的复杂度；公网/账号会把项目变成另一个产品；单写者 + 只读镜像把冲突问题从 CRDT 降为复制。
+- 代价：Android 原生层工程（前台服务、MediaCodec、Keystore、JNI）；手机端要补 TLS（`rustls-tls-native-roots`）与 SQLite（rusqlite bundled）；Key 上手机扩大泄露面，靠 Keystore + 一次性配对码 + 固定域名收窄；现有无鉴权广播协议在同步上线前必须补设备 token 与定向下发；长录音的发热/耗电/成本需在设置与文案中管理。
+- 验证：需求讨论四轮（2026-11-07）确认四个分叉；文档定稿 `docs/prd/memo/{INDEX,PRD,SPEC,ACCEPTANCE}.md` + `docs/engineering/memo-pipeline.md`；实现前先做锁屏录音与手机直连百炼两个 spike。
+- 规范：`docs/prd/memo/*`、`docs/engineering/memo-pipeline.md`、`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/INDEX.md`、`docs/status.md`、`AGENTS.md`。
+- 调整（2026-11-08，D118）：锁屏/后台录音、发热/耗电与成本估算降为 P1/P2；MVP 采集改为 WebView 前台 + WAV，原生层与 AAC 延后。
+
 ## D117 · 电脑端顶部滚动边缘铺满整页（2026-11-07）
 
 - 背景：用户反馈「向下滑动时顶部出现渐变白条，而且没充满整个页面、只在中间一段，看着很奇怪」。实测 1180 窗口：内容列 674 + 两侧 28 = 730，渐隐层只有 730 宽，两侧各留 141 直边，所以像一条贴在中间的白色带子。
@@ -1120,6 +1138,34 @@
 - 代价：`PageShell` 多一个 `ResizeObserver`（窗口 resize / 列宽变化时重算一次），首帧 `--dsl-bleed: 0`。
 - 验证：浏览器 CDP 量 `.dsl-topbar-wrap` 宽度 = 956（=滚动视口）、胶囊仍 674；浅/深 × 1180/960 截图顶部渐隐层左右到边、无直边、无横向溢出；`tsc` / `biome` / 707 tests 全绿。
 - 规范：`app/src/desktop/shell/page-shell.tsx`、`app/src/desktop/styles/ios.css`、`docs/engineering/desktop-ios-ui.md`、`AGENTS.md`。
+
+## D119 · 「内容」改名「剪贴板」，设置收回剪贴板页（2026-11-08，收窄 shell PRD 的「低频配置进设置」）
+
+- 背景：用户反馈「剪贴板的设置好像没放进内容那个模块」「它俩应该是一个东西」。核对代码后发现：剪贴板的设置**早在 D85 就并进了内容页**（记录开关、`密码框与隐藏内容 不记录`、页头 `N / 100 条` + 清空），但「设置 › 剪贴板」二级页把同一组信息又完整摆了一遍（0 项独有；上限 100 是 Rust 常量，不可配置）。两个入口 + 两个名字（导航「内容」/ 设置「剪贴板」）让人以为设置只属于设置页。
+- 决策：
+  - **改名**：桌面一级页「内容」→「**剪贴板**」（⌘2 不变）。视图 id 仍是 `content`，`?view=content` 与 `?view=clipboard` 两个别名都落到它，URL / 状态契约不变。
+  - **删除重复**：「设置 › 剪贴板」二级页与设置首页那一行一起删除；`SettingsSection` 去掉 `clipboard`，`?view=settings&section=clipboard` 落设置首页。设置「功能」组回到 手机连接 / AI 联动。
+  - **归属**：剪贴板的历史与设置都只在剪贴板页；页内设置组加组标题「设置」（`记录剪贴板` 开关 + `密码框与隐藏内容 不记录`），页头保留 `N / 100 条` + 清空（二次确认，文案含「包括置顶」）。
+- 放弃：把设置做成页头动作或弹层（页头动作位只有两个，已被计数与清空占掉；只有一个开关，多一层不值得）；保留设置行做跳转（多一个入口就还是「两个地方」）；设置里留隐私文案（隐私说明在「设置 › 关于本机」，删子页不丢）。
+- 原因：同一功能只留一个归属、一个名字，与 D104 把语音配置收回一级页是同一条规则；页面自己的功能配置不塞进设置。
+- 代价：设置首页少了「记录中 · N 条 / 已暂停」这行环境摘要（暂停态只在剪贴板页可见）；shell PRD 的「低频配置收进设置二级页」被收窄为「页面自己的功能配置留在该页」。
+- 验证：`app.test.tsx` / `settings-page.test.tsx` / `clipboard-section.test.tsx` 断言已改（设置首页不再有剪贴板、⌘2 页头是「剪贴板」、旧 `?view=settings&section=clipboard` 落首页），`pnpm typecheck / lint / test`、`check-docs`、`check-boundaries`、`qa-desktop-ios.mjs` 见 `docs/status.md`。
+- 编号：本条为 **D119**（同日 D118 已被语音备忘录范围调整占用）。
+- 规范：`app/src/desktop/lib/desktop-nav.ts`、`app/src/desktop/pages/{settings-page,content-page}.tsx`、`app/src/desktop/features/clipboard/components/clipboard-section.tsx`、`app/src/desktop/{app.test,settings-page.test}.tsx`、`app/src/desktop/features/clipboard/components/clipboard-section.test.tsx`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/engineering/{clipboard-manager,desktop-ios-ui}.md`、`docs/standards/ux.md`、`docs/frontend-architecture.md`、`docs/prd/usage/{PRD,INDEX}.md`、`docs/INDEX.md`、`docs/status.md`、`AGENTS.md`。
+- 遗留：D115 语音备忘录原计划「桌面内容页加分段」，页面改名后该落点需要重定（备忘录由另一条实现线处理，本决策不改 memo 文档）。
+
+## D118 · 语音备忘录范围调整：锁屏/后台录音与发热/成本延后（2026-11-08，调整 D115）
+
+- 背景：用户评审 D115 后明确：锁屏录音先不开发（低优先级）；发热/成本估算也先不做，等全部开发完、测试没问题再整；先把这些记进文档。
+- 决策：
+  - **锁屏/后台录音移到 P1（暂缓）**：MVP 不引原生 `AudioRecord`、前台服务、常驻通知、电池白名单；录音只在 App 前台/亮屏，复用现有 `set_keep_screen_on` 保持亮屏。
+  - **采集简化**：MVP 用 WebView `getUserMedia` + ScriptProcessor，PCM 分片交 Rust 写 WAV；不引 MediaCodec/AAC（P2 再压缩）。
+  - **发热/耗电优化与用量/成本估算移到 P2**，不在 MVP 范围；2 小时上限先固定，不基于真机热测校准。
+- 放弃（本期）：前台服务/通知/OEM 引导、AAC/Opus 编码、热与电量实测、成本看板。
+- 原因：先把「能录 → 能识别 → 能归类 → 能存 → 能同步」闭环跑通；后台与压缩都只替换采集层，晚做不阻塞数据模型与管道，还能先验证产品价值。
+- 代价：锁屏/切后台即停止；长录音体积大（WAV 约 115MB/小时）；需在 PRD/SPEC/文案里明示，避免用户以为能后台录。
+- 验证：文档同步 `docs/prd/memo/{PRD,SPEC,ACCEPTANCE,INDEX}.md`、`docs/engineering/memo-pipeline.md`；实现前 spike 改为「手机直连百炼 TLS / Android SQLite / WAV 长录音」三项。
+- 规范：`docs/prd/memo/*`、`docs/engineering/memo-pipeline.md`、`docs/decisions.md`（D115 标注被调整）、`AGENTS.md`、`docs/status.md`。
 
 ## D120 · 菜单栏看板卡片区铺原生磨砂（真玻璃，NSVisualEffectView）（2026-11-08，补充 D108/D116）
 
@@ -1132,3 +1178,32 @@
 - 验证：日志 `[panel] 卡片区玻璃已就位（NSVisualEffectView · popover · 圆角 18）`；同屏同位置 A/B 实测（tint 压到 0.04）——`SIDEKICK_UI_VIBRANCY=off` 时卡片里能看清背后正文（区块 stdev 69.6），开启后正文被糊成均匀磨砂（stdev 48.2、无文字残留）；卡片实测 320×432、18px 圆角无直角玻璃外露；`cargo test` 184 / 708 前端 tests / tsc / lint / `check-docs` / `check-boundaries` 全绿。
 - 调整（同日晚，用户反馈「看不出来太大的区别」）：确认不是没生效，而是**浅色背景下密集磨砂与不透明卡几乎同观感**。据此把默认材质换成 macOS 26 的 **`NSGlassEffectView`（`liquidGlassRegular`）**——背景颜色真正透进来、带边缘高光，最接近「iOS 26 玻璃」；低版本或类不存在时自动退回经典磨砂 `popover`。同时把材质做成可切档：`SIDEKICK_GLASS_MATERIAL=liquidGlass|liquidGlassClear|popover|underWindowBackground|sidebar|menu|contentBackground`（`liquidGlassClear` 实测在数据卡上小字对比不足，不建议）。QA 预览同步增强：`SIDEKICK_PANEL_PREVIEW="x,y"`（逻辑像素）可把面板放到任意位置对着深色/彩色背景截图，且预览期间不因失焦自动收起（截图脚本点不回来）。
 - 规范：`app/src-tauri/src/panel_glass.rs`、`app/src-tauri/src/usage_panel.rs`（`CARD_RADIUS` + `panel_glass_ready`）、`app/src-tauri/src/lib.rs`（预览改为不弹主窗口）、`app/src/desktop/styles/panel.css`、`app/src/desktop/panel/usage-panel.tsx`、`app/src/shared/lib/tauri.ts`、`app/src/dev/tauri-mock.ts`、`docs/engineering/desktop-usage-panel.md`、`docs/status.md`、`AGENTS.md`。
+
+## D121 · 剪贴板「最多保留」可配：默认 100、范围 10–200（2026-11-08，补 D44 的固定上限）
+
+- 背景：用户问「一般剪贴板能设置数量，那个设置放哪儿了」。核对后确认：保留条数一直写死在 Rust 常量 `MAX_ITEMS = 100`，前端只展示 `N / 100 条`，设置里从来没有这一项（删除设置二级页时也因此没有丢失任何可配置项，D119）。用户明确要求加上。
+- 决策：
+  - 上限可配：默认 **100**，范围 **10–200**（Rust `clamp_max_items` 夹住）；值存进 `~/.sidekick/clipboard.json` 的 `maxItems`（旧文件缺字段回落 100，不迁移不炸）。上限 200 而不是 500：每条文本允许 5 万字符，条目多了整文件写盘会变沉。
+  - 入口在剪贴板页「设置」组：`记录剪贴板` 下面一行「最多保留」，右侧 iOS 分段 **20 / 50 / 100 / 200**（一键切换，不做数字输入框）。设置里仍然没有剪贴板（D119）。
+  - 新命令 `clipboard_set_max_items(maxItems)`：夹取 → **立即按同一规则裁剪现有历史**（置顶优先保留，其余按 `last_used_at` 从新到旧）→ 原子落盘 → 广播 `clipboard-changed`；页头 `N / M 条` 随之变化。
+  - 记录时也按当前上限裁剪（`record_item` 收 `max_items` 参数），不再引用编译期常量。
+- 放弃：不设上限（JSON 会无限胖、每次复制都整文件写）；500 档（写盘成本换不来收益）；数字输入（只一个设置项，多一层键盘/校验不值当，分段更符合 iOS 列表）；把调上限放回设置页（违反 D119）。
+- 代价：`clipboard.json` 最大约 200 条（含置顶），改小后不可恢复被裁掉的历史；旧版桌面端读到 `maxItems` 会忽略、仍按 100 裁剪（向前兼容，不破坏文件）。
+- 验证：`cargo test --lib` **188 passed**（剪贴板 12 个用例：夹取范围、改小保留置顶先删最旧未置顶、自定义上限下入库裁剪、`maxItems` 落盘往返、旧文件缺字段回落 100）；前端 `709 tests`、`tsc`、`biome`、`check-docs`、`check-boundaries` 全绿；`node scripts/qa-desktop-ios.mjs` 58 张截图（浅/深 × 1180/960）无溢出/console error。
+- 规范：`app/src-tauri/src/clipboard_manager.rs`、`app/src-tauri/src/lib.rs`、`app/src/shared/lib/tauri.ts`、`app/src/desktop/features/clipboard/{clipboard-store.ts,components/clipboard-section.tsx,components/clipboard-section.test.tsx}`、`app/src/dev/tauri-mock.ts`、`docs/engineering/clipboard-manager.md`、`docs/prd/shell/{PRD,SPEC,ACCEPTANCE}.md`、`docs/status.md`、`AGENTS.md`。
+
+## D122 · 语音备忘录 S1+S2 落地：手机前台录音 + 分段 ASR/LLM + 局域网只读镜像（2026-11-08，实现 D115/D118）
+
+- 背景：D115 定方向、D118 砍掉锁屏/后台与成本估算后，按批准的「S1 手机独立 + S2 局域网镜像」实施计划落地代码。
+- 决策：
+  - **采集**：手机 WebView `getUserMedia` + `ScriptProcessor(2048)`，16k mono PCM16，边录边 1 秒分片写 Rust；停止回填 WAV 头并 rename 到 `audio/<id>.wav`。仅前台/亮屏，锁屏/切后台/离开页面停止并保存；`visibilitychange` 与组件卸载都走 stop。
+  - **本地库**：双端 rusqlite bundled（WAL）。手机 `<app_data>/memo/audio|tmp|sidekick.db`；桌面 `~/.sidekick/sidekick.db` + `~/.sidekick/memos/audio/`。共享 schema `memos/memo_segments/memo_kv`，墓碑 `deleted_at`。
+  - **管道**：手机 Rust 单飞队列；5 分钟分段直连百炼 wss（`qwen-audio-3.1-asr-flash-streaming`）转写；兼容模式 `qwen-plus` 输出 JSON（标题/类型/摘要/待办/标签），失败保留转写并用首句当标题。无 Key→failed(no_key)，网络错→offline；失败段可重试、已完成段不重复。
+  - **Key/配对**：桌面生成 6 位一次性码（2 分钟、错 3 次作废），手机 `memo.pair.request` 换回 `token + apiKey`；桌面只存 token 的 sha256，手机存 App 私有文件 `memo/secure.json`（0600）。**偏差**：不做 Android Keystore（需向 `gen/android` 注入 Kotlin），Keystore 列 P1；手机端固定官方 ASR/LLM 端点，不允许改地址。
+  - **同步**：手机单写者、桌面只读。连上电脑先 `memo.hello`，再分批 `memo.push` 元数据 + `SK02` 音频分块 + `memo.audio.commit`；桌面校验 size/sha256 后回 `committed`，手机才写 `synced_at`。没有 cursor/心跳，未同步条目每次全量重推，桌面按 id upsert 去重；断线保留 `synced_at=null`。
+  - **定向发送**：桌面服务新增 per-client sender map；Key/token/音频 ack 只回发起连接，不进聊天广播；`memo.*` 在 `desktop_server` 内消费。
+  - **UI**：手机顶栏新增 `NotebookPen` → 全屏「备忘录」（列表/详情/录音/播放/改标题与类型/删音频/删条目），设置新增「备忘录 / 百炼 Key / 从电脑配对」；桌面「剪贴板」页加「剪贴板 / 备忘录」分段（不加一级页），语音页加「配对手机 / 发送 Key」。播放走 `asset` 协议，不把音频塞 IPC。
+- 放弃/暂缓：Keystore；cursor + 心跳 + 真正断点续传；锁屏/后台录音；AAC/Opus；发热/耗电与成本；桌面编辑/删除；公网/账号。
+- 代价：手机 Key 依赖 App 沙箱 + FBE（非 Keystore）；2 小时 WAV 约 230MB；同步每次全量扫描未同步行（条数少可接受）；桌面镜像在手机离线时不能更新。
+- 验证：Rust `cargo test` **201 passed**（memo 核心 13 + SK02 2）；前端 **724 tests / 84 files**、`tsc`、`biome`、`build`、`check-docs`、`check-boundaries` 全绿；Android debug APK 构建成功（含 rusqlite/reqwest/webpki roots）；浏览器 mock 截图（手机 390、桌面 1180）无溢出。真机录音/配对/同步待用户验收。
+- 规范：`app/src-tauri/src/memo/**`、`memo_protocol.rs`、`desktop_server.rs`、`mobile_client.rs`、`app/src/mobile/features/memo/**`、`app/src/desktop/features/memo/**`、`app/src/protocol/memo.ts`、`protocol/README.md`、`docs/engineering/memo-pipeline.md`、`docs/prd/memo/**`。

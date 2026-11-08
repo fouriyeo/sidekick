@@ -40,6 +40,7 @@ children:
 | 做自动发现 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) | 该篇 |
 | 做 AI 联动 / DSH hook / 宠物四态 / 会话列表 | [prd/hook/INDEX.md](./prd/hook/INDEX.md) | PRD / SPEC + [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
 | 做 Token 用量看板 / 模型价格 / 三种分组 | [prd/usage/INDEX.md](./prd/usage/INDEX.md) | PRD / SPEC + [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
+| 做语音备忘录 / 录音卡 / 手机独立 AI 归类 | [prd/memo/INDEX.md](./prd/memo/INDEX.md) | PRD / SPEC + [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
 | 改应用外壳 / 导航 / 状态词 / 首用清单 | [prd/shell/INDEX.md](./prd/shell/INDEX.md) | PRD / SPEC / AC |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
 | 查进度、环境、构建 | 直接读 | [status.md](./status.md) / [setup.md](./setup.md) |
@@ -70,7 +71,8 @@ docs/
 │  ├─ mic/                      # INDEX + PRD / SPEC / ACCEPTANCE
 │  ├─ hook/                     # INDEX + PRD / SPEC / ACCEPTANCE（AI 联动）
 │  ├─ usage/                    # INDEX + PRD / SPEC / ACCEPTANCE（Token 用量看板）
-│  └─ shell/                    # INDEX + PRD / SPEC / ACCEPTANCE（桌面简约 iOS + 手机两页壳）
+│  ├─ shell/                    # INDEX + PRD / SPEC / ACCEPTANCE（桌面简约 iOS + 手机两页壳）
+│  └─ memo/                     # INDEX + PRD / SPEC / ACCEPTANCE（语音备忘录：手机独立录音 + AI 归类 + 局域网镜像）
 ├─ engineering/                 # 技术方案
 │  ├─ INDEX.md
 │  ├─ audio-pipeline.md         # 采集 → 传输 → 转写 → 输入
@@ -79,6 +81,7 @@ docs/
 │  ├─ clipboard-manager.md      # 桌面剪贴板历史与隐私过滤
 │  ├─ dsh-hook.md               # DSH 本地脚本注入、Rust 桥、四态协议
 │  ├─ token-usage-pricing.md   # Token 用量账本、聚合、模型价格表
+│  ├─ memo-pipeline.md         # 语音备忘录：手机独立录音、分段转写、LLM 归类、局域网镜像
 │  ├─ desktop-ios-ui.md         # 电脑端「简约 iOS」界面契约（实现契约）
 │  ├─ lan-discovery.md          # UDP 发现与动态端口
 │  ├─ pet-runtime.md            # 帧动画图集、状态机、持久化、性能
@@ -99,7 +102,7 @@ docs/
 ## 4. 当前阶段（2026-11-06）
 
 - 已完成：局域网 MVP、自动发现与动态端口、前端 Phase 1、宠物 P0 代码、麦克风（百炼云端唯一）代码、语音页/关键词 + 用量统计、桌面剪贴板 P1、断连自动重连、屏幕常亮/触感、双主题（D71/D76）、首次命名/改名下线（2026-11-05）；D69/D77/D78 继续有效。
-- 已完成（代码，待交互回归）：**桌面「简约 iOS」重做**（D85，2026-11-06）——224 侧栏 + 概览 / 内容 / 用量 / 语音 / 设置 5 个一级入口 + iOS 分组列表 + 二级页，取代 D79 的 6 视图；2026-11-06 第二轮：**Liquid Glass 质感层（D86）**——sticky 玻璃工具栏、彩色图标块、胶囊控件、弹簧动效与 grain，玻璃只做控件层；**D101/D104：语音先收回「设置 › 语音输入」单页、再升为第 4 个一级入口「语音 ⌘4」**（配置 / 关键词 / 用量三段，内部不再 push）；手机两页壳（D80/D81）不变。产品规则见 [prd/shell](./prd/shell/INDEX.md)，实现契约见 [engineering/desktop-ios-ui.md](./engineering/desktop-ios-ui.md)，结构见 [frontend-architecture.md](./frontend-architecture.md)。
+- 已完成（代码，待交互回归）：**桌面「简约 iOS」重做**（D85，2026-11-06）——224 侧栏 + 概览 / 剪贴板 / 用量 / 语音 / 设置 5 个一级入口 + iOS 分组列表 + 二级页，取代 D79 的 6 视图；2026-11-06 第二轮：**Liquid Glass 质感层（D86）**——sticky 玻璃工具栏、彩色图标块、胶囊控件、弹簧动效与 grain，玻璃只做控件层；**D101/D104：语音先收回「设置 › 语音输入」单页、再升为第 4 个一级入口「语音 ⌘4」**（配置 / 关键词 / 用量三段，内部不再 push）；**D119：第 2 个一级页「内容」改名「剪贴板」，设置 › 剪贴板二级页删除、历史与设置都只在剪贴板页**；手机两页壳（D80/D81）不变。产品规则见 [prd/shell](./prd/shell/INDEX.md)，实现契约见 [engineering/desktop-ios-ui.md](./engineering/desktop-ios-ui.md)，结构见 [frontend-architecture.md](./frontend-architecture.md)。
 - 代码完成（待真机/隐私验收）：**AI 联动（DSH hook）**——产品规则见 [prd/hook](./prd/hook/INDEX.md)，技术方案见 [engineering/dsh-hook.md](./engineering/dsh-hook.md)。
 - 代码完成（待验收，2026-11-06）：**Token 用量看板 V1**——桌面一级「用量」+ 手机宠物页顶栏今日数字（点开用量页，v17 / D93）+ 模型价格表；产品规则见 [prd/usage](./prd/usage/INDEX.md)，技术方案见 [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md)（D82–D84）。
 - 代码完成（待真机，2026-11-06，D93）：**手机顶栏 v17**——连接状态收成信号塔图标（连上只显示图标、未连上才补短词），今日用量数字上顶栏（点开用量页），设置页移除用量入口；浏览器 QA 390/320 双主题无溢出/无 console error。
@@ -125,6 +128,7 @@ docs/
 | 宠物存档与运行时 | [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
 | AI 联动（DSH）产品规则 | [prd/hook/PRD.md](./prd/hook/PRD.md) |
 | Token 用量看板 / 模型价格 | [prd/usage/INDEX.md](./prd/usage/INDEX.md) / [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
+| 语音备忘录产品规则 / 手机独立 AI 管道与局域网镜像 | [prd/memo/INDEX.md](./prd/memo/INDEX.md) / [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
 | 应用外壳：桌面简约 iOS 结构 / 导航 / 页面归属 / 状态词 / 首用清单 | [prd/shell/INDEX.md](./prd/shell/INDEX.md)（桌面实现契约 [engineering/desktop-ios-ui.md](./engineering/desktop-ios-ui.md)） |
 | AI 四态动作/声音/桌面页 | [prd/hook/SPEC.md](./prd/hook/SPEC.md) |
 | DSH 脚本/桥/安装/协议 | [engineering/dsh-hook.md](./engineering/dsh-hook.md) |

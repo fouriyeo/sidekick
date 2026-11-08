@@ -26,7 +26,7 @@ const noShots = process.argv.includes("--no-shots");
 /** 一级页（显式列出；侧栏上半 概览/内容/用量/语音，设置固定在底部）。 */
 const PRIMARY_PAGES = [
   { name: "overview", view: "", label: "概览", query: "&ai=asking" },
-  { name: "content", view: "content", label: "内容" },
+  { name: "clipboard", view: "content", label: "剪贴板" },
   { name: "usage", view: "usage", label: "用量" },
   { name: "voice", view: "voice", label: "语音" },
   { name: "settings", view: "settings", label: "设置" },
@@ -37,7 +37,6 @@ const SETTINGS_PAGES = [
   { name: "settings-connection", view: "connection", label: "手机连接" },
   { name: "settings-hook", view: "hook", label: "AI 联动" },
   { name: "settings-accessibility", view: "accessibility", label: "自动输入" },
-  { name: "settings-clipboard", view: "clipboard", label: "剪贴板" },
   { name: "settings-about", view: "about", label: "关于本机" },
   { name: "settings-messages", view: "messages", label: "消息通道" },
 ];

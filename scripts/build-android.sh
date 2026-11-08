@@ -36,6 +36,13 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/../app" && pwd)"
 
+# tauri android build 会改写 Cargo.toml（移除移动端不兼容的 macos-private-api），
+# 退出时无论成败都补回来，避免下一次桌面构建/ cargo test 卡在 feature allowlist。
+restore_desktop_features() {
+  node "$SCRIPT_DIR/restore-desktop-features.mjs" || true
+}
+trap restore_desktop_features EXIT
+
 # gradle 的 rust 任务会经 `beforeBuildCommand` 调 `pnpm`，但它的工作目录是
 # `gen/android`（没有 package.json），corepack 在那里读不到 `packageManager`，
 # 会退回全局版本并被版本自检拦下。shim 里先切到 app 目录再转给 corepack，

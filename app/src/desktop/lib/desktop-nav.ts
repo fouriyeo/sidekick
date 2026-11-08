@@ -4,9 +4,12 @@ import { AudioLines, Clipboard, Gauge, LayoutGrid, Settings } from "lucide-react
 /**
  * 电脑端「简约 iOS」导航模型（2026-11-07，D85 结构 + D86 质感 + D104 语音一级页）。
  *
- * 一级 5 个：概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 设置 ⌘5；设置固定在侧栏底部，
+ * 一级 5 个：概览 ⌘1 / 剪贴板 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 设置 ⌘5；设置固定在侧栏底部，
  * 侧栏上半只有 4 个入口。语音是一级页里的**单页**（百炼配置 / 关键词 / 语音用量
  * 三段纵向排列），内部不再 push（D101 收掉二级页，D104 把它从设置挪回一级）。
+ *
+ * 剪贴板原叫「内容」，D119 改名：历史与设置都只在这一页，设置里不再有剪贴板。
+ * 视图 id 仍是 `content`（`?view=content` / `?view=clipboard` 两个旧别名都落到它）。
  */
 
 export type DesktopView = "overview" | "content" | "usage" | "voice" | "settings";
@@ -16,7 +19,6 @@ export type SettingsSection =
   | "root"
   | "connection"
   | "hook"
-  | "clipboard"
   | "accessibility"
   | "about"
   | "messages";
@@ -41,7 +43,7 @@ export type DesktopNavItem = {
 /** 一级导航（侧栏顺序）；⌘ 序号与数组顺序一致，设置固定底部。 */
 export const DESKTOP_NAV: readonly DesktopNavItem[] = [
   { id: "overview", label: "概览", shortcut: "⌘1", icon: LayoutGrid },
-  { id: "content", label: "内容", shortcut: "⌘2", icon: Clipboard },
+  { id: "content", label: "剪贴板", shortcut: "⌘2", icon: Clipboard },
   { id: "usage", label: "用量", shortcut: "⌘3", icon: Gauge },
   { id: "voice", label: "语音", shortcut: "⌘4", icon: AudioLines },
   { id: "settings", label: "设置", shortcut: "⌘5", icon: Settings },
@@ -50,11 +52,10 @@ export const DESKTOP_NAV: readonly DesktopNavItem[] = [
 /** 侧栏上半部分的一级项（设置单独固定在底部）。 */
 export const DESKTOP_PRIMARY_NAV = DESKTOP_NAV.filter((item) => item.id !== "settings");
 
-/** 设置二级页的大标题；`root` 用「设置」。 */
+/** 设置二级页的大标题；`root` 用「设置」（剪贴板没有二级页，D119）。 */
 export const SETTINGS_SECTION_TITLE: Record<Exclude<SettingsSection, "root">, string> = {
   connection: "手机连接",
   hook: "AI 联动",
-  clipboard: "剪贴板",
   accessibility: "自动输入",
   about: "关于本机",
   messages: "消息通道",
@@ -63,7 +64,7 @@ export const SETTINGS_SECTION_TITLE: Record<Exclude<SettingsSection, "root">, st
 /** 一级导航的标题（页头用）。 */
 export const VIEW_TITLE: Record<DesktopView, string> = {
   overview: "概览",
-  content: "内容",
+  content: "剪贴板",
   usage: "用量",
   voice: "语音",
   settings: "设置",
@@ -80,6 +81,7 @@ export function viewForShortcut(key: string): DesktopView | null {
 const VIEW_ALIASES: Record<string, DesktopRoute> = {
   overview: { view: "overview", section: "root" },
   content: { view: "content", section: "root" },
+  // 剪贴板是 ⌘2 一级页（D119），两个旧名字都保留。
   clipboard: { view: "content", section: "root" },
   usage: { view: "usage", section: "root" },
   // 语音是第 4 个一级页（D104）；旧调试别名 models 也落到这里。
@@ -103,7 +105,6 @@ function isSettingsSection(value: string | null): value is SettingsSection {
     value === "root" ||
     value === "connection" ||
     value === "hook" ||
-    value === "clipboard" ||
     value === "accessibility" ||
     value === "about" ||
     value === "messages"

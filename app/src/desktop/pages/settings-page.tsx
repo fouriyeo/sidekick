@@ -1,7 +1,6 @@
-import { Clipboard, Info, Keyboard, MessageCircle, Palette, Plug, Smartphone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Info, Keyboard, MessageCircle, Palette, Plug, Smartphone } from "lucide-react";
+import { useState } from "react";
 import { ChatSection } from "@/desktop/features/chat/components/chat-section";
-import { useClipboardStore } from "@/desktop/features/clipboard/clipboard-store";
 import { ConnectionSection } from "@/desktop/features/connect/components/connection-section";
 import { HookSection } from "@/desktop/features/hook/components/hook-section";
 import { describeHookStatus, useHookStore } from "@/desktop/features/hook/hook-store";
@@ -25,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
-import { Switch } from "@/shared/ui/switch";
 import { ThemeOptions } from "@/shared/ui/theme-options";
 
 type SettingsPageProps = {
@@ -38,9 +36,10 @@ type SettingsPageProps = {
 /**
  * 设置：一张 iOS 分组列表，点进二级页再返回。
  *
- * 首页只放「会改的东西」：外观、自动输入、手机连接、AI 联动、剪贴板、关于；
+ * 首页只放「会改的东西」：外观、自动输入、手机连接、AI 联动、关于；
  * 每一项右侧只有一个短值，不放解释性长句。二级页共用同一个返回壳。
- * 语音是独立一级页（D104），不占设置的行与二级页。
+ * 语音是独立一级页（D104）；剪贴板也是独立一级页，历史与设置都在那一页（D119），
+ * 设置里不再有剪贴板行与二级页。
  */
 export function SettingsPage({ connection, section, onSectionChange, nav }: SettingsPageProps) {
   if (section === "root") {
@@ -55,7 +54,6 @@ export function SettingsPage({ connection, section, onSectionChange, nav }: Sett
         <div key={section} className="flex flex-col gap-6">
           {section === "connection" && <ConnectionSettings connection={connection} />}
           {section === "hook" && <HookSection />}
-          {section === "clipboard" && <ClipboardSettings />}
           {section === "accessibility" && <AccessibilityCard showHeading={false} />}
           {section === "about" && <AboutSettings />}
           {section === "messages" && (
@@ -80,18 +78,10 @@ function SettingsRoot({
   connection: DesktopConnection;
   onSectionChange: (section: SettingsSection) => void;
 }) {
-  const snapshot = useClipboardStore((state) => state.snapshot);
-  const refreshClipboard = useClipboardStore((state) => state.refresh);
   const hookStatus = useHookStore((state) => state.status);
-
-  useEffect(() => {
-    void refreshClipboard();
-  }, [refreshClipboard]);
 
   const connected = connection.status === "connected";
   const address = connection.info ? `${connection.info.ip}:${connection.info.port}` : null;
-  const enabled = snapshot?.enabled ?? true;
-  const count = snapshot?.items.length ?? 0;
   const hookLabel = describeHookStatus(hookStatus).label;
 
   return (
@@ -132,14 +122,6 @@ function SettingsRoot({
             meta={hookLabel}
             chevron
             onClick={() => onSectionChange("hook")}
-          />
-          <ListRow
-            icon={<Clipboard aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
-            iconTone="blue"
-            title="剪贴板"
-            meta={enabled ? `记录中 · ${count} 条` : "已暂停"}
-            chevron
-            onClick={() => onSectionChange("clipboard")}
           />
         </ListGroup>
 
@@ -194,70 +176,6 @@ function ConnectionSettings({ connection }: { connection: DesktopConnection }) {
         onToggleQr={() => setQrOpen((open) => !open)}
       />
     </div>
-  );
-}
-
-function ClipboardSettings() {
-  const snapshot = useClipboardStore((state) => state.snapshot);
-  const refresh = useClipboardStore((state) => state.refresh);
-  const setEnabled = useClipboardStore((state) => state.setEnabled);
-  const clear = useClipboardStore((state) => state.clear);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const enabled = snapshot?.enabled ?? true;
-  const count = snapshot?.items.length ?? 0;
-  const maxItems = snapshot?.maxItems ?? 100;
-
-  return (
-    <>
-      <ListGroup>
-        <ListRow
-          title="记录剪贴板"
-          control={
-            <Switch
-              aria-label="记录剪贴板"
-              checked={enabled}
-              onCheckedChange={(value) => void setEnabled(value)}
-            />
-          }
-        />
-        <ListRow title="已保存" meta={`${count} / ${maxItems} 条`} mono />
-        <ListRow title="密码框与隐藏内容" meta="不记录" />
-      </ListGroup>
-
-      <ListGroup>
-        <ListActionRow tone="danger" disabled={count === 0} onClick={() => setConfirmOpen(true)}>
-          清空历史
-        </ListActionRow>
-      </ListGroup>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>清空剪贴板历史？</DialogTitle>
-            <DialogDescription>所有记录都会删除，不能恢复。</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
-              取消
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                void clear().then(() => setConfirmOpen(false));
-              }}
-            >
-              清空
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }
 

@@ -37,6 +37,8 @@ mod haptics;
 mod keep_awake;
 #[cfg(target_os = "macos")]
 mod menu;
+mod memo;
+mod memo_protocol;
 mod mic_protocol;
 #[cfg(mobile)]
 mod mobile_client;
@@ -105,6 +107,12 @@ pub fn run() {
             app.manage(clipboard.clone());
             clipboard.start();
 
+            // 语音备忘录镜像（D115/D118）：桌面只读，手机单写者。
+            let memo = std::sync::Arc::new(
+                memo::desktop::MemoHub::new(handle.clone()).map_err(std::io::Error::other)?,
+            );
+            app.manage(memo.clone());
+
             // DSH AI 联动：回环监听 + 状态广播桥，WS 与设置页共用。
             let hook = dsh_hook::HookBridge::new(handle.clone());
             app.manage(hook.clone());
@@ -116,6 +124,7 @@ pub fn run() {
                 asr_cloud,
                 usage,
                 token_usage,
+                memo,
             ));
 
             // 菜单栏常驻（D88）：隐藏 Dock 图标，入口只在菜单栏。
@@ -232,6 +241,7 @@ pub fn run() {
             clipboard_manager::clipboard_delete,
             clipboard_manager::clipboard_clear,
             clipboard_manager::clipboard_set_enabled,
+            clipboard_manager::clipboard_set_max_items,
             dsh_hook::dsh_hook_status,
             dsh_hook::dsh_hook_install,
             dsh_hook::dsh_hook_set_enabled,
@@ -239,7 +249,10 @@ pub fn run() {
             dsh_hook::dsh_hook_test,
             usage_panel::hide_usage_panel,
             usage_panel::open_usage_page,
-            usage_panel::panel_glass_ready
+            usage_panel::panel_glass_ready,
+            memo::desktop::memo_list,
+            memo::desktop::memo_get,
+            memo::desktop::memo_pair_code_create
         ]);
 
     #[cfg(mobile)]
@@ -253,6 +266,21 @@ pub fn run() {
         })
         .setup(|app| {
             app.manage(mobile_client::ClientState::new());
+            // 语音备忘录（D115/D118）：本地库 + 上次未完成录音恢复。
+            let memo_state = std::sync::Arc::new(
+                memo::mobile::MemoState::new(app.handle()).map_err(std::io::Error::other)?,
+            );
+            app.manage(memo_state.clone());
+            // 恢复可能要修 WAV 头/算 sha256，放到阻塞线程，别卡启动。
+            let recover_handle = app.handle().clone();
+            let recover_state = memo_state.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                if let Err(error) =
+                    memo::mobile::recording::recover(&recover_handle, &recover_state)
+                {
+                    eprintln!("[memo] 恢复未完成录音失败: {error}");
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -269,7 +297,27 @@ pub fn run() {
             mobile_client::send_status_request,
             mobile_client::send_usage_request,
             mobile_client::send_focus_request,
-            mobile_client::send_key_request
+            mobile_client::send_key_request,
+            memo::mobile::memo_list,
+            memo::mobile::memo_get,
+            memo::mobile::memo_update,
+            memo::mobile::memo_delete,
+            memo::mobile::memo_delete_audio,
+            memo::mobile::memo_storage_stats,
+            memo::mobile::memo_recording_start,
+            memo::mobile::memo_recording_append,
+            memo::mobile::memo_recording_finish,
+            memo::mobile::memo_recording_cancel,
+            memo::mobile::memo_recording_status,
+            memo::mobile::memo_recover,
+            memo::mobile::memo_retry,
+            memo::mobile::memo_key_status,
+            memo::mobile::memo_key_save,
+            memo::mobile::memo_key_clear,
+            memo::mobile::memo_pair_request,
+            memo::mobile::memo_pair_apply,
+            memo::mobile::memo_sync_now,
+            memo::mobile::memo_sync_pending
         ]);
 
     builder

@@ -2,7 +2,7 @@
 doc: prd/hook/ACCEPTANCE
 title: AI 联动（Hook）验收用例
 status: draft
-updated: 2026-11-06
+updated: 2026-11-08
 load: on-demand
 owner: qa
 related:
@@ -18,7 +18,7 @@ related:
 
 | ID | Given | When | Then |
 | --- | --- | --- | --- |
-| HOOK-AC-01 | 桌面 App 正常启动 | 打开 系统 › 联动 | 显示「联动」段；消息 / 内容页仍可用（D79） |
+| HOOK-AC-01 | 桌面 App 正常启动 | 打开 系统 › 联动 | 显示「联动」段；消息 / 剪贴板页仍可用（D79） |
 | HOOK-AC-02 | 未安装 DSH 联动 | 点开关 | 弹确认框，说明写 3 个文件、不装 npm 包、需重启 DSH |
 | HOOK-AC-03 | 确认首次安装 | 确认 | 写入插件/配置/patch；原 patch 有备份；页面显示等待重启；不出现半成品文件 |
 | HOOK-AC-04 | 已写入 | 重启 DSH | 10 秒内显示「已连接 · desktop」「插件 v3」；当前状态静态 |

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -15,7 +16,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tokio_util::io::ReaderStream;
 
 use crate::app_focus::{self, FocusLimiter, FocusRequest, IntervalLimiter};
@@ -28,6 +29,7 @@ use crate::desktop_keys::{self, KeyAction, KeyRegistry};
 use crate::desktop_mic::{self, FrontApp};
 use crate::discovery;
 use crate::dsh_hook::HookBridge;
+use crate::memo::desktop::MemoHub;
 use crate::mic_protocol::{self, MicStartMessage, MicStopReason};
 use crate::token_usage::TokenUsageStore;
 
@@ -64,6 +66,10 @@ struct AppState {
     keys: Arc<KeyRegistry>,
     /// 结果卡片手动按键的 500ms 限频。
     key_limiter: Arc<IntervalLimiter>,
+    /// 语音备忘录镜像（D115/D118）。
+    memo: Arc<MemoHub>,
+    /// WS 定向发送：Key / token / 音频 ack 只回给发起请求的那台设备。
+    senders: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>,
 }
 
 struct ActiveMic {
@@ -281,6 +287,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // 先订阅广播，再直发当前 AI 状态快照：新连接（手机/网页）立刻拿到四态，
     // 不会因为快照和广播的先后顺序丢状态。
     let mut rx = state.tx.subscribe();
+    let (direct_tx, mut direct_rx) = mpsc::unbounded_channel::<String>();
+    if let Ok(mut senders) = state.senders.lock() {
+        senders.insert(client_id, direct_tx);
+    }
 
     let count = state.clients.fetch_add(1, Ordering::SeqCst) + 1;
     println!("[ws] client connected ({count} online)");
@@ -312,9 +322,29 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     ));
 
     let mut send_task = tokio::spawn(async move {
-        while let Ok(text) = rx.recv().await {
-            if sender.send(Message::Text(text.into())).await.is_err() {
-                break;
+        loop {
+            tokio::select! {
+                broadcast = rx.recv() => {
+                    match broadcast {
+                        Ok(text) => {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+                direct = direct_rx.recv() => {
+                    match direct {
+                        Some(text) => {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        None => break,
+                    }
+                }
             }
         }
     });
@@ -347,6 +377,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         }
                         if kind.starts_with("mic.") {
                             handle_mic_text(&recv_state, client_id, &text);
+                            continue;
+                        }
+                        if kind.starts_with("memo.") {
+                            handle_memo_text(&recv_state, client_id, &text);
                             continue;
                         }
                         if kind == "status.request" {
@@ -394,7 +428,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     let _ = recv_state.tx.send(text);
                 }
                 Message::Binary(data) => {
-                    handle_audio_frame(&recv_state, client_id, &data);
+                    if data.starts_with(crate::memo_protocol::MAGIC) {
+                        handle_memo_frame(&recv_state, client_id, &data);
+                    } else {
+                        handle_audio_frame(&recv_state, client_id, &data);
+                    }
                 }
                 Message::Close(_) => break,
                 _ => {}
@@ -408,6 +446,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
 
     cleanup_session(&state, client_id);
+    state.memo.disconnect(client_id);
+    if let Ok(mut senders) = state.senders.lock() {
+        senders.remove(&client_id);
+    }
     let count = state.clients.fetch_sub(1, Ordering::SeqCst) - 1;
     println!("[ws] client disconnected ({count} online)");
     let _ = state.tx.send(system_message_with_clients(
@@ -637,6 +679,191 @@ fn handle_key_request(state: &AppState, client_id: u64, text: &str) {
             .to_string(),
         );
     });
+}
+
+
+fn send_to(state: &AppState, client_id: u64, value: Value) {
+    if let Ok(senders) = state.senders.lock() {
+        if let Some(tx) = senders.get(&client_id) {
+            let _ = tx.send(value.to_string());
+        }
+    }
+}
+
+fn memo_error(state: &AppState, client_id: u64, code: &str, message: &str) {
+    send_to(
+        state,
+        client_id,
+        json!({
+            "v": 1,
+            "type": "memo.error",
+            "code": code,
+            "message": message,
+            "ts": now_ms(),
+        }),
+    );
+}
+
+fn handle_memo_text(state: &AppState, client_id: u64, text: &str) {
+    let Ok(value) = serde_json::from_str::<Value>(text) else { return };
+    let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
+    match kind {
+        "memo.pair.request" => {
+            let code = value.get("code").and_then(Value::as_str).unwrap_or("");
+            let device_id = value.get("deviceId").and_then(Value::as_str).unwrap_or("");
+            let name = value.get("deviceName").and_then(Value::as_str);
+            match state.memo.pair(client_id, code, device_id, name) {
+                Ok((token, key)) => send_to(
+                    state,
+                    client_id,
+                    json!({
+                        "v": 1,
+                        "type": "memo.pair.result",
+                        "ok": true,
+                        "token": token,
+                        "key": key,
+                        "ts": now_ms(),
+                    }),
+                ),
+                Err(error) => send_to(
+                    state,
+                    client_id,
+                    json!({
+                        "v": 1,
+                        "type": "memo.pair.result",
+                        "ok": false,
+                        "error": error,
+                        "ts": now_ms(),
+                    }),
+                ),
+            }
+        }
+        "memo.hello" => {
+            let device_id = value.get("deviceId").and_then(Value::as_str).unwrap_or("");
+            let token = value.get("token").and_then(Value::as_str).unwrap_or("");
+            match state.memo.hello(client_id, device_id, token) {
+                Ok(()) => send_to(
+                    state,
+                    client_id,
+                    json!({ "v": 1, "type": "memo.hello.ack", "ok": true, "ts": now_ms() }),
+                ),
+                Err(error) => send_to(
+                    state,
+                    client_id,
+                    json!({
+                        "v": 1,
+                        "type": "memo.hello.ack",
+                        "ok": false,
+                        "error": error,
+                        "ts": now_ms(),
+                    }),
+                ),
+            }
+        }
+        "memo.push" => {
+            let memos = value
+                .get("memos")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            match state.memo.upsert(client_id, &memos) {
+                Ok(ids) => send_to(
+                    state,
+                    client_id,
+                    json!({ "v": 1, "type": "memo.push.ack", "ids": ids, "ts": now_ms() }),
+                ),
+                Err(error) => memo_error(state, client_id, "sync_failed", &error),
+            }
+        }
+        "memo.audio.begin" => {
+            let memo_id = value.get("memoId").and_then(Value::as_str).unwrap_or("");
+            let bytes = value.get("bytes").and_then(Value::as_i64).unwrap_or(0);
+            let sha256 = value.get("sha256").and_then(Value::as_str).unwrap_or("");
+            match state.memo.begin_audio(client_id, memo_id, bytes, sha256) {
+                Ok(offset) => send_to(
+                    state,
+                    client_id,
+                    json!({
+                        "v": 1,
+                        "type": "memo.audio.begin.ack",
+                        "memoId": memo_id,
+                        "offset": offset,
+                        "ts": now_ms(),
+                    }),
+                ),
+                Err(error) => memo_error(state, client_id, "audio_begin_failed", &error),
+            }
+        }
+        "memo.audio.commit" => {
+            let memo_id = value
+                .get("memoId")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            // 长录音的 sha256 校验会读几十~几百 MB，不能卡在 WS 事件循环里。
+            let hub = state.memo.clone();
+            let reply_state = state.clone();
+            tokio::task::spawn_blocking(move || {
+                let result = hub.commit_audio(client_id, &memo_id);
+                let reply = match result {
+                    Ok(()) => json!({
+                        "v": 1,
+                        "type": "memo.audio.committed",
+                        "memoId": memo_id,
+                        "ok": true,
+                        "ts": now_ms(),
+                    }),
+                    Err(error) => json!({
+                        "v": 1,
+                        "type": "memo.audio.committed",
+                        "memoId": memo_id,
+                        "ok": false,
+                        "error": error,
+                        "ts": now_ms(),
+                    }),
+                };
+                send_to(&reply_state, client_id, reply);
+            });
+        }
+        "memo.delete" => {
+            let memo_id = value.get("memoId").and_then(Value::as_str).unwrap_or("");
+            match state.memo.delete(client_id, memo_id) {
+                Ok(()) => send_to(
+                    state,
+                    client_id,
+                    json!({
+                        "v": 1,
+                        "type": "memo.delete.ack",
+                        "memoId": memo_id,
+                        "ok": true,
+                        "ts": now_ms(),
+                    }),
+                ),
+                Err(error) => memo_error(state, client_id, "delete_failed", &error),
+            }
+        }
+        _ => {}
+    }
+}
+
+fn handle_memo_frame(state: &AppState, client_id: u64, data: &[u8]) {
+    let Some((memo_id, offset, payload)) = crate::memo_protocol::parse(data) else {
+        return;
+    };
+    match state.memo.append_audio(client_id, &memo_id, offset, payload) {
+        Ok(next) => send_to(
+            state,
+            client_id,
+            json!({
+                "v": 1,
+                "type": "memo.audio.ack",
+                "memoId": memo_id,
+                "offset": next,
+                "ts": now_ms(),
+            }),
+        ),
+        Err(error) => memo_error(state, client_id, "audio_frame_failed", &error),
+    }
 }
 
 fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
@@ -1119,6 +1346,7 @@ pub async fn start(
     asr_cloud: Arc<AsrCloudState>,
     usage: Arc<UsageStore>,
     token_usage: Arc<TokenUsageStore>,
+    memo: Arc<MemoHub>,
 ) {
     let state = AppState {
         tx: hook.sender(),
@@ -1135,6 +1363,8 @@ pub async fn start(
         key_limiter: Arc::new(IntervalLimiter::with_interval(
             desktop_keys::KEY_MIN_INTERVAL,
         )),
+        memo,
+        senders: Arc::new(Mutex::new(HashMap::new())),
     };
     let app = Router::new()
         .route("/", get(mobile_page))

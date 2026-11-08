@@ -386,7 +386,10 @@ mod tests {
             settings: Mutex::new(settings),
         };
         let config = state.session_config().unwrap();
-        assert_eq!(config.keywords, vec!["异步".to_string(), "函数".to_string()]);
+        assert_eq!(
+            config.keywords,
+            vec!["异步".to_string(), "函数".to_string()]
+        );
     }
 
     #[test]

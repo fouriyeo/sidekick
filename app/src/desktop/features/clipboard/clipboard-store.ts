@@ -8,6 +8,7 @@ import {
   listClipboard,
   normalizeError,
   setClipboardEnabled,
+  setClipboardMaxItems,
   toggleClipboardPin,
 } from "@/shared/lib/tauri";
 
@@ -21,6 +22,7 @@ type ClipboardState = {
   remove: (id: string) => Promise<void>;
   clear: () => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
+  setMaxItems: (maxItems: number) => Promise<void>;
   applySnapshot: (snapshot: ClipboardSnapshot) => void;
 };
 
@@ -30,8 +32,11 @@ export function filterClipboardItems(items: ClipboardItem[], query: string): Cli
   return items.filter((item) => item.text.toLowerCase().includes(needle));
 }
 
-/** 与 Rust 侧 MAX_ITEMS 对齐；snapshot 还没加载时用于展示上限。 */
+/** 与 Rust 侧 `DEFAULT_MAX_ITEMS` 对齐；snapshot 还没加载时用于展示上限。 */
 export const DEFAULT_CLIPBOARD_MAX_ITEMS = 100;
+
+/** 保留条数的可选档位（Rust 侧允许 10–200，D121）。 */
+export const CLIPBOARD_MAX_ITEM_OPTIONS = [20, 50, 100, 200] as const;
 
 /** 页头计数：只留「已用 / 上限 条」，不再跟在后面的隐私后缀。 */
 export function formatClipboardCount(count: number, maxItems?: number): string {
@@ -100,6 +105,15 @@ export const useClipboardStore = create<ClipboardState>((set) => ({
   setEnabled: async (enabled) => {
     try {
       const snapshot = await setClipboardEnabled(enabled);
+      set({ snapshot, error: null });
+    } catch (cause) {
+      set({ error: normalizeError(cause) });
+    }
+  },
+
+  setMaxItems: async (maxItems) => {
+    try {
+      const snapshot = await setClipboardMaxItems(maxItems);
       set({ snapshot, error: null });
     } catch (cause) {
       set({ error: normalizeError(cause) });

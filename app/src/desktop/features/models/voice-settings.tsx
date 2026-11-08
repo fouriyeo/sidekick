@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { MemoPairPanel } from "@/desktop/features/memo/memo-pair-panel";
 import { CloudAsrForm } from "@/desktop/features/models/cloud-asr-form";
 import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import { KeywordsPanel } from "@/desktop/features/models/keywords-panel";
@@ -31,6 +32,7 @@ export function VoiceSettings() {
   return (
     <>
       <CloudAsrForm />
+      <MemoPairPanel />
       <KeywordsPanel />
       <UsageStatsPanel />
     </>

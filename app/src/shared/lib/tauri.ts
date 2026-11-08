@@ -3,6 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { type DiscoveredServer, isDiscoveredServer } from "@/protocol/discovery";
 import {
+  type AppendResult,
+  isMemoEvent,
+  type MemoDetail,
+  type MemoEvent,
+  type MemoKeyStatus,
+  type MemoStorageStats,
+  type MemoSummary,
+  type MemoType,
+  type RecordingStarted,
+  type RecordingStatus,
+} from "@/protocol/memo";
+import {
   type ConnEvent,
   isConnEvent,
   isStatusState,
@@ -170,6 +182,7 @@ const COMMANDS = {
   clipboardDelete: "clipboard_delete",
   clipboardClear: "clipboard_clear",
   clipboardSetEnabled: "clipboard_set_enabled",
+  clipboardSetMaxItems: "clipboard_set_max_items",
   sendStatusRequest: "send_status_request",
   sendFocusRequest: "send_focus_request",
   dshHookStatus: "dsh_hook_status",
@@ -186,6 +199,26 @@ const COMMANDS = {
   hideUsagePanel: "hide_usage_panel",
   openUsagePage: "open_usage_page",
   panelGlassReady: "panel_glass_ready",
+  memoList: "memo_list",
+  memoGet: "memo_get",
+  memoUpdate: "memo_update",
+  memoDelete: "memo_delete",
+  memoDeleteAudio: "memo_delete_audio",
+  memoStorageStats: "memo_storage_stats",
+  memoRecordingStart: "memo_recording_start",
+  memoRecordingAppend: "memo_recording_append",
+  memoRecordingFinish: "memo_recording_finish",
+  memoRecordingCancel: "memo_recording_cancel",
+  memoRecordingStatus: "memo_recording_status",
+  memoRetry: "memo_retry",
+  memoKeyStatus: "memo_key_status",
+  memoKeySave: "memo_key_save",
+  memoKeyClear: "memo_key_clear",
+  memoPairRequest: "memo_pair_request",
+  memoPairApply: "memo_pair_apply",
+  memoSyncNow: "memo_sync_now",
+  memoSyncPending: "memo_sync_pending",
+  memoPairCodeCreate: "memo_pair_code_create",
 } as const;
 
 const EVENTS = {
@@ -194,6 +227,8 @@ const EVENTS = {
   clipboardChanged: "clipboard-changed",
   dshHookStatus: "dsh-hook-status",
   navigate: "sidekick-navigate",
+  memo: "memo",
+  memoChanged: "memo-changed",
 } as const;
 
 type Listener<T> = (payload: T) => void;
@@ -258,6 +293,8 @@ const connChannel = createEventChannel(EVENTS.conn);
 const clipboardChannel = createEventChannel(EVENTS.clipboardChanged);
 const dshHookChannel = createEventChannel(EVENTS.dshHookStatus);
 const navigateChannel = createEventChannel(EVENTS.navigate);
+const memoChannel = createEventChannel(EVENTS.memo);
+const memoChangedChannel = createEventChannel(EVENTS.memoChanged);
 
 export async function getAppRole(): Promise<AppRole> {
   const role = await invoke<string>(COMMANDS.appRole);
@@ -467,6 +504,11 @@ export function setClipboardEnabled(enabled: boolean): Promise<ClipboardSnapshot
   return invoke<ClipboardSnapshot>(COMMANDS.clipboardSetEnabled, { enabled });
 }
 
+/** 保留条数（10–200，Rust 侧夹住）；改小会立即按「置顶优先、其余从旧到新」裁剪。 */
+export function setClipboardMaxItems(maxItems: number): Promise<ClipboardSnapshot> {
+  return invoke<ClipboardSnapshot>(COMMANDS.clipboardSetMaxItems, { maxItems });
+}
+
 /** 手机端请求一次当前 AI 状态快照；桌面端收到后回一条 status（广播）。 */
 export function sendStatusRequest(): Promise<void> {
   return invoke<void>(COMMANDS.sendStatusRequest);
@@ -537,6 +579,105 @@ export function subscribeDshHookStatus(handler: (status: DshHookStatus) => void)
   return dshHookChannel((payload) => {
     if (isDshHookStatus(payload)) handler(payload);
   });
+}
+
+/** 语音备忘录的本地管道事件（录音完成 / 转写进度 / Key 变化）。 */
+export function subscribeMemo(handler: (event: MemoEvent) => void): Unsubscribe {
+  return memoChannel((payload) => {
+    if (isMemoEvent(payload)) handler(payload);
+  });
+}
+
+/** 桌面镜像收到手机推送/音频提交后广播的「列表变了」。 */
+export function subscribeMemoChanged(handler: () => void): Unsubscribe {
+  return memoChangedChannel(() => handler());
+}
+
+export function memoList(): Promise<MemoSummary[]> {
+  return invoke<MemoSummary[]>(COMMANDS.memoList);
+}
+
+export function memoGet(id: string): Promise<MemoDetail> {
+  return invoke<MemoDetail>(COMMANDS.memoGet, { id });
+}
+
+export function memoUpdate(
+  id: string,
+  input: { title?: string; memoType?: MemoType },
+): Promise<MemoSummary> {
+  return invoke<MemoSummary>(COMMANDS.memoUpdate, { id, ...input });
+}
+
+export function memoDelete(id: string): Promise<void> {
+  return invoke<void>(COMMANDS.memoDelete, { id });
+}
+
+export function memoDeleteAudio(id: string): Promise<void> {
+  return invoke<void>(COMMANDS.memoDeleteAudio, { id });
+}
+
+export function memoStorageStats(): Promise<MemoStorageStats> {
+  return invoke<MemoStorageStats>(COMMANDS.memoStorageStats);
+}
+
+export function memoRecordingStart(): Promise<RecordingStarted> {
+  return invoke<RecordingStarted>(COMMANDS.memoRecordingStart);
+}
+
+export function memoRecordingAppend(session: string, pcm: string): Promise<AppendResult> {
+  return invoke<AppendResult>(COMMANDS.memoRecordingAppend, { session, pcm });
+}
+
+export function memoRecordingFinish(): Promise<MemoSummary> {
+  return invoke<MemoSummary>(COMMANDS.memoRecordingFinish);
+}
+
+export function memoRecordingCancel(): Promise<void> {
+  return invoke<void>(COMMANDS.memoRecordingCancel);
+}
+
+export function memoRecordingStatus(): Promise<RecordingStatus | null> {
+  return invoke<RecordingStatus | null>(COMMANDS.memoRecordingStatus);
+}
+
+export function memoRetry(id: string): Promise<void> {
+  return invoke<void>(COMMANDS.memoRetry, { id });
+}
+
+export function memoKeyStatus(): Promise<MemoKeyStatus> {
+  return invoke<MemoKeyStatus>(COMMANDS.memoKeyStatus);
+}
+
+export function memoKeySave(key: string): Promise<MemoKeyStatus> {
+  return invoke<MemoKeyStatus>(COMMANDS.memoKeySave, { key });
+}
+
+export function memoKeyClear(): Promise<MemoKeyStatus> {
+  return invoke<MemoKeyStatus>(COMMANDS.memoKeyClear);
+}
+
+export function memoPairRequest(code: string, name?: string): Promise<void> {
+  return invoke<void>(COMMANDS.memoPairRequest, { code, name });
+}
+
+export function memoPairApply(token: string, key?: string): Promise<MemoKeyStatus> {
+  return invoke<MemoKeyStatus>(COMMANDS.memoPairApply, { token, key });
+}
+
+export type MemoPairCode = { code: string; expiresAt: number };
+
+/** 桌面生成一次性配对码（2 分钟、错 3 次作废），手机用它换 token + Key。 */
+export function memoPairCodeCreate(): Promise<MemoPairCode> {
+  return invoke<MemoPairCode>(COMMANDS.memoPairCodeCreate);
+}
+
+/** 连上电脑 / 打开备忘录页 / 条目完成后触发一次镜像同步；未配对时静默返回。 */
+export function memoSyncNow(): Promise<void> {
+  return invoke<void>(COMMANDS.memoSyncNow);
+}
+
+export function memoSyncPending(): Promise<number> {
+  return invoke<number>(COMMANDS.memoSyncPending);
 }
 
 export function subscribeChat(handler: (raw: string) => void): Unsubscribe {

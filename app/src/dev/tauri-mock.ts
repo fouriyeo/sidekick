@@ -1,6 +1,6 @@
 type MockRole = "desktop" | "mobile";
 
-const MOCK_EVENTS = ["chat", "conn", "clipboard-changed", "dsh-hook-status"] as const;
+const MOCK_EVENTS = ["chat", "conn", "clipboard-changed", "dsh-hook-status", "memo"] as const;
 type MockEvent = (typeof MOCK_EVENTS)[number];
 
 type MockHookState = "idle" | "working" | "asking" | "completed";
@@ -26,6 +26,26 @@ type MockClipboardItem = {
   createdAt: number;
   lastUsedAt: number;
   pinned: boolean;
+};
+
+type MockMemo = {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  memoType: "memo" | "todo" | "idea";
+  title: string;
+  summary: string | null;
+  todos: string[];
+  tags: string[];
+  durationMs: number;
+  status: "pending" | "transcribing" | "structuring" | "done" | "failed" | "offline";
+  aiStatus: string | null;
+  hasAudio: boolean;
+  audioBytes: number;
+  synced: boolean;
+  failedSegment: number | null;
+  lastError: string | null;
+  transcript: string;
 };
 
 function isMockEvent(value: unknown): value is MockEvent {
@@ -193,6 +213,95 @@ export function installTauriMock(): void {
       },
     ] as MockClipboardItem[],
   };
+
+  const memos: MockMemo[] = [
+    {
+      id: "mock-memo-1",
+      createdAt: Date.now() - 12 * 60_000,
+      updatedAt: Date.now() - 10 * 60_000,
+      memoType: "todo",
+      title: "下班路上买牛奶和鸡蛋",
+      summary: "冰箱里的牛奶和鸡蛋都没了，顺路补一下。",
+      todos: ["买牛奶", "买鸡蛋"],
+      tags: ["生活"],
+      durationMs: 42_000,
+      status: "done",
+      aiStatus: "ok",
+      hasAudio: true,
+      audioBytes: 42 * 32_000,
+      synced: true,
+      failedSegment: null,
+      lastError: null,
+      transcript: "下班路上记得买牛奶和鸡蛋，冰箱里的都没了。",
+    },
+    {
+      id: "mock-memo-2",
+      createdAt: Date.now() - 2 * 60 * 60_000,
+      updatedAt: Date.now() - 2 * 60 * 60_000,
+      memoType: "idea",
+      title: "把备忘录做成录音卡",
+      summary: "说完自动变成一条可检索的备忘。",
+      todos: [],
+      tags: ["产品"],
+      durationMs: 18_000,
+      status: "done",
+      aiStatus: "ok",
+      hasAudio: true,
+      audioBytes: 18 * 32_000,
+      synced: false,
+      failedSegment: null,
+      lastError: null,
+      transcript: "我想到可以把备忘录做成一张录音卡，说完就自动变成一条可以检索的备忘。",
+    },
+    {
+      id: "mock-memo-3",
+      createdAt: Date.now() - 26 * 60 * 60_000,
+      updatedAt: Date.now() - 26 * 60 * 60_000,
+      memoType: "memo",
+      title: "和产品对一下下周排期",
+      summary: null,
+      todos: [],
+      tags: [],
+      durationMs: 9_000,
+      status: "offline",
+      aiStatus: null,
+      hasAudio: true,
+      audioBytes: 9 * 32_000,
+      synced: false,
+      failedSegment: 0,
+      lastError: "等待网络，联网后会自动继续。",
+      transcript: "",
+    },
+  ];
+
+  let memoKeySet = true;
+  let memoPaired = true;
+  let memoRecording: { session: string; startedAt: number; bytes: number } | null = null;
+
+  function memoSummary(memo: MockMemo) {
+    const { transcript: _transcript, ...summary } = memo;
+    return summary;
+  }
+
+  function memoDetail(memo: MockMemo) {
+    return {
+      ...memoSummary(memo),
+      transcript: memo.transcript,
+      segments: memo.transcript
+        ? [{ idx: 0, text: memo.transcript, status: "done" }]
+        : [{ idx: 0, text: "", status: "failed" }],
+      audioPath: memo.hasAudio ? `/Mock/memos/audio/${memo.id}.wav` : null,
+    };
+  }
+
+  function memoKeyStatus() {
+    return {
+      hasKey: memoKeySet,
+      keyMasked: memoKeySet ? "sk-…mock" : null,
+      paired: memoPaired,
+      deviceId: "mock-device",
+    };
+  }
 
   function emit(event: MockEvent, payload: unknown) {
     const handlerId = eventHandlers.get(event);
@@ -881,6 +990,133 @@ export function installTauriMock(): void {
         clipboard.enabled = Boolean(args?.enabled);
         emitClipboard();
         return clipboardSnapshot();
+      }
+      if (command === "clipboard_set_max_items") {
+        const requested = Number(args?.maxItems ?? clipboard.maxItems);
+        clipboard.maxItems = Math.min(200, Math.max(10, Math.round(requested)));
+        clipboard.items = clipboard.items.slice(0, clipboard.maxItems);
+        emitClipboard();
+        return clipboardSnapshot();
+      }
+
+      if (command === "memo_list") return memos.map(memoSummary);
+      if (command === "memo_get") {
+        const memo = memos.find((entry) => entry.id === args?.id);
+        if (!memo) throw new Error("备忘录不存在");
+        return memoDetail(memo);
+      }
+      if (command === "memo_update") {
+        const memo = memos.find((entry) => entry.id === args?.id);
+        if (!memo) throw new Error("备忘录不存在");
+        if (typeof args?.title === "string" && args.title.trim()) memo.title = args.title.trim();
+        if (args?.memoType === "memo" || args?.memoType === "todo" || args?.memoType === "idea") {
+          memo.memoType = args.memoType;
+        }
+        memo.updatedAt = Date.now();
+        memo.synced = false;
+        return memoSummary(memo);
+      }
+      if (command === "memo_delete") {
+        const index = memos.findIndex((entry) => entry.id === args?.id);
+        if (index >= 0) memos.splice(index, 1);
+        return null;
+      }
+      if (command === "memo_delete_audio") {
+        const memo = memos.find((entry) => entry.id === args?.id);
+        if (memo) {
+          memo.hasAudio = false;
+          memo.audioBytes = 0;
+          memo.synced = false;
+        }
+        return null;
+      }
+      if (command === "memo_storage_stats") {
+        return {
+          count: memos.length,
+          audioBytes: memos.reduce((total, memo) => total + memo.audioBytes, 0),
+          audioFiles: memos.filter((memo) => memo.hasAudio).length,
+        };
+      }
+      if (command === "memo_key_status") return memoKeyStatus();
+      if (command === "memo_key_save") {
+        if (typeof args?.key !== "string" || args.key.trim().length < 8) {
+          throw new Error("API Key 格式不正确");
+        }
+        memoKeySet = true;
+        return memoKeyStatus();
+      }
+      if (command === "memo_key_clear") {
+        memoKeySet = false;
+        return memoKeyStatus();
+      }
+      if (command === "memo_pair_request") return null;
+      if (command === "memo_pair_code_create") {
+        return { code: "123456", expiresAt: Date.now() + 120_000 };
+      }
+      if (command === "memo_pair_apply") {
+        memoPaired = true;
+        if (typeof args?.key === "string" && args.key.trim()) memoKeySet = true;
+        return memoKeyStatus();
+      }
+      if (command === "memo_recording_start") {
+        memoRecording = { session: "mock-session", startedAt: Date.now(), bytes: 0 };
+        return { sessionId: memoRecording.session, startedAt: memoRecording.startedAt };
+      }
+      if (command === "memo_recording_append") {
+        if (memoRecording) memoRecording.bytes += 32_000;
+        return {
+          bytes: memoRecording?.bytes ?? 0,
+          durationMs: Math.round((memoRecording?.bytes ?? 0) / 32),
+          reachedMax: false,
+        };
+      }
+      if (command === "memo_recording_finish") {
+        const durationMs = Math.max(1_000, Math.round((memoRecording?.bytes ?? 0) / 32));
+        memoRecording = null;
+        const memo: MockMemo = {
+          id: `mock-memo-${Date.now()}`,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          memoType: "memo",
+          title: "浏览器 mock 录音",
+          summary: "这是在浏览器里模拟出来的录音结果。",
+          todos: [],
+          tags: [],
+          durationMs,
+          status: "done",
+          aiStatus: "ok",
+          hasAudio: false,
+          audioBytes: 0,
+          synced: false,
+          failedSegment: null,
+          lastError: null,
+          transcript: "这是在浏览器里模拟出来的一条备忘录，用来检查列表、详情和状态。",
+        };
+        memos.unshift(memo);
+        return memoSummary(memo);
+      }
+      if (command === "memo_recording_cancel") {
+        memoRecording = null;
+        return null;
+      }
+      if (command === "memo_recording_status") {
+        return memoRecording
+          ? {
+              sessionId: memoRecording.session,
+              startedAt: memoRecording.startedAt,
+              bytes: memoRecording.bytes,
+              durationMs: Math.round(memoRecording.bytes / 32),
+              maxMs: 7_200_000,
+            }
+          : null;
+      }
+      if (command === "memo_retry") {
+        const memo = memos.find((entry) => entry.id === args?.id);
+        if (memo) {
+          memo.status = "pending";
+          memo.lastError = null;
+        }
+        return null;
       }
 
       if (command === "dsh_hook_status") return dshHookSnapshot();

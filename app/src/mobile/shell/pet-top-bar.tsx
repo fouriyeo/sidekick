@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Gauge, MessageCircle, RadioTower, Settings } from "lucide-react";
+import { Gauge, MessageCircle, NotebookPen, RadioTower, Settings } from "lucide-react";
 import { useEffect } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
@@ -80,7 +80,7 @@ export function PetTopBar() {
             strokeWidth={1.6}
           />
           {connection.shortLabel && (
-            <span className="max-w-[92px] truncate text-[13px] leading-[18px] whitespace-nowrap">
+            <span className="hidden max-w-[92px] truncate text-[13px] leading-[18px] whitespace-nowrap min-[360px]:inline">
               {connection.shortLabel}
             </span>
           )}
@@ -105,6 +105,15 @@ export function PetTopBar() {
           ) : (
             <Gauge aria-hidden="true" className={ICON_CLASS} strokeWidth={1.6} />
           )}
+        </button>
+
+        <button
+          type="button"
+          aria-label="备忘录"
+          className={cn(HIT_CLASS, "size-11")}
+          onClick={() => setView("memo")}
+        >
+          <NotebookPen aria-hidden="true" className={ICON_CLASS} strokeWidth={1.6} />
         </button>
 
         <button

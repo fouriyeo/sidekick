@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   deleteClipboardItem: vi.fn(),
   clearClipboard: vi.fn(),
   setClipboardEnabled: vi.fn(),
+  setClipboardMaxItems: vi.fn(),
   subscribeClipboardChanged: vi.fn(() => () => undefined),
   normalizeError: (error: unknown): string =>
     error instanceof Error ? error.message : String(error),
@@ -65,6 +66,7 @@ beforeEach(() => {
   });
   api.clearClipboard.mockResolvedValue({ ...snapshot, items: [] });
   api.setClipboardEnabled.mockResolvedValue(snapshot);
+  api.setClipboardMaxItems.mockResolvedValue({ ...snapshot, maxItems: 20 });
 });
 
 afterEach(() => {
@@ -86,6 +88,28 @@ describe("ClipboardSection 列表", () => {
     ).not.toBeNull();
     expect(screen.getByText("文本 · 刚刚")).toBeInTheDocument();
     expect(screen.getByText("链接 · 刚刚")).toBeInTheDocument();
+  });
+
+  it("页头叫「剪贴板」，设置组就在本页（D119）", async () => {
+    render(<ClipboardSection />);
+
+    expect(await screen.findByRole("heading", { name: "剪贴板" })).toBeInTheDocument();
+    expect(screen.getByText("设置")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "记录剪贴板" })).toBeInTheDocument();
+    expect(screen.getByText("密码框与隐藏内容")).toBeInTheDocument();
+    expect(screen.getByText("不记录")).toBeInTheDocument();
+    expect(screen.getByText("最多保留")).toBeInTheDocument();
+  });
+
+  it("改「最多保留」立即生效，页头计数跟着换（D121）", async () => {
+    render(<ClipboardSection />);
+    await screen.findByText(/第一行：把这段代码改成异步/);
+
+    fireEvent.click(screen.getByRole("button", { name: "20" }));
+
+    await waitFor(() => expect(api.setClipboardMaxItems).toHaveBeenCalledWith(20));
+    await waitFor(() => expect(useClipboardStore.getState().snapshot?.maxItems).toBe(20));
+    expect(screen.getByText("2 / 20 条")).toBeInTheDocument();
   });
 
   it("点击整行复制，并 toast 反馈", async () => {

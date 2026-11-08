@@ -10,7 +10,10 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::app_paths;
 
-const MAX_ITEMS: usize = 100;
+/// 保留条数的默认值 / 上下限；`max_items` 由用户设置，存进 `clipboard.json`（D121）。
+const DEFAULT_MAX_ITEMS: usize = 100;
+const MIN_MAX_ITEMS: usize = 10;
+const MAX_MAX_ITEMS: usize = 200;
 const MAX_TEXT_CHARS: usize = 50_000;
 const POLL_MS: u64 = 500;
 const EVENT_CHANGED: &str = "clipboard-changed";
@@ -40,6 +43,8 @@ pub struct ClipboardSnapshot {
 struct ClipboardFile {
     version: u32,
     enabled: bool,
+    /// 旧文件没有这个字段：`#[serde(default)]` 会回落到 `Default` 的 100。
+    max_items: usize,
     items: Vec<ClipboardItem>,
 }
 
@@ -48,6 +53,7 @@ impl Default for ClipboardFile {
         Self {
             version: 1,
             enabled: true,
+            max_items: DEFAULT_MAX_ITEMS,
             items: Vec::new(),
         }
     }
@@ -56,6 +62,7 @@ impl Default for ClipboardFile {
 struct Inner {
     enabled: bool,
     items: Vec<ClipboardItem>,
+    max_items: usize,
 }
 
 pub struct ClipboardManager {
@@ -71,7 +78,8 @@ impl ClipboardManager {
         let path = app_paths::clipboard_file();
         let mut file = load_file(&path).unwrap_or_default();
         sort_items(&mut file.items);
-        trim_items(&mut file.items);
+        let max_items = clamp_max_items(file.max_items);
+        trim_items(&mut file.items, max_items);
 
         Self {
             app,
@@ -79,6 +87,7 @@ impl ClipboardManager {
             inner: Mutex::new(Inner {
                 enabled: file.enabled,
                 items: file.items,
+                max_items,
             }),
             skip_next: Mutex::new(None),
             counter: AtomicU64::new(0),
@@ -119,7 +128,7 @@ impl ClipboardManager {
             enabled: inner.enabled,
             items: inner.items.clone(),
             path: self.path.to_string_lossy().to_string(),
-            max_items: MAX_ITEMS,
+            max_items: inner.max_items,
         }
     }
 
@@ -207,6 +216,18 @@ impl ClipboardManager {
         Ok(snapshot)
     }
 
+    /// 改「最多保留 N 条」：夹到 [`MIN_MAX_ITEMS`, `MAX_MAX_ITEMS`] 后**立即裁剪**现有的历史
+    /// （置顶优先保留，其余按 `last_used_at` 从新到旧），再落盘并广播。
+    pub fn set_max_items(&self, max_items: usize) -> Result<ClipboardSnapshot, String> {
+        let mut inner = self.inner.lock().unwrap();
+        let value = clamp_max_items(max_items);
+        inner.max_items = value;
+        trim_items(&mut inner.items, value);
+        let snapshot = self.persist_and_snapshot(&mut inner);
+        let _ = self.app.emit(EVENT_CHANGED, snapshot.clone());
+        Ok(snapshot)
+    }
+
     fn add_text(&self, text: String) {
         let kind = item_kind(text.trim()).to_string();
         self.record_text(text, &kind);
@@ -220,8 +241,9 @@ impl ClipboardManager {
         }
 
         let now = now_ms();
+        let max_items = inner.max_items;
         let id = format!("{now}-{}", self.counter.fetch_add(1, Ordering::Relaxed));
-        if !record_item(&mut inner.items, &text, kind, &id, now) {
+        if !record_item(&mut inner.items, &text, kind, &id, now, max_items) {
             return;
         }
         let snapshot = self.persist_and_snapshot(&mut inner);
@@ -252,8 +274,15 @@ fn item_kind(text: &str) -> &'static str {
 /// - 空白或超长文本不入库；
 /// - 与已有记录文本相同时先移除旧记录，并保留旧记录的 `pinned`；
 /// - 新记录的 `last_used_at` 刷新为 `now`；
-/// - 重新排序（置顶优先 → `last_used_at` 倒序）后裁剪到 [`MAX_ITEMS`]。
-fn record_item(items: &mut Vec<ClipboardItem>, text: &str, kind: &str, id: &str, now: u64) -> bool {
+/// - 重新排序（置顶优先 → `last_used_at` 倒序）后裁剪到 `max_items`。
+fn record_item(
+    items: &mut Vec<ClipboardItem>,
+    text: &str,
+    kind: &str,
+    id: &str,
+    now: u64,
+    max_items: usize,
+) -> bool {
     let trimmed = text.trim();
     if trimmed.is_empty() || trimmed.chars().count() > MAX_TEXT_CHARS {
         return false;
@@ -275,7 +304,7 @@ fn record_item(items: &mut Vec<ClipboardItem>, text: &str, kind: &str, id: &str,
         pinned: existing_pinned,
     });
     sort_items(items);
-    trim_items(items);
+    trim_items(items, clamp_max_items(max_items));
     true
 }
 
@@ -288,8 +317,15 @@ fn sort_items(items: &mut [ClipboardItem]) {
     });
 }
 
-fn trim_items(items: &mut Vec<ClipboardItem>) {
-    while items.len() > MAX_ITEMS {
+/// 用户可配范围：太小会「刚复制就被挤掉」，太大文件会胖；两端都夹住。
+fn clamp_max_items(value: usize) -> usize {
+    value.clamp(MIN_MAX_ITEMS, MAX_MAX_ITEMS)
+}
+
+/// 排序后从尾部淘汰（置顶在前、其次是新记录），所以先删最旧的未置顶项。
+fn trim_items(items: &mut Vec<ClipboardItem>, max_items: usize) {
+    let limit = clamp_max_items(max_items);
+    while items.len() > limit {
         items.pop();
     }
 }
@@ -348,6 +384,7 @@ fn save_file(path: &Path, inner: &Inner) -> Result<(), String> {
     let payload = ClipboardFile {
         version: 1,
         enabled: inner.enabled,
+        max_items: inner.max_items,
         items: inner.items.clone(),
     };
     let bytes = serde_json::to_vec(&payload).map_err(|error| format!("序列化失败: {error}"))?;
@@ -422,6 +459,14 @@ pub fn clipboard_set_enabled(
     manager.set_enabled(enabled)
 }
 
+#[tauri::command]
+pub fn clipboard_set_max_items(
+    manager: State<'_, Arc<ClipboardManager>>,
+    max_items: usize,
+) -> Result<ClipboardSnapshot, String> {
+    manager.set_max_items(max_items)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,12 +511,70 @@ mod tests {
 
     #[test]
     fn trims_to_max_items() {
-        let mut items: Vec<ClipboardItem> = (0..MAX_ITEMS + 5)
+        let mut items: Vec<ClipboardItem> = (0..DEFAULT_MAX_ITEMS + 5)
             .map(|index| item(&index.to_string(), "x", false, index as u64))
             .collect();
         sort_items(&mut items);
-        trim_items(&mut items);
-        assert_eq!(items.len(), MAX_ITEMS);
+        trim_items(&mut items, DEFAULT_MAX_ITEMS);
+        assert_eq!(items.len(), DEFAULT_MAX_ITEMS);
+    }
+
+    #[test]
+    fn clamps_max_items_to_range() {
+        assert_eq!(clamp_max_items(0), MIN_MAX_ITEMS);
+        assert_eq!(clamp_max_items(9), MIN_MAX_ITEMS);
+        assert_eq!(clamp_max_items(10), 10);
+        assert_eq!(clamp_max_items(100), 100);
+        assert_eq!(clamp_max_items(MAX_MAX_ITEMS), MAX_MAX_ITEMS);
+        assert_eq!(clamp_max_items(500), MAX_MAX_ITEMS);
+    }
+
+    #[test]
+    fn shrinking_max_items_drops_oldest_unpinned_first() {
+        // 30 条：最旧那条置顶。缩到 10 条时置顶的必须留下，先淘汰最旧的未置顶项。
+        let mut items: Vec<ClipboardItem> = (0..30)
+            .map(|index| item(&format!("old-{index}"), "x", false, index as u64))
+            .collect();
+        items[0].pinned = true;
+        items[0].last_used_at = 0;
+        sort_items(&mut items);
+
+        trim_items(&mut items, 10);
+
+        assert_eq!(items.len(), 10);
+        assert!(items.iter().any(|item| item.id == "old-0" && item.pinned));
+        // 未置顶里最旧的几条被淘汰，最新的 9 条留下。
+        assert!(!items.iter().any(|item| item.id == "old-1"));
+        assert!(!items.iter().any(|item| item.id == "old-20"));
+        assert!(items.iter().any(|item| item.id == "old-29"));
+    }
+
+    #[test]
+    fn files_roundtrip_max_items_and_legacy_file_defaults_to_100() {
+        let dir = std::env::temp_dir().join(format!(
+            "sidekick-clipboard-test-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let path = dir.join("clipboard.json");
+
+        // 写：max_items = 40 必须落盘。
+        let inner = Inner {
+            enabled: true,
+            items: vec![item("a", "a", false, 1)],
+            max_items: 40,
+        };
+        save_file(&path, &inner).unwrap();
+        let loaded = load_file(&path).unwrap();
+        assert_eq!(loaded.max_items, 40);
+        assert_eq!(loaded.items.len(), 1);
+
+        // 读旧文件（没有 maxItems 字段）→ 默认 100，不能炸。
+        fs::write(&path, br#"{"version":1,"enabled":true,"items":[]}"#).unwrap();
+        let legacy = load_file(&path).unwrap();
+        assert_eq!(legacy.max_items, DEFAULT_MAX_ITEMS);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -488,7 +591,8 @@ mod tests {
             "帮我总结一下会议要点",
             "voice",
             "v1",
-            100
+            100,
+            DEFAULT_MAX_ITEMS
         ));
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].kind, "voice");
@@ -499,7 +603,14 @@ mod tests {
     fn record_item_dedupes_and_preserves_pin() {
         // 同文本再次出现：旧记录被替换，但置顶状态保留，last_used_at 刷新。
         let mut items = vec![item("old", "hello", true, 10)];
-        assert!(record_item(&mut items, "hello", "text", "new", 50));
+        assert!(record_item(
+            &mut items,
+            "hello",
+            "text",
+            "new",
+            50,
+            DEFAULT_MAX_ITEMS
+        ));
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].id, "new");
@@ -510,7 +621,7 @@ mod tests {
 
     #[test]
     fn record_item_trims_to_max_items_keeping_pinned() {
-        let mut items: Vec<ClipboardItem> = (0..MAX_ITEMS)
+        let mut items: Vec<ClipboardItem> = (0..DEFAULT_MAX_ITEMS)
             .map(|index| {
                 item(
                     &format!("old-{index}"),
@@ -525,9 +636,16 @@ mod tests {
         items[0].last_used_at = 0;
         sort_items(&mut items);
 
-        assert!(record_item(&mut items, "最新一条", "voice", "newest", 999));
+        assert!(record_item(
+            &mut items,
+            "最新一条",
+            "voice",
+            "newest",
+            999,
+            DEFAULT_MAX_ITEMS
+        ));
 
-        assert_eq!(items.len(), MAX_ITEMS);
+        assert_eq!(items.len(), DEFAULT_MAX_ITEMS);
         assert!(items.iter().any(|item| item.id == "old-0" && item.pinned));
         assert!(
             items
@@ -539,13 +657,42 @@ mod tests {
     }
 
     #[test]
+    fn record_item_respects_custom_max_items() {
+        let mut items: Vec<ClipboardItem> = (0..10)
+            .map(|index| item(&format!("old-{index}"), "x", false, index as u64))
+            .collect();
+        sort_items(&mut items);
+
+        assert!(record_item(&mut items, "新的一条", "text", "newest", 99, 10));
+
+        // 上限 10：加一条就得淘汰最旧的一条。
+        assert_eq!(items.len(), 10);
+        assert!(items.iter().any(|item| item.id == "newest"));
+        assert!(!items.iter().any(|item| item.id == "old-0"));
+    }
+
+    #[test]
     fn record_item_rejects_blank_and_oversized_text() {
         let mut items = Vec::new();
-        assert!(!record_item(&mut items, "   ", "voice", "blank", 1));
+        assert!(!record_item(
+            &mut items,
+            "   ",
+            "voice",
+            "blank",
+            1,
+            DEFAULT_MAX_ITEMS
+        ));
         assert!(items.is_empty());
 
         let oversized = "x".repeat(MAX_TEXT_CHARS + 1);
-        assert!(!record_item(&mut items, &oversized, "text", "big", 2));
+        assert!(!record_item(
+            &mut items,
+            &oversized,
+            "text",
+            "big",
+            2,
+            DEFAULT_MAX_ITEMS
+        ));
         assert!(items.is_empty());
     }
 }

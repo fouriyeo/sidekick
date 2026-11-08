@@ -1,15 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClipboardSnapshot } from "@/shared/lib/tauri";
 
 const api = vi.hoisted(() => ({
-  listClipboard: vi.fn(),
-  copyClipboardItem: vi.fn(),
-  toggleClipboardPin: vi.fn(),
-  deleteClipboardItem: vi.fn(),
-  clearClipboard: vi.fn(),
-  setClipboardEnabled: vi.fn(),
-  subscribeClipboardChanged: vi.fn(() => () => undefined),
   getAccessibilityInfo: vi.fn(),
   requestAccessibility: vi.fn(),
   openAccessibilitySettings: vi.fn(),
@@ -20,26 +12,9 @@ const api = vi.hoisted(() => ({
 
 vi.mock("@/shared/lib/tauri", () => api);
 
-import { useClipboardStore } from "@/desktop/features/clipboard/clipboard-store";
-import type { DesktopNav } from "@/desktop/lib/desktop-nav";
+import { type DesktopNav, initialRoute } from "@/desktop/lib/desktop-nav";
 import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { SettingsPage } from "./settings-page";
-
-const snapshot: ClipboardSnapshot = {
-  enabled: true,
-  path: "/tmp/clipboard.json",
-  maxItems: 100,
-  items: [
-    {
-      id: "1",
-      text: "一段被复制过的文字",
-      kind: "text",
-      createdAt: 1_800_000_000_000,
-      lastUsedAt: 1_800_000_000_000,
-      pinned: false,
-    },
-  ],
-};
 
 function makeConnection(): DesktopConnection {
   return {
@@ -72,17 +47,12 @@ async function renderRoot(onSectionChange = vi.fn()) {
       nav={makeNav()}
     />,
   );
-  // 根页会异步读剪贴板摘要，等它落定再断言，避免 act 警告。
-  await waitFor(() => expect(useClipboardStore.getState().snapshot).not.toBeNull());
+  await waitFor(() => expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument());
   return onSectionChange;
 }
 
 beforeEach(() => {
-  useClipboardStore.setState({ snapshot: null, loading: false, error: null });
   vi.clearAllMocks();
-  api.listClipboard.mockResolvedValue(snapshot);
-  api.setClipboardEnabled.mockResolvedValue({ ...snapshot, enabled: false });
-  api.clearClipboard.mockResolvedValue({ ...snapshot, items: [] });
 });
 
 afterEach(cleanup);
@@ -92,29 +62,21 @@ describe("SettingsPage 设置", () => {
     await renderRoot();
 
     expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("记录中 · 1 条")).toBeInTheDocument());
 
-    for (const label of [
-      "外观",
-      "自动输入",
-      "手机连接",
-      "AI 联动",
-      "剪贴板",
-      "关于本机",
-      "消息通道",
-    ]) {
+    for (const label of ["外观", "自动输入", "手机连接", "AI 联动", "关于本机", "消息通道"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    // 语音已是一级页，设置里不再有「语音输入」。
+    // 语音是第 4 个一级页（D104），剪贴板是 ⌘2 一级页（D119）：设置里都没有入口。
     expect(screen.queryByText("语音输入")).toBeNull();
+    expect(screen.queryByText("剪贴板")).toBeNull();
     expect(screen.getByText("192.168.1.23:47810")).toBeInTheDocument();
   });
 
-  it("「功能」组顺序：手机连接 / AI 联动 / 剪贴板", async () => {
+  it("「功能」组只剩手机连接 / AI 联动", async () => {
     await renderRoot();
 
     const texts = screen.getAllByRole("button").map((node) => node.textContent ?? "");
-    const order = ["手机连接", "AI 联动", "剪贴板"].map((title) =>
+    const order = ["手机连接", "AI 联动"].map((title) =>
       texts.findIndex((text) => text.startsWith(title)),
     );
     expect(order.every((index) => index >= 0)).toBe(true);
@@ -144,25 +106,13 @@ describe("SettingsPage 设置", () => {
     expect(onSectionChange).toHaveBeenCalledWith("root");
   });
 
-  it("剪贴板二级页可以暂停记录与清空", async () => {
-    render(
-      <SettingsPage
-        connection={makeConnection()}
-        section="clipboard"
-        onSectionChange={vi.fn()}
-        nav={makeNav()}
-      />,
-    );
+  it("旧的「设置 › 剪贴板」链接落到设置首页，剪贴板链接落到 ⌘2 页（D119）", () => {
+    window.history.pushState({}, "", "/?view=settings&section=clipboard");
+    expect(initialRoute()).toEqual({ view: "settings", section: "root" });
 
-    await waitFor(() => expect(screen.getByText("1 / 100 条")).toBeInTheDocument());
+    window.history.pushState({}, "", "/?view=clipboard");
+    expect(initialRoute()).toEqual({ view: "content", section: "root" });
 
-    fireEvent.click(screen.getByRole("switch", { name: /记录剪贴板/ }));
-    expect(api.setClipboardEnabled).toHaveBeenCalledWith(false);
-    await waitFor(() => expect(useClipboardStore.getState().snapshot?.enabled).toBe(false));
-
-    fireEvent.click(screen.getByRole("button", { name: "清空历史" }));
-    fireEvent.click(screen.getByRole("button", { name: "清空" }));
-    expect(api.clearClipboard).toHaveBeenCalled();
-    await waitFor(() => expect(useClipboardStore.getState().snapshot?.items).toHaveLength(0));
+    window.history.pushState({}, "", "/");
   });
 });

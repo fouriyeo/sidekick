@@ -349,9 +349,7 @@ impl TokenUsageStore {
         {
             return None;
         }
-        let path = self
-            .session_cache_dir()
-            .join(format!("{session_id}.json"));
+        let path = self.session_cache_dir().join(format!("{session_id}.json"));
         let meta = fs::metadata(&path).ok()?;
         if !meta.is_file() || meta.len() > 2 * 1024 * 1024 {
             return None;
@@ -1347,10 +1345,8 @@ mod tests {
         )
         .unwrap();
         let pricing: Arc<dyn PriceLookup> = Arc::new(FakePricing { quote: None });
-        let store = TokenUsageStore::with_ledger_path(
-            pricing,
-            dir.join("storages/cost-meter/ledger.json"),
-        );
+        let store =
+            TokenUsageStore::with_ledger_path(pricing, dir.join("storages/cost-meter/ledger.json"));
         let stats = store.stats_at("today", today());
         assert_eq!(stats.groups.sessions.len(), 1);
         assert_eq!(stats.groups.sessions[0].label, "缓存里的会话名");

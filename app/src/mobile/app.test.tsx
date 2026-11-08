@@ -21,6 +21,7 @@ const tauri = vi.hoisted(() => ({
   discoverServers: vi.fn(),
   exitApp: vi.fn(),
   haptic: vi.fn(),
+  memoSyncNow: vi.fn(async () => undefined),
   sendChat: vi.fn(),
   sendFocusRequest: vi.fn(),
   sendKeyRequest: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/shared/lib/tauri", () => ({
   discoverServers: tauri.discoverServers,
   exitApp: tauri.exitApp,
   haptic: tauri.haptic,
+  memoSyncNow: tauri.memoSyncNow,
   sendChat: tauri.sendChat,
   sendFocusRequest: tauri.sendFocusRequest,
   sendKeyRequest: tauri.sendKeyRequest,
@@ -69,6 +71,7 @@ vi.mock("@/shared/lib/tauri", () => ({
     tauri.subscribeConn(handler);
     return tauri.unsubscribeConn;
   },
+  subscribeMemo: () => () => {},
 }));
 
 vi.mock("@/mobile/features/mic/mic-button", () => ({

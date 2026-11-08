@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
 import { useFirstUseStore } from "@/mobile/features/first-use/store";
+import { MemoSettingsSection } from "@/mobile/features/memo/memo-key-section";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { PET_SOUND_LABEL, type PetSoundKind, previewPetSound } from "@/mobile/features/pet/sound";
 import type { ReduceMotionSetting } from "@/mobile/features/pet/types";
@@ -572,6 +573,8 @@ export function MorePage() {
               onChange={(minutes) => void update({ dimMinutes: minutes })}
             />
           </section>
+
+          <MemoSettingsSection />
 
           <AboutCard
             resetConfirm={resetConfirm}

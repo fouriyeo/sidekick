@@ -10,13 +10,18 @@ import { micBusyNow } from "@/mobile/features/mic/mic-store";
  * - `asking` / `offline` 也是二级页，返回时按层级回 pet / 上一页；
  * - `offline` 记录打开它的视图，返回时回到原页面（「连接」是多入口的排障页）。
  */
-export type MobileView = "pet" | "settings" | "chat" | "usage" | "asking" | "offline";
+export type MobileView = "pet" | "settings" | "chat" | "usage" | "asking" | "offline" | "memo";
 
 /** 浏览器开发时可用 ?view=usage 直接打开二级页；生产恒为宠物根页。 */
 function initialView(): MobileView {
   if (!import.meta.env.DEV || typeof window === "undefined") return "pet";
   const requested = new URLSearchParams(window.location.search).get("view");
-  if (requested === "usage" || requested === "settings" || requested === "chat") {
+  if (
+    requested === "usage" ||
+    requested === "settings" ||
+    requested === "chat" ||
+    requested === "memo"
+  ) {
     return requested;
   }
   return "pet";
