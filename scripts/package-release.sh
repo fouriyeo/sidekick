@@ -13,3 +13,5 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 echo
 echo "release/ 已更新："
 ls -lh "$ROOT_DIR/release"
+echo
+echo "下一步（分发）：scripts/publish-release.sh   # 上传 GitHub Releases（release/ 不再入库，D125）"

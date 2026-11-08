@@ -2,7 +2,7 @@
 doc: standards/visual
 title: 视觉与动效规范
 status: active
-updated: 2026-11-05
+updated: 2026-11-08
 load: on-demand
 ---
 
@@ -10,7 +10,7 @@ load: on-demand
 
 > 概念：**深海声呐（Direction B · Sonar）**——鲸鱼在深海里发声，电脑和手机用声呐互相找到；信号与连接本身就是品牌。
 > 两套主题：深色「深海自发光」与浅色「海面雾光 + 海玻璃」（第二主题，重新设计光源，不是把深色反色）。外观默认跟随系统；宠物舞台随主题——深色是深海自发光，浅色换成「海玻璃舞台」。
-> 唯一事实源：颜色、圆角、字体、动效令牌以 [`app/src/shared/styles/tokens.css`](../../app/src/shared/styles/tokens.css) 为基线；桌面另有 [`app/src/desktop/styles/ios.css`](../../app/src/desktop/styles/ios.css)（`.desktop-ios` 作用域；D85 定「简约 iOS」结构，**D86 升级为 Liquid Glass · iOS 26 质感层**），手机另有 `app/src/mobile/styles/clean.css`（`.mobile-clean`，D80/D81），两者互不影响。本文档解释语义与用法。2026-11-04 起取代「夜灯桌宠」单暗色方案（[D71](../decisions.md)）；同日 D76 把默认值改为跟随系统、宠物舞台随主题；2026-11-06 D85 桌面换「简约 iOS」，D86 换 Liquid Glass。
+> 唯一事实源：颜色、圆角、字体、动效令牌以 [`app/src/shared/styles/tokens.css`](../../app/src/shared/styles/tokens.css) 为基线；桌面另有 [`app/src/desktop/styles/ios.css`](../../app/src/desktop/styles/ios.css)（`.desktop-ios` 作用域；D85 定「简约 iOS」结构，**D86 升级为 Liquid Glass · iOS 26 质感层**），手机另有 `app/src/mobile/styles/clean.css`（`.mobile-clean`，D80；字体 D91），两者互不影响。本文档解释语义与用法。2026-11-04 起取代「夜灯桌宠」单暗色方案（[D71](../decisions.md)）；同日 D76 把默认值改为跟随系统、宠物舞台随主题；2026-11-06 D85 桌面换「简约 iOS」，D86 换 Liquid Glass。
 
 ## 1. 视觉原则
 
@@ -73,7 +73,7 @@ load: on-demand
 - **iOS system colors**（只给图标块 / 数据强调）：`blue #0A84FF`、`green #34C759 / #30D158`、`orange #FF9F0A`、`purple #BF5AF2`、`pink #FF375F`、`teal #0A7764 / #3FC4A0`、`gray #8E8E93`。
 - **玻璃只用于控件层**：侧栏、sticky 工具栏、动作组、分段轨道、次级按钮、辅助功能提示、弹层遮罩；**内容卡 / 列表行 / 图表永远不透明**（HIG：glass 是导航与控件层）。
 - **兜底**：`prefers-reduced-transparency: reduce` 时玻璃去掉 `backdrop-filter`、背景退回 `--card` 实底；此时不能依赖模糊来保证可读性。
-- 桌面字体用系统栈 `-apple-system`，不随包字体；手机才用随包 MiSans Normal 400（D81）。
+- 桌面字体用系统栈 `-apple-system`，不随包字体；手机用随包 **HarmonyOS Sans SC Regular 400**（原始 TTF 8.1MB，免费商用需在关于页注明，D91）。
 
 
 ## 3. 语义色板
@@ -167,7 +167,7 @@ load: on-demand
 
 ## 5. 字体与排版
 
-- 系统无衬线：`-apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif`；桌面不打包字体；手机随包 MiSans Normal 400（D81，`.mobile-clean` 首选，系统字体做缺字回退）。
+- 系统无衬线：`-apple-system, "PingFang SC", "Noto Sans CJK SC", "Helvetica Neue", sans-serif`；桌面不打包字体；手机随包 **HarmonyOS Sans SC Regular 400**（D91，`.mobile-clean` 首选，系统字体做缺字回退）；D81 的字体选择已被 D91 取代。
 - 数据等宽：`ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Cascadia Mono", monospace`；数字统一 `font-variant-numeric: tabular-nums`（`body` 已全局开启）。
 - 字重 400 / 500 / 600（桌面大标题 600、字距 -0.022em）；中文行高 1.55–1.7；拉丁小标签字距 0.14–0.22em；显示级 -0.03em。
 
@@ -248,7 +248,7 @@ load: on-demand
 ## 10. 资源与性能
 
 - 图片 WebP；图标 SVG；宠物图集只进 mobile 按需 chunk，不进桌面首屏。
-- 不打包中文字体；如需品牌字体，必须子集化并走依赖审批。
+- 中文字体：手机随包 HarmonyOS Sans SC Regular 400（D91，约 8.1MB 原始 TTF，免费商用需注明）；不新增其它中文字体，品牌字体必须子集化并走依赖审批。
 - 宠物舞台 `devicePixelRatio` 上限 2；安卓避免大面积 blur/shadow 动画。
 - 真机 60fps 是硬指标；掉帧就减粒子/网格，不降整体帧率目标。
 - 暗色 OLED 防烧屏：屏幕常亮已落地（默认开、默认最长 2 小时，可关/可调），宠物页无操作默认 5 分钟自动暗到 70%（可调 1/2/5/10/15/30 分钟），触摸恢复。

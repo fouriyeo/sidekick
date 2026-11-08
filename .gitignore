@@ -8,3 +8,7 @@ artifacts
 
 # 图标/视觉过程稿与评审截图（约 16MB，本地评审用，不入库；定稿资产是 brand/appicon.png 与 brand/logo-mark*.svg）
 brand/icon-drafts/
+
+# 安装包不再入库（D125）：release/ 只放本地构建产物，分发走 GitHub Releases
+/release/*.dmg
+/release/*.apk

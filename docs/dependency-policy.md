@@ -224,7 +224,7 @@
   - `chrono = "0.4"`（features `clock`）：用量按本机时区切天；Cargo.lock `0.4.45`；MIT/Apache-2.0。
   - 以上都只在桌面目标使用，不进安卓包；无额外前端依赖。
 - 单实例（2026-11-03，仅桌面目标）：`tauri-plugin-single-instance = "2"`（Cargo.lock `2.5.5`），防止桌面端多开抢 UDP 47820 发现端口、互相覆盖 DSH hook endpoint（D60）；Apache-2.0 OR MIT；官方 Tauri 插件，macOS 用 Unix socket 加锁，`zbus` 等依赖只在 Linux 目标编译；不进安卓包。
-- 不再下载模型权重；旧 `models/` 目录不参与运行；模型与用量口径见 [asr-model.md](./engineering/asr-model.md)。
+- 不再下载模型权重；旧 `models/` 目录不参与运行；百炼模型、Key 与语音用量口径见 [asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md)。
 - Tauri 插件只用官方或维护良好的社区插件；capabilities 最小权限。
 - 新增 crate 前跑 `cargo tree -d` 看是否已有重复能力；`cargo deny` 管许可证；`cargo audit` 管漏洞。
 - 协议类型如果引入 `ts-rs` / `tauri-specta`，生成物入库并在 CI 校验一致性。
@@ -260,7 +260,7 @@ cargo outdated
 cargo tree -d
 ```
 
-- 每月第一个工作日跑一次前端 + Rust 审计；结果记录在 PR/issue，必要时更新 `status.md`。
+- 每月第一个工作日跑一次前端 + Rust 审计；结果记录在 PR/issue，必要时更新 `history.md` 与 `status.md`。
 - 高危漏洞：立即评估；不可修复则移除依赖或隔离使用，并记录到 `decisions.md`。
 
 ## 13. 例外与记录

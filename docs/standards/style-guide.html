@@ -1101,13 +1101,12 @@ footer { margin-top: 40px; font-size: 11.5px; line-height: 1.6; color: var(--mut
         <h2 class="sec">10 · 文档与实现</h2>
         <div class="card">
           <div class="gaps">
-            <div class="gap"><span class="gi">1</span><span><b>手机字体文档已过期</b><span class="tag">待修</span><span class="sub"><code>visual.md</code> §2 / §5 / §10 仍写 MiSans 400（D81），实现是 HarmonyOS Sans SC（D91）；§10「不打包中文字体」与随包 8.1MB 直接冲突。</span></span></div>
-            <div class="gap"><span class="gi">2</span><span><b>手机开关尺寸</b><span class="tag">待修</span><span class="sub"><code>visual.md</code> §7 写 44×26，代码是轨道 51×31、滑块 27、热区 44（iOS 26 尺寸）。</span></span></div>
-            <div class="gap"><span class="gi">3</span><span><b>字号没有令牌</b><span class="tag">建议</span><span class="sub">16 个取值散在组件里：13px 出现 56 次、15px 33 次、10px 26 次。Tailwind v4 可用 <code>@theme</code> 收成 <code>--text-*</code>，否则规范只能靠约定。</span></span></div>
-            <div class="gap"><span class="gi">4</span><span><b>行高没有令牌</b><span class="tag">建议</span><span class="sub"><code>leading-none / tight / [19px] / [21px] / relaxed</code> 混用，其中 1.625 被局部覆盖成 1.45——这是补丁，不是规则。</span></span></div>
-            <div class="gap"><span class="gi">5</span><span><b>圆角有三套来源</b><span class="tag">建议</span><span class="sub">tokens（10/12/14/16/20/24/28）、ios.css（9/11/18/20/999）、组件内联（2/6/8）。改一处不会同步另外两处。</span></span></div>
-            <div class="gap"><span class="gi">6</span><span><b>旧表面不在新壳规范内</b><span class="tag">已知</span><span class="sub">价格表、麦克风浮层、手机聊天页仍是 mono 大写 9–10.5px 小字；它们还在包内，但不属于本页的字号表。</span></span></div>
-            <div class="gap"><span class="gi">7</span><span><b>注释与实现不符</b><span class="tag">待修</span><span class="sub"><code>list.tsx</code> 注释写图标块「9 圆角」，<code>ios.css</code> 实际是 10；以代码为准。</span></span></div>
+            <div class="gap"><span class="gi">1</span><span><b>手机开关尺寸</b><span class="tag">待修</span><span class="sub"><code>visual.md</code> §7 写 44×26，代码是轨道 51×31、滑块 27、热区 44（iOS 26 尺寸）。</span></span></div>
+            <div class="gap"><span class="gi">2</span><span><b>字号没有令牌</b><span class="tag">建议</span><span class="sub">16 个取值散在组件里：13px 出现 56 次、15px 33 次、10px 26 次。Tailwind v4 可用 <code>@theme</code> 收成 <code>--text-*</code>，否则规范只能靠约定。</span></span></div>
+            <div class="gap"><span class="gi">3</span><span><b>行高没有令牌</b><span class="tag">建议</span><span class="sub"><code>leading-none / tight / [19px] / [21px] / relaxed</code> 混用，其中 1.625 被局部覆盖成 1.45——这是补丁，不是规则。</span></span></div>
+            <div class="gap"><span class="gi">4</span><span><b>圆角有三套来源</b><span class="tag">建议</span><span class="sub">tokens（10/12/14/16/20/24/28）、ios.css（9/11/18/20/999）、组件内联（2/6/8）。改一处不会同步另外两处。</span></span></div>
+            <div class="gap"><span class="gi">5</span><span><b>旧表面不在新壳规范内</b><span class="tag">已知</span><span class="sub">价格表、麦克风浮层、手机聊天页仍是 mono 大写 9–10.5px 小字；它们还在包内，但不属于本页的字号表。</span></span></div>
+            <div class="gap"><span class="gi">6</span><span><b>注释与实现不符</b><span class="tag">待修</span><span class="sub"><code>list.tsx</code> 注释写图标块「9 圆角」，<code>ios.css</code> 实际是 10；以代码为准。</span></span></div>
           </div>
         </div>
       </section>

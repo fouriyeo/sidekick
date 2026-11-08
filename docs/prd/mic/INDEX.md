@@ -2,7 +2,7 @@
 doc: prd/mic/INDEX
 title: 外设麦克风 · 一页摘要
 status: active
-updated: 2026-11-05
+updated: 2026-11-08
 load: on-demand
 children:
   - PRD.md
@@ -12,8 +12,8 @@ children:
 
 # 外设麦克风 · 一页摘要
 
-> 手机当电脑的无线麦克风：按住说话，松开后文字出现在电脑当前光标处。
-> 本期定位：**AI 语音输入**。不做系统级虚拟麦克风（会议/录音软件）。
+> 手机当电脑的无线麦克风：按住说话，松开后文字出现在电脑当前光标处。本期定位 **AI 语音输入**，不做系统级虚拟麦克风（会议/录音软件）。
+> 本页回答：这个功能做什么、不做什么、成功标准、读哪篇；不包含规则细节（PRD）、体验细节（SPEC）、用例（ACCEPTANCE）。
 
 ## 本期做什么
 
@@ -22,7 +22,7 @@ children:
 - 手机麦克风权限、桌面辅助功能权限的说明与降级。
 - 桌面百炼云端流式转写（唯一）；显式同意、未配置直接报错、失败不回退；默认自动粘贴，失败/不安全时仅复制。
 - 结果卡片手动「回车」（Return）/「清空」（⌘A+Delete，两次确认），只作用于最近一次插入的目标窗口，30 秒内有效。
-- 桌面「模型」页配置百炼（无业务空间 ID）并区间切换查看今天/7/30/365 Token/金额。
+- 桌面「语音 ⌘4」一级页配置百炼（无业务空间 ID），并区间切换查看今天/7/30/365 Token/金额。
 - **绝不自动按回车、绝不自动发送**；只有用户在结果卡片主动点按才合成按键。
 - 手机端状态反馈 + 最近一次转写卡片。
 - 桌面端不抢焦点的小浮窗状态。
@@ -58,7 +58,7 @@ children:
 | 产品/评审 | [PRD.md](./PRD.md) | 1–3 节 + 质量自检 |
 | 设计/前端 | [SPEC.md](./SPEC.md) | 状态机、手势、桌面浮窗、文案 |
 | 测试 | [ACCEPTANCE.md](./ACCEPTANCE.md) | 全部 P0 用例 |
-| 技术方案 | [engineering/audio-pipeline.md](../../engineering/audio-pipeline.md) + [protocol-audio.md](../../engineering/protocol-audio.md) | 全部 |
+| 技术方案 | [engineering/audio-pipeline.md](../../engineering/audio-pipeline.md) + [protocol-audio.md](../../engineering/protocol-audio.md) + [asr-cloud-bailian.md](../../engineering/asr-cloud-bailian.md) | 链路 / 协议 / 云端 |
 
 交互规则见 [standards/ux.md](../../standards/ux.md)；隐私原则见 [product/principles.md](../../product/principles.md)。
 

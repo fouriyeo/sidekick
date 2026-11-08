@@ -1,74 +1,95 @@
-# 小跟班 · Sidekick
+# Sidekick
 
 <p align="center">
-  <img src="brand/logo-horizontal.svg" width="420" alt="小跟班 · Sidekick" />
+  <img src="brand/logo-mark.svg" width="96" height="96" alt="Sidekick" />
 </p>
 
-把手机变成电脑的外设与 AI 宠物：电脑把 AI/任务状态推到手机，你在手机上收通知、回答 AI 的提问、发快捷指令、语音输入。
+把手机变成电脑的外设与 AI 宠物：电脑把 AI / 任务状态推到手机，你在手机上收状态、按住说话把文字送进电脑、看 Token 用量、录一段语音备忘录。
 
-当前进度：**局域网 MVP 已验证**；手机端可自动发现电脑；宠物 P0 与麦克风 spike 已完成，完整麦克风 P0 待做。
+- 电脑端：macOS（Tauri 2，常驻菜单栏）
+- 手机端：Android（Tauri 2，竖屏；与电脑同局域网直连）
+
+> 「小跟班」只是手机宠物角色的名字，App 名是 Sidekick（决策 D114）。
+
+## 现在能做什么
+
+| 能力 | 说明 |
+| --- | --- |
+| 手机 ↔ 电脑 | 同 Wi-Fi 自动发现（UDP 47820 + 端口回退）、断线自动重连、扫码/手动地址兜底 |
+| 电脑端 6 个一级页 | 概览 ⌘1 · 剪贴板 ⌘2 · 备忘录 ⌘3 · 用量 ⌘4 · 语音 ⌘5 · 设置 ⌘6（Liquid Glass 壳） |
+| 手机 | 宠物页 + 设置二级页 + 聊天/连接/回答页 + 语音备忘录全屏页 |
+| 语音输入 | 按住手机说话 → 百炼云端流式识别 → 写剪贴板并合成 Cmd+V；结果卡可手动「回车 / 清空」 |
+| 剪贴板 | 历史 / 搜索 / 置顶 / 隐私过滤，最多保留 100（可配 10–200） |
+| Token 用量 | 只读本机 DSH 账本，桌面宽幅仪表 + 手机紧凑仪表 + 菜单栏小看板 |
+| 语音备忘录 | 手机录音（前台）→ 分段转写 → LLM 归类（标题/类型/摘要/待办/标签）→ 本地库；电脑同局域网只读镜像 |
+| AI 联动 | DSH hook 把 AI 四态与会话列表推到手机，点会话可在电脑唤起 DSH |
+
+**还没做**：手机回答 AI 提问、文本消息、Claude Code / Qoder hook、配对鉴权、正式签名与公证、蓝牙通道、iOS。逐项状态见 [docs/status.md](docs/status.md)。
+
+## 下载
+
+安装包走 GitHub Releases（不进仓库）：
+
+- 最新版：<https://github.com/fouriyeo/sidekick/releases/latest>
+  - `Sidekick-macOS.dmg`（未签名；首次打开右键 → 打开）
+  - `Sidekick-Android.apk`（arm64，release 签名；从 debug 包换过来需先卸载）
+
+本地构建产物固定落在 `release/`（文件名不变、每次覆盖，**不入库**，D125）。发版上传用 `scripts/publish-release.sh`。
 
 ## 快速开始
 
 ```bash
 cd app && pnpm install
-pnpm tauri dev             # 桌面端
-scripts/build-android.sh   # 构建安卓 debug APK
-scripts/install-android.sh # 安装并启动（需 adb 已连接手机）
-scripts/package-release.sh # 打包桌面 dmg + 安卓 release APK 到 release/
+pnpm tauri dev                 # 桌面端（窗口出现即 HTTP/WS 服务已启动）
+
+scripts/build-android.sh       # 构建 Android debug APK（首次需 pnpm tauri android init）
+scripts/install-android.sh     # 安装并启动（需 adb 已连接手机）
+
+scripts/package-release.sh     # 打 release：先安卓后桌面 → release/
+scripts/publish-release.sh     # 上传到 GitHub Releases
 ```
 
-打好的成品在 [`release/`](release/)：`Sidekick-macOS.dmg`、`Sidekick-Android.apk`。文件名固定、每次打包覆盖，不建版本号目录；重新打包后提交推送即可更新仓库里的安装包（Git 会保留每份历史副本，仓库体积随推送次数增长）。
-
-手机与电脑连同一 Wi-Fi，打开手机 App 会自动找到电脑并连上（单台电脑时零输入）；发现失败可在 App 里手动填桌面窗口显示的地址。桌面窗口默认不常驻大二维码，需要安装 App 时展开「用手机浏览器打开 / 安装 App」扫码即可。
+手机与电脑连同一 Wi-Fi，打开 App 会自动发现并连接；企业网只放行单播时改用手动地址或扫码。环境、无线调试、WebView 远程调试见 [docs/setup.md](docs/setup.md)。
 
 ## 目录
 
-- `app/` — Tauri 项目（桌面端 + 安卓端同一代码库）
-- `brand/` — logo 源文件（SVG 图标、横版组合、App 图标、favicon）
-- `release/` — 打包好的安装包：`Sidekick-macOS.dmg`、`Sidekick-Android.apk`（固定文件名，覆盖更新）
-- `protocol/` — 手机与电脑之间的事件协议
-- `docs/` — 架构、决策、环境、状态、蓝牙预研
-- `scripts/` — 构建/安装/打包、文档检查脚本
-
-## 品牌资源
-
-- 品牌标记是「随身卡」（决策 D99）：贴顶边的穿透挂孔 + 左上斜切一角 + 右下颗琥珀灯，深青底 `#0F3A3E`
-- `brand/appicon.png` — App 图标母版（1024 满幅、无透明通道、不烤圆角，遮罩交给系统）
-- `brand/logo-mark.svg` / `brand/logo-mark-flat.svg` — 矢量标记（富质感版 / 小尺寸扁平版）
-- `scripts/gen-brand-mark.py` — 几何唯一事实源：派生 favicon、侧栏 22px 标记、托盘 36px 单色模板图、Android 自适应前景层
-- 重生成全平台图标（顺序不能反）：`cd app && pnpm tauri icon ../brand/appicon.png` → `python3 scripts/gen-brand-mark.py`
-- `brand/icon-drafts/` — 图标过程稿与真实壁纸/真实尺寸评审表，**不作为事实源**
-- 旧猫头源仍在：`brand/logo-icon.svg`、`logo-favicon.svg`、`logo-appicon.svg`、`logo-horizontal*.svg`（文字标待与图标一起重做）
+```text
+app/          Tauri 项目（桌面 + 安卓共用；src/{desktop,mobile,shared,protocol}）
+brand/        品牌母版与矢量标记（appicon.png + logo-mark*.svg）
+protocol/     手机 ↔ 电脑事件协议
+docs/         文档树（入口 docs/INDEX.md）
+release/      本地构建产物（不入库）
+scripts/      构建 / 安装 / 打包 / 发布 / QA / 文档检查
+```
 
 ## 文档
 
-- `AGENTS.md` — 给 AI / 新协作者的入口（先读这个）
-- `docs/INDEX.md` — 文档树入口（树形 + 懒加载）
-- `docs/product/` — 产品原则、用户、范围、指标
-- `docs/standards/` — 产品、交互、视觉、工程规范
-- `docs/prd/pet/` — 情绪宠物 PRD / SPEC / ACCEPTANCE
-- `docs/prd/mic/` — 外设麦克风 PRD / SPEC / ACCEPTANCE
-- `docs/engineering/` — 音频链路、协议提案、宠物运行时、测试
-- `docs/architecture.md` — 架构与接口
-- `docs/frontend-architecture.md` — 前端目标架构与规范
-- `docs/status.md` — 进度、已验证内容、已知问题
-- `docs/setup.md` — 环境、构建、无线调试、WebView 调试
-- `docs/decisions.md` — 关键选型与取舍记录
-- `docs/dependency-policy.md` — 开源依赖治理
-- `docs/ble-notes.md` — 蓝牙预研笔记
-- `protocol/README.md` — 事件协议 v0
+- [AGENTS.md](AGENTS.md) — 给 AI / 新协作者的入口（项目上下文、命令、Top 12 坑）
+- [docs/INDEX.md](docs/INDEX.md) — 文档树入口（树形 + 懒加载）
+- [docs/status.md](docs/status.md) — 当前状态、待验收、下一步
+- [docs/decisions.md](docs/decisions.md) — 决策记录（含取代关系）
+- [docs/history.md](docs/history.md) — 变更历史
+- [docs/engineering/pitfalls.md](docs/engineering/pitfalls.md) — 踩过的坑与硬约束
+- [docs/architecture.md](docs/architecture.md) · [docs/frontend-architecture.md](docs/frontend-architecture.md) · [docs/dependency-policy.md](docs/dependency-policy.md)
+- [docs/setup.md](docs/setup.md) — 环境、构建、打包、调试
 
 ## 路线
 
-- [x] 局域网双向通信（2026-10-31）
-- [x] 手机自动发现电脑 + 服务端口自动回退（2026-10-31）
-- [x] 前端脚手架（React 19 + Tailwind v4 + shadcn/Base UI + Motion）
-- [x] 产品规范与两份 PRD（2026-10-31）
-- [ ] 前端平台分目录 + 连接/聊天迁移
-- [ ] 情绪宠物（手机横屏、纯陪伴）
-- [ ] 外设麦克风（AI 语音输入）
-- [ ] Claude Code / Qoder hook 接入（通知 + 远程回答）
-- [ ] release 签名与打包
+- [x] 局域网双向通信 + 自动发现 + 端口回退（2026-10-31）
+- [x] 断连自动重连 / 屏幕常亮 / 触感 / 双主题（2026-11）
+- [x] 电脑端「Liquid Glass · iOS 26」六页壳 + 设置二级页
+- [x] 菜单栏常驻 + Token 用量小看板（原生磨砂玻璃）
+- [x] 语音输入（百炼云端流式）+ 剪贴板历史 + Token / 语音用量统计
+- [x] 语音备忘录（手机录音 + AI 归类 + 局域网只读镜像）
+- [x] AI 联动（DSH hook 四态 / 会话列表 / 一键唤起）
+- [ ] 手机回答 AI 提问、文本消息
+- [ ] Claude Code / Qoder hook 接入
 - [ ] 配对与鉴权
-- [ ] 蓝牙通道 / iOS
+- [ ] 正式签名 / 公证 / 开机自启
+- [ ] 蓝牙通道、iOS
+
+## 品牌与许可
+
+- 品牌标记是「随身卡」（D99）：深青底 `#0F3A3E`、贴顶穿透挂孔、左上斜切角、右下琥珀灯。母版 `brand/appicon.png`（1024 满幅位图）+ `scripts/gen-brand-mark.py`（矢量几何，派生 favicon / 侧栏 / 托盘 / Android 自适应前景）。
+- 手机随包字体 HarmonyOS Sans SC Regular（见《HarmonyOS Sans 字体许可协议》，禁止改写/子集化/转 WOFF2；软件内「设置 › 数据与关于」已注明）。
+- 宠物帧动画来自 DeepSeek 鲸鱼图集（OpenPets schema 2）；第三方依赖准入见 [docs/dependency-policy.md](docs/dependency-policy.md)。

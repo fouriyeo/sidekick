@@ -35,7 +35,7 @@ Sidekick 把本机 DSH 已经记账的 LLM Token 用量搬进应用内：桌面�
 
 - DSH 的 cost-meter 已在本机 `<DSH_HOME>/storages/cost-meter/ledger.json` 按天记账，但用户只能在 DSH 里看，Sidekick 的手机侧完全看不到「AI 今天花了多少」。
 - 桌面「语音 › 语音用量」已有百炼 ASR 用量统计，但那是语音转写账单，**不是 LLM Token**，不能混成一个「总花费」。
-- 调研 tokei 后确认：用户要的是「应用内看板」，不是菜单栏状态数字；V1 以信息最全的「总览」结构落地，先验证有没有人看（[设计归档](../../design/token-dashboard-v1/README.md)）。
+- 调研 tokei 后确认：用户要的是「应用内看板」，不是菜单栏状态数字；V1 以信息最全的「总览」结构落地，先验证有没有人看（[设计归档](../../design/ARCHIVE.md#token-dashboard-v1)）。
 - 不做会怎样：用户继续在 DSH 与账单之间来回切；做了会怎样：打开 Sidekick 就能回答「今天/这个月花了多少、花在哪」。
 
 ### 1.2 用户与场景
@@ -205,7 +205,7 @@ Sidekick 把本机 DSH 已经记账的 LLM Token 用量搬进应用内：桌面�
 - **兼容**：桌面 1180×760 / 960×640；手机 390×844、360×800、320 宽不横向滚动；深浅双主题；WebView 103 限制（无 oklch/color-mix/CSS translate）。
 - **可访问性**：区间切换可用键盘；图表有文字替代与 `aria-label`；状态变化 `aria-live`；`prefers-reduced-motion` 下不播放入场动画。
 - **质量门**：`cargo fmt --check`、`cargo test`、`pnpm typecheck/lint/test/build`、`node scripts/check-docs.mjs`、`node scripts/check-boundaries.mjs` 全绿；新增 Rust 测试不联网。
-- **文档**：本目录 + 工程方案；`protocol/README.md` 同步 `usage.request` / `usage`；`decisions.md` 含 D83/D97/D98；`docs/engineering/desktop-ios-ui.md` v3；`docs/design/usage-dashboard-v2/`；`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/design/INDEX.md`、`docs/INDEX.md` 补入口。
+- **文档**：本目录 + 工程方案；`protocol/README.md` 同步 `usage.request` / `usage`；`decisions.md` 含 D83/D97/D98；`docs/engineering/desktop-ios-ui.md` v3；`docs/design/ARCHIVE.md`（用量看板 v2 段）；`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/design/INDEX.md`、`docs/INDEX.md` 补入口。
 
 ## 6. 依赖、排期与风险
 
@@ -235,11 +235,4 @@ Sidekick 把本机 DSH 已经记账的 LLM Token 用量搬进应用内：桌面�
 
 ## 7. 变更记录
 
-| 日期 | 变更 |
-| --- | --- |
-| 2026-11-06 | 创建：V1 只读本机 DSH 账本；桌面第 6 页 + 手机设置二级页；四区间/三分组/价格刷新；D83 手机模型分组默认开 |
-| 2026-11-06 | 跟随 D85 收口：桌面导航改为 4 项（用量 ⌘3、设置 ⌘4）；用量页改为 iOS 分组列表（2×2 汇总 + 分组 + 趋势 + 构成，无状态条/页脚/状态胶囊）；手机页规则不变 |
-| 2026-11-06 | D94：语音提升为一级页，桌面导航变 5 项，用量挪到 ⌘4、设置 ⌘5；ASR 费用仍在「语音 › 语音用量」，不并入本页 |
-| 2026-11-06 | D101：语音收回「设置 › 语音输入」单页，桌面导航回到 4 项（用量 ⌘3、设置 ⌘4）；ASR 费用仍在设置 › 语音输入 › 语音用量，不并入本页 |
-| 2026-11-07 | D104：语音升为第 4 个一级入口（⌘4），导航变 5 项（用量 ⌘3、语音 ⌘4、设置 ⌘5）；ASR 费用仍在「语音 › 语音用量」，不并入本页 |
-| 2026-11-06 | D97/D98 v2：桌面改为宽幅「深潜仪表」（花费 hero + 剖面 + 光谱 + 按金额排序的账本），手机改为无卡片紧凑仪表（花费 hero + 可拖动剖面）；恢复环比、坐标轴、占比条；统计数据与协议不变 |
+本篇只保留当前有效规则；逐日变更与决策号见 [history.md](../../history.md)，取舍理由见 [decisions.md](../../decisions.md)（D82–D84 / D97 / D98 / D102 / D103 / D108–D111 / D116 / D120）。

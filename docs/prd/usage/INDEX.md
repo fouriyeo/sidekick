@@ -65,16 +65,16 @@ related:
 | 测试 | [ACCEPTANCE.md](./ACCEPTANCE.md) | U-01–U-18 |
 | 技术方案 | [engineering/token-usage-pricing.md](../../engineering/token-usage-pricing.md) | 全部；协议见 [protocol/README.md](../../../protocol/README.md) |
 
-交互规则见 [standards/ux.md](../../standards/ux.md)；视觉令牌见 [standards/visual.md](../../standards/visual.md)；价格来源与 tokei 调研见 [设计归档](../../design/token-dashboard-v1/README.md) 与 [engineering/token-usage-pricing.md](../../engineering/token-usage-pricing.md)。
+交互规则见 [standards/ux.md](../../standards/ux.md)；视觉令牌见 [standards/visual.md](../../standards/visual.md)；价格来源与 tokei 调研见 [设计归档](../../design/ARCHIVE.md#token-dashboard-v1) 与 [engineering/token-usage-pricing.md](../../engineering/token-usage-pricing.md)。
 
 ## 已定决策
 
 - 应用内看板 + 菜单栏**点击弹出**的小看板（D108）；不做菜单栏常驻数字/徽标（用户 2026-11-07 改口：要点击弹出的小框，不要常驻数字）。
 - 数据只读本机 DSH 账本；只做 DSH 一家，其它客户端占位「未接入」。
 - 手机模型分组默认显示、可关闭（D83）；`status.sessionList` 保持不含模型名（D78 不变）；价格来源与刷新策略见 D84。
-- 桌面新增一级「用量」（D82 时是第 6 项；D85 后 4 项导航里位于 ⌘3；D94 短暂挪到 ⌘4；D101/D104 调整后用量仍在 ⌘3，语音占 ⌘4）；价格表入口在分组列表卡尾。
+- 桌面新增一级「用量」（D82 时是第 6 项；D85 后 4 项导航；D94 短暂挪到 ⌘4；D104 语音升为 ⌘4、D123 拆分备忘录后，用量为 ⌘4、语音 ⌘5、设置 ⌘6）；价格表入口在分组列表卡尾。
 - 价格来源优先级与刷新策略见 [PRD 3.6](./PRD.md#36-价格规则p0)；实现见工程方案 §5。
-- 视觉 v2：桌面宽幅数据页 + 花费剖面（D97）；手机无卡片紧凑仪表（D98）；视觉稿确认「深潜仪表」方向，归档见 [design/usage-dashboard-v2](../../design/usage-dashboard-v2/README.md)。
+- 视觉 v2：桌面宽幅数据页 + 花费剖面（D97）；手机无卡片紧凑仪表（D98）；视觉稿确认「深潜仪表」方向，归档见 [design/ARCHIVE.md](../../design/ARCHIVE.md#usage-dashboard-v2)。
 
 ## 维护规则
 

@@ -2,15 +2,15 @@
 doc: prd/mic/ACCEPTANCE
 title: 外设麦克风验收清单
 status: active
-updated: 2026-11-05
+updated: 2026-11-08
 load: on-demand
 owner: qa
 ---
 
 # 外设麦克风 · 验收清单
 
-> 只列可执行用例。产品规则见 [PRD.md](./PRD.md)，体验细节见 [SPEC.md](./SPEC.md)。
-> 设备基线：Realme RMX3370 / Android 13（横/竖屏）+ macOS 13.3+；可信局域网。
+> 这篇只列可执行用例（Given-When-Then）；不包含产品规则（[PRD.md](./PRD.md)）与体验细节（[SPEC.md](./SPEC.md)）。
+> 设备基线：Realme RMX3370 / Android 13（竖屏）+ macOS 13.3+；可信局域网。
 
 ## 1. 入口与连接
 

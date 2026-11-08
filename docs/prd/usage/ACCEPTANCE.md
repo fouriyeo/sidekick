@@ -102,7 +102,7 @@ related:
 ## U-14 文档
 
 - **步骤** 检查本次文档、决策、设计归档与关联索引/协议。
-- **期望** SPEC/ACCEPTANCE/PRD 与 D97/D98/D108、`docs/engineering/desktop-ios-ui.md` v3、`docs/design/usage-dashboard-v2/`、`docs/engineering/desktop-usage-panel.md` 前后一致；frontmatter 齐全、`status: draft`、`updated: 2026-11-07`；`check-docs` 通过；`protocol/README.md` 含 `usage.request` / `usage`；`decisions.md` 含 D83/D97/D98/D108；`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/design/INDEX.md`、`docs/INDEX.md` 有入口且链接可点。
+- **期望** SPEC/ACCEPTANCE/PRD 与 D97/D98/D108、`docs/engineering/desktop-ios-ui.md` v3、`docs/design/ARCHIVE.md`、`docs/engineering/desktop-usage-panel.md` 前后一致；frontmatter 齐全、`status: draft`、`updated: 2026-11-07`；`check-docs` 通过；`protocol/README.md` 含 `usage.request` / `usage`；`decisions.md` 含 D83/D97/D98/D108；`docs/prd/INDEX.md`、`docs/engineering/INDEX.md`、`docs/design/INDEX.md`、`docs/INDEX.md` 有入口且链接可点。
 
 ## U-15 非目标
 

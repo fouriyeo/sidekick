@@ -26,11 +26,16 @@ description: Sidekick 项目文档导航与懒加载。用户问“这个项目�
 | --- | --- |
 | 为什么做、给谁、这期做什么 | `docs/product/INDEX.md` |
 | PRD、优先级、验收 | `docs/prd/INDEX.md` |
-| 横屏、触控、反馈、无障碍 | `docs/standards/ux.md` |
+| 竖屏布局、触控、反馈、无障碍 | `docs/standards/ux.md` |
 | 配色、字体、宠物资产、动效 | `docs/standards/visual.md` |
 | 平台边界、依赖、DoD | `docs/standards/engineering.md` |
 | 音频链路、协议、宠物运行时 | `docs/engineering/INDEX.md` |
-| 进度、环境、决策 | `docs/status.md` / `docs/setup.md` / `docs/decisions.md` |
+| 当前状态、待验收、下一步 | `docs/status.md` |
+| 变更历史（何时做了什么） | `docs/history.md` |
+| 决策与取代关系 | `docs/decisions.md` |
+| 踩过的坑与硬约束 | `docs/engineering/pitfalls.md` |
+| 设计归档（只读结论） | `docs/design/ARCHIVE.md` |
+| 环境、构建、调试 | `docs/setup.md` |
 
 ## 维护
 

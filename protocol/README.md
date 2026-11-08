@@ -1,6 +1,9 @@
-# Sidekick 事件协议 v0
+# Sidekick 事件协议
 
-当前用于局域网 MVP：WebSocket 文本帧 + 麦克风二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
+当前用于局域网 MVP：WebSocket 文本帧 + 麦克风/备忘录二进制帧。文本消息是 JSON，用 `type` 区分；音频帧按 session 路由，**不广播**。
+
+> 这篇回答：所有已实现消息的类型、字段语义与兼容规则。
+> 不包含：麦克风消息与 `SK01` 帧格式（唯一归属 [docs/engineering/protocol-audio.md](../docs/engineering/protocol-audio.md)）、云端识别与用量（[asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）、备忘录管道（[memo-pipeline.md](../docs/engineering/memo-pipeline.md)）、发现（[lan-discovery.md](../docs/engineering/lan-discovery.md)）。
 
 服务端把 `chat` / `system` / `status` / `desktop.status` / `usage` / `mic.*` / `key.*` 控制消息广播给所有已连接客户端（调试可见）；`status.request` 只回一次当前快照（`status` + `desktop.status`）；`focus.request` 由桌面处理并回 `focus.result`；`key.request` 由桌面校验后合成按键并回 `key.result`；麦克风音频帧只进入对应会话缓冲。MVP 阶段无鉴权。
 
@@ -17,27 +20,17 @@
 双向聊天消息。
 
 ```json
-{
-  "type": "chat",
-  "from": "desktop",
-  "text": "hello",
-  "ts": 1730000000000
-}
+{ "type": "chat", "from": "desktop", "text": "hello", "ts": 1730000000000 }
 ```
 
-- `from`：`desktop` 或 `phone`
-- `ts`：毫秒时间戳
+- `from`：`desktop` 或 `phone`；`ts`：毫秒时间戳
 
 ### system
 
 服务端生成的系统提示（连接、断开等）。可选 `clients` 字段表示当前在线客户端数（含桌面本机窗口与网页预览；旧服务端不发送，旧客户端忽略）。
 
 ```json
-{
-  "type": "system",
-  "text": "客户端已连接，当前 2 个",
-  "clients": 2
-}
+{ "type": "system", "text": "客户端已连接，当前 2 个", "clients": 2 }
 ```
 
 ### status
@@ -69,24 +62,17 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 }
 ```
 
-- `state`：`idle` / `working` / `asking` / `completed`（产品里的静态 / 工作中 / 等你决定 / 完成）
-- `source`：`dsh`（P0）；后续 `claude-code` / `qoder`
+- `state`：`idle` / `working` / `asking` / `completed`（产品里的静态 / 工作中 / 等你决定 / 完成）；`source`：`dsh`（P0），后续 `claude-code` / `qoder`
 - `sessions`：进行中的顶层会话数；只用于桌面调试，手机不展示数字
-- `resume`：仅 `completed` 有值；桌面 3 秒后补发该状态
-- `remainingMs`：仅 `completed` 有值；手机本地兜底倒计时
+- `resume` / `remainingMs`：仅 `completed` 有值；桌面 3 秒后补发该状态，手机也可用 `remainingMs` 本地兜底倒计时
 - `sessionList`：可选，最多 50 条；旧版桌面不发送，旧版手机忽略
-  - `id`：DSH 会话 id（不透明，≤128）
-  - `title`：会话标题（单行 ≤80 字符；可空）
-  - `source`：会话来源，P0 恒为 `dsh`
+  - `id`：DSH 会话 id（不透明，≤128）；`title`：单行 ≤80 字符，可空；`source`：P0 恒为 `dsh`
   - `state`：`idle` / `working` / `asking`；**不含 completed**，完成态由 `completedAt` 推导
   - `askKind`：`approval` / `question` / null
-  - `tool`：可选，仅 `state=working` 有值；粗粒度工具类别，白名单 `bash` / `read` / `edit` / `search` / `web` / `agent` / `plan` / `tool`。桌面桥对未知值折叠为通用 `tool`（不保留原文），手机端对未知值/非 working 值归一为 `null`。旧版桌面不发送，旧版手机忽略
-  - `lastEventAt`：最近有意义事件的桌面时钟 ms
-  - `completedAt`：最近一轮完成的桌面时钟 ms；null 表示没有完成记录
-- 隐私：`sessionList` 只同步会话 id、标题、状态、askKind、时间与粗粒度工具类别；**不读取/外发**提示词、回复、工具参数、文件路径、模型名或工具名原文。`tool` 是固定枚举，不是工具名透传
-- 桌面在收到 completed 后 3 秒主动广播 resume 状态；手机也可用 `remainingMs` 本地回退
-- 新客户端连接、手机发 `status.request` 时，桌面立即回当前快照（含 `sessionList`）
-- 旧版手机按未知类型/未知字段忽略，不影响聊天/麦克风
+  - `tool`：可选，仅 `state=working` 有值；粗粒度枚举白名单 `bash` / `read` / `edit` / `search` / `web` / `agent` / `plan` / `tool`。桌面桥对未知值折叠为通用 `tool`（不保留原文），手机端对未知值/非 working 归一为 `null`
+  - `lastEventAt`：最近有意义事件的桌面时钟 ms；`completedAt`：最近一轮完成的桌面时钟 ms，null 表示没有完成记录
+- 隐私：只同步会话 id、标题、状态、askKind、时间与粗粒度工具类别；**不读取/外发**提示词、回复、工具参数、文件路径、模型名或工具名原文
+- 新客户端连接、手机发 `status.request` 时，桌面立即回当前快照（含 `sessionList`）；旧手机按未知类型/未知字段忽略
 
 ### status.request
 
@@ -111,13 +97,9 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 }
 ```
 
-- `asrConfigured`：百炼已配置完整——已同意音频上传 + 已保存 Key + 地址/模型校验通过（对应桌面 `asr_cloud_status().configured`）
-- `asrHasKey`：百炼 Key 已保存（允许「已保存但配置不完整」的中间态）
-- `accessibilityTrusted`：macOS 已授权辅助功能（对应 `accessibility_trusted()`；非 macOS 恒为 false）
-- `ts`：桌面时钟毫秒时间戳
+- `asrConfigured`：百炼已配置完整（已同意 + 已存 Key + 地址/模型校验通过）；`asrHasKey`：Key 已保存（允许「已保存但配置不完整」的中间态）；`accessibilityTrusted`：macOS 已授权辅助功能（非 macOS 恒为 false）
 - 发送时机：新客户端连接时直发一条；手机发 `status.request` 时随 `status` 快照一起广播
-- 旧桌面不发送：旧手机忽略未知类型；旧桌面 / 未收到时手机 ③④ 显示「在电脑上完成」，**不伪造完成态**
-- 隐私：只有两个配置就绪布尔 + 一个系统权限布尔，不读取/外发 Key 本身、掩码、提示词、文件路径
+- 旧桌面不发送：旧手机忽略未知类型；旧桌面/未收到时手机 ③④ 显示「在电脑上完成」，**不伪造完成态**
 
 ### usage.request / usage
 
@@ -169,8 +151,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 }
 ```
 
-- `range`：`today` / `7d` / `30d` / `180d`；非法值按 `7d`。
-- `summary` / `days` / `groups` 字段与桌面 `token_usage_stats` 返回结构同构；金额单位人民币微元（1 元 = 1,000,000），`costSource` 为 `ledger` / `estimated` / `mixed` / `unknown`。
+- `range`：`today` / `7d` / `30d` / `180d`；非法值按 `7d`。`summary` / `days` / `groups` 与桌面 `token_usage_stats` 返回结构同构；金额单位人民币微元（1 元 = 1,000,000），`costSource` 为 `ledger` / `estimated` / `mixed` / `unknown`。
 - `previous` 是上一等长周期，用于对比；`coverageDays` 是区间内实际有数据的天数。
 - 关闭「在手机显示模型分组」时 `groups.models` 为空数组、`groups.modelsHidden = true`；`status.sessionList` 仍不含模型名（D78 不变）。
 - 旧手机忽略未知类型；旧桌面不发送 `usage`，不影响聊天/麦克风/状态。
@@ -184,8 +165,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 { "type": "focus.result", "v": 1, "requestId": "f-…", "source": "dsh", "ok": true, "error": null, "ts": 1730000000001 }
 ```
 
-- `requestId`：手机生成，用于把结果对回发起方
-- `ok=false` 时 `error` 只回错误码：`bad_request` / `rate_limited` / `unsupported_source` / `unsupported_platform` / `launch_failed`
+- `requestId`：手机生成，用于把结果对回发起方；`ok=false` 时 `error` 只回错误码：`bad_request` / `rate_limited` / `unsupported_source` / `unsupported_platform` / `launch_failed`
 - 桌面全局 1.5s 限频；不自动回答、不发送任何内容
 
 ### key.request / key.result
@@ -206,176 +186,53 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 
 ## 麦克风消息（v1，已实现）
 
-详细格式/帧布局见 [docs/engineering/protocol-audio.md](../docs/engineering/protocol-audio.md)。
+语音识别只由桌面直连百炼，手机不接触 API Key，失败直接报错、不回退本机。消息为 `mic.start` / `mic.ready` / `mic.partial` / `mic.result` / `mic.state` / `mic.error` / `mic.stop` / `mic.cancel`；音频是 `SK01` 二进制帧（`magic + version + flags + session UUID + sequence + PCM16`），只按 session 进入内存缓冲、**绝不广播**；`mic.stop` 的 `reason` 为 `release` / `cancel` / `timeout` / `background` / `disconnect` / `mic_lost`，只有 `release` / `timeout` 转写；单端重复 `mic.start` 以最新会话为准，异端回 `mic.error(session_busy)`；`mic.cancel` 是权威中止（桌面人工/`maxMs + 3s` 看门狗），手机收到必须停采集；取消不转写、不插入、不写用量。
 
-| 方向 | 类型 | 传输 |
-| --- | --- | --- |
-| 手机 → 桌面 | `mic.start` | JSON |
-| 桌面 → 手机 | `mic.ready` | JSON |
-| 手机 → 桌面 | PCM16 分片 | Binary（`SK01`） |
-| 手机 → 桌面 | `mic.stop` | JSON |
-| 桌面 UI → 服务端 | `mic.cancel` | JSON |
-| 桌面 → 手机/UI | `mic.cancel` / `mic.partial` / `mic.result` / `mic.state` / `mic.error` | JSON |
+**字段、帧布局、状态机、测试要点以 [docs/engineering/protocol-audio.md](../docs/engineering/protocol-audio.md) 为唯一事实源，本文不再复制。**
 
-`mic.start` 示例：
+## 规划中的事件（均未实现）
 
-```json
-{
-  "v": 1,
-  "type": "mic.start",
-  "session": "0f8fad5b-d9cb-469f-a165-70867728950e",
-  "codec": "pcm16",
-  "sampleRate": 16000,
-  "channels": 1,
-  "frameMs": 128,
-  "maxMs": 60000,
-  "ts": 1730000000000
-}
-```
+以下类型只是名称与用途预留，当前**任何一端都不发送**；实现时先补本文与 `protocol-audio.md` 的字段表，再改两端解析：
 
-`mic.stop` 的 `reason`：`release` / `cancel` / `timeout` / `background` / `disconnect` / `mic_lost`；只有 `release` / `timeout` 会转写。
-
-`mic.cancel`（桌面 → 手机/UI，权威中止）：桌面浮层的人工「取消录音」与服务端看门狗都发这条。`reason=desktop` 表示用户主动取消，`reason=timeout` 表示 `maxMs + 3s` 内没收到 `mic.stop`（手机卡死/停止消息丢失）。手机收到后必须停掉本地采集，**即使本地记录的 session 与消息里的不一致**；旧手机忽略该类型但仍会收到 `mic.state(cancelled)`。
-
-```json
-{ "v": 1, "type": "mic.cancel", "session": "0f8fad5b-…", "reason": "desktop", "ts": 1730000000000 }
-```
-
-- 桌面 UI 发 `mic.cancel` 时只需带 `v/type/session/ts`；服务端校验并广播权威版本（带 `reason`），不会把请求原样广播。
-- 服务端看门狗按每个 `mic.start` 的 `maxMs + 3_000ms` 计时，只中止 session 仍匹配的 active 会话，避免误杀新会话。
-- 取消不建转写、不发 `finish-task`、不插入、不写用量。
-
-`mic.result` 可选带 `usage`（`inputTokens` / `outputTokens` / `totalTokens` / `audioDurationMs`）。语音识别只走百炼云端，`mic.ready`/`mic.partial`/`mic.result` 不再有 `engine`/`model`/`fallback` 字段（2026-11-02 双端同版本升级）。
-
-`mic.partial`（桌面 → 手机/UI，云端流式）：
-
-```json
-{
-  "v": 1,
-  "type": "mic.partial",
-  "session": "0f8fad5b-d9cb-469f-a165-70867728950e",
-  "rev": 12,
-  "text": "帮我把这段异步的注释",
-  "sentence": 1,
-  "ts": 1730000000000
-}
-```
-
-- `text` 是“已定稿句 + 当前句”的完整可见文本，客户端整体替换；`rev` 只增，客户端丢弃旧 rev。
-- 只用于回显，不落字；最终文本以 `mic.result.text` 为准。
-- 服务端 50ms 节流，句子结束强制发送；旧手机忽略该类型。
-- 不再带 `engine`。
-
-音频帧：
-
-```text
-SK01 | version=1 | flags | reserved | session(16B) | sequence(u32 BE) | PCM16 LE payload
-```
-
-规则：
-
-- 音频帧绝不广播；服务端按 session 追加到内存缓冲。
-- 单会话：同一客户端重复 `mic.start` 以**最新会话**为准（旧会话中止并广播 `mic.state(cancelled)`）；另一个客户端正在录音时返回 `mic.error(session_busy)`，不抢会话。
-- `mic.stop` 必须 owner + session 匹配才生效；不匹配回 `mic.error(session_mismatch)`，不清理 active（避免旧会话迟到的 stop 误杀新会话）。没有 active 且 reason=cancel 时补发一条 `mic.state(cancelled)` 清理陈旧浮层。
-- `mic.result` 含结果原因和文本；文本只给手机结果卡片，不写日志。结果卡片上的「回车/清空」走 `key.request`（见上文），不是 `mic.*` 的子类型。
-- 语音识别只由桌面直连百炼，手机不接触 API Key；失败直接报错，不回退本机。
-- `mic.result.usage` 记入 `asr_usage.json`，模型页区间切换展示今天/7/30/365；`asr_usage_stats()` 返回最近 365 天 `days`。
-- 详细字段、超时与测试向量见协议文档。
-
-## 实现映射（当前代码）
-
-- 桌面服务端：`app/src-tauri/src/desktop_server.rs`（axum `/ws`、动态端口、UDP 发现、麦克风会话）
-- 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）；麦克风状态浮层 `desktop/features/mic-receiver`
-- 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
-- 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`
-- 结果卡片手动按键：`app/src-tauri/src/desktop_keys.rs`（安全闸门/按键计划/目标注册表）、`desktop_server.rs`、`mobile_client.rs`、`app/src/mobile/features/mic/mic-store.ts`
-- 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
-- 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
-- AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`（DSH 本地脚本）、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
-- AI 会话列表：`app/src/mobile/features/sessions/`（列表/清除标记）；focus 唤起：`app/src-tauri/src/app_focus.rs`、`desktop_server.rs`、`mobile_client.rs`
-- 首用清单电脑侧状态：`desktop_server.rs`（`desktop_status_message` / 新连接直发 / `status.request` 广播）、`app/src/protocol/messages.ts`（解析）、`app/src/mobile/features/first-use/store.ts` 与 `settings/more-page.tsx`（③④ 完成态）
-- 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）
-
-## 规划中的事件（AI 接入阶段）
-
-### status（已实现）
-
-已在上文「消息类型 → status」落地；桌面 DSH 联动与手机四态已使用。
-
-### ask
-
-AI 需要用户决策（权限确认、反问）。
-
-```json
-{ "type": "ask", "id": "uuid", "source": "claude-code", "prompt": "...", "options": ["allow", "deny"], "ts": 1730000000000 }
-```
-
-### answer
-
-用户对 `ask` 的回复，通过 `id` 配对。
-
-```json
-{ "type": "answer", "id": "uuid", "value": "allow", "ts": 1730000000000 }
-```
-
-### notify
-
-单向通知（任务完成等）。
-
-```json
-{ "type": "notify", "text": "...", "level": "info|warn|error", "ts": 1730000000000 }
-```
-
-### input
-
-用户回传（语音文字、快捷指令等）。
-
-```json
-{ "type": "input", "kind": "voice|shortcut|text", "text": "...", "ts": 1730000000000 }
-```
+| 类型 | 预留用途 |
+| --- | --- |
+| `ask` | AI 需要用户决策（权限确认、反问），带 `id` 与 `options` |
+| `answer` | 用户对 `ask` 的回复，通过 `id` 配对 |
+| `notify` | 单向通知（任务完成等），带 `level` |
+| `input` | 用户回传（语音文字、快捷指令等），带 `kind` |
 
 ## 语音备忘录（memo.*，已实现）
 
-手机是唯一写者，电脑只读镜像。所有 `memo.*` 控制消息都**不进入聊天广播**；Key、token、音频 ack 通过定向发送只回给发起连接；配对结果由手机 Rust 直接落盘，Key 不进 WebView。
+手机是唯一写者，电脑只读镜像。所有 `memo.*` 控制消息都**不进入聊天广播**；Key、token、音频 ack 通过定向发送只回发起连接；配对结果由手机 Rust 直接落盘，Key 不进 WebView。管道细节见 [memo-pipeline.md](../docs/engineering/memo-pipeline.md)。
 
 ### 配对（一次性 6 位码）
 
-- 桌面「语音 › 手机备忘录 › 配对手机 / 发送 Key」调用 `memo_pair_code_create` 生成 6 位码，2 分钟有效、错 3 次作废；
-- 手机 → 桌面：
-
-```json
-{ "v": 1, "type": "memo.pair.request", "code": "123456", "deviceId": "uuid", "deviceName": "Realme", "ts": 0 }
-```
-
-- 桌面 → 手机（定向）：
-
-```json
-{ "v": 1, "type": "memo.pair.result", "ok": true, "token": "64位hex", "key": "sk-...", "ts": 0 }
-```
-
-失败时 `ok:false` + `error`。`key` 可能为 `null`（电脑没配百炼）。手机把 token/Key 存 App 私有目录（MVP，Keystore 留 P1）。
+- 桌面「语音 › 手机备忘录 › 配对手机 / 发送 Key」调用 `memo_pair_code_create` 生成 6 位码，2 分钟有效、错 3 次作废。
+- 手机 → 桌面：`memo.pair.request {code, deviceId, deviceName}`；桌面 → 手机（定向）：`memo.pair.result {ok, token, key}`。
+- 失败时 `ok:false` + `error`。`key` 可能为 `null`（电脑没配百炼）。手机把 token/Key 存 App 私有目录（MVP，Keystore 留 P1）。
 
 ### 同步
 
 手机连上电脑后先 `memo.hello {deviceId, token}`，再推未同步条目：
 
 - `memo.push {memos:[...]}`：元数据批量（≤50/批），电脑 upsert 后回 `memo.push.ack {ids}`；墓碑用 `deletedAt`。
-- `memo.audio.begin {memoId, bytes, sha256}` → 电脑回 `memo.audio.begin.ack {memoId, offset}`；
-- 音频分块用二进制 `SK02` 帧：`SK02` + `memoId` 长度(u16 LE) + `memoId` + `offset`(u64 LE) + payload；
-- 每块电脑回 `memo.audio.ack {memoId, offset}`；偏移不连续直接 `memo.error`；
+- `memo.audio.begin {memoId, bytes, sha256}` → 电脑回 `memo.audio.begin.ack {memoId, offset}`；音频分块用二进制 `SK02` 帧：`SK02` + `memoId` 长度(u16 LE) + `memoId` + `offset`(u64 LE) + payload。
+- 每块电脑回 `memo.audio.ack {memoId, offset}`；偏移不连续直接 `memo.error`。
 - `memo.audio.commit {memoId}` → 电脑校验大小与 sha256，回 `memo.audio.committed {memoId, ok}`；手机收到 `ok:true` 才写 `synced_at`。
 - `memo.delete {memoId}` 可显式墓碑；当前实现也接受 `memo.push` 里的 `deletedAt`。
 
 未配对连接发 `memo.push/audio.*` 一律 `memo.error{code:"sync_failed"|"audio_*_failed"}`，不落库。同步是手机单写者，不做 CRDT/双向编辑。
 
-## 音频通道（已实现）
+## 实现映射（当前代码）
 
-麦克风使用低开销的二进制音频帧，且**不能广播**给其它客户端：
-
-- 控制消息：`mic.start` / `mic.ready` / `mic.stop` / `mic.result` / `mic.state` / `mic.error`；
-- 音频帧：`magic + version + session UUID + sequence + PCM16`；
-- 桌面按 session 路由到内存缓冲，不进入现有广播通道；
-- P0 仅可信局域网、无鉴权；配对/加密在 P1。
-
-实现前评审已完成；现有 `chat` / `system` 行为不变。详见
-[`docs/engineering/protocol-audio.md`](../docs/engineering/protocol-audio.md)。
+- 桌面服务端：`app/src-tauri/src/desktop_server.rs`（axum `/ws`、动态端口、UDP 发现、麦克风会话）
+- 桌面 UI：`app/src/desktop/lib/ws-client.ts`（本机回环）；麦克风状态浮层 `desktop/features/mic-receiver`
+- 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
+- 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`（细节见 [protocol-audio.md](../docs/engineering/protocol-audio.md)）
+- 结果卡片手动按键：`app/src-tauri/src/desktop_keys.rs`（安全闸门/按键计划/目标注册表）、`desktop_server.rs`、`mobile_client.rs`、`app/src/mobile/features/mic/mic-store.ts`
+- 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
+- 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
+- AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
+- AI 会话列表：`app/src/mobile/features/sessions/`；focus 唤起：`app/src-tauri/src/app_focus.rs`、`desktop_server.rs`、`mobile_client.rs`
+- 首用清单电脑侧状态：`desktop_server.rs`（`desktop_status_message` / 新连接直发 / `status.request` 广播）、`app/src/protocol/messages.ts`、`app/src/mobile/features/first-use/store.ts` 与 `settings/more-page.tsx`
+- 手机浏览器落地页：`app/src-tauri/mobile/index.html`（仅调试/下载入口，不是正式客户端）

@@ -2,7 +2,7 @@
 doc: standards/git
 title: Git 提交与推送规范
 status: active
-updated: 2026-11-03
+updated: 2026-11-08
 load: on-demand
 owner: engineering
 ---
@@ -46,7 +46,7 @@ fix(pet): 宠物图集按方形格子裁切，避免露出相邻行
 | 手机端（`app/src/mobile`、图集/资源、原生命令） | `scripts/build-android.sh && scripts/install-android.sh`，真机至少验证关键路径 |
 | 文档 | `node scripts/check-docs.mjs` |
 | 平台目录/依赖 | `node scripts/check-boundaries.mjs` |
-| `release/` 安装包 | `scripts/package-release.sh`；确认两个文件 < 100MB、APK `apksigner verify` 通过、dmg 可挂载 |
+| 发布安装包 | `scripts/package-release.sh` → `scripts/publish-release.sh`；确认 APK `apksigner verify` 通过、dmg 可挂载、Releases 上传成功 |
 | 协议/消息类型 | 同步 `protocol/README.md` 与相关 docs |
 
 - 先 `git status` + `git diff --stat` 核对范围，别把无关文件、设计素材、大二进制带进来。
@@ -56,8 +56,9 @@ fix(pet): 宠物图集按方形格子裁切，避免露出相邻行
 
 1. `git fetch`，确认当前分支与 `origin/main` 没有分叉；有分叉先 rebase，不 force push。
 2. 只推 `main`；推送后 `git status -sb` 确认 `## main...origin/main` 且无 ahead/behind。
-3. 不提交构建产物：`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、`.venv`。
-   - **唯一例外**：`release/` 下两个固定命名的安装包（`Sidekick-macOS.dmg`、`Sidekick-Android.apk`）随功能提交推送到 `main`，供直接下载。每次打包覆盖同名文件、不建版本目录；注意 Git 会为每份提交的二进制保留历史副本，仓库体积随推送次数增长（约 +11MB/次；单文件必须 < 100MB，所以只放 release 包，debug APK 禁止入库）。
+3. 不提交构建产物：`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、DMG、`.venv`。
+   - **安装包不再入库（D125，撤销 D63）**：`release/` 只是本地构建目录（`/release/*.dmg`、`/release/*.apk` 已 gitignore），分发走 `scripts/publish-release.sh` → GitHub Releases。debug APK 120–314MB，任何情况下都不要入库。
+   - 历史原因：旧规则把两个包提交进 `main`，Git 为每份二进制保留副本，仓库历史膨胀到 285MB；2026-11-08 用 `git filter-repo` 重写历史抹除。
 4. 设计过程素材（截图/GIF/预览页）默认不入库；需要归档时先问，放 `brand/` 下并控制体积。
 
 ## 4. 不可逆操作

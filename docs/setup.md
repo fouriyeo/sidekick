@@ -147,18 +147,19 @@ node scripts/patch-android-manifest.mjs
 - **开发二进制重编译就掉授权**：`cargo` 产物是 ad-hoc 链接器签名（无证书），cdhash 每次重新链接都变，TCC 只认旧身份——表现是系统设置里明明勾着、App 里「重新检测」仍显示未授权（macOS 26 更严格）。一次性解决：跑 `scripts/setup-dev-signing.sh` 建本机自签名证书「Sidekick Dev」（私钥/证书留底 `~/.sidekick/dev-signing/`，仅在「代码签名」策略上信任，不需要 sudo），之后 `scripts/run-desktop.sh` 构建完会自动调 `scripts/sign-desktop-dev.sh` 重签，设计需求固定为 `identifier "dev.sidekick.app" and certificate root = H"5d57…"`，重编译不变，授权一次长期有效。`pnpm tauri dev` 没有构建后钩子，重编译后要手动跑一次 `scripts/sign-desktop-dev.sh` 并重启 App；`--recreate` 可重建证书（重建后要在系统设置里重新授权一次）。本机已安装的 `/Applications/Sidekick.app` 也能用同一脚本重签（传 `.app` 路径时不覆盖 identifier，由 Info.plist 决定），签完两个产物的设计需求一致：`identifier "dev.sidekick.app" and certificate root = H"5d57…"`；但 `scripts/package-desktop.sh` 产出的 DMG 仍是 ad-hoc 链接器签名，重装/重新打包会换身份，要彻底固定得让 `pnpm tauri build` 用同一证书（`APPLE_SIGNING_IDENTITY`，自签名时不要开 `--timestamp`），或装完再补签一次。证书/私钥在 `~/.sidekick/dev-signing/`（`0600`），只在本机登录钥匙串里信任，不要提交或分享。
 - 剪贴板历史在 `~/.sidekick/clipboard.json`，权限 `600`；可在桌面「剪贴板」页暂停/清空。
 
-## Release 打包（release/ 固定产物）
+## Release 打包与发布（release/ 不入库）
 
 ```sh
-scripts/package-release.sh    # 桌面 + 安卓，产物覆盖 release/ 下同名文件
+scripts/package-release.sh    # 安卓 + 桌面，产物覆盖 release/ 下同名文件
 scripts/package-desktop.sh    # 只打桌面
 scripts/package-android.sh    # 只打安卓
+scripts/publish-release.sh    # 上传 GitHub Releases（tag 默认 vYYYY.MM.DD）
 ```
 
 - 桌面：`pnpm tauri build` → `release/Sidekick-macOS.dmg`（arm64）。`package-desktop.sh` 会带上 `APPLE_SIGNING_IDENTITY`，用本机自签名证书「Sidekick Dev」签（`scripts/setup-dev-signing.sh` 建的那张），**这样 TCC 辅助功能授权可以跨重装保留**；没建身份时回退 ad-hoc 链接器签名，每次重装都要重新授权。产物未公证，Gatekeeper 拦截时右键 → 打开。
 - 安卓：release 构建（aarch64）→ `zipalign` + `apksigner` → `release/Sidekick-Android.apk`。
   - 首次运行自动在 `~/.sidekick/` 生成签名密钥 `android-release.jks` 与 `android-signing.properties`（0600）；**备份且不要提交**，密钥丢失后新包无法覆盖安装升级。
   - 想用已有 keystore：设置 `SIDEKICK_ANDROID_KEYSTORE` / `SIDEKICK_ANDROID_SIGNING_PROPS` 两个环境变量。
-- 文件名固定、每次覆盖、不建版本号目录；`release/` 里只放 release 包（debug APK 约 250MB，超过 GitHub 100MB 单文件上限）。
-- 注意：打包会把安装包写入 Git 历史（每推一次约 +11MB 仓库体积）；仓库明显变大时改走 GitHub Release 或独立分支。
+- 文件名固定、每次覆盖、不建版本号目录；**两个包都不提交**（D125，撤销 D63），分发走 `scripts/publish-release.sh` → GitHub Releases（私有仓库下载需登录）。
+- 新克隆的仓库要先本地打一次 APK 再打桌面端：`build.rs` 会把 `release/Sidekick-Android.apk` 编译期嵌进 DMG 里的桌面二进制（`/download/apk` 靠它离线下发）。
 - 后续：正式签名（Apple Developer 证书 + 公证）、开机自启。

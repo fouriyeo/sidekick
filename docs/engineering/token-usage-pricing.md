@@ -160,8 +160,7 @@ pricing_seed.json（内置 USD/1M）/ ~/.sidekick/token_pricing.json（缓存）
 | `~/.sidekick/token_pricing.json` | 0600 | 运行期缓存：`version` / `settings{autoRefresh,mobileModels}` / `catalog` / `meta{catalogSource,updatedAt,lastAttemptAt,lastError}`；原子写（temp + rename），失败保留上次成功 |
 | `~/.sidekick/token_pricing_overrides.json` | 用户维护 | `fxCnyPerUsd` + 模型价覆盖（可选 `"currency":"CNY"` 直接给人民币价）；键支持 `provider:model` / `model` / 目录 id；优先级最高 |
 
-- 目录不存在时自动创建 `~/.sidekick/`（沿用 `app_paths::data_dir()`，测试用 `SIDEKICK_DATA_DIR`）。
-- 价目单位统一为「人民币 / 1M tokens」；远程/seed 的 USD 价 × FX 后再参与估算。
+- 目录不存在时自动创建 `~/.sidekick/`（沿用 `app_paths::data_dir()`，测试用 `SIDEKICK_DATA_DIR`）；价目单位统一「人民币 / 1M tokens」，远程/seed 的 USD 价 × FX 后再参与估算。
 
 ### 5.2 来源优先级与峰谷
 
@@ -184,8 +183,7 @@ override（用户覆盖）
 | --- | --- |
 | 自动刷新 | 仅在「打开用量页且缓存 >24h」时后台触发一次；每 App 会话最多一次 |
 | 手动刷新 | 最短间隔 60s，未到显示「刚刚刷新过，稍后再试」 |
-| 失败 | 保留上次成功目录与 `updatedAt`，写 `lastError`；1h 内不自动重试 |
-| stale | `updatedAt` 缺失或 >7 天 |
+| 失败 / stale | 失败保留上次成功目录与 `updatedAt`、写 `lastError`，1h 内不自动重试；`updatedAt` 缺失或 >7 天标记 stale |
 | 单飞 | 刷新单飞（Mutex），并发调用复用同一次请求 |
 | 远程请求 | 只 `GET https://openrouter.ai/api/v1/models`；UA `Sidekick/0.1`；10s 超时；≤3 次重定向且最终 host 必须是 openrouter.ai；响应 ≤8MB；不携带任何本机数据 |
 | 网络依赖 | 新增运行时 `reqwest`（`default-features=false`，features `json`/`gzip`/`rustls-no-provider`），rustls provider 复用 `tls::ensure_crypto_provider()`（ring） |
@@ -193,8 +191,7 @@ override（用户覆盖）
 
 ### 5.4 `PricingStatus` 与 `PriceQuote`
 
-- `PricingStatus`（camelCase）：`source:"remote"|"seed"|"override"|"mixed"`、`updatedAt`、`lastAttemptAt`、`lastError`、`stale`、`autoRefresh`、`modelCount`、`fxCnyPerUsd`、`fxSource:"override"|"env"|"ledger"|"fallback"`、`mobileModels`。
-- `PriceQuote`：`inputCnyPerM` / `outputCnyPerM` / `cacheReadCnyPerM` / `cacheWriteCnyPerM` / `source:"override"|"deepseek-official"|"remote"|"seed"`。
+- `PricingStatus`（camelCase）：`source:"remote"|"seed"|"override"|"mixed"`、`updatedAt`、`lastAttemptAt`、`lastError`、`stale`、`autoRefresh`、`modelCount`、`fxCnyPerUsd`、`fxSource:"override"|"env"|"ledger"|"fallback"`、`mobileModels`；`PriceQuote`：`inputCnyPerM` / `outputCnyPerM` / `cacheReadCnyPerM` / `cacheWriteCnyPerM` / `source`。
 
 ## 6. Tauri 命令
 
@@ -275,8 +272,7 @@ override（用户覆盖）
 ## 9. 隐私与安全
 
 - 账本只读；不向 DSH 回写、不改配置、不创建文件。外发字段白名单见 §7；手机模型名/接入方仅在 `mobileModels=true` 时下发（D83），`status.sessionList` 不变（D78）。
-- 价格刷新仅访问固定公开 URL；不携带用量、模型名、设备标识；重定向限制 + host 白名单防 SSRF。
-- 缓存/覆盖文件 0600；错误日志只记错误码，不记会话标题、模型明细或提示词；不新增遥测。
+- 价格刷新仅访问固定公开 URL，不携带用量/模型名/设备标识，重定向限制 + host 白名单防 SSRF；缓存/覆盖文件 0600；错误日志只记错误码，不记会话标题、模型明细或提示词；不新增遥测。
 
 ## 10. 空态与错误码
 
@@ -286,8 +282,7 @@ override（用户覆盖）
 | 读失败但有缓存 | `available=true`、`reason` 非空 | 「账本这次没读成功，显示的是上次数据。」 |
 | 损坏/不可读/过大 | `available=false`、对应 reason | 「读取用量失败」「账本文件过大」 |
 | 区间无数据 | `coverageDays=0`、汇总全 0 | 「这个区间还没有记账数据。」 |
-| 全部缺价 | `costSource="unknown"`、`costCnyMicros=0` | 金额「—」+「没有可用价格」 |
-| 部分缺价 | `costSource="mixed"` 或 `estimated` | 「部分日期缺价，金额为已知部分。」 |
+| 全部/部分缺价 | `costSource="unknown"`（金额「—」+「没有可用价格」）或 `mixed`/`estimated`（「部分日期缺价，金额为已知部分。」） | 同上 |
 | 价格刷新失败 | `pricing.lastError` 非空 | 「上次刷新失败：…」 |
 | 价格 stale | `pricing.stale=true` | 「价格表已超过 7 天未更新；估算可能偏离账单。」 |
 
@@ -300,5 +295,4 @@ override（用户覆盖）
 
 ## 12. 维护与回滚
 
-- **更新 seed**：`node scripts/update-pricing.mjs` → 校对 `_meta.source="openrouter/api/v1/models"`、`count`、采样若干模型价 → 提交 `app/src-tauri/src/pricing_seed.json`；运行期优先用 `~/.sidekick/token_pricing.json` 缓存，seed 只作首启/离线兜底。覆盖价由用户手动编辑 `~/.sidekick/token_pricing_overrides.json`（0600），页面不提供在线编辑；格式错误时忽略该条，不崩溃。
-- **回滚**：回退代码提交即可；`~/.sidekick/token_pricing.json` 可安全删除（自动重建）；覆盖文件属于用户数据，不随回滚删除；DSH 账本全程无写入，无需回滚。已知限制：账本 schema 无契约；`reasoning` 不参与估算；0 元账单被标「缺价」；峰谷不处理法定调休；手机模型名外发受 D83 控制；不做多客户端解析。
+- **更新 seed**：`node scripts/update-pricing.mjs` → 校对 `_meta.source="openrouter/api/v1/models"`、`count`、采样若干模型价 → 提交 `app/src-tauri/src/pricing_seed.json`；运行期优先用缓存，seed 只作首启/离线兜底；覆盖价由用户手改 `~/.sidekick/token_pricing_overrides.json`（0600），格式错误忽略该条、不崩溃。**回滚**：回退代码提交即可；`~/.sidekick/token_pricing.json` 可安全删除（自动重建）；覆盖文件属于用户数据，不随回滚删除；DSH 账本全程无写入，无需回滚。已知限制：账本 schema 无契约；`reasoning` 不参与估算；0 元账单被标「缺价」；峰谷不处理法定调休；手机模型名外发受 D83 控制；不做多客户端解析。

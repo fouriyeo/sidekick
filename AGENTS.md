@@ -1,323 +1,111 @@
 # AGENTS.md — Sidekick 项目上下文
 
-> 面向 AI 编码代理：读完这一份就能接手。细节在 `docs/`，协议在 `protocol/`。
-> 最后更新：2026-11-08
+> 面向 AI 编码代理：读完这份就能接手。细节在 `docs/`（入口 `docs/INDEX.md`），协议在 `protocol/`。
+> 最后更新：2026-11-08 ｜ 本文只放「必须一直知道」的事；状态、历史、踩坑各有唯一归属（见 §2.5）。
 
 ## 1. 项目是什么
 
-- 名称：Sidekick（英文名；App 名不用中文，D114。「小跟班」只作为手机宠物角色名）
-- 一句话：把手机变成电脑的「外设 + AI 宠物」——电脑把 AI/任务状态推给手机，用户在手机上收通知、回答 AI 的提问、发快捷指令、语音输入。
-- 仓库：https://github.com/fouriyeo/sidekick （私有，owner 项目维护者 / fouriyeo）
-- 本地路径：`/Users/dev/code/sidekick`
-- 平台目标：Android 优先，iOS 后续；电脑端先 macOS。
+- 名称：Sidekick（英文；「小跟班」只是手机宠物角色名，D114）。
+- 一句话：把手机变成电脑的「外设 + AI 宠物」——电脑把 AI/任务状态推到手机；手机收状态、录音转文字、看用量、录音频备忘录。
+- 仓库：https://github.com/fouriyeo/sidekick （私有，owner fouriyeo）；本地 `/Users/dev/code/sidekick`。
+- 平台：Android 优先（iOS 后续）；电脑端目前只 macOS。
 
-## 2. 当前状态（务必先看）
+## 2. 现在做到哪（快照）
 
-- ✅ **局域网 MVP 已验证**（2026-10-31）：Tauri 桌面端（服务端）+ Tauri 安卓 App（客户端）双向收发消息成功。
-- ✅ **手机自动发现电脑已落地**（2026-10-31）：UDP 广播探测（固定 47820）+ 桌面单播回主机名/真实端口；服务端口候选 `47810`–`47814`、`8848` 自动回退；手机启动即自动连接，桌面大二维码改为按需展开；真机（Realme）端到端与端口回退已验。
-- ✅ **断连自动重连**（2026-11-01）：断连/启动未连上/手动连接失败后按 1s→30s 退避重试，每次先静默重新发现再连；切后台暂停、回前台立即重试；消息页保留断连折叠块（倒计时 + 立即重连 / 重新搜索 + 手动地址 / 扫码文字入口），连接页是排障主入口（D79）。真机验证：杀桌面后自动重试，桌面恢复/端口回退到 47811 都能自动连上。
-- ✅ **宠物页屏幕常亮**（2026-11-01）：设置页「显示 → 屏幕常亮」真开关（默认开）；手机 Rust `set_keep_screen_on` 用 JNI 调 Android `FLAG_KEEP_SCREEN_ON`，只在宠物页前台（含设置页打开时的既有规则）生效，非宠物页/后台释放；旧存档 `"never"` 归一化为开。iOS 暂为空实现。
-- ✅ **触感接管 + 可配时长**（2026-11-02）：启动时关闭 WebView 默认长按震动（`setHapticFeedbackEnabled(false)`），App 用原生 `performHapticFeedback` 发轻/中/成功/失败触感（**不申请 VIBRATE 权限**，跟随系统触感）；麦克风按下即中震；宠物页禁长按选中/复制；自动变暗默认 5 分钟、屏幕常亮最长默认 2 小时，设置页可调。
-- ✅ 安卓 App 可构建、可安装到真机（测试机 Realme RMX3370 / Android 13）；首版「黑屏」问题已修复（见第 8 节）。
-- ✅ **前端 Phase 1 已完成**（2026-10-31）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）双 entry；`entries/desktop.tsx` / `entries/mobile.tsx`、`desktop/**`、`mobile/**`、`protocol/messages.ts`、`shared/lib/tauri.ts` 已落地；连接/聊天 1:1 迁移，旧 `main.ts` / `styles.css` 已删除；桌面浏览器与安卓真机双向收发通过。
-- ✅ **视觉系统方向 B「深潜声呐」+ 双主题**（2026-11-04，D71）：`tokens.css` 重写为深海语义色板（全 hex）；深色「深海自发光」默认 + 浅色「海面雾光/海玻璃」两套手调主题；`sidekick:theme`（system/light/dark）、`index.html` 防闪脚本、`shared/lib/theme.ts`、`data-theme` + `.dark` 双写、Sonner 跟随；桌面/手机换皮与设置页「外观」三选一；宠物复用 OpenPets 图集不重绘、舞台两主题都深；`design-lab/` 评审稿按 D71 收口删除（不再作为事实源）。
-- ✅ **外观默认跟随系统 + 宠物舞台随主题**（2026-11-04，D76，supersede D71 的「默认深色」「舞台两套主题都深」）：`sidekick:theme` 缺失/非法一律 `system`，首次启动/无存档随系统亮暗，localStorage 不可用时静默回退深色；`--pet-*` 随主题——深色深海自发光，浅色换成「海玻璃舞台」（`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`）+ 新增 `--pet-coral-foreground`；始终深色的桌面麦克风浮层用 `.deep-sea-scope` 钉住深色 pet 令牌；鲸鱼图集不重绘、不加 filter，浅底对比度偏低是接受的代价。
-- ✅ ~~指挥舱 A 双端壳~~（2026-11-05，D79；**桌面已被 D85/D86/D87 取代**，手机已被 D80 取代）：桌面曾是 6 视图 + 48 全局状态条 + 72 图标 rail + 56 页头；手机曾有底部 3 档与动态页。状态词表（连接 7 态 / AI 4 态 / 麦克风 9 态、会话「已完成」vs AI「完成」）继续有效；产品规则 `docs/prd/shell/`。
-- ✅ **电脑端「Liquid Glass · iOS 26」重做**（2026-11-06，D85 结构 + D86 质感，代码完成、待真机目检）：电脑端只留 **6 个一级页——概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6**（D104 把语音升为第 4 个一级入口；D119 把「内容」改名「剪贴板」；D123 把备忘录拆成独立一级页）；左侧 **224 玻璃侧栏**（顶部 38 交通灯区、5 个入口、底部设置、三行状态摘要「服务端口 / 手机台数 / AI 状态」）；页面是 **sticky 玻璃工具栏**（滚动 >6px 变玻璃胶囊、淡入 17/600 紧凑标题 + 内容从玻璃下滚过、顶部有 scroll-edge 模糊渐隐）+ **34/600 大标题** + 不透明白卡（730 单列 / 28 边距 / 16 圆角 / 行 54 / 15 号标题 / 分隔线内缩 16 或 60）。**删除**：会话列表页、系统页 4 段、48 全局状态条、72 图标导航、56 页头、页脚、mono 大写与解释性文案；AI 只出现在「概览 › 当前会话」。**设置是 iOS push**（二级页从右侧推入、左上「‹ 设置」返回）。质感层（D86，依据 Apple HIG › Materials + Liquid Glass）：玻璃**只做导航/控件层**（侧栏、工具栏、`dsl-action-group` 动作组、`dsl-glass` 提示卡与聊天输入栏），内容层保持不透明；彩色图标块 30×30/圆角 10（iOS system colors）、胶囊按钮 36/30/26、胶囊分段控件（spring 滑块）、40×24 开关、38 高输入、20 圆角弹层；侧栏选中滑块与分段滑块用 Motion spring morph、页面进入 fade / 二级页 push、按压 0.997、弹层 300ms 入场；还有 specular 高光、2.6% grain、极淡环境光；全部尊重 `prefers-reduced-motion` 与 `prefers-reduced-transparency`。令牌在 `app/src/desktop/styles/ios.css`（`.desktop-ios` 同时挂根 div 与 `<html>`，弹层 portal 才吃得到），手机 `.mobile-clean` 不受影响；窗口 `titleBarStyle: Overlay` + `hiddenTitle`；列表基元 `desktop/shell/list.tsx`、分段 `shell/segmented-control.tsx`、页头 `shell/page-header.tsx`。契约 `docs/engineering/desktop-ios-ui.md`（v3，D97 增补宽幅数据页），决策 D85/D86/D87（D87 为窗口级 macOS 材质：透明窗口 + NSVisualEffectView，`.dsl-vibrancy` + `sidekick:vibrancy=off` 回退）。**77 files / 644 tests / tsc / lint / build / docs 全绿**；浏览器 QA `scripts/qa-desktop-ios.mjs` 全页截图（含滚动态/弹层/vibrancy）无溢出/报错，真机窗口（交通灯/拖动）待目检。
-- ✅ **手机干净版两页壳**（2026-11-05，D80，代码完成待真机）：手机只留「宠物（根）/ 设置（二级）」两页，删除动态页与底部 tab；宠物页 = 顶栏（v17：gear / 连接状态信号塔图标 / 今日用量数字 / chat，D93）→ 会话卡（折叠 1 行、展开 5 行、working wash、左滑清除、已完成 2h 自动隐藏）→ 无底色鲸鱼（230；D107 起展开不再缩到 220、也不位移）→ 居中 56 薄荷圆麦克风（距底 24）；设置从 gear 进、左上返回、17/400 inline 标题、首用清单 banner、无底栏；说完话结果卡为共用白卡（百炼 + 右侧 9px 状态 + 2 行 11.5 正文），清空/回车在麦克风左右两个 56px 浅灰圆钮（D100），不再有 grabber/复制/时间/卡内动作。新增 `.mobile-clean` 作用域令牌（`app/src/mobile/styles/clean.css`），只影响手机；桌面端不变。**字体改用随包 HarmonyOS Sans SC Regular 400（8.1MB 原始 TTF，免费商用需注明；D91）**，会话标题 15、设置说明行高 19；旧 `stream` / `tab-bar` / `now-row` / 动态页组件已删除；activity-store 已删除。591 tests / tsc / lint / build 全绿；真机 Realme RMX3370 与 Honor BKQ-AN10（Android 17 / WebView 156）已验证宠物页 / 会话展开 / 设置页 / 返回键 / 深色 / HarmonyOS Sans 字体，待补录音禁切页、结果卡清空二次确认、320 宽。
-- ✅ **语音录音/结果 UI 重做**（2026-11-06，D100，代码完成待真机）：录音胶囊改深石墨 `#2C2C2E` + 柔和向上阴影，取消提示移到胶囊上方（距容器底 100px，80/32 阈值不变），胶囊不再变珊瑚色；实时卡/结果卡共用一张白卡、同一位置（距容器底 170→110），卡头「百炼 + 右侧 9px 已输入/已复制/没成功」、正文 11.5/2 行，去掉 grabber/复制/时间/卡内动作区；清空/回车改为麦克风左右两个 56px 浅灰圆钮，仅 `inserted` 出现；胶囊 260→56（300ms）、卡片下滑（280ms）、动作圆错峰淡入（120/160ms），尊重 `prefers-reduced-motion`。672 tests / tsc / lint / build 全绿；Android debug APK 已构建（250MB），真机安装/过渡目检待 adb。
-- ✅ **手机会话卡改浮层 + 字号收一档 + 完成即展开可点**（2026-11-07，D107，代码完成待真机）：会话卡从文档流摘出、绝对定位浮在宠物舞台上；宠物舞台固定占「顶栏下 → 麦克风上」并顶部预留折叠卡高度，展开只加高卡片（`max-height` 124→324，260ms），鲸鱼固定 230、不位移不缩放（删 230→220 与 `--pet-session-shift`）；点卡片外 / 返回键先收起。字号对齐麦克风区：标题 13/18、副行 11.5/16、header 12、计数 11、footer 12、chevron 12、行高 50（清除 72×50）。完成态：store 比对相邻快照标记新完成（首份只做基线），自动展开 + 薄荷对勾 /「已完成」/ 行尾 › + 1.4s 薄荷脉冲；已完成行可点发 `focus.request`（只唤起 DSH 窗口），行尾 spinner + 3.2s 提示。692 tests / tsc / lint / build / check-docs / check-boundaries 全绿；浏览器 390/360/320 × 浅深宠物坐标零位移；真机待走查。
-- ✅ **动效图标统一到 `shared/ui/motion`**（2026-11-07，D110，承接 D107/D100）：加载/提示不再各页面手写 `Loader2 + animate-spin`/内联 keyframes，统一 5 个基础件——`LoadingOrbit`（轨道弧）/ `LoadingDots`（三点波）/ `HintCheck`（draw 描线、pop 弹起）/ `HintAsk`（琥珀涟漪）/ `HintError`（珊瑚画叉）；颜色只吃 `currentColor`、尺寸只走 `size`、默认 aria-hidden、尊重 `prefers-reduced-motion`；环类加粗（2.4→3.2/3.4）、放慢 20–40%、带回弹缓动。手机已接入会话行（working / 已完成 / asking / pendingFocus）、麦克风处理中、连接页连接中；706 tests / tsc / lint / build / docs 全绿；真机待走查。试样台 `artifacts/loading-lab` 已删除（评审稿不入库）。
-- ✅ **语音备忘录 S1+S2 代码完成，待真机**（2026-11-08，D122，实现 D115/D118）：手机独立录音（**仅前台/亮屏**，WebView getUserMedia + 1 秒 PCM 分片直写 WAV，崩溃可恢复）→ 5 分钟分段百炼 WS 转写 → qwen-plus 结构化（标题/类型/摘要/待办/标签，失败保留转写）→ 手机 rusqlite；录音默认保留（WAV 16k mono，约 115MB/h）。电脑同局域网只读镜像（手机单写者、`memo.push` + SK02 分块 + sha256 committed 后才写 synced_at）；Key 由电脑一次性 6 位码配对下发（**MVP 存手机 App 私有文件 0600，Keystore 列 P1**；手机固定官方端点）。入口 = 手机顶栏「备忘录」全屏页（不加底部 tab），桌面独立一级页「备忘录 ⌘3」（D123，只读镜像；剪贴板恢复单一职责），语音页「配对手机」。发热/耗电与成本估算 P2；不做完整 AI 会话/公网/双向同步。产品 `docs/prd/memo/`，技术 `docs/engineering/memo-pipeline.md`；`cargo test` 201 / 前端 731 / tsc / lint / build / docs / boundaries 全绿，debug APK 已构建；真机录音/配对/同步待验收。
+- 局域网 MVP 已验证：桌面（Tauri）跑 HTTP/WS 服务，手机 App 主动连；UDP 自动发现 + 端口回退 + 断线重连（1s→30s 退避）。
+- 电脑端「Liquid Glass · iOS 26」壳：6 个一级页 **概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6** + 224 玻璃侧栏 + sticky 玻璃工具栏 + push 式设置二级页。
+- 菜单栏常驻（关窗=隐藏窗口）+ 左键 Token 用量小看板（原生磨砂玻璃卡片）。
+- 手机：宠物页（会话卡浮层 / 鲸鱼 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局。
+- 功能：语音输入（百炼云端 ASR，唯一）→ 写剪贴板 + 合成 Cmd+V；结果卡可手动「回车/清空」；Token 用量看板（双端）；语音备忘录（手机录音 + 分段转写 + LLM 归类 + 局域网只读镜像）；AI 联动（DSH hook，四态 + 会话列表 + 一键唤起 DSH）。
+- 未做：手机回答 AI 提问、文本消息、Claude Code / Qoder hook、配对鉴权、正式签名/公证、BLE、iOS。
+- 逐项状态与待验收项 → `docs/status.md`；变更历史 → `docs/history.md`。
 
-- ✅ **备忘录交互改版 v0.3 代码完成，待真机**（2026-11-08，D124）：手机录音键从顶部卡改为**底部固定条**（64、距底 24+safe-area），录音采用 **C 双模**（按住 ≥400ms 松手存；轻点 ≤400ms 锁定、再点结束；上滑 80dp 取消；不做左右滑——TalkBack 左右滑是焦点导航且模式不可见）；顶部改为**周/月双视角日历** + 当日列表（周条 44×52 可横滑，320 可见 6 格；月网格固定 42 格、320 宽左右各 6 边距实现 44×44；选中日唯一真相，录音中全部锁定）；同批补首录隐私 Sheet、`memoBusyNow()` guard（换页/返回/进详情全拦，返回先停存）、取消二次确认、触感、`aria-live`、详情「复制全文」、空态文案。桌面备忘录改为**宽幅两栏**（`PageShell size="wide"` 956 例外）：左周/月日历 300 + 右当日列表，详情 Dialog 补复制全文，保持只读。日期语义共用 `app/src/shared/lib/calendar.ts`；**不动 Rust/SQLite/协议**，手机默认周、桌面默认月各自记忆。未做：锁屏录音、镜像开关、真·日记、埋点、`memo_list` 分页。产品 `docs/prd/memo/{PRD,SPEC,ACCEPTANCE}.md` v0.3，决策 D124；浏览器 QA `scripts/qa-memo.mjs`；真机走查待补。
-- ✅ **首用清单 ③④ 真实状态**（2026-11-06，D92）：新增 `desktop.status` 协议（桌面连接时直发、手机 `status.request` 时广播 `asrConfigured` / `asrHasKey` / `accessibilityTrusted`，只含布尔 + ts）；手机设置页 banner 按真实状态显示「已完成」并计步，旧桌面/未收到仍显示「在电脑上完成」，不伪造完成态。
-- ✅ **语音一级页 + 关键词列表**（2026-11-06，D94；**导航部分已被 D101 / D104 取代**：D101 收回设置单页，D104 升为第 4 个一级入口 ⌘4）：当时语音从「设置 › 语音输入」提升为左侧一级「语音 ⌘2」；根页只做枢纽（百炼状态 / 关键词计数 / 今天与近 7 天用量），配置、关键词、用量各自 push 二级页；设置首页删除语音行。关键词是单一列表（一行一个词、加号加行、保存、不做分组/权重），最多 2000 个、统一权重 4；旧热词与中间版本分组数据平铺迁移；新增 `asr_keywords_save`（只写 `bailian.vocabulary`，不碰 Key/同意）。
-- ✅ **语音收回「设置 › 语音输入」单页 + 桌面一级回到 4 个**（2026-11-06，D101；**导航部分已被 D104 取代**：语音升为第 4 个一级入口 ⌘4，单页三段沿用）：当时桌面一级 概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 设置 ⌘4，侧栏上半 3 项 + 底部设置；设置新增「语音输入」单页（「功能」组顺序 手机连接 / 语音输入 / AI 联动 / 剪贴板；行 meta 已配置「已配置」/ 未配置「未配置」+ 琥珀点），页内三段 = 百炼配置 + 关键词面板 + 语音用量，**内部不再 push**、页头只有「‹ 设置」；旧「语音」一级页与「连接与识别 / 关键词 / 语音用量」3 个二级页删除，`?view=voice` / `?view=models` 落到设置语音页；关键词单列表（2000 上限 / 权重 4）、`asr_keywords_save`、未配置信号、2 次点击可达保留。
-- ✅ **语音升为第 4 个一级入口（用量下）+ 设置回到 4 个入口**（2026-11-07，D104，取代 D101 的导航部分）：桌面 5 个一级页——概览 ⌘1 / 内容 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 设置 ⌘5；侧栏上半 4 个入口 + 底部设置；语音 = 单个一级页（fade 进入、页头 34/600「语音」），页内三段 = 百炼配置 / 关键词 / 语音用量，内部不再 push；未配置时侧栏「语音」项 6px 琥珀点；设置删除「语音输入」行与 section（当时功能组回到 手机连接 / AI 联动 / 剪贴板，D119 又把剪贴板收走，现在只剩 手机连接 / AI 联动），设置首页仍不承载配置表单；`?view=voice` / `?view=models` 落到一级语音页。D101 的单页三段、不 push、关键词与未配置信号保留。
-- ✅ **「内容」改名「剪贴板」+ 设置收回剪贴板页**（2026-11-08，D119，收窄 shell PRD 的「低频配置进设置」）：桌面第 2 个一级页「内容」→「**剪贴板**」（⌘2 不变；视图 id 仍是 `content`，`?view=content` / `?view=clipboard` 两个别名都落到它）；**删除「设置 › 剪贴板」二级页与设置首页那一行**（`SettingsSection` 去掉 `clipboard`，旧链接 `?view=settings&section=clipboard` 落设置首页），设置「功能」组只剩 手机连接 / AI 联动。剪贴板的历史与设置都只在剪贴板页：页头 `N / 100 条` + 清空（二次确认），搜索下方新增组标题「设置」（`记录剪贴板` 开关 + `密码框与隐藏内容 不记录`）。理由：设置子页 0 项独有（上限 100 是 Rust 常量、隐私说明在「设置 › 关于本机」），同一功能两个入口两个名字；与 D104 语音收回一级页同一条规则。**708 tests / tsc / lint / check-docs / check-boundaries 全绿**；`node scripts/qa-desktop-ios.mjs` 58 张截图（浅/深 × 1180/960，少 2 页设置子页）无溢出/console error。**不要**再把剪贴板设置放回设置，也不要改视图 id `content`。
-- ✅ **剪贴板「最多保留」可配**（2026-11-08，D121，补 D44 的固定上限）：保留条数不再写死，默认 **100**、范围 **10–200**；剪贴板页「设置」组在记录开关下多一行「最多保留」，右侧 iOS 分段 **20 / 50 / 100 / 200**；新命令 `clipboard_set_max_items` 夹取后**立即**按「置顶优先保留、其余从旧到新」裁剪现有历史、原子落盘并广播 `clipboard-changed`，页头 `N / M 条` 跟着变；值存 `~/.sidekick/clipboard.json › maxItems`（旧文件缺字段回落 100）。记录路径也按当前上限裁剪（`record_item` 收 `max_items`，不要再引用编译期常量）。**188 Rust tests / 709 前端 tests / tsc / lint / check-docs / check-boundaries 全绿**；QA 58 张截图无溢出/console error。
-- ✅ **Token 用量看板 V1**（2026-11-06，D82–D84，代码完成待验收；**桌面导航位置：D104 后仍是第 3 个入口「用量 ⌘3」**）：桌面一级「用量」+ 手机宠物页顶栏今日数字（点开用量页，v17 / D93）；只读本机 `~/.dsh/storages/cost-meter/ledger.json`，按客户端/会话/模型分组；`usage.request`/`usage` 协议带 `data` 包装（不含提示词/路径/cwd），模型 ID 按 D83 开关上手机；模型价格参考 tokei：seed + `~/.sidekick/token_pricing.json` 缓存 + overrides + DeepSeek 官方峰谷，实际 `costCny` 优先、缺价才估算（标 ≈）；新增 `reqwest`（rustls-no-provider，provider 在 `tls.rs`）。
-- ✅ **用量看板 v2**（2026-11-06，D97 桌面 / D98 手机，代码完成、浏览器验收通过、真机待走查）：桌面用量页改成**宽幅「深潜仪表」**——`PageShell size="wide"`（约 900 内容）+ `PageHeader compact`、花费 58/500 等宽 hero + 环比 + 三读数、当前区间 SVG 花费剖面（y 轴/网格/日均虚线/峰值/今日呼吸点/单日柱/悬停气泡/`sr-only` 每日表）、Token 光谱 + 按金额排序的账本（行底占比条）、左下价格行打开原 Sheet；手机改成**无卡片紧凑仪表**——花费 hero + 可触摸拖动剖面（无 y 轴、气泡）、薄荷缓存读光谱、账本行底占比条、只读价格行；两端共用 `app/src/shared/lib/usage-chart.ts`（刻度/路径/日期/环比/百分比/排序），令牌分别在 `desktop/styles/usage.css` / `mobile/styles/usage.css`（不动 ios.css / clean.css / tokens.css）；dev mock 按区间生成连续日 + 自洽 previous，并支持 `?usage=empty` 截空态。**78 test files / 673 tests / tsc / lint / build / 边界 / docs 全绿**；桌面 56 张截图（1180/960 × 浅/深）无溢出/报错，手机 390/360/320 × 浅/深截图无横向溢出；真机（Realme WebView 103 / Honor）待走查。D102 起两端默认「今天 / 模型」，分组排行按金额降序选 Top 8，桌面账本字号下调一档（标题 12.5、副行 10.5、Token/金额 10.5、行高 35）。
-- ✅ **电脑端菜单栏常驻**（2026-11-06，D88，代码完成待人工目检）：关窗只隐藏窗口，HTTP 服务（47810+）/ UDP 发现（47820）/ DSH hook 桥（47815–47819）/ 剪贴板监听继续跑——手机连接与 AI 状态不再随关窗中断；激活策略随窗口状态切换（D112）：主窗口显示时 `Regular`（Dock 图标 + 菜单栏 + Cmd+Tab 正常，⌘Q 可用），关窗隐藏后 `Accessory`（无 Dock、无 App 菜单、Cmd+Tab 不出现）；菜单栏 36×36 单色模板图标（D99 起是「随身卡」剪影：卡身实心 + 挂孔与灯镂空，`scripts/gen-brand-mark.py` 生成，`icon_as_template` 自动适配浅/深菜单栏）；**左键图标弹出 Token 用量小看板（D108），主窗口走右键菜单「显示主窗口 / 退出 Sidekick」或看板底部「打开用量页」**；托盘建失败自动退回「关窗即退出」（`TRAY_READY` 守卫），不留「无窗口/无图标/无退出」死局；`tray-icon` + `image-png` feature 只在桌面目标启用（Android 包不受影响）。契约 `docs/engineering/desktop-tray.md`。
-- ✅ **菜单栏 Token 用量小看板**（2026-11-07，D108，代码完成待目检）：左键菜单栏图标 → 图标正下方弹出 320×432 只读卡片（今天/7 天 + 花费 + 三读数 + 近 7 天迷你柱（悬停出「日期 · 金额」气泡）+ 客户端/会话/模型 Top 3 分组 + 打开用量页）；独立 `usage-panel` 窗口（`index.html?window=panel`，启动预创建隐藏，360×468 含非对称透明留白 左右 20/上 8/下 28），点其它 App / Esc / 再点图标收起，Cmd+W 只隐藏不销毁；「打开用量页」显示主窗口并发 `sidekick-navigate`。只读复用 `token_usage_stats`，不新增协议/不写账本；失败回退显示主窗口。契约 `docs/engineering/desktop-usage-panel.md`。**184 Rust tests（含 6 个定位单测）/ 707 前端 tests / tsc / lint / build / 边界 / docs 全绿**；浏览器 QA 60 张截图（含面板 6 张：浅深×正常/空态 + 2 张悬停，卡片实测 320×432）。菜单栏点击/多屏/失焦收起待人工目检。
-- ✅ **看板卡片区铺原生磨砂「真玻璃」**（2026-11-08，D120，补充 D108/D116）：纯 CSS 的 `backdrop-filter` 采不到窗口背后的桌面（采样上界是文档根元素），所以在 WebView 下垫了一块原生玻璃层（默认 macOS 26 的 `NSGlassEffectView`/`liquidGlassRegular`，低版本退回 `NSVisualEffectView` popover；档位开关 `SIDEKICK_GLASS_MATERIAL`）——**只铺 320×432 卡片矩形、圆角 18，不铺整窗**（整窗铺会让 20/8/28 留白变成一圈磨砂、阴影叠在模糊壁纸上发脏）。前端只有 `panel_glass_ready=true` 时才把卡片换成薄 tint（浅 `rgba(255,255,255,.3)` / 深 `rgba(28,28,30,.38)`），否则保持不透明实色卡；`SIDEKICK_UI_VIBRANCY=off` 回退。顺带修掉暗色主题越界阴影（`0 18px 44px` → `0 8px 18px`）。代码 `app/src-tauri/src/panel_glass.rs`。
-- ✅ **菜单栏归属随窗口状态切换**（2026-11-07，D112，修 D88 副作用）：Accessory 应用在 macOS 上没有自己的菜单栏，主窗口聚焦时左上角仍是上一个普通 App 的菜单。现在主窗口显示时切 `ActivationPolicy::Regular`（Dock 图标 + 默认菜单 + Cmd+Tab，⌘Q 可用），关窗隐藏时切回 `Accessory`；新增 `app/src-tauri/src/activation.rs`，调用点只有 `tray::show_main_window` 与 `CloseRequested`。实测窗口显示时系统菜单栏 = Apple/desktop/文件/编辑/显示/窗口（菜单已在 D113 中文化），关窗后 Dock 图标消失、菜单栏回到前台 App、`lsof -nP -iTCP:47810` 仍监听。第一项应用菜单名跟随包名（调试裸二进制 `desktop`、打包后 `Sidekick`），不是菜单能控制的。
-- 产品规范与两份 PRD 已落地（2026-10-31）：`docs/product`、`docs/standards`、`docs/prd`、`docs/engineering`；文档采用树形 + 懒加载，入口 `docs/INDEX.md`。
-- ✅ **品牌标记换成「随身卡」+ 全平台图标重生成**（2026-11-06，D99，取代猫头 logo 与爪印方向）：标记 = 一张歪 3.5° 的奶油卡，贴顶边穿透挂孔（工卡）+ 左上斜切一角（SIM/录音卡）+ 右下颗琥珀灯（REC/待命），深青底 `#0F3A3E`。母版双轨：App 图标走位图 `brand/appicon.png`（1024 满幅、不烤圆角），小尺寸走 `scripts/gen-brand-mark.py` 的矢量几何派生（favicon 16–32、侧栏 22、托盘 36 单色、Android 自适应前景）。已重生成 `app/src-tauri/icons/**` 与 `app/public/{favicon,logo-icon}.svg`；修正 Android 自适应图标白边（背景层 `#0F3A3E` + 前景收到 60% 安全区）。**三条图标规则**：差异只能长在轮廓上（内部细节 40px 第一批死掉）、底色必须和壁纸抢边界（禁止中性对比底）、玻璃不能当图标材质。Dock/菜单栏/真机主屏观感待人工目检；`brand/logo-horizontal*.svg` 文字标仍是猫头，待单独重做。
-- ⏸ 蓝牙通道：预研过，Mac 可用 Python `bless` 当 BLE 外设广播（见 `docs/ble-notes.md`），但**主线暂定为局域网**，蓝牙延后。
-- ✅ **宠物 P0 代码已完成**（2026-10-31；2026-11-02 改为帧动画图集；2026-11-04 下线触摸互动、去舞台声呐环、宠物不再响应麦克风、done 改循环；2026-11-05 首次命名/改名下线）：OpenPets schema 2 图集（WebP 764KB + poster）+ 状态候选链 + 解码/降级；状态机/plugin-store 存档、单竖屏布局、设置（2026-11-05 移到手机「更多」整页）、宠物主界面 + 消息入口；宠物固定显示「小跟班」，首次 BOOT 气泡「你来了。我是小跟班。」，`onboarded` 只表示是否已见过面；触摸互动（点击/长按/抚摸、爱心、亲密度、interacting、设置页无障碍互动）已删除，点击宠物无任何反应；`PetPhase` 只剩 idle/sleeping/away，`Mood` 只剩 content/curious/sleepy，麦克风不再产生宠物事件（仅 `micListening` 门禁在录音时静音 AI 音效/触感）；舞台无背景声呐环；done 循环（一轮 1.6s，3 秒 completed 约 1.875 轮，无末帧定格）；真机 60fps 与存档跨重启待补，扩展状态行（睡眠）待美术。
-- ✅ **麦克风（百炼云端唯一）**（2026-11-02）：手机 WebView 流式 PCM16 → `mic.*` + `SK01` 二进制帧 → 桌面直连百炼 WS（run-task/finish-task、二进制 PCM）→ `mic.partial` 50ms 流式回显 → `arboard` 写剪贴板 + `core-graphics` 合成 Cmd+V；未授权/窗口变化/密码框只复制。本机 whisper/模型下载已下线，失败直接报错、不回退。
-- ✅ **结果卡片手动「回车 / 清空」**（2026-11-04）：语音输入成功后，「已输入」卡片出现两个按钮——「回车」合成 Return，「清空」合成 `⌘A`+`Delete`（两次确认）；新增 `key.request`/`key.result` 协议，只作用于最近一次插入的目标窗口（30 秒时效、成功即作废、500ms 限频、密码框/未授权/非 macOS 拒绝），仍**不自动发送**。
-- ✅ **模型页 + 用量统计**（2026-11-02；D104 后位置为一级「语音 ⌘4」单页的 配置 / 关键词 / 语音用量 三段）：桌面语音配置（2026-10 前为独立导航「模型」）：配置段配置百炼（完整地址/本地 `asr.json` 0600 保存 API Key/模型/语言/场景/保留方言/同意/测试/保存/清除 Key；无业务空间 ID 字段），关键词段管理一行一个词的列表（最多 2000 个，统一权重 4），语音用量段区间切换（今天/近 7 天/近 1 个月/近 1 年；今天无明细、7/30 按天、1 年按月）+ 金额/Token/会话/时长（人民币微元，北京/新加坡价格估算）；`asr_usage.json` 0600、按天、最多 400 天；`asr_usage_stats()` 返回 365 天 `days`。
-- ✅ **桌面剪贴板 P1**（2026-10-31，2026-11-01 补语音入库与上限展示）：文本历史、搜索、复制、置顶、删除、清空、暂停；隐藏类型过滤；语音转写以 `voice` 入库；最多保留默认 100 条（可配 10–200，D121）；本地 `0600` JSON；唯一归属是桌面「剪贴板」页（D79 建页时叫「内容」，D119 改名；历史与设置都在这一页，设置里没有剪贴板）。
-- 🚧 **AI 联动（DSH hook）代码完成，待真机/隐私验收**（2026-11-02；2026-11-03 加会话列表；2026-11-04 会话行加粗粒度工具动作、插件 v3）：桌面「设置 › AI 联动」二级页 + 本地 `sidekick-hook.mjs` 注入 DSH profile + Rust 回环桥 + `status` 协议（含 `sessionList`）+ 手机四态动作/三音效 + 手机宠物页会话卡（标题/状态/当前工具动作/清除/反问一键唤起 DSH）；产品规则 `docs/prd/hook/`，技术方案 `docs/engineering/dsh-hook.md`；首次开启需重启 DSH 一次，之后热开关。
-- ❌ 尚未开始：手机回答 AI 提问、文本消息、Claude Code / Qoder 接入、正式签名包、iOS。
+## 2.5 文档怎么读（懒加载）
 
-## 2.5 文档导航（懒加载）
+| 你要什么 | 读哪 |
+| --- | --- |
+| 唯一入口 / 按任务路由 | `docs/INDEX.md` |
+| 现在什么状态、下一步、待验收 | `docs/status.md` |
+| 为什么这么定（含被取代关系） | `docs/decisions.md` |
+| 变更历史（谁在什么时候做了什么） | `docs/history.md` |
+| 踩过的坑与硬约束 | `docs/engineering/pitfalls.md` |
+| 产品原则 / 规范 / PRD / 技术方案 | `docs/product/`、`docs/standards/`、`docs/prd/`、`docs/engineering/` |
+| 设计归档（只读结论） | `docs/design/ARCHIVE.md` |
 
-- 唯一入口 `docs/INDEX.md`；先读它，再按任务选 **1 个**分支；最多读 2 篇叶子，不要整棵读完。
-- 分支：产品方向 `docs/product/`、规范 `docs/standards/`、PRD `docs/prd/`（含 `shell/` 应用外壳：导航 / 状态词 / 首用清单）、技术方案 `docs/engineering/`、设计归档 `docs/design/`（只留 INDEX + README，过程素材不入库）。
-- 现有基础文档仍是事实源：`docs/architecture.md`、`docs/frontend-architecture.md`、`docs/dependency-policy.md`、`protocol/README.md`。
-- 新文档必须带 frontmatter；改完跑 `node scripts/check-docs.mjs`。
-- 项目子智能体在 `.qoder/agents/`；项目 Skill 在 `.qoder/skills/`（`sidekick-docs`、`sidekick-feature`）。
+规则：从 `docs/INDEX.md` 选 **1 个**分支，最多读 2 篇叶子；够用就停。新文档写 frontmatter 并在父索引登记，改完跑 `node scripts/check-docs.mjs`。项目子智能体与 Skill 在 `.agents/agents/`、`.agents/skills/`。
 
-## 3. 技术栈与架构速览
+## 3. 技术栈与架构
 
-- 单仓库、双产物：Tauri 2 桌面端 + 安卓端共用 `app/`，但构建出两个独立软件；Rust 用 `cfg(desktop/mobile)` 隔离，桌面服务代码不进手机包。
-- 前端按平台分目录：`src/desktop`、`src/mobile`、`src/shared`、`src/protocol`；桌面与手机各自固定布局，**不做跨端自适应**。详见 `docs/standards/engineering.md`。
-- 桌面端：Tauri（Rust）+ Vite/TypeScript；Rust 里跑 axum HTTP/WebSocket 服务，端口候选 **47810**–`47814`、`8848`（默认 47810，被占用自动顺延，真实端口由 `server_info` 与发现回包告知）；UDP 发现端口固定 **47820**。
-- 手机端：Tauri Android App（Rust 核心 + WebView UI）；Rust 侧用 tokio-tungstenite 主动连电脑，前端通过 Tauri 命令/事件与 Rust 通信。
-- 角色判定：Rust `app_role` 命令按 `cfg!(target_os = "android" | "ios")` 返回 `mobile` / `desktop`；`src/main.tsx` 据此动态 import 并挂载 `entries/desktop.tsx` / `entries/mobile.tsx`。
-- 协议：WebSocket 文本帧 JSON；服务端把消息广播给所有已连接客户端。定义见 `protocol/README.md`。
-- 数据流：手机 App →(ws)→ 桌面服务 → 广播 → 桌面 UI / 其他客户端。
-- 前端重构目标栈（Phase 1 已落地）：React 19 + Tailwind v4 + shadcn/ui（Base UI, base-nova）+ Motion；宠物为帧动画图集（OpenPets schema 2）。**视觉按平台分两个作用域**：手机是 `.mobile-clean`（`app/src/mobile/styles/clean.css`，浅 `#F7F8F8` 页 / 白卡 / HarmonyOS Sans SC），电脑是 `.desktop-ios`（`app/src/desktop/styles/ios.css`，Liquid Glass：浅 `#F2F2F7` 页 / 白卡 / 玻璃栏、深 `#000` 页 / `#1C1C1E` 卡 / `rgba(32,32,35,.86)` 玻璃，D85+D86）；`tokens.css` 的深海双主题只作共享基础与手机宠物舞台，**不要拿它当电脑端颜色来源**。主题运行时在 `shared/lib/theme.ts`，见 `docs/frontend-architecture.md` §6。
-
-### 桌面端接口
-
-| 方式 | 路径/名称 | 说明 |
-| --- | --- | --- |
-| HTTP GET | `/` | 手机落地页（含「下载 App」按钮 + 网页聊天预览） |
-| HTTP GET | `/download/apk` | 下发手机安装包：优先仓库 `release/Sidekick-Android.apk`（release 签名），其次编译期嵌入的同一份（`build.rs` 打进桌面二进制），最后回退 debug 构建产物；带 `Content-Length`，文件名 `Sidekick-Android.apk`，全缺时 HTML 404 |
-| WS | `/ws` | 消息通道 |
-| UDP | `47820` | 发现响应器：收 `sidekick.discover` 探测，单播回主机名 + 真实端口 |
-| Tauri 命令 | `server_info` | 等就绪后返回 `{ip, port, url, discoveryPort}`，前端展示地址/发现状态/二维码 |
-| Tauri 命令 | `asr_cloud_status` / `asr_cloud_save` / `asr_cloud_test` / `asr_cloud_clear` / `asr_keywords_save` | 百炼配置/状态/测试/清除 + 关键词保存；Key 存本地 `asr.json`（0600），状态只返回 `hasKey`/`keyMasked`，不读 Keychain |
-| Tauri 命令 | `asr_usage_stats` / `asr_usage_clear` | 今天/7/30/365 汇总 + 最近 365 天 `days`；清空只重置本地统计 |
-| Tauri 命令 | `token_usage_stats` / `token_pricing_status` / `token_pricing_refresh` / `token_pricing_set_auto` / `token_pricing_set_mobile_models` | Token 用量聚合与模型价格表；只读 DSH ledger，价格只 GET 公开目录 |
-
-### 手机端接口
-
-| 方式 | 名称 | 说明 |
-| --- | --- | --- |
-| Tauri 命令 | `app_role` | 返回 `mobile` |
-| Tauri 命令 | `discover_servers` | 无参；UDP 广播发现同网段电脑，返回 `{name, ip, port, addr}[]`（异常返回空数组） |
-| Tauri 命令 | `connect_server({addr})` | 连接 `ws://<addr>/ws`；`addr` 可只写 `IP:端口`（缺省 47810）；重复调用先断开旧连接，4s 超时 |
-| Tauri 命令 | `send_chat({text})` | 发送 `{"type":"chat","from":"phone",...}` |
-| Tauri 命令 | `send_focus_request({source,sessionId,requestId})` | 发送 `focus.request`；结果走 `chat` 事件里的 `focus.result` |
-| Tauri 命令 | `send_key_request({action,session,requestId})` | 发送 `key.request`（`enter`/`clear`）；结果走 `chat` 事件里的 `key.result`，只允许用户主动点按 |
-| Tauri 命令 | `send_usage_request({range})` | 请求一次 `usage` 快照（today/7d/30d/180d）；结果走 `chat` 事件的 `usage` 消息 |
-| Tauri 命令 | `set_keep_screen_on({enabled})` | 宠物页前台屏幕常亮：Android JNI 加/清 `FLAG_KEEP_SCREEN_ON`；iOS 暂为空实现 |
-| Tauri 事件 | `conn` / `chat` | `conn: {online, url}`；`chat: <JSON 字符串>`（含 status/sessionList/focus.result/mic.*/chat） |
-
-扫码连接不是独立的 Tauri 命令：手机连接页「扫码连接」→ `getUserMedia` + `jsqr` 解出桌面二维码里的 `http://ip:端口` → 复用 `connect_server`。桌面二维码内容不变，浏览器扫码打开落地页的行为也不变（D74）。
+- 单仓库、双产物：Tauri 2 桌面 + Tauri Android，共用 `app/`；Rust 用 `cfg(desktop/mobile)` 隔离，桌面服务代码不进手机包。
+- 前端：React 19 + Tailwind v4 + shadcn/ui（Base UI `base-nova`）+ Motion；`src/{desktop,mobile,shared,protocol}`，**两个平台各自固定布局，不做跨端自适应、禁止跨平台 import**。
+- 桌面：axum HTTP/WS（端口候选 **47810–47814、8848**，默认 47810，被占自动顺延）+ UDP 发现响应器（固定 **47820**）+ DSH hook 回环桥（**47815–47819**，只绑 127.0.0.1）。
+- 手机：tokio-tungstenite 主动连电脑；前端只通过 Tauri 命令/事件通信（`shared/lib/tauri.ts`）。
+- 协议：WebSocket 文本帧 JSON，服务端广播；定义见 `protocol/README.md`，音频协议见 `docs/engineering/protocol-audio.md`。
+- 视觉按平台分作用域：桌面 `.desktop-ios`（`desktop/styles/ios.css`）、手机 `.mobile-clean`（`mobile/styles/clean.css`）；`tokens.css` 只是共享基础与宠物舞台色，不要当桌面色板。
 
 ## 4. 目录结构
 
-```
+```text
 sidekick/
-├─ AGENTS.md            # ← 本文件（最高优先级上下文）
-├─ README.md            # 人类入口
-├─ .qoder/
-│  ├─ agents/           # 项目子智能体（docs-router / prd-reviewer / pet-designer / audio-engineer / protocol-guardian）
-│  └─ skills/           # 项目 Skill（sidekick-docs / sidekick-feature）
-├─ app/                 # Tauri 项目（桌面 + 安卓共用，构建两个产物）
-│  ├─ index.html
-│  ├─ src/main.tsx      # createRoot + app_role 动态 import entry
-│  ├─ src/entries/      # desktop.tsx / mobile.tsx
-│  ├─ src/desktop/      # 桌面平台：styles/ios.css（.desktop-ios 令牌）、shell/（sidebar/list/page-header/page-shell/segmented-control）、pages/（概览/剪贴板/备忘录/用量/语音/设置）、features/（语音三段内容组件、设置的各二级页 Section）
-│  ├─ src/mobile/       # 手机平台：shell/（顶部条/页头）、features/（pet/asking/chat/connect/settings/first-use/sessions/mic）
-│  ├─ src/protocol/     # messages.ts（chat/system/ServerInfo/ConnEvent + clients）+ discovery.ts（发现结果）
-│  ├─ src/shared/       # ui（button/input/switch/dialog/sheet/signal-dot 等）/ lib（tauri、status、sessions、activity）/ styles
-│  ├─ src/dev/          # 仅开发环境 Tauri mock（浏览器验证）
-│  ├─ src-tauri/src/lib.rs        # 桌面 axum 服务 + 手机 WS 客户端（cfg 分流；动态端口/连接串行化）
-│  ├─ src-tauri/src/tray.rs       # 菜单栏常驻：托盘图标/右键菜单/关窗隐藏/Accessory（D88）
-│  ├─ src-tauri/icons/tray.png    # 36×36 单色模板图标（`scripts/gen-brand-mark.py` 生成）
-│  ├─ src-tauri/src/desktop_keys.rs # 结果卡片手动 Enter/⌘A+Delete（安全闸门/目标注册表）
-│  ├─ src-tauri/src/discovery.rs  # UDP 局域网发现（探测/回包/响应器/扫描）
-│  ├─ src-tauri/mobile/index.html # 手机浏览器落地页（含下载按钮）
-│  ├─ src-tauri/tauri.conf.json   # 产品名 Sidekick / identifier dev.sidekick.app
-│  └─ src-tauri/gen/    # tauri android init 生成（已 gitignore，需重新生成）
-├─ brand/               # logo 源文件（SVG 图标 / 横版 / App 图标 / favicon）
-├─ release/             # 打包好的安装包（固定文件名，每次覆盖，不建版本号目录）
-├─ protocol/README.md   # 事件协议 v0
-├─ docs/
-│  ├─ INDEX.md          # 文档树入口（懒加载）
-│  ├─ product/          # 产品原则、用户、范围、指标
-│  ├─ standards/        # 文档/产品/交互/视觉/工程规范
-│  ├─ prd/              # 宠物、麦克风、AI 联动、应用外壳（shell）PRD / SPEC / ACCEPTANCE
-│  ├─ engineering/      # 音频链路、协议提案、宠物运行时、测试
-│  └─ architecture.md … # 现有基础文档
-└─ scripts/             # 安卓构建与安装、文档检查
+├─ AGENTS.md  README.md
+├─ .agents/{agents,skills}/     # 项目子智能体与 Skill
+├─ app/                         # Tauri 项目（桌面 + 安卓）
+│  ├─ src/{entries,desktop,mobile,shared,protocol,dev}/
+│  ├─ src-tauri/src/            # lib.rs 分流 + tray/panel_glass/discovery/desktop_keys/asr_*/keep_awake…
+│  └─ src-tauri/{capabilities,icons,mobile/}/
+├─ brand/                       # appicon.png 母版 + 矢量标记（+ gen-brand-mark.py 派生）
+├─ release/                     # 本地构建产物（不入库，D125）
+├─ protocol/README.md           # 事件协议
+├─ docs/                        # 文档树，入口 docs/INDEX.md
+└─ scripts/                     # 构建/安装/打包/发布/QA/文档检查
 ```
-
-前端结构已落地：`src/entries` + `src/desktop` + `src/mobile` + `src/shared` + `src/protocol`，禁止跨平台 import；桌面壳在 `desktop/shell` + `desktop/pages`，手机壳在 `mobile/shell`；视图切换只走组件状态 / `ui-store`，不写 URL、不加全局 `body` 状态类。详见 `docs/standards/engineering.md`。
 
 ## 5. 常用命令
 
-前提：`cd sidekick/app && pnpm install`。
+```bash
+cd app && pnpm install
+pnpm tauri dev                 # 桌面开发（窗口出现即服务已启动）
+scripts/build-android.sh       # 构建 debug APK（首次需 pnpm tauri android init）
+scripts/install-android.sh     # adb install -r + 启动
+scripts/package-release.sh     # 先安卓后桌面 → release/（覆盖同名文件）
+scripts/publish-release.sh     # 上传 GitHub Releases（分发入口）
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+node scripts/check-docs.mjs && node scripts/check-boundaries.mjs
+node scripts/qa-desktop-ios.mjs   # 桌面全页截图（需先 pnpm dev）
+node scripts/qa-memo.mjs          # 备忘录两端截图 + CDP 走查
+```
 
-- 桌面开发：`pnpm tauri dev`（窗口出现即服务已启动；日志可见 `[server] listening on http://0.0.0.0:47810` 与 `[discovery] UDP 响应器已启动`）
-- 生成安卓工程（首次/清理后）：`pnpm tauri android init`（需要 `ANDROID_HOME` / `NDK_HOME` / `JAVA_HOME`，见 `docs/setup.md`）
-- 构建 debug APK：`scripts/build-android.sh`
-  - 等价于：`pnpm tauri android build --debug --target aarch64 --apk`
-  - 产物：`app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
-- 安装并启动：`scripts/install-android.sh`（`adb install -r` + `am start`）
-- 打包 release 安装包：`scripts/package-release.sh`（或 `package-desktop.sh` / `package-android.sh`）
-  - 桌面：`pnpm tauri build` → 覆盖 `release/Sidekick-macOS.dmg`（未签名）
-  - 安卓：release 构建 → `zipalign` + `apksigner`（本地密钥）→ 覆盖 `release/Sidekick-Android.apk`
-  - 固定文件名、不建版本号目录；不要提交 debug APK（约 250MB，超 GitHub 100MB 上限）
-- 日志：桌面端看 `tauri dev` 终端；安卓端 `adb logcat`
-- 前端质量：`pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm format`（Biome + Vitest；覆盖 entries/desktop/mobile/shared/protocol/test/dev）
-- 重生成全平台图标（顺序不能反）：`pnpm tauri icon ../brand/appicon.png`（在 `app/` 内运行）→ `python3 scripts/gen-brand-mark.py`（重写 favicon/侧栏/托盘单色图 + Android 自适应前景层与背景色，否则自适应图标外圈会留白边）。`gen/` 清空后先 `pnpm tauri android init`
-- 电脑端浏览器 QA：`cd app && pnpm dev --host 127.0.0.1`，另开终端 `node scripts/qa-desktop-ios.mjs`（桌面 QA 全页截图：浅/深 × 1180/960 × 6 个一级页（含「语音」页滚动态）+ 设置二级页 + 弹层 + 滚动玻璃工具栏 + vibrancy 契约校验，截图到 `artifacts/desktop-ios-qa/`，顺带检查横向溢出/console error）
-- 备忘录交互 QA（D124）：`cd app && pnpm dev --host 127.0.0.1`，另开终端 `node scripts/qa-memo.mjs`（手机 320/390 × 周/月 × 浅深 + 桌面 1180/960 周/月，14 张截图 + CDP 走通首录告知→锁定→保存；截图到 `artifacts/memo-qa/`）
-- 手机用量页浏览器 QA：`?role=mobile&view=usage`（390×844 / 360×800 / 320×720 × 浅/深，`?usage=empty` 截账本缺失态）；拖动剖面检查气泡与 `scrollTop` 不变；真机（Realme WebView 103）用 `adb exec-out screencap -p` 复验。
-- 文档检查：`node scripts/check-docs.mjs`（在仓库根目录运行）
-- 平台边界检查：`node scripts/check-boundaries.mjs`（迁移出 `src/mobile` / `src/desktop` 后自动生效）
+环境（macOS arm64）：Rust 1.93、Node 24 + pnpm 11、JDK 21、Android SDK 37 / NDK 27.2，详见 `docs/setup.md`。
 
-### 项目子智能体
+## 6. 改完怎么验（最短路径）
 
-| 代理 | 什么时候用 |
-| --- | --- |
-| `sidekick-docs-router` | 查规范/PRD/方案，按树懒加载，不批量读 |
-| `sidekick-prd-reviewer` | 写完/改完 PRD，按 10 项质量门评审 |
-| `sidekick-pet-designer` | 宠物体验/视觉/动效评审 |
-| `sidekick-audio-engineer` | 麦克风采集/传输/转写/输入方案与排障 |
-| `sidekick-protocol-guardian` | 改协议/消息类型后检查文档与实现一致 |
+1. 前端：`pnpm typecheck / lint / test / build`（Biome + Vitest）。
+2. 桌面 UI：`node scripts/qa-desktop-ios.mjs` 看溢出/console error，再 `pnpm tauri dev` 目检窗口（交通灯、拖动区、滚动玻璃、深浅主题、菜单栏看板）。
+3. 手机：`scripts/build-android.sh && scripts/install-android.sh`，真机确认自动发现→连接→收发；UI 用 `scripts/qa-memo.mjs` 与浏览器 `?role=mobile`（320/390 × 浅深）。
+4. 无头验证：`docs/setup.md`「WebView 远程调试」用 CDP 调命令 + `adb exec-out screencap -p` 截图。
+5. 改协议：`protocol/README.md`、Rust、两端解析三处同步；改完跑文档与边界检查。
 
-> 新建/修改 `.qoder/agents` 或 `.qoder/skills` 后，需要刷新或重启 Qoder 才会被识别。
+## 7. 最常踩的 10 个坑（详情见 `docs/engineering/pitfalls.md`）
 
-## 6. 环境（macOS arm64）
+1. 不要给 `<body>` 加平台状态类；桌面/手机是两个独立 entry（历史上这样整页黑屏）。
+2. 主题：`index.html` 内联防闪脚本必须在最前；`data-theme` 与 `.dark` 必须双写（`shared/lib/theme.ts`）。
+3. WebView 103 不支持 `oklch`/`dvh`/`color-mix`/CSS `translate` 属性——颜色用 hex，居中用 flex/`mx-auto`，不要 `-translate-x-1/2`。
+4. 广播回显：发送后不要本地追加，等服务端广播，按 `from` 判 me/them。
+5. 关窗 = 隐藏窗口（D88），唯一退出是菜单栏右键；关窗后 `Accessibility`/`Regular` 策略随窗口切换（D112）。
+6. 打包顺序不能反：先 APK 后 DMG，桌面 `build.rs` 编译期把 APK 嵌进二进制。
+7. `release/` 不入库（D125）；安装包走 GitHub Releases；debug APK 120–314MB，绝不入库。
+8. Android 16+ 要 `ACCESS_LOCAL_NETWORK` 运行时权限，缺了表现为「发现 0 台 / 连接超时」，但 `curl` 能通（D72）；企业网可能只放行单播，mDNS 也救不了（D73）。
+9. Android 返回键：新增全屏页面必须 `pushBackHandler`，否则按返回被根页面当成退出确认。
+10. 桌面看板/玻璃/面板窗口的坑（CSS 权重、留白、`macos-private-api`、只铺卡片区）改动前先读 pitfalls §7。
 
-- Rust 1.93（brew `rust`，含 rustup；Rust 安卓目标已安装）
-- Node 24 + pnpm 11（`packageManager` 已锁定 pnpm@11.22）；Tauri CLI 在 `app/` 的 devDependencies
-- JDK 21：`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
-- Android SDK：`~/Library/Android/sdk`（cmdline-tools 由 brew cask 安装）
-- NDK `27.2.12479018`；compileSdk 37（SDK 包名是 `platforms;android-37.0`）
-- 已安装：`rust`、`openjdk@21`、`android-commandlinetools`、`cargo-ndk`、`gh`、`pnpm`
-- 详细安装步骤 / 环境变量 / 无线调试流程：`docs/setup.md`
+## 8. 协作约定
 
-## 7. 验证「改完没坏」的最短路径
+- 用户中文母语：沟通用中文、直白、先结论；环境配置由 AI 代劳，**破坏性操作（删库、重置、卸载、force push）先问**。
+- Git：提交信息中文（`type(scope): 中文摘要`）；push 前跑完 quality 命令；`force push`/改可见性先确认；规则见 `docs/standards/git.md`。
+- 平台边界：`mobile` 不 import `desktop`，反之亦然，`shared` 不 import 两者；前端规范 `docs/frontend-architecture.md`，依赖准入 `docs/dependency-policy.md`。
+- 重大取舍追加到 `docs/decisions.md`；新踩的坑写进 `docs/engineering/pitfalls.md`；不要往 AGENTS.md 里堆流水账。
+- 不提交构建产物（`app/dist`、`node_modules`、`target`、`gen/`、APK/DMG）；`release/` 也不再入库。
 
-1. 桌面端 `pnpm tauri dev`，确认日志出现 `[server] listening on http://0.0.0.0:47810` 与 `[discovery] UDP 响应器已启动`；
-2. `scripts/build-android.sh && scripts/install-android.sh`，手机上打开 App；
-3. App 启动后自动发现并连接（logcat 见 `[discovery] 扫描结束，发现 N 台电脑` → `[mobile] connected to ws://…`），状态变「已连接」；发现失败再展开「手动输入地址」兜底；
-4. 双向发消息，桌面日志应出现 `[ws] recv: {...}`；
-5. 电脑端改界面后：`node scripts/qa-desktop-ios.mjs`（视觉/溢出/弹层令牌/滚动玻璃工具栏），再 `pnpm tauri dev` 目检窗口（交通灯位置、拖动区、滚动时的玻璃过渡、深浅主题）；
-6. 无头验证（推荐 AI 用）：见 `docs/setup.md`「WebView 远程调试」，用 CDP 调 Tauri 命令并用 `adb exec-out screencap -p` 截图确认。
-7. 电脑端菜单栏（D88 + D108，只能人工目检）：`pnpm tauri dev` 后确认终端出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）` 与 `[panel] 已创建隐藏窗口 360×468` 且菜单栏有随身卡剪影（D99）；左键图标 → 用量小看板出现在图标下方、再点收起、点外部/Esc 收起、底部「打开用量页」落到用量页；右键「显示主窗口」窗口回来、「退出 Sidekick」才结束进程（`lsof` 端口释放）。点关闭按钮 → 窗口消失但 `lsof -nP -iTCP:47810` 仍监听、手机仍「已连接」。细节见 `docs/engineering/{desktop-tray,desktop-usage-panel}.md`。
+## 9. 下一步
 
-## 8. 已知坑（踩过的都在这）
-
-- **不要给 body 加平台状态类**：桌面/手机是两个独立 entry，各自固定布局；历史上 `.mobile { display:none }` 命中 `<body class="mobile">` 导致整页黑屏，已删除旧 DOM/styles。
-- **StrictMode 订阅**：Tauri `listen` 是异步的；`shared/lib/tauri.ts` 的 `subscribe*` 已处理 pending/cleanup，组件 effect 必须调用返回的同步退订函数，不要每次渲染重新 listen。
-- **广播回显**：桌面/手机发送后都不要本地追加，等服务端广播回显；按 `from` 判断 me/them，避免重复消息。
-- **dev mock**：浏览器验证用 `http://localhost:1420/?role=mobile`；`src/dev/tauri-mock.ts` 只在 `import.meta.env.DEV` 生效，生产构建不包含。
-- **无线调试两个端口不同**：配对弹窗里的是「配对端口」，无线调试主页的是「连接端口」；`adb pair` 用前者、`adb connect` 用后者。配对码离开弹窗即失效。
-- **adb 出现重复设备**：mDNS 与 IP 两条 transport 同时存在会报 `more than one device/emulator`；`adb disconnect <mDNS 服务名>` 只留 IP 连接。
-- **compileSdk 37**：SDK 包名是 `platforms;android-37.0`，不是 `android-37`。
-- **debug APK 很大**（约 120–240MB，含未剥离调试符号），属正常；release 需签名，体积预计 10–20MB。`release/` 只放 release 包：debug 包超过 GitHub 单文件 100MB 上限，推不上去。
-- **release/ 固定产物**：`scripts/package-release.sh` 生成 `release/Sidekick-macOS.dmg`（未签名）与 `release/Sidekick-Android.apk`（release + 本地 keystore 签名，首次运行自动生成 `~/.sidekick/android-release.jks`）；文件名固定、每次覆盖，不要改成带版本号。Git 会为每次提交保留二进制历史副本，固定文件名只让工作区保持一份（仓库历史仍随每次推送增长）。
-- **打包顺序（2026-11-06）**：桌面端 `build.rs` 会把 `release/Sidekick-Android.apk` **编译期嵌进二进制**，DMG 里带的安装包取决于编译那一刻磁盘上的那份；必须**先 `package-android.sh` 再 `package-desktop.sh`**（`package-release.sh` 已按此顺序）。单独打桌面端时先确认 APK 是最新的，否则手机扫码下载到的还是旧包；验证方法：在 `target/release/desktop` 里搜 APK 头 64 字节能命中、且整段与 `release/Sidekick-Android.apk` 一致。
-- **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore；克隆后必须先 `pnpm tauri android init` 再构建。**2026-11-08 补**：`tauri android build` 会把 `macos-private-api` 从 `Cargo.toml` 里剥掉（移动端不兼容），但它是桌面透明窗口的硬前提；`scripts/build-android.sh` 现在用 trap 在退出时调 `scripts/restore-desktop-features.mjs` 补回。若绕过脚本直接跑 `tauri android build`，之后桌面 `cargo test` 报 feature allowlist 时先手动补回这一项。
-- **图标管线（D99）**：App 图标母版是**位图** `brand/appicon.png`，小尺寸（favicon 16–32 / 侧栏 22 / 托盘 36 单色 / Android 自适应前景）由 `scripts/gen-brand-mark.py` 的**矢量几何**派生——两份同源，改形状改这个脚本的常量，不要手改 SVG。`pnpm tauri icon` 会把 Android 的 `ic_launcher_background` 写成 `#FFFFFF`，而母版是满幅深青底，圆/方遮罩外圈会露出一圈白边；必须在其**之后**跑 `python3 scripts/gen-brand-mark.py` 重写背景色与五档前景层。旧 `scripts/gen-tray-icon.py`（画猫头）已删除。玻璃/内部细节不能当图标：40px 只吃轮廓与明度差。
-- **直接跑 debug 二进制会白屏**：`cargo build`（不加 `tauri/custom-protocol`）产出的 debug 程序是 dev 模式，启动时加载 `http://localhost:1420`，没有 Vite dev server 就白屏（2026-11-03 踩过）。要独立运行用 `scripts/run-desktop.sh`（先 `pnpm build`，再 `cargo build --features tauri/custom-protocol`），日常改前端用 `pnpm tauri dev`；两者不要混。
-- **macOS 防火墙**：第一次接受局域网连接会弹「允许传入网络连接」，必须允许，否则手机连不上。
-- **手机与电脑需同一局域网**；开发机 IP 会变，一般不用手填（自动发现），发现失败时再手动输入桌面窗口显示的地址。
-- **自动发现的三个前提**：同一网段、路由器不拦广播/无 AP 隔离、macOS 防火墙允许 Sidekick 传入（TCP 服务端口 + UDP 47820）。
-- **端口被占用是正常的**：`47810` 被占会自动顺延到 `47811`…，桌面日志与窗口地址显示真实端口；手机发现回包也带真实端口。
-- **菜单栏用量小看板（D108）**：第二窗口 label 固定 `usage-panel`，`capabilities/panel.json` 的 `windows` 必须与它一致；`main.tsx` 用 `?window=panel` 先于 `app_role` 分支，不要改成 `getCurrentWindow().label`（会多引一层 JS window API，dev mock 也要补）。收起靠三个入口：托盘再点（`is_visible` 就 hide）、`Focused(false)`、Esc 的 `hide_usage_panel`；`CloseRequested` 必须 prevent+hide，否则 Cmd+W 会销毁窗口、下次左键才重建。创建/显示失败一律回退 `show_main_window`。**CSS 权重**：面板按钮重置只能用 `:where(.dsl-panel) button`；写成 `.dsl-panel button` 会压过 `.dsl-panel-tab` / `.dsl-panel-open` 的字号和背景（表现为分段控件变纯文字、主按钮没底色）。**面板的 html 也挂了 `.desktop-ios`**：ios.css 给 `.desktop-ios` 铺了 `--background` + 两层环境光（权重 0,1,0），`panel.css` 里只写 `html { background: transparent }`（0,0,1）会被盖掉，整个窗口（含 14px 透明留白）被刷成页面底色（浅 `#f2f2f7` / 深 `#000`），看起来就是「卡片外面还有一圈别的颜色」；必须写成 `html.desktop-ios`。**阴影必须放得下**：窗口透明留白是 左右 20 / 上 8 / 下 28，卡片阴影 `0 8px 18px` 大致落在底部/两侧留白内；阴影的 blur+offset 一旦超过留白，会被窗口边界裁成「卡片外一圈灰框」（用户会误以为是第二层背景色）。**顶部留白别加大**：窗口顶边保持在菜单栏底线（30pt），否则透明窗口会盖住托盘图标下半区，再点图标关不掉面板。**`macos-private-api` 不能从 `Cargo.toml` 删**：`tauri.macos.conf.json › macOSPrivateApi: true` 依赖它（透明窗口），删掉后 `tauri-build` 的 feature allowlist 检查会让 `cargo test` 直接失败。
-- **看板玻璃只铺卡片区（D120）**：`panel_glass.rs` 用 `contentView.addSubview_positioned_relativeTo(..., Below, None)` 把 `NSVisualEffectView` 垫在 WebView 之下，frame 是卡片矩形（`SIDE_PAD, H - TOP_PAD - CARD_H, CARD_W, CARD_H`）、圆角靠 `layer.setCornerRadius + masksToBounds`（该 view 没有公开的 `cornerRadius`）。**不要改成整窗铺**（留白会变磨砂、阴影发脏），也**不要在 `panel.css` 里加 `backdrop-filter`**（透明窗口没有可采样像素，白烧 GPU）。原生 view 插进去以后 CSS 关不掉，回退只能走 Rust 的 `SIDEKICK_UI_VIBRANCY=off`；前端必须靠 `panel_glass_ready` 判断，别无条件切 tint。`prefers-reduced-transparency` 在 WKWebView 上不匹配，不能拿它当降级开关。QA 预览 `SIDEKICK_PANEL_PREVIEW=1` 现在会先收起主窗口（否则面板后面是白卡，看不出玻璃糊到了什么）。**玻璃态不要描边、不要投影**（D120 第二次收紧）：`--panel-border/--panel-shadow` 在 `html[data-panel-glass="on"]` 下必须是 transparent / none，并且 `NSGlassEffectView` 必须套一层同尺寸 `masksToBounds` 容器——它自己会往 frame 外蹭一圈约 5%、20pt 的柔光，那是用户眼里的「卡片周围一圈阴影」。裁剪前后量留白：247→235（有晕）vs 平 247（裁掉）。改这里记得用 `SIDEKICK_PANEL_PREVIEW="x,y"` 截图复核。
-- **关窗 = 隐藏窗口，不是退出**（2026-11-06，D88）：Tauri 现在被 `tray.rs` 拦截 `CloseRequested` → `prevent_close` + `hide()`；HTTP（47810+）、UDP 发现（47820）、hook 桥（47815–47819）继续跑，手机保持「已连接」、AI 状态继续推。**唯一退出入口是菜单栏图标右键菜单「退出 Sidekick」**；Dock 图标隐藏（Accessory），关窗后 ⌘Q / Cmd+Tab 都不可用，不要按旧经验「关掉窗口就当退出」。托盘创建失败时会自动退回旧行为（`TRAY_READY=false`），此时关窗仍然退出。排查「手机连不上」时先看菜单栏图标在不在、`lsof -nP -iTCP:47810` 有没有监听，而不是找窗口。
-- **桌面 IP 不写死**：`server_info` 每次按网卡实时选 IPv4（`desktop_server::pick_lan_ip`：en* 优先，跳过 utun/bridge/awdl/anpi 等虚拟接口，防 VPN 地址进二维码）；手机连接地址来自 UDP **源 IP** + 发现回包里的真实端口，换网段/换 IP 不需要改代码。
-- **手动输入在连接页**：手机顶部连接状态 → 连接页 →「手动输入地址」；扫码是连接页的主按钮。发现失败的空状态卡片里也有入口。桌面窗口显示的 `IP:端口` 即要填的地址（自动发现失败时才需要）。
-- **桌面端单实例（防多开）**：`tauri-plugin-single-instance` 在 `Builder` 最先注册，第二个进程只把已有窗口叫到前台然后退出（D60）。多开的代价很隐蔽：后启动实例会把 `~/.dsh/sidekick/config.json` 的 `endpoint` 改成它的回环端口（47816），它退出后 DSH hook 的上报全部打空，剩下那个实例的桥永远 idle；而手机发现只认持有 UDP 47820 的先启动实例，于是「AI 在工作、宠物是 idle」。状态不更新时先查 `lsof -nP -iTCP:47815-47819`、config.json 的 endpoint 是否指向活着的进程（`curl -s -o /dev/null -w '%{http_code}' -X POST <endpoint>`）。
-- **重复连接**：手机端 `connect_server` 已串行化（先 abort 旧连接 + generation 守卫），自动连接与手动点击并发不会互相覆盖状态。
-- **自动重连**：`connection-store` 用模块级单一定时器，退避 1s→2s→4s→8s→16s→30s（上限 30s），每次重试先静默 UDP 重新发现（覆盖端口回退/IP 变化），发现 0 台退回上次地址，多台回上次那台、无地址则停止；手动连接/重新搜索会取消排期并清零退避；`document.hidden` 暂停、回前台立即重试。电脑恢复最晚一个退避周期（≤30s）连上。
-- **无心跳**：协议没有 ping/pong；进程退出/网络断开靠 FIN/RST 立刻发现（实测约 0.5s），电脑睡眠/路由器静默丢包可能长时间仍显示「已连接」，需心跳方案补齐。
-- **在线人数会跳动**：广播的「当前 N 个」是瞬时连接数，测试脚本/网页预览会造成数字变化，不是 bug。
-- **WebView 103 兼容**：真机 Realme 的 Android System WebView 为 103，不支持 `oklch`/`dvh`/`color-mix`；颜色用 `tokens.css` 的 hex（**不要用 `oklch`/`color-mix` 定义最终令牌**，D71），`h-dvh` 由 `globals.css` 未分层 `100vh` 覆盖。改颜色/全屏高度时先在真机验证。**也不支持 CSS `translate` 属性**：Tailwind v4 的 `translate-x/y-*` 工具类编译成 `translate: var(--tw-translate-x) …`，在真机上会被忽略（元素整体偏半个自身宽度）。居中/位移不要用 `left-1/2 -translate-x-1/2`，改用 `inset-x-0` + flex `items-center`，或 `left-0 right-0 mx-auto`；dialog/sheet/tooltip 里仍有 translate 类，属已知待修项。
-- **主题防闪**：`app/index.html` `<head>` 里的内联脚本必须保留且在最前——它在 CSS/React 之前读 `localStorage["sidekick:theme"]`（`system|light|dark`，缺失/非法一律 `system` 跟随系统），写 `<html>` 的 `data-theme` + `.dark` + `color-scheme`；localStorage 被禁用时静默回退深色。移到 React 或删掉会首屏闪一下错误主题；key 不能改（`shared/lib/theme.ts` 的 `THEME_STORAGE_KEY` 同值）。
-- **主题双写**：令牌看 `data-theme`，Tailwind `dark:` 变体看 `.dark` class；`shared/lib/theme.ts` 的 `applyTheme` 已同时处理，不要只改其中一个或手写 `document.documentElement.className`。系统主题跟随 `matchMedia`、多窗口同步靠 `storage` 事件；Sonner 用 `useTheme().resolved`，不要写死 dark。
-- **窗口拖动区需要能力授权（2026-11-07）**：`data-tauri-drag-region` 不是纯 CSS——Tauri 的 `drag.js` 会 invoke `plugin:window|start_dragging`，必须在 `app/src-tauri/capabilities/default.json` 里授 `core:window:allow-start-dragging`，否则鼠标按住拖动区毫无反应且没有报错（表现就是「窗口拖不动」）。拖动区写 `data-tauri-drag-region="deep"` 让整块可拖（按钮等可点元素仍优先）；只写裸属性时只有直接点中容器本身才生效，点里面的文字/子元素无效。
-- **菜单栏/激活策略随窗口切换（D112）**：macOS 的 `Accessory` 应用**没有自己的菜单栏**——主窗口聚焦时左上角仍是上一个普通 App 的菜单（⌘Q/编辑菜单不属于 Sidekick）。所以 `tray::show_main_window` 里先 `activation::window_shown`（切 `Regular`）再 `set_focus`，`CloseRequested` 隐藏窗口后 `activation::window_hidden`（切回 `Accessory`）；**不要在 setup 里只设一次 Accessory**，也不要改成永远 `Regular`（关窗后 Dock/Cmd+Tab 会常驻）。读当前策略用 `NSRunningApplication.activationPolicy`，不要用 `lsappinfo ActivationPolicy`（返回 NULL）。
-- **默认窗口 1180×760**（min 960×640）：桌面按这个基准设计分栏与间距；改窗口/左栏宽度时同步检查 960 宽不溢出、1180 宽不空。
-- **舞台随主题（浅色海玻璃，D76）**：`--pet-*` 随 `data-theme` 切换——深色是深海自发光（`--pet-bg #030e12`），浅色是「海玻璃舞台」浅底（`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`/`#3f5e5d`、border `#9dbab4`），新增 `--pet-coral-foreground`。**始终深色的表面**（桌面麦克风浮层）用 `.deep-sea-scope` 重新钉住深色 pet 令牌与浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），不要直接套页面主题；`SignalDot` 的 `tone="stage"` 只是「用 pet 令牌」，不再等于「固定深色」。鲸鱼图集不重绘、不加 CSS `filter`：浅色舞台下白色围裙/亮部对比度偏低（实测约 26% 不透明像素对比度 <1.5、中位数约 3.5）是明确接受的代价，不要靠重绘图集、光晕或描边 filter「修」。
-- **Android 返回键**：不注册 `back-button` 监听时系统默认直接 finish（退出 App）。现在 App 启动即注册一次 `subscribeBackButton`（`shared/lib/tauri.ts`）；「更多」页通过 `mobile/system-back.ts` 返回栈消费，其它二级页由 `MobileApp` 按视图层级处理，根页面走「再按一次退出」（第一次提示、2 秒内第二次调 `exitApp()`，需要 `core:app:allow-exit` 权限，已在 `capabilities/default.json`）。**新增全屏页面时记得 `pushBackHandler`，否则该页按返回会被根页面当成退出确认**。浏览器 `?role=mobile` 用 Esc 模拟返回键（dev mock）。
-- **屏幕常亮**：走 Android 原生窗口标志（`app/src-tauri/src/keep_awake.rs`，`WebviewWindow::with_webview` + `jni_handle().exec`），不用 `navigator.wakeLock`（WebView 上可用性/权限前提不确定）；`jni` 只加在 Android 目标并**锁 0.21**（必须与 `tauri-runtime-wry` 一致，否则 `JniHandle::exec` 闭包类型不匹配）。窗口标志只在窗口可见时生效，所以非宠物页/后台由 JS 显式释放；无需 `WAKE_LOCK` 权限。JNI 失败只打 `[keep-awake]` 日志，静默降级为系统默认熄屏。常亮有上限：`useKeepAwake(active, maxDurationMs)` 到点释放，回前台重新计时（`keepAwakeHours` 默认 2，0 = 不限）。
-- **触感（震动）**：WebView 默认长按会由系统发 `LONG_PRESS` 震动（看起来像「点了但没反应」，实际每一下都震）；启动时调 `disable_webview_haptics` → `WebView.setHapticFeedbackEnabled(false)` 关掉它。App 自己的触感走 `haptic(style)` 命令 → `decorView.performHapticFeedback`（light/medium/success/error，API<30 时 CONFIRM/REJECT 降级），**不需要 VIBRATE 权限**；`navigator.vibrate` 因 APK 未声明 VIBRATE 会被 Chromium 忽略（只当浏览器兜底），所以不要再指望它。系统「触摸振动」关闭时 App 静默不震。宠物页靠 `user-select:none` + `-webkit-touch-callout:none` + `contextmenu` 阻止选中/复制，聊天文本和输入框不受影响。
-- **变暗/常亮时长**：`dimMinutes`（默认 5，1–60）与 `keepAwakeHours`（默认 2，0 = 不限）在 `persistence.ts` 归一化；改默认值要同步迁移测试与 `docs/prd/pet/SPEC.md` §7。
-- **手机只支持竖屏**：`use-orientation` / `posture` / `SET_POSTURE` 已删除；`scripts/patch-android-manifest.mjs` 给 `MainActivity` 写 `android:screenOrientation="portrait"`。旧存档里的 `posture` 字段被忽略。浏览器 dev 也按竖屏单布局渲染，不写 `landscape:` 断点。
-- **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（由 `scripts/patch-android-manifest.mjs` 写入 gen manifest）；Tauri 移动端需 `on_permission_request` 允许 `Microphone`。WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
-- **扫码要用相机（D74）**：manifest 声明 `CAMERA` 后，只需在 `lib.rs` 的 `on_permission_request` 里让 `PermissionKind::Camera` 返回 `Allow`，**不用改 MainActivity**——wry 的 `grantPermissionRequest` 拿到 Allow 会自己调 `activity.requestPermissions(CAMERA)` 弹系统授权。解码用 `jsqr`（动态 import，43KB gzip），**不要换 `BarcodeDetector`**：它在 Android 依赖 GMS 的 ML Kit，缺 GMS 静默失效。扫码解析只认 IPv4 与 http/https/ws/wss，忽略 path/query（给未来配对 token 留余地）；全屏扫码页要 `pushBackHandler`，否则按返回会被根页面当成退出确认。
-- **Android 16+ 局域网权限**：`targetSdk` 37 下访问局域网要 `ACCESS_LOCAL_NETWORK`（dangerous 运行时权限），系统默认拒绝。缺它时自动发现恒为 0 台、手动连电脑报「连接超时」（Rust 侧 `CONNECT_TIMEOUT` 4s），**但同一台手机 shell 里 `curl` 能连通**——不要据此误判成防火墙或企业网隔离。补丁脚本已在 manifest 声明并在 `MainActivity.kt` 请求（仅 `SDK_INT >= 36`）；`gen/` 不入库，每次 `pnpm tauri android init` 后必须重跑。排查：`adb shell appops get dev.sidekick.app ACCESS_LOCAL_NETWORK`，出现 `Uid mode: ignore` 即被拒；`adb reverse tcp:47810 tcp:47810` 后连 `127.0.0.1:47810` 能通，正好反证是该权限而非网络。
-- **权限修好后自动发现仍可能失败（独立问题，D73）**：`example-corp` 这类企业 WiFi **只放行单播**，广播和组播全丢。2026-11-04 用原生探针（NDK 编译的静态 ARM64 程序，绕开 toybox `nc` 没有 `SO_BROADCAST` 的限制）实测：五类包手机侧全部 `sent OK`、`Udp OutDatagrams` 差值 +3 与三次探测严格对应，但电脑只收到单播——网段广播、受限广播、组播 `224.0.0.251`(mDNS)、`224.0.0.1`(all-hosts) 全丢。**所以 mDNS 也不能作为替代方案**，它走组播同样被丢；不要一遇到广播不通就想到 mDNS。排查两层要分开：先看 `appops` 权限（TCP 与广播都被它拦），再单独验广播（`python3` 监听 `0.0.0.0:47820` 后重启 App，或看 `OutDatagrams` 差值与实际到达是否对得上）。广播不通时只能手动输入地址（App 会记住并自动重连，实测 8 秒内），或改用不依赖发现的扫码；单播扫描同 /24 能做但接近端口扫描，在企业网可能触发安全告警。
-- **百炼云端 ASR（唯一）**：本机 whisper 已下线；`whisper-rs`/cmake/libclang 不再是构建前提。未同意/地址或模型无效/无 Key 时 `mic.start` 直接回 `mic.error(cloud_not_configured|cloud_key_unavailable)`，不建会话、不回退。`asr.json`（0600，含明文 `apiKey` 与派生 `keyPresent`/`keyHint`）。`asr.json` 在 `~/.sidekick/asr.json`。**整个链路不再读写 Keychain**，所以开页/测试/录音都不弹系统密码；升级前存在旧钥匙串里的 Key 不会自动迁移，需在「语音」一级页重新粘贴一次（2026-11-03 试过自动迁移：开发版重编译后签名变化，读旧条目会弹系统登录密码，已回退）。代价是明文 Key 只靠 0600 权限保护，不要分享/提交该文件。地址必须完整 URL；业务空间直接粘贴并把 `{WorkspaceId}` 换成真实 ID，未替换报“请填写完整服务地址…”，不再发 `X-DashScope-WorkSpace`。`task-started` 前只缓存音频，之后二进制 PCM 转发；`mic.partial` 50ms 节流、`rev` 只增、整体替换、只回显不落字；最终只插入一次。 **usage 来源**：`task-finished.payload.usage` 可能为空（qwen-audio-3.1 实测只返回 `payload.output={}`），usage 实际出现在部分 `result-generated.payload.usage`（累计值）；`bailian_asr` 会累计最近一次并在收尾兜底，不要只读 `task-finished`（D105）。
-- **关键词（D94）**：`asr.json › bailian.vocabulary` 是唯一事实源（一行一个词，≤2000）；中间版本 `dictionaries` 只在读取时平铺进 `vocabulary` 后丢弃。每个词统一按即时热词权重 4 发送；空列表不传 `parameters.vocabulary`。关键词是用户内容：日志只打数量、不打词；英文词在 `language_hints` 只含 `zh` 时可能被官方过滤。改字段要同步 `asr_config.rs` / `bailian_asr.rs` / `asr_cloud.rs` / 前端 `keywords.ts` / `docs/engineering/asr-model.md`。
-- **rustls 必须显式 ring provider**：`tokio-tungstenite` 用 rustls 0.23，进程必须先 `rustls::crypto::ring::default_provider().install_default()`；`Cargo.toml` 必须保留 `rustls`（`default-features=false`，features `ring`/`std`/`tls12`）。删 `reqwest` 后曾因没有 CryptoProvider 在 TLS 握手 panic，被误报成 `cloud_network`（2026-11-02，D59）。改 TLS/依赖后跑 `cargo tree -e features -i rustls` 确认 `ring` 还在。
-- **用量统计**：`asr_usage.json`（0600，原子写，最多 400 天）只存每日汇总，不存文本/Key/音频；按本机时区切天；每次 `task-finished` 有 usage 就记账（插入失败/空结果也计费）；`asr_usage_stats()` 返回今天/7/30/365 汇总 + 最近 365 天 `days`（今天起倒序、缺失为 0）；语音 › 语音用量区间切换，今天无明细、7/30 按天、1 年按自然月。金额人民币微元，北京 ¥6/¥4.5、新加坡 ¥6.781/¥5.104 每百万 Token，自定义地址按北京估算；`priceNote` 明示估算，以百炼账单为准。清空统计只重置该文件的每日汇总，不影响配置/Key。
-- **本地 Key 存储**：API Key 只存 `~/.sidekick/asr.json`（0600），不再使用 Keychain；`asr_keychain.rs` 只保留「清除时顺手删除旧条目」，**不要为自动迁移加读取逻辑**（开发版每次重编译签名都会变，读旧条目会弹 macOS 登录密码）。`asr.json` 里只有 `keyPresent`/`keyHint` 而没有 `apiKey` 是升级前的老文件，`normalize()` 会把它当作未配置，不会再出现「显示已保存但录音说没配置」；恢复办法只有「语音」一级页重新粘贴。
-- **本机数据目录**：`~/.sidekick/`（`asr.json` / `asr_usage.json` / `clipboard.json`，均 0600）+ 迁移标记 `.migrated-from-app-support`。首次启动会把旧 `~/Library/Application Support/Sidekick/` 里的同名 JSON 复制一次过来（旧文件保留、不覆盖新文件、只复制一次；用户删掉历史后不会被旧目录复活）；`SIDEKICK_DATA_DIR` 仍可覆盖给测试用。`~/.sidekick/` 同时放着安卓 release 签名的 `android-release.jks`，别混删。
-- **旧 models 目录**：`~/Library/Application Support/Sidekick/models/` 可能还在磁盘上，但不迁移、不参与运行，可手动删除；不要把它当作可用模型来源。
-- **自动粘贴 TCC（D75）**：`core-graphics` 合成 Cmd+V 需要 macOS 辅助功能勾选当前程序；不勾选时 `outcome=copied`、结果卡片也不出现「回车 / 清空」。桌面端现在**启动即提示**（`AccessibilityHint` 是「概览」顶部一行，带「去开启」与关闭；授权后/`window.focus` 回来重新判定自动收起）。「去开启」走 `accessibility_request()` 弹系统原生提示——**不要自己拼 `x-apple.systempreferences:` URL**，实测旧格式落「通用」页、新格式在 macOS 15 上无反应。**TCC 不能编程授权**，别指望自动勾上。另注意：App 是 ad-hoc 签名，TCC 按 CDHash 记账，**每次重新打包桌面端旧授权就失效**（系统设置里开关看着是开的但无效）；`codesign -dvv` 对比 CDHash 即可确认，`tccutil reset Accessibility dev.sidekick.app` 删旧条目后重新授权能恢复，根治要固定签名证书。
-- **麦克风录音 UI 锚点（D100）**：竖屏底部居中的 56px 高宽容器只能包含按钮本身；实时卡/结果卡放在独立绝对定位层（`inset-x-0 mx-auto w-[min(86vw,380px)]`、`pointer-events-none`），用 `.mic-card-layer` 在 `bottom-[170px]` / `bottom-[110px]` 之间过渡；动作圆绝对定位在麦克风左右（`left/right-[calc(50%-120px)]`），不参与 flex 宽度。否则会把容器撑宽、按钮被挤偏，看起来「按住后跳走」。居中要用 `inset-x-0` + flex `items-center` / `left-0 right-0 mx-auto`，**不要用 `left-1/2 -translate-x-1/2`**（WebView 103 不支持 CSS translate，会偏右半宽）。取消只保留上滑手势（≥80dp，滑回 <32dp 继续；提示在胶囊上方，胶囊保持深石墨、提示变珊瑚色），**不要再加左下取消按钮**。
-- **剪贴板**：`NSPasteboard` 每 500ms 检查 changeCount；`org.nspasteboard.ConcealedType/TransientType/GeneratedType` 与密码管理器类型不记录；Sidekick 自身写入通过 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind = "voice"` 入库（暂停记录时仍写系统剪贴板、但不入历史）；最多 100 条（置顶优先淘汰）；文件 `~/.sidekick/clipboard.json` 权限 600（旧目录同名文件首次启动自动复制）。
-- **宠物背景不要加光晕**：OLED 像素自发光，光晕/大面积亮色渐变直接耗电；宠物舞台只用 `--pet-bg` 单一纯色底（深色深海深底 / 浅色海玻璃，D76），深色主题下不叠光晕/大面积亮色，装饰只做小面积低亮度（2026-11-02 移除 `--pet-glow`，D58）。
-- **宠物图集（OpenPets schema 2）**：资产在 `app/src/mobile/features/pet/assets/openpet/`（webp 764KB + poster 14KB + pet.json）；一列一帧、单状态 ≤32 帧、兼容 16；播放器 rAF 按 `frames[].duration` 推进，done 用 `loop` 循环（一轮 16×100ms=1.6s，3 秒 completed 内约 1.875 轮，**不再末帧定格**）；后台/覆盖层暂停，减少动效冻结第 0 帧；manifest 非法/解码失败/尺寸不匹配 → poster 兜底。新增状态行只需图集加行 + manifest 登记（可选改 `sprite-state-map.ts` 候选链），渲染器不用动。单帧 256 在 ~500px 舞台 2 倍放大会偏软，解码约 16.8MB；**`.petSlot` 在 max-width 卡住时会变竖长（360×800 屏上是 272×440 CSS），播放器必须按 min(宽,高) 取方形格子 + `overflow:hidden` 居中，否则会露出图集相邻行（看起来像两只宠物）**；资产来自 DeepSeek 鲸鱼（zip 无 LICENSE），发版前确认授权。
-- **宠物资产红线（D71，不可越界）**：复用现有 OpenPets 图集 + `SpritePet`，**不重绘、不染色、不新增鲸鱼**；本体颜色归图集，`tokens.css` 已删除 `--pet-body`/`--pet-belly`/`--pet-eye`/`--pet-cheek`，不要再给鲸鱼加 CSS fill/filter。**手机舞台已无背景声呐环（D77）**，不要再加回来；桌面 `SignalDot` 的 `.sonar-dot-ring` 保留，不加光晕（OLED，D58）。
-- **宠物触摸互动已下线**（2026-11-04，D69）：点击、长按、来回抚摸宠物都不产生任何反应，不再有 `POKE`/`PET_*`/`interacting`/手势识别/亲密度/触摸爱心；不要再加 pointer 手势或 `interacting` 状态。AI 四态、睡眠/变暗保留；**麦克风反应已下线（D77）**——录音时宠物姿态/气泡/触感不变，只保留 `micListening` 门禁静音 AI 音效/触感。变暗遮罩的点击唤醒是屏幕行为，不是宠物互动。
-- **宠物首次命名/改名已下线**（2026-11-05）：宠物固定显示「小跟班」，`first_meet` 文案是「你来了。我是小跟班。」；不要再加命名弹层、输入框、`NAME_SET`/`celebrating`/`happy`/爱心/`phaseUntil`/`schedulePhaseExpiry`/`setName`，也不要再给 `PetSaveV1` 加 `name`。`onboarded` 保留为「是否已见过面」，首次 BOOT 置 true；旧存档的 `name` 字段忽略、不迁移（version 仍 1，其他字段照常恢复）。手机「更多」页分组固定为 01 连接 / 02 外观 / 03 反馈 / 04 显示 / 05 数据与关于（含重置宠物）/ 06 消息通道，重置确认文案「要重置宠物吗？」。
-- **AI 联动（DSH hook）**：不装第三方插件；`app/src/dsh-hook/sidekick-hook.mjs` 由 Rust `include_str!` 打进桌面端并写到 `~/.dsh/profiles/<profile>/plugins/`，patch 用 `# >>> sidekick-hook` 标记块插入；首次必须重启 DSH 一次（profile patch 启动时加载），之后开关只改 `~/.dsh/sidekick/config.json` 热生效。改脚本后要重新编译桌面端，否则嵌入的还是旧版本。插件协议版本 `PLUGIN_VERSION = 3`（v2 加 `sessionList`，v3 加会话当前工具类别），桌面「设置 › AI 联动」页的「插件版本」由 hello 上报动态渲染，不用改页面代码。回环端口 `47815–47819`，只绑 `127.0.0.1`，Bearer token；状态只发 `state/sessions/ts/resume/sessionList`（id、标题、状态、askKind、lastEventAt、completedAt、粗粒度工具类别 `tool`），**不要加提示词/回复/工具参数/路径/cwd/模型名/工具名原文**。`tool` 是插件本地归一后的固定枚举（bash/read/edit/search/web/agent/plan/tool），未知工具落 `tool`；Rust 桥 `SessionTool` 做第二道白名单、未知值折叠为通用 `tool`，不保留原文。标题是内容类外发字段：单行 ≤80 字符、不写日志、不落盘；`sessionList` 最多 50 条，旧客户端忽略（旧插件不报 `tool`，手机显示「正在思考」）。多 profile 已安装时 UI 锁定选择器，切换要先移除联动。
-- **用量看板**：只读 `$DSH_HOME/storages/cost-meter/ledger.json`（180 天、日粒度、costCny 实际记账）；金额人民币微元，总 Token 五个桶相加，缓存命中 = cacheRead/(input+cacheRead+cacheWrite)；缺 `costCny` 才按价格表估算并标 `≈`，未知模型不编造；百炼 ASR 费用不并入。`usage` 消息带 `data` 包装，不含提示词/路径/cwd；模型 ID 默认上手机（D83），关闭「在手机显示模型分组」后 `groups.models=[] + modelsHidden=true`。价格表 seed 由 `scripts/update-pricing.mjs` 更新，缓存/覆盖在 `~/.sidekick/`；刷新失败保留上次成功，禁止写零价。**手机顶栏今日数字**（v17 / D93）只读独立的 `today` 快照（连上/回前台静默 `usage.request(today)`，不改变量页区间），无快照/账本缺失/缺价时退回仪表盘图标，不显示假数字；设置页不再有「用量」入口。
-- **用量页区间过滤（D97/D98）**：`usage.days` 按协议是「最近最多 180 个真实日期」，**不是当前区间**；桌面/手机必须先用 `app/src/shared/lib/usage-chart.ts` 的 `daysForRange(days, range, generatedAt)` 过滤，再画剖面/取区间日期（今天 = 1 天）。真机 00:00 曾出现「今天」tab 配 7 天曲线，就是漏了这一步；不要改后端 `days`（协议约定保留 180 天）。
-- **用量会话标题回填（D103）**：会话行标签优先账本 `sessions[].title`；账本没有时**只读** `<DSH_HOME>/storages/session_projcache/sessions/<id>.json` 的 `record.rows.title.val`（≤80 字符，不读 `titleInput`/消息，id 只允许字母数字/`-`/`_`），Top 8 才回填；缓存也没有才「会话 + 8 位短 id」。不要再只用 id 当默认标签。
-- **动效图标（D110）**：加载/提示图标一律用 `app/src/shared/ui/motion` 的 `LoadingOrbit` / `LoadingDots` / `HintCheck` / `HintAsk` / `HintError`，不要再在业务里手写 `Loader2 + animate-spin` 或内联 `@keyframes`。组件颜色只读 `currentColor`（调用方给 `text-signal` / `text-decide` / `text-destructive`），尺寸只走 `size`（行内 20 / 行尾 14），默认装饰、需要语义时传 `label`；全部尊重 `prefers-reduced-motion`。环类保持加粗（描线 3.2–3.4 / 呼吸环 0.075em / 涟漪 0.085em）、时长放慢 20–40%、用带过冲的缓动；不要再把环改细或换回匀速旋转。试样台 HTML 已删除，评审稿不入库。
-- **手机会话列表**：`sessionList` 随 `status` 广播（最多 50 条，标题 ≤80 字符，`tool` 仅 working 有值）；手机 `session-store` 用本地清除标记过滤（`lastEventAt <= cleared.through` 隐藏），标记存 `sidekick-sessions.json` 只含 id/at/through（7 天 TTL、最多 200 条），有新事件自动解除。会话卡在宠物页是**浮层**（D107）：浮在鲸鱼上方，折叠 1 行 / 展开最多 5 行，展开只加高卡片、鲸鱼不位移（舞台顶部按折叠卡高度预留）；标题 13/18 + 副行 11.5/16 + 行高 50，左滑露出「清除」按钮（asking 同样一次点击，无「再点」）；新完成自动展开 + 薄荷对勾 / 脉冲标出，已完成行可点发 `focus.request`；已完成会话完成后 2 小时无新事件自动隐藏（派生过滤，不落盘、不提示，有新事件复现）；不再有动态页。工作中行显示 spinner + 「正在<动作>」（运行命令/阅读文件/修改文件/搜索代码/查资料/处理子任务/整理计划/使用工具；无 `tool` 或未知值「正在思考」），行尾保留相对时间。点 asking 会话发 `focus.request`，桌面 `app_focus.rs` 只做 `open -a "DeepSeek Harness"`（1.5s 限频，错误只回错误码），**不接受手机传来的应用路径**。**已归档会话不下发**：桌面桥读 `$DSH_HOME/storages/workspace.json` 的 `global.archivedSessionIds`（2s 缓存，文件缺失/异常按空）过滤列表，并按可见列表重算聚合态与 `sessions`，避免归档的 asking 让宠物一直停在「等你决定」；插件仍上报原始列表，旧桥忽略。改 `sessionList` 字段要同步 `protocol/README.md`、Rust 桥与手机解析三处。
-- **手机会话行左滑 / 自动隐藏（D95/D96）**：行内容用 `transform: translate3d(...)` 左移 72px 露出「清除」按钮；**不要把位移写在 `<li class="ms-row">` 上**（入场动画 `animation ... both` 最终帧 `transform: none` 会压掉内联 transform），放在内层 `data-swipe-content`；拖动期间直接改 style、松手才 setState；`setPointerCapture` 只在水平位移 >8px 后调用（否则 click 被重定向、asking 行点不开）；滑动后要吞掉一次 click。已完成会话自动隐藏是 `visibleSessions({ now, autoClearCompletedAfterMs })` 的派生过滤，**不要改写成写 `cleared` 标记**（会受 7 天 TTL/落盘影响）；`useSessionClock` 60s + 回前台刷新，桌面不传该选项、行为不变。
-- **手机会话卡浮层（D107）**：会话卡是绝对定位浮层（`absolute inset-x-4 top-2 z-20`），**不要放回文档流**——一旦进流，展开就会把鲸鱼往下顶（2026-11-07 修的就是这个）。宠物舞台 `reserveTop = sessionFeedReserveHeight(rows.length)`（8 + 40 + 48 + footer 32），折叠/展开都按折叠高度居中，鲸鱼固定 230（不再有 220，`--pet-session-shift` 已删）。卡片高度用 inline `max-height` 过渡（+2px 给 hairline），`SESSION_FEED_HEADER_H` / `SESSION_ROW_H` / `SESSION_FEED_FOOTER_H` 常量与 Tailwind 的 `h-10` / `h-[50px]` / `h-8` 必须同步（行高一改：入场动画、舞台预留、卡片高度三处一起变）。展开时透明 catcher 在 z-10 点空白收起，`pushBackHandler` 先收列表。新完成由 `session-store.apply` 比对上一份快照（`hasBaseline` 首份只做基线，打开 App / 重连不弹历史完成），`pendingExpand` + `freshIds`（4s）驱动自动展开与 1.4s 薄荷脉冲；已完成行 `onOpenFocus` 发 `focus.request`（不要重开 asking 页），行尾 spinner 与提示复用 `focusErrorText`。
-- **麦克风圆钮/胶囊（D100）**：单竖屏布局下空闲态是 56px 薄荷圆钮居中、距底 56；录音时展开为 `min(90vw,420px)` **深石墨 `#2C2C2E` + 柔和向上阴影**的胶囊，收尾时收回圆钮只转 spinner；取消提示在胶囊上方 `bottom-[100px]`（80/32 阈值不变），**胶囊不再变珊瑚色**；实时卡/结果卡共用一张白卡、同一位置（`bottom-[170px]` → `bottom-[110px]`），卡头「百炼 + 右侧 9px 状态」、正文 11.5/2 行，**不要恢复 grabber/复制/时间/卡内动作区**；清空/回车是麦克风左右两个 56px 浅灰圆钮（`.mic-action`，仅 `inserted` 出现），不要再放回卡里；过渡用 `.mic-morph` / `.mic-card-layer` / `.mic-action` 的 CSS transition，不要引动画库；减少动效时直接切结果态。不要用 `left-1/2 -translate-x-1/2` 居中（WebView 103 不支持 CSS translate）。
-- **麦克风上滑取消的 pointercancel 坑（2026-11-06）**：录音按钮的 pointerdown 若落在子元素（mic SVG）上，recording 开始后子元素被卸载，Chrome 会对进行中的触摸补 `pointercancel`，手指轻微一动（真机 12px）就被 `onPointerCancel` 当成取消。修复：按钮加 `mic-gesture`，`clean.css` 里 `.mic-gesture > * { pointer-events: none; }`，手势永远落在按钮本身；不要再把按钮子元素做成可交互的。真机验证：12/40px 上移不取消、80px 进入取消区、滑回 32px 退出取消区；按住时胶囊保持深石墨，取消提示变珊瑚色（D100）。
-- **结果卡片手动按键**：`key.request` 只接受「最近一次 `mic.result(inserted)`」的目标（owner+mic session），30 秒过期、成功一次即作废、桌面 500ms 限频；按键前重新核对前台应用、密码框、辅助功能，任一不符只回错误码、不按键。「清空」是 `⌘A`+`Delete`（两次确认），不是 ⌘Z；终端等非标准输入框可能不生效，**绝不能因此回退成回车**。日志不打文本/应用名/按键序列；结果卡片只在 `outcome=inserted` 时显示按钮。
-- **麦克风会话/中断（2026-11-04，D70）**：手机 `mic-button` 的手势结束必须看 ref（`heldRef`/`pointerIdRef`）而不是渲染期 `phase`；一次只允许一个 in-flight start（`startingRef` + `lifecycleRef` token），否则 `sessionIdRef`/`startSentRef` 会被并发 start 覆盖，出现「手指已抬起但电脑端一直正在听」。服务端同端重复 `mic.start` 以最新会话为准、异端仍 `session_busy`；`mic.stop` 必须 owner+session 匹配；每个会话 `maxMs+3s` 看门狗；新增 `mic.cancel`（桌面 UI 请求 → 服务端广播 `reason=desktop|timeout`），手机收到后**不校验本地 session** 强制停本地采集。桌面浮层「倾听中」右侧有「取消录音」。改 `mic.cancel` 要同步 `protocol/README.md`、`protocol-audio.md`、Rust `handle_mic_cancel` 与双端解析。
-- **shadcn 不要混 base**：当前固定 `base-nova`（Base UI）；组件从 registry 复制，不要再引 Radix 版本；类名合并用 `cn`，不要再装 clsx/tailwind-merge。
-- **`--accent` 与 `--whale` 分开（D71）**：`--accent` 是 shadcn 的 hover/选中面（语义 = `--wash` 薄荷薄层）；鲸蓝用新令牌 `--whale`。不要改 `--accent` 当品牌次色，否则所有 shadcn 组件 hover 会变蓝块。
-- **声呐环只做装饰且可暂停**：只剩桌面状态点 `.sonar-dot-ring` 5.6s（手机舞台背景环已删除，D77）；只动 `transform`/`opacity`，细描边、不发光、不叠 `filter`；`prefers-reduced-motion` 冻结；`useMotionPause` 在后台/窗口失焦写 `<html data-motion-paused>` 暂停。常驻窗口不要再加更多循环动画，也不要恢复手机舞台环。
-- **电脑端 Liquid Glass 壳体（D85+D86+D104）**：视图切换是组件状态（桌面 `route.view` / 手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框 / 下拉 / contentEditable 里不劫持。一级有 概览/剪贴板/备忘录/用量/语音/设置（语音是第 4 个一级页单页，三段、内部不再 push；备忘录是 ⌘3 独立只读页，D123；剪贴板是 ⌘2 一级页，历史与设置都在那一页，设置里没有剪贴板行与二级页，D119），**会话列表页、系统页、48 状态条、72 图标 rail 已删除，不要恢复**；AI 在做什么只在「概览 › 当前会话」。
-- **玻璃只做控件层**（HIG 红线）：侧栏、sticky 工具栏、`dsl-action-group` 动作组、`dsl-glass` 提示卡/聊天输入栏可以用玻璃；**列表卡、内容区、表单卡一律不透明**，不要在内容层再叠玻璃或玻璃套玻璃。玻璃控件数量要克制，同屏别超过 3–4 块。
-- **桌面令牌作用域**：颜色/圆角/材质全在 `app/src/desktop/styles/ios.css` 的 `.desktop-ios`（同时挂根 div 与 `<html>`，Dialog/Sheet portal 才吃得到）；组件用语义类（`bg-card`/`bg-background`/`text-muted-foreground`/`border-border`/`text-signal`/`--ios-*`）。**不要写死颜色、不要动 `tokens.css` 当桌面色板**；列表用 `desktop/shell/list.tsx`（ListGroup/ListRow/ListActionRow/ListEmpty，`iconTone` 出彩色图标块），分段用 `shell/segmented-control.tsx`；旧 `Card`/`MetaRow`/`CardHint` 仍是无页面使用的兼容导出，下一轮删。
-- **桌面宽幅数据页（用量，D97）**：用量页是「730 单列」的**唯一明确例外**——`PageShell size="wide"`（max-w 956 → 约 900 内容）、`tone="usage"`（`.dsl-usage-canvas`，vibrancy 下透明）、`bottomGap="compact"`；`PageHeader compact` 不画 34/600 大标题，只留工具栏 17/600 + `sr-only h1`。样式在 `desktop/styles/usage.css` 的 `.dsl-usage`（浅/深 `--usage-*`、`.dsl-num` SF Mono 回退），**不要塞回 ios.css / tokens.css**；图表是手写 SVG（当前区间 `days`、今天/单日/缺价处理、`pathLength` 描线、`role="img"` + `sr-only` 表），不要引图表库；<1080 断点 hero 换行、下半区单列。
-- **手机用量页（D98）**：无卡片、hairline 分区，样式在 `mobile/styles/usage.css` 的 `.mobile-usage`（浅/深 `--mu-*`），`entries/mobile.tsx` 在 clean.css 之后引入；**不要改 clean.css**（其它页/在途改动）。图表 `touch-action: pan-y`，水平位移 >8px 才 `setPointerCapture`，不 preventDefault 纵向滚动；今天用静态柔光 halo（**手机不做循环呼吸动画**，D58/D89）；缓存读固定薄荷 c1，不再用 chart-2 蓝；分组 tab 在 `modelsHidden` 时隐藏；价格行只读，不提供刷新。
-- **用量图表共享数学**：刻度/路径/日期/环比/五桶百分比/占比/排序都在 `app/src/shared/lib/usage-chart.ts`（纯函数，桌面+手机共用）；改图表先改这里并跑 `usage-chart.test.ts`，不要两端各写一套。图表的 `stop-color` 用 CSS 类给 `<stop>`，不要写 `stop-color="var(--x)"` 这种 presentation attribute（WebKit 不解析）。
-- **sticky 玻璃工具栏**：`PageShell` 负责滚动与 `scrolled` 状态（>6px），`PageHeader` 用 sticky 包装层 + `data-scrolled`：未滚动透明、滚动后 `dsl-topbar` 变玻璃胶囊并淡入 17/600 紧凑标题；顶部 0–86px 用 `--topbar-fade` + mask 做 scroll-edge 渐隐，**不要再把内容直接贴到玻璃上沿**（会从 8px 缝隙里露出来）。二级页用 `PageShell transition="push"`（从右侧推入）。
-- **动效（D89 Q 弹）**：页面 fade 320 / push 340（**不加过冲**）/ 滑块 `SPRING_SLIDE` spring（520 / 24 / 0.8，ζ≈0.59、过冲 10%）/ 按压 0.94–0.985（按下 90ms 快进、松手 320ms 回弹）/ 弹层 320+220 / 数字 400ms 补间 / 柱阵 420ms + 20ms 错峰；手机 `clean.css` 用同一根 `--spring-back` 做结果卡 300ms、会话行 260ms+24ms 错峰、麦克风钮 0.92、开关 transform 320ms。**任何新动效都要 `useReducedMotion()` 或 `prefers-reduced-motion` 退化**（不是"可选"）；`prefers-reduced-transparency: reduce` 时玻璃退成实底（CSS 已写，别用 custom 透明度绕过）。WebView 103 只认 `transform`，不写 CSS `translate` / `scale` 属性。
-- **桌面文案红线**：不写页面说明句、mono 大写装饰、「暂无数据」；每行只有标题 + 一个短值/一句状态，只有危险操作、隐私承诺、必须输入提示可留一句。二维码用 `QRCode.toDataURL` 出图（弹层场景），连接页内嵌二维码用 canvas + 白底 + hairline 描边环；**不要用 canvas 进弹层**（挂载晚于 effect 会留白）。
-- **窗口 Overlay 标题栏**：`tauri.conf.json` 用 `titleBarStyle: "Overlay"` + `hiddenTitle`，交通灯浮在侧栏顶部 38 区域内；拖动区只有两处 `data-tauri-drag-region`（侧栏顶部 38、sticky 工具栏），**新增页面别把唯一可点元素放进拖动区**。
-- **窗口材质（D87）**：macOS 真实材质在 `app/src-tauri/tauri.macos.conf.json`（`macOSPrivateApi` + `transparent` + `windowEffects.underWindowBackground` / `followsWindowActiveState`），**不要写进基础 tauri.conf.json**（Android 会跟着透明）。`index.html` 内联脚本只在「真实 Tauri（`__TAURI_INTERNALS__.metadata`）+ macOS + 未设 `sidekick:vibrancy=off`」时给 `<html>` 加 `.dsl-vibrancy`；该模式下 html/body 透明、`.dsl-main` 自己铺不透明底 + 环境光、侧栏只留 tint 且关掉 backdrop-filter，`prefers-reduced-transparency` 退实色；浏览器 mock 没有 metadata 不会触发（仍走 D86 自绘玻璃）。真实材质只能人工 `pnpm tauri dev` 目检（无头环境截不到窗口）。
-- **弹层要吃到桌面令牌**：Dialog/Sheet 走 portal 到 `body`，所以 `desktop/app.tsx` 把 `.desktop-ios` 也加到 `<html>` 上；离开这个 class 弹层会掉回全局深海令牌。改弹层样式/新增 portal 组件时先看 `ios.css` 的 `:root.desktop-ios` 选择器。
-- **手机字体（D91，取代 D81 的 MiSans）**：Android WebView 把 `sans-serif` 解析成 OEM 的 **OPlusSans 3.1（OPPO Sans Regular）**，字形比 PingFang 宽、笔画厚，15–16/400 会显「老年机」；**不要只靠 300 字重**（会发虚）。手机端随包 `app/src/mobile/assets/fonts/HarmonyOS_SansSC_Regular.ttf`（鸿蒙字体，400，8.1MB，原始 TTF），`clean.css` `@font-face` + `.mobile-clean` 首选；系统字体做缺字回退。标题 15/21、正文 13/19；全手机 400（`!important` 防合成粗体），桌面不加载。**许可禁止改字体：不要转 WOFF2、不要 subset**（违反《HarmonyOS Sans 字体许可协议》），软件内需注明（设置「数据与关于」已写），README 记录来源与协议。
-- **手机返回层级与录音**：settings / chat / asking / usage → pet、offline → 上一页、scan → offline；新增全屏页必须接入返回处理，否则按返回会被根页面当成退出确认；没有底部 tab，录音中所有换页入口由 `ui-store.setView` 拦截，不弹「录音中 · 松手后再切页」（那是旧 3 档文案）。
-- **首用清单 / 设备数 / focus**：手机本地判定「连接 + 麦克风（`micReady`）」，③ 百炼 Key / ④ 辅助功能由桌面 `desktop.status` 上报（`asrConfigured` / `asrHasKey` / `accessibilityTrusted`，只含布尔 + ts，不含 Key/掩码/路径）；手机在连接成功、回前台、打开设置页时发 `status.request` 刷新，只有桌面明确上报 true 才显示「已完成」，旧桌面/未收到显示「在电脑上完成」，不得伪造完成态。改字段要同步 `protocol/README.md`、Rust `desktop_server.rs`、手机 `protocol/messages.ts` 与 `first-use/store.ts` 四处。桌面「已连接 · N 台设备」= `system.clients - 1`（含本机窗口与网页预览），不显示设备名；浏览器 mock 无本地 WS，「在 DSH 打开」只能在 `pnpm tauri dev` / 真机验证。
-
-- **开发二进制的 TCC 授权要固定签名（2026-11-08）**：`cargo build` 的 `target/debug/desktop` 是 ad-hoc 链接器签名（`codesign -dv` 显示 `adhoc, linker-signed`、`Identifier=desktop-<hash>`、`Info.plist=not bound`），cdhash 每编译一次就变，TCC 按代码身份记账 → 系统设置里辅助功能勾着、App 里 `AXIsProcessTrusted()` 仍为 false（用户会报「明明授权了却识别不到」）。**不要建议用户反复重勾**，改成 `scripts/setup-dev-signing.sh`（本机自签名证书「Sidekick Dev」，p12 必须 `-legacy` 否则 `security import` 报 MAC verification failed；只在 `-p codeSign` 上 trustRoot）一次性建身份，`scripts/run-desktop.sh` 构建后自动调 `scripts/sign-desktop-dev.sh` 以固定 identifier `dev.sidekick.app` 重签（DR = `identifier "dev.sidekick.app" and certificate root = H"5d57…"`，重编译不变）。**`pnpm tauri dev` 没有构建后钩子**，重编译后要手动重签并重启 App；打包产物仍是 ad-hoc 未签名，正式分发前要换成 Apple Development/Developer ID 证书，否则每次重装也会掉授权。
-
-## 9. 协作约定
-
-- 用户是中文母语：沟通用中文、直白、先基础后细节；环境配置由 AI 直接代劳，但破坏性操作（删库、重置、卸载）先问。
-- 改动跨端时同步更新 `protocol/README.md` 与相关 docs；重大决策追加到 `docs/decisions.md`。
-- 文档遵循 `docs/standards/documentation.md`：先改“唯一归属”文档，再同步索引；不要一次读完整棵文档树。
-- 平台边界：`mobile` 不 import `desktop`，`desktop` 不 import `mobile`，`shared` 不 import 两者；详见 `docs/standards/engineering.md`。
-- 前端改动遵循 `docs/frontend-architecture.md`；新增/升级依赖遵循 `docs/dependency-policy.md`，新增运行时依赖追加到 `docs/decisions.md`。
-- 不提交构建产物（`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、`.venv`）；**唯一例外**是 `release/` 下两个固定命名的安装包（`Sidekick-macOS.dmg`、`Sidekick-Android.apk`），它们是要分发/直接下载的成品，每次打包覆盖同名文件、不建版本号目录。
-- **Git**：提交信息**用中文**（`type(scope): 中文摘要` + 中文正文，type/scope 保留英文）；push 前跑完 `typecheck/lint/test/build`、手机端真机验证、文档检查；`force push`/改仓库可见性等不可逆操作先确认；完整规则见 [docs/standards/git.md](docs/standards/git.md)。GitHub 推送已配置（gh 登录 fouriyeo，已 `gh auth setup-git`）。
-
-## 10. 下一步路线（按优先级）
-
-> 用量看板 v2（D97/D98）代码完成：桌面宽幅仪表 + 手机紧凑仪表，浏览器 QA 通过；下一步真机/窗口目检。
-> 前置：Phase 1 平台分目录与连接/聊天迁移已完成（2026-10-31）；手机自动发现电脑已落地；宠物 P0 代码完成（帧动画图集；触摸互动已下线；真机与扩展状态行待补）；麦克风 P0 与桌面剪贴板 P1 代码完成，真机/辅助功能待回归；手机 D80 两页壳与电脑端 D85+D86 Liquid Glass 壳代码完成（2026-11-06），真机/窗口目检待补。
-
-1. ✅ 前端平台分目录 + 连接/聊天迁移（已完成 2026-10-31）。
-2. 情绪宠物 P0：代码已完成（帧动画图集 + poster 降级、单竖屏布局、plugin-store 存档）；真机 60fps/存档跨重启、扩展状态行（睡眠）待补；触摸互动、麦克风联动与首次命名均已下线（D69/D77/2026-11-05）。
-3. ✅ 外设麦克风（百炼云端唯一）：二进制协议、云端流式、`mic.partial`、手机 UI、桌面浮层已完成；结果卡片手动回车/清空已完成（2026-11-04）；下一步 macOS 辅助功能自动粘贴与真机 60 秒/断连/密码框/按键焦点矩阵。
-4. ✅ 模型页 + 用量统计：百炼配置（无业务空间 ID）、本地 Key 元数据、区间切换（今天/7/30/365，1 年按月）、清空统计已完成（2026-11-02）；下一步真实账号/本地 Key 迁移/金额对账与真机验收。
-5. ✅ 桌面剪贴板 P1：文本历史、搜索、置顶、隐私过滤、本地持久化已完成；语音转写以 `voice` 入库、100 条上限在 UI 可见（2026-11-01）。
-6. ✅ 手机干净版两页壳（2026-11-05，D80；取代 D79 的手机 3 档）：宠物页（顶栏 / 会话卡 / 鲸鱼 / 居中圆麦克风）+ 设置二级页，删动态页与底栏；结果卡弹窗三段；代码完成、591 tests 全绿；下一步真机回归（返回键 / 录音禁切页 / 双主题 / 320 宽 / 结果卡清空二次确认）。
-7. ✅ 电脑端「Liquid Glass · iOS 26」（2026-11-06，D85 结构 + D86 质感 + D104 语音一级页（⌘4），取代 D79 指挥舱桌面壳 / D82 桌面导航顺序）：5 入口 + 224 玻璃侧栏 + sticky 玻璃工具栏（滚动淡入紧凑标题）+ 34/600 大标题 + 不透明白卡（16 圆角 / 行 54）+ 彩色图标块 + 胶囊按钮/分段/搜索 + 设置 push + spring 动效 / specular / grain / scroll-edge；删除会话列表页、系统页、状态条、图标 rail；**77 files / 644 tests / tsc / lint / build / docs 全绿**，浏览器 56 张截图（含滚动态/vibrancy）通过；**下一步 `pnpm tauri dev` 目检窗口**（真实材质/交通灯/拖动区/滚动玻璃过渡/深浅主题/960 宽）。
-8. ✅ 电脑端菜单栏常驻（2026-11-06，D88）：关窗隐藏窗口 + `Accessory` 隐藏 Dock + 菜单栏模板图标；左键显示窗口、右键菜单退出；HTTP/发现/hook 桥在关窗后继续跑；`cargo check` 通过，菜单栏观感/反色/端口存活/单实例唤醒待人工 `pnpm tauri dev` 目检；契约 `docs/engineering/desktop-tray.md`。
-9. 🚧 AI 联动（DSH hook）：本地脚本注入 + 桌面回环桥 + 手机四态动作/三音效 + 会话列表/清除/反问唤起 + 会话行工具动作（插件 v3）；代码完成，待真机/隐私验收（2026-11-04）。
-10. 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息、Claude Code / Qoder 接入。
-11. 配对鉴权 + 正式签名/公证/开机自启（`release/` 固定产物与打包脚本已完成 2026-11-03，仍是本地密钥/未签名）。
-12. 蓝牙通道：评估 Tauri 移动端 BLE（需自写 Kotlin 插件）或 Python sidecar；见 `docs/ble-notes.md`。
-13. iOS 目标（Tauri mobile 初始化 + 后台限制评估）。
-14. P2：系统级虚拟麦克风、云同步/多语言。
-15. 视觉系统双主题回归（2026-11-04，D71/D76；桌面已由 D85 改为 iOS 令牌，回归时以 `desktop-ios-qa` 截图为准）：逐页检查深/浅两套主题的对比度与层级、浅色海玻璃舞台与页面的衔接、深色浮层 `.deep-sea-scope` 不被浅色主题漂白、桌面状态点声呐环在 reduced-motion/后台失焦下的暂停；之后每个新组件都要双主题验收。
+按 `docs/status.md §4` 排序执行：真机/目检回归（桌面窗口、手机 C 手势、备忘录配对同步）→ 手机回答 AI 提问 → 配对鉴权与正式签名 → BLE / iOS。路线变更先改 `docs/product/scope.md` 与 `docs/status.md`。

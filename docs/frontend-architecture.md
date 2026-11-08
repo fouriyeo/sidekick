@@ -1,15 +1,13 @@
 # 前端技术架构
 
-> 状态：已定稿（2026-10-31）；依赖与脚手架已安装，Phase 1 已完成；宠物 P0 已实现 OpenPets schema 2 帧动画图集（含 poster 降级）；2026-11-04 视觉系统为「深海声呐」双主题（D71/D76，默认跟随系统、宠物舞台随主题）；2026-11-06 桌面按 D85 重做为「简约 iOS」壳，D104（次日）把语音升为第 4 个一级入口、D123 拆出备忘录后一级为 6 个（概览 / 剪贴板 / 备忘录 / 用量 / 语音 / 设置；224 侧栏 + iOS 分组列表 + 设置二级页，取代 D79 的 6 视图壳；D119 把「内容」改名「剪贴板」并把剪贴板设置收回该页，设置里不再有剪贴板行与二级页），同日 D86 升级为 Liquid Glass · iOS 26 质感层（玻璃只给控件层 + 弹簧动效），用量页按 D82 保留；手机按 D80 完成干净版两页壳（宠物 + 设置）；测试以 `pnpm test` 当前输出为准（2026-11-06 基线 588+），真机已验证基础页，主题运行时见 §6。
-> 组织：单仓库、双产物；前端按 `desktop` / `mobile` / `shared` / `protocol` 分目录；桌面与手机固定布局，不做跨端自适应。宠物本期定位纯陪伴，PRD 见 [prd/pet/](./prd/pet/INDEX.md)；壳与导航规则见 [prd/shell/](./prd/shell/INDEX.md)。
-> 范围：`app/` 下 Tauri 桌面端与安卓端共用的 WebView 前端。
-> 不含：`app/src-tauri/mobile/index.html` 静态落地页（继续用原生 HTML，保持轻量）。
-> 依赖准入与许可证细则见 [dependency-policy.md](./dependency-policy.md)。
+> 范围：`app/` 下桌面端与安卓端共用的 WebView 前端；不含 `app/src-tauri/mobile/index.html` 静态落地页。
+> 现状：React 19 + Tailwind v4 + shadcn/ui（Base UI `base-nova`）+ Motion + Zustand；两个 entry、各自固定布局。桌面 `.desktop-ios`（Liquid Glass 壳）、手机 `.mobile-clean`（两页壳 + 备忘录全屏页）。
+> 状态与待验收项见 [status.md](./status.md)；依赖准入见 [dependency-policy.md](./dependency-policy.md)；视觉与交互规则见 [standards/visual.md](./standards/visual.md)、[standards/ux.md](./standards/ux.md)。
 
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 下一步核心是情绪宠物（纯陪伴）；AI 联动（DSH hook）已作为独立 P1 接入四态展示；2026-11-06 起桌面按 D85 采用「简约 iOS」壳，D104 把语音升为第 4 个一级入口、D123 拆出备忘录（6 个一级入口：概览 / 剪贴板 / 备忘录 / 用量 / 语音 / 设置；224 侧栏 + iOS 分组列表 + 设置二级页；D119 把「内容」改名「剪贴板」，剪贴板设置只在该页），同日 D86 升级为 Liquid Glass · iOS 26 质感层，手机按 D80 改为两页壳（宠物 / 设置；无底栏），聊天降级为「设置 › 消息通道」/手机消息页。规格见 [prd/pet/](./prd/pet/INDEX.md)、[prd/mic/](./prd/mic/INDEX.md)、[prd/hook/](./prd/hook/INDEX.md)、[prd/shell/](./prd/shell/INDEX.md)。
+- 已落地：宠物（OpenPets 图集）、麦克风、剪贴板、AI 联动、Token 用量、语音备忘录、桌面 Liquid Glass 壳（6 个一级页 + 设置二级页）、手机两页壳 + 备忘录全屏页。规格见 [prd/](./prd/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -37,57 +35,19 @@
 
 ```text
 app/
-├─ index.html                 # 只保留 #root 与 /src/main.tsx
+├─ index.html                 # 只保留 #root 与 /src/main.tsx（含主题防闪内联脚本）
 ├─ src/
 │  ├─ main.tsx                # app_role → 动态 import 对应 entry
-│  ├─ entries/
-│  │  ├─ desktop.tsx          # 挂载桌面「Liquid Glass」壳（`desktop/app.tsx`；`.desktop-ios` 同时挂根 div 与 <html>）
-│  │  └─ mobile.tsx           # 挂载手机两页壳（`mobile/app.tsx` + `.mobile-clean`）
-│  ├─ desktop/                # 桌面专属（Liquid Glass 壳，固定窗口布局）
-│  │  ├─ app.tsx              # 桌面根：224 玻璃侧栏 + 视图切换 + sticky 页头 + 全局层（麦克风浮层 / toast）；给 <html> 补 .desktop-ios 供弹层 portal
-│  │  ├─ shell/               # sidebar / list / page-header / page-shell / segmented-control（card / page-chips 已退出、待删）
-│  │  ├─ pages/               # overview / content / memo / usage / voice / settings 六个一级页（content 即「剪贴板」，D119；memo 由 D123 拆出）
-│  │  ├─ features/            # 各页 Section（不自带页头）：connection / chat / clipboard / hook / models / settings / mic-receiver / usage
-│  │  ├─ lib/                 # desktop-nav、status/clients/voice store、ws-client
-│  │  └─ styles/              # ios.css：Liquid Glass 令牌 + 材质类（.dsl-glass / .dsl-card / .dsl-topbar / .dsl-tile）+ 动效（dsl-page-in / dsl-page-push）
-│  ├─ mobile/                 # 手机专属（只做竖屏）
-│  │  ├─ app.tsx              # 手机根：宠物 + 设置/二级页 + 返回栈
-│  │  ├─ shell/               # page / page-header / pet-top-bar
-│  │  ├─ features/
-│  │  │  ├─ pet/              # 首屏：舞台、鲸鱼、会话卡容器
-│  │  │  ├─ asking/           # 等你决定页
-│  │  │  ├─ first-use/        # 首用清单（4 步；①② 本地、③④ 吃 desktop.status；设置页 banner 复用）
-│  │  │  ├─ sessions/         # 会话卡 / 会话行 / 清除标记 / D78 工具动作
-│  │  │  ├─ mic/              # 按住说话、圆钮/胶囊、权限、结果卡
-│  │  │  ├─ connect/          # 连接页、扫码、重连（connection-view）
-│  │  │  ├─ chat/             # 消息页（通道调试）
-│  │  │  ├─ usage/            # 用量（顶栏今日数字 → 只读看板，D93）
-│  │  │  └─ settings/         # 更多：设置整页（页面化）
-│  │  ├─ ui-store.ts          # MobileView 枚举 + scanOpen + offlineReturnView
-│  │  └─ styles/              # clean.css：手机「干净版」令牌，只挂 `.mobile-clean`
-│  ├─ shared/
-│  │  ├─ ui/                  # shadcn 复制组件 + signal-bars / status-chip / theme-options
-│  │  ├─ lib/
-│  │  │  ├─ tauri.ts          # invoke/listen 唯一出口
-│  │  │  ├─ theme.ts          # 主题偏好：initTheme/useTheme/setThemePreference
-│  │  │  ├─ status.ts         # AI 四态文案/优先级（两端共用）
-│  │  │  ├─ sessions.ts       # 会话行派生（D78 工具动作白名单）
-│  │  │  ├─ activity.ts       # 最近发生的类型与派生
-│  │  │  ├─ activity-store.ts # 内存 store 工厂（cap 20，不落盘）
-│  │  │  ├─ mic-status-copy.ts # 麦克风状态文案（两端共用）
-│  │  │  ├─ local-storage.ts  # 安全 localStorage 读写（含 sidekick:theme）
-│  │  │  ├─ utils.ts          # cn() 等
-│  │  │  └─ format.ts         # Intl 等纯函数
-│  │  └─ styles/
-│  │     ├─ globals.css       # @import "tailwindcss"; 基础样式
-│  │     └─ tokens.css        # @theme 设计令牌
-│  ├─ protocol/
-│  │  ├─ messages.ts          # 与 Rust 协议一一对应的类型
-│  │  └─ audio-frame.ts       # 麦克风二进制帧编解码/测试向量
-│  └─ assets/
-│     ├─ pet/                 # 图集/海报（mobile chunk）
-│     └─ icons/               # 少量自有 SVG
+│  ├─ entries/{desktop,mobile}.tsx
+│  ├─ desktop/                # app.tsx（224 侧栏 + 视图切换 + 全局层）、shell/、pages/、features/、lib/、styles/ios.css
+│  ├─ mobile/                 # app.tsx（宠物 + 二级页 + 返回栈）、shell/、features/、ui-store.ts、styles/clean.css
+│  ├─ shared/                 # ui/（shadcn 复制组件 + motion）、lib/（tauri/theme/status/sessions/usage-chart…）、styles/（globals.css + tokens.css）
+│  ├─ protocol/               # messages.ts + audio-frame.ts（与 Rust 一一对应）
+│  └─ dev/                    # 仅开发环境的 Tauri mock
 ```
+
+- 桌面 `desktop/pages/`：overview / content（剪贴板）/ memo / usage / voice / settings 六个一级页；`features/` 放各页 Section，不自带页头。
+- 手机 `mobile/features/`：pet / asking / sessions / mic / connect / chat / usage / settings / first-use / memo。
 
 **依赖方向（必须遵守）**
 
@@ -208,64 +168,23 @@ UI 事件
 **令牌示例**
 
 ```css
-/* shared/styles/tokens.css（节选；完整值以此文件为准） */
+/* shared/styles/tokens.css（节选；完整值以文件为准） */
 :root {
   --radius: 12px;
-  --motion-ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-1: 120ms;
-  --dur-2: 180ms;
-  --dur-3: 240ms;
-  --dur-4: 320ms;
-
-  /* 深色（:root 基座；偏好默认 system，按系统解析） */
-  --background: #06181e;
-  --foreground: #dceceb;
-  --card: #0b242c;
-  --primary: #3fc4a0;
-  --primary-foreground: #032019;
-  --border: #2b5560;
-  --input: #578893;
-  --ring: #6ef0c8;
-  --signal: #6ef0c8;
-  --whale: #8fb6e0;
-  --wash: #10393b;
-  --abyss: #030e12;
-  color-scheme: dark;
+  /* 深色基座（偏好默认 system，按系统解析） */
+  --background: #06181e;  --foreground: #dceceb;  --card: #0b242c;
+  --primary: #3fc4a0;     --border: #2b5560;      --ring: #6ef0c8;
+  --signal: #6ef0c8;      --whale: #8fb6e0;       --wash: #10393b;
+  --abyss: #030e12;       color-scheme: dark;
 }
-
 :root[data-theme="light"] {
-  /* 浅色（第二主题）：海面雾光 + 海玻璃 */
-  --background: #e7efed;
-  --foreground: #0e2a2b;
-  --card: #f5faf8;
-  --primary: #095b51;
-  --primary-foreground: #f7fdfb;
-  --border: #a4beb9;
-  --input: #6f8f89;
-  --ring: #0a7764;
-  --signal: #0a7764;
-  --whale: #28618c;
-  --wash: #dfece8;
-  --abyss: #082229;
-  color-scheme: light;
+  /* 浅色：海面雾光 + 海玻璃 */
+  --background: #e7efed;  --foreground: #0e2a2b;  --card: #f5faf8;
+  --primary: #095b51;     --border: #a4beb9;      --ring: #0a7764;
+  --signal: #0a7764;      --whale: #28618c;       --wash: #dfece8;
+  --abyss: #082229;       color-scheme: light;
 }
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-signal: var(--signal);
-  --color-whale: var(--whale);
-  --radius-sm: 10px;
-  --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 16px;
-  --ease-out-soft: var(--motion-ease-out-soft);
-}
+@theme inline { --color-background: var(--background); --color-card: var(--card); --color-primary: var(--primary); --color-border: var(--border); --color-ring: var(--ring); }
 ```
 
 完整令牌集（含 `--pet-*`、`--chart-*`、`--shadow-*`）见 `app/src/shared/styles/tokens.css`；桌面「Liquid Glass」覆盖见 `app/src/desktop/styles/ios.css`（`.desktop-ios`），手机「干净版」覆盖见 `app/src/mobile/styles/clean.css`（`.mobile-clean`）；语义解释见 [standards/visual.md](./standards/visual.md) §3。`--pet-*` 也随 `data-theme` 切换（深色深海自发光 / 浅色海玻璃舞台，D76）；始终深色的表面用 `.deep-sea-scope` 重新钉住深色 pet 令牌与浮层用到的壳层信号色（如桌面麦克风浮层）。
@@ -353,14 +272,9 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 
 ## 10. 质量与测试
 
-- TypeScript `strict`；禁止 `any` 跨边界；外部数据用 `unknown` + 校验。
-- Biome 负责 lint + format；不混用 ESLint + Prettier（除非有明确规则缺口，再单独决策）。
-- Vitest + Testing Library：协议解析、状态机映射、纯函数、关键组件。
-- Tauri API 在测试里 mock；不依赖真实 Rust 进程。
-- 端到端继续用现有 CDP + `adb` 脚本；Tauri WebView 暂不接 Playwright。
-- 电脑端改界面前后跑 `scripts/qa-desktop-ios.mjs`：浅/深 × 1180/960 × 6 个一级页（含「语音」页滚动态）+ 设置二级页 + 弹层，桌面 QA 全页截图到 `artifacts/desktop-ios-qa/`，并检查横向溢出与 console error。
-- 每次提交前：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`。
-- 新增脚本建议：`typecheck`、`lint`、`format`、`test`、`test:watch`。
+- TypeScript `strict`；禁止 `any` 跨边界；外部数据用 `unknown` + 校验。Biome 负责 lint + format；Vitest + Testing Library 测协议解析、状态机映射、纯函数与关键组件；Tauri API 在测试里 mock。
+- 每次提交前：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`；电脑端改界面跑 `node scripts/qa-desktop-ios.mjs`，手机改界面跑 `node scripts/qa-memo.mjs` 与浏览器 `?role=mobile`。
+- 测试矩阵、真机清单、发布门与回归清单只在 [engineering/quality.md](./engineering/quality.md) 维护，本篇不重复。
 
 ## 11. 性能预算
 
@@ -405,48 +319,12 @@ adb shell dumpsys package com.android.webview | grep versionName
 - 不在前端保存配对密钥/长期凭证；密钥留在 Rust/系统钥匙串。
 - 不加载 CDN 脚本、字体、样式；所有资源随包分发。
 
-## 13. 迁移计划
+## 13. 交付状态
 
-当前进度（2026-11-06）：Phase 1 已完成。React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物 P0（OpenPets schema 2 帧动画图集 + poster 降级）、麦克风、桌面剪贴板、AI 联动、Token 用量看板已落地。桌面按 D85 重做为「简约 iOS」壳、D104 把语音升为第 4 个一级入口、D123 拆出备忘录（6 入口）：224 侧栏 + 大标题页头 + iOS 分组列表 + 设置二级页，删除 48 状态条、72 图标 rail、桌面会话页与系统页 4 段；同日 D86 升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏、30×30 彩色图标块、胶囊控件、spring 动效、grain），`.desktop-ios` 令牌只作用于桌面；用量页按 D82 保留为一级「用量」。手机按 D80 完成两页壳（宠物页顶栏 / 会话卡 / 无底色鲸鱼 / 圆形麦克风 / 结果卡弹窗；设置二级页 / 首用 banner / 返回层级），v17 顶栏改为「gear / 连接信号塔图标 / 今日用量数字 / chat」（D93），删除 `stream`、`tab-bar`、`now-row` 与动态页，`.mobile-clean` 令牌只作用于手机。全仓 tsc / lint / build 全绿，测试以 `pnpm test` 当前输出为准（2026-11-06 基线 588+）；真机 Realme 已验证宠物页/会话展开/设置/返回键，待补录音禁切页、结果卡清空、深色/320 真机；桌面新壳待交互回归。
+迁移已全部完成（2026-10-31 起）：React 双 entry、`protocol/messages.ts`、`shared/lib/tauri.ts`、宠物、麦克风、剪贴板、AI 联动、Token 用量、语音备忘录均已落地。逐项状态与待验收项见 [status.md](./status.md)，历史见 [history.md](./history.md)；验收清单只在 [engineering/quality.md](./engineering/quality.md#8-回归清单每次提交发版) 维护，不要在本篇另写一份。
 
-| 阶段 | 内容 | 退出标准 |
-| --- | --- | --- |
-| 0. 预检 | 真机 WebView 版本、开分支、记录当前包体/启动时间 | 版本 ≥ 111 或已决定降级方案 |
-| 1. 骨架 | React + Vite + Tailwind + shadcn + Biome；两个 entry；连接 + 聊天 1:1 复刻 | 双端连接/收发与现状一致，Rust 未改 |
-| 2. 宠物 | 舞台、情绪状态机、plugin-store 存档、单竖屏布局（帧动画图集） | 真机 60fps，聊天仍可用 |
-| 3. 麦克风 | 手机采集 + 桌面转写/输入、协议扩展、权限与降级 | 真机按住说话全链路通过 |
-| 4. 收尾 | 设置/配对 UI、补齐测试、包名 `desktop` → `sidekick`（旧 DOM/`styles.css` 已随 Phase 1 删除） | 无旧代码引用，测试通过 |
-| 5. 加固 | CSP、release 签名、性能预算验收、桌面/安卓回归 | 验收清单全绿 |
+## 14. 未决事项
 
-约束：
-
-- Phase 1 不改 Rust、不改协议；Phase 2 先做情绪宠物；Phase 3 引入音频协议；`status` 映射在 AI 联动 P1 落地（DSH hook）。
-- 不在同一次改动里同时换框架、改协议、加宠物。
-- 每阶段结束更新 `status.md`，重大取舍追加 `decisions.md`。
-
-## 14. 验收清单
-
-- [ ] 桌面 `pnpm tauri dev` 正常启动，`[server] listening` 出现
-- [ ] 安卓 `scripts/build-android.sh && scripts/install-android.sh` 成功
-- [ ] 手机打开 App 自动发现并连接电脑，状态为「已连接」；无发现时可手动输入地址兜底
-- [ ] 桌面 Liquid Glass 壳：默认概览、224 玻璃侧栏 + 三行状态摘要可点、⌘1–⌘6、滚动后 sticky 玻璃工具栏 + 紧凑标题、语音一级页单页（三段、内部不再 push）、设置二级页 push/返回、概览顶部自动输入提示、麦克风浮层全局；无状态条 / 图标 rail / 会话页 / 系统 4 段
-- [ ] 内容层不透明（白卡 / 行 / 图表无 backdrop-filter）；`prefers-reduced-motion` 无入场/缩放、`prefers-reduced-transparency` 玻璃退为实底卡
-- [ ] 手机两页壳：默认宠物、顶栏 gear/连接/今日用量/chat 可点、无底部 tab、会话卡折叠展开、二级页返回层级正确、录音中禁切页、结果卡三段
-- [ ] 状态语言两端同词（连接 7 / AI 4 / 麦克风 9），琥珀只给「等你决定」，会话工作行显示 D78 工具动作
-- [ ] 双向聊天与现状一致，气泡方向正确
-- [ ] 构建产物中两个 entry 分 chunk，运行时只加载对应角色的一份
-- [ ] 宠物情绪状态切换与 [pet PRD](./prd/pet/PRD.md) 一致；协议 status 接入后另测
-- [ ] Realme 真机动画 60fps，无长期掉帧
-- [ ] `prefers-reduced-motion` 下无强制动画
-- [ ] 首屏 JS/CSS 在预算内
-- [ ] CSP 开启后无控制台报错（IPC/asset/WASM 都通）
-- [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 全绿
-- [ ] 无裸 `.mobile` 之类全局选择器；安全区/键盘不遮挡输入框
-
-## 15. 未决事项
-
-- 真机 WebView 版本（决定 Tailwind v4 是否可直接用）。
-- 宠物美术方向：改用内置 OpenPets schema 2 帧动画图集（2026-11-02，D57）；自绘 SVG 与 Rive 路线停止。
-- 聊天记录是否持久化、存哪里（SQLite/tauri-plugin-store）。
+- 聊天记录是否持久化、存哪里（SQLite / tauri-plugin-store）。
 - 协议类型是否用 ts-rs 自动生成；等协议字段稳定后再定。
 - iOS 端 WebView 性能与帧动画兼容性，后续单独评估。

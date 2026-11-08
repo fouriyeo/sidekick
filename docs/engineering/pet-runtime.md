@@ -2,7 +2,7 @@
 doc: engineering/pet-runtime
 title: 宠物运行时方案
 status: draft
-updated: 2026-11-05
+updated: 2026-11-08
 load: on-demand
 owner: engineering
 ---
@@ -16,26 +16,30 @@ owner: engineering
 
 ```text
 app/src/mobile/features/pet/
-├─ pet-stage.tsx          # 舞台、气泡、设置/聊天入口、姿态布局
+├─ pet-page.tsx           # 宠物页屏幕壳（顶栏 / 会话卡 / 麦克风 / 变暗）
+├─ pet-stage.tsx          # 舞台：鲸鱼图集 + 读屏播报
 ├─ sprite-pet.tsx         # 帧动画播放器（OpenPets schema 2 图集）
 ├─ sprite-manifest.ts     # 图集 manifest 解析与校验
 ├─ sprite-state-map.ts    # App 语义 → 图集状态候选链
 ├─ sprite-player.ts       # 纯函数帧推进（loop / once）
-├─ assets/openpet/        # spritesheet.webp + poster.webp + pet.json
+├─ assets/openpet/        # pet.json + spritesheet.webp + poster.webp
 ├─ state-machine.ts       # 状态/心情/转移（纯函数优先）
+├─ ai-status.ts           # AI 四态展示状态（独立内存 store）
 ├─ mood.ts                # 精力/时间计算
+├─ sound.ts               # AI 三音效（Web Audio 合成）
 ├─ persistence.ts         # 存档 schema、迁移与 PetStorage 接口
 ├─ tauri-pet-storage.ts   # plugin-store adapter
 ├─ pet-store.ts           # Zustand store 与副作用
-├─ copy.ts                # 文案库（copy_id，无用户自定义名字）
-├─ pet-settings.tsx       # 设置页（反馈/外观/显示/重置/关于）
+├─ pet-name.ts            # 固定显示名「小跟班」（无用户自定义名字）
+├─ copy.ts                # 文案库（copy_id）
 ├─ haptics.ts             # 触感语义 → 原生 haptic 命令（浏览器回退 navigator.vibrate）
 ├─ use-keep-awake.ts      # 宠物页常亮（含最长时长与到点释放）
-├─ pet-bubble.tsx         # 气泡
-└─ pet-status-caption.tsx # AI 状态文案卡
+├─ use-reduced-motion.ts  # 系统减少动效
+├─ pet.module.css         # 舞台 / 鲸鱼槽位样式
+└─ types.ts               # PetState / PetEvent 等类型
 ```
 
-- 只允许 `mobile/entries` 引用；桌面不 import。
+- 只允许 `mobile/` 内部引用（入口经 `entries/mobile.tsx` → `mobile/app.tsx`）；桌面不 import。
 - 业务状态用纯函数 + Zustand；图集状态名只出现在 manifest / `sprite-state-map.ts`。
 - 触感统一走 `haptics.ts` → 原生 `haptic` 命令（`performHapticFeedback`，无 VIBRATE 权限）；WebView 默认长按触感在 App 启动时关闭。
 - 文件命名 kebab-case，组件导出 PascalCase（与 [frontend-architecture](../frontend-architecture.md) 第 7 节一致）。
@@ -47,7 +51,7 @@ app/src/mobile/features/pet/
 - **一列一帧**：`grid.cell` 是单帧边长（当前 256），`grid.cols` 是列数（当前 16；上限 32），行号由 `states.*.row` 声明。
 - 单状态帧数 1–32，兼容 16；不同状态可以帧数不同，只播 `frames` 里列出的列。
 - 播放：按 `frames[].duration` 累计推进（rAF，只在帧号变化时改 `background-position`）；`loop` 无限循环，`once` 播完停在末帧。内置图集 `done` 已改为 `loop`：一轮 16×100ms=1.6 秒，completed 展示 3 秒内约循环 1.875 轮，不再末帧定格；`once` 能力保留给未来需要定格的状态，当前内置图集没有 `once` 状态。
-- 尺寸：`ResizeObserver` 量容器后取 `min(宽,高)` 做方形格子（`.petSlot` 可能被 max-width 卡成竖长），元素本身设成该方形 + `overflow:hidden` 居中，再按 px 设置 `background-size/position`；旋转/姿态变化不重新解码，DPR 上限 2。
+- 尺寸：`ResizeObserver` 量容器后取 `min(宽,高)` 做方形格子（`.petSlot` 可能被 max-width 卡成竖长），元素本身设成该方形 + `overflow:hidden` 居中，再按 px 设置 `background-size/position`；旋转（竖屏锁定）不重新解码，DPR 上限 2。
 - 降级：manifest 校验失败、解码失败、或图片尺寸与 `cols/cell` 不匹配 → 显示 `poster.webp`；气泡/触感/录音不受影响。
 - 内存：4096×1024 解码约 16.8MB；需要再降可拆状态条按需解码（协议不变）。
 
@@ -144,7 +148,7 @@ type PetSaveV1 = {
 - 睡眠倒计时只累计前台（宠物页可见且未打开设置/聊天覆盖层）；夜间 5 分钟无互动入睡；06:00 后 `TICK` 自动醒，回前台按跨夜规则重算（不能靠触摸唤醒）。
 - 回来问候：`now - lastSeenAt > 6h`；>3 天用特殊文案；每次前台最多一次；与睡眠冲突时睡眠优先。
 - 后台跨夜离开 ≥5 分钟回前台直接 `sleeping`，不弹问候；覆盖层关闭后恢复计时，不重新问候。
-- 姿态/方向：单竖屏布局（D62），不再有方向监听与 docked/handheld 姿态；Android Activity 锁 `portrait`。
+- 布局：单竖屏（D62），无方向监听、无姿态切换；Android Activity 锁 `portrait`，浏览器 dev 也按竖屏渲染。
 - 精力结算按 `lastEnergyAt` 分段累计（前台 -1/30min、后台 -1/2h、睡眠 +5/h），clamp 0–100；启动补算但不超过阈值。
 - 系统时间回拨/时区变化：只重算时段；不补发问候；精力不补发衰减。
 - 测试用可注入 `now`，不直接读 `Date.now()` 散落各处。
@@ -177,7 +181,7 @@ BOOT / TICK / VISIBILITY / OVERLAY / RESET
 - 单元：状态转移（含覆盖层/后台/睡眠/醒来）、精力边界、时段/问候、plugin-store 迁移/损坏、旧存档带 `name` 忽略并恢复其他字段、首启无弹窗/无权限请求、点击宠物不产生事件、录音不产生事件。
 - 组件：四态行/候选链回落、done 循环（3 秒内约 1.875 轮、无末帧定格）、减少动效冻结、气泡频率、设置章节与保存、解码失败降级。
 - 集成：录音中宠物无变化（D77）；后台/回前台；低电量。
-- 真机：Realme 16:9/20:9、手动态、60fps、掉电、锁屏恢复。
+- 真机：Realme 16:9/20:9 竖屏、旋转锁竖屏、60fps、掉电、锁屏恢复。
 - Mock：震动、时间、PetStorage adapter、Image 解码。
 
 ## 10. 风险
