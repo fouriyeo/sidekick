@@ -56,6 +56,7 @@ fn kind() -> Kind {
         Some("sidebar") => Kind::Frosted(NSVisualEffectMaterial::Sidebar),
         Some("menu") => Kind::Frosted(NSVisualEffectMaterial::Menu),
         Some("contentBackground") => Kind::Frosted(NSVisualEffectMaterial::ContentBackground),
+        Some("popover") => Kind::Frosted(NSVisualEffectMaterial::Popover),
         // 默认档：macOS 26+ 用 Liquid Glass（最接近 iOS 26），老系统在 install 里退回磨砂。
         _ => Kind::LiquidGlass(NSGlassEffectViewStyle::Regular),
     }

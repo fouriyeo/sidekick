@@ -151,15 +151,14 @@ pub fn run() {
             let panel_preview = false;
 
             // Accessory 应用启动时不会被系统自动带到前台，手动把窗口叫到前面。
-            if !panel_preview {
-                tray::show_main_window(&handle);
-            }
+            tray::show_main_window(&handle);
             #[cfg(all(desktop, debug_assertions))]
             if panel_preview {
-                // 主窗口由 tauri.conf.json 的 windows 自动创建并可见，这里显式收起来，
-                // 面板后面才真的是桌面壁纸（否则玻璃糊的是一张白卡，截图看不出效果）。
+                // 主窗口留着但挪到屏幕外：**不能 hide**——Accessory 应用没有激活窗口时，
+                // 面板窗口 show() 了也不会被合成到屏幕上（截图就是一片空白）。
+                // 挪走之后面板背后的背景才干净（桌面壁纸/其它 App），玻璃效果看得清。
                 if let Some(main) = handle.get_webview_window("main") {
-                    let _ = main.hide();
+                    let _ = main.set_position(tauri::PhysicalPosition::new(-20000, -20000));
                 }
                 // SIDEKICK_PANEL_PREVIEW="x,y"（逻辑像素）可把面板放到任意位置，
                 // 方便把玻璃挪到深色/彩色窗口前面截图对比；只写 1 用默认右上角。
