@@ -29,7 +29,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
 futures-util = "0.3"
 tauri-plugin-store = "2.5.0"
-base64 = "0.22"
+base64 = "0.23"
 # 语音备忘录（D115/D118）：双端共用的本地库。bundled 会在两个目标上编译 SQLite，
 # Android 由 cargo-ndk 用 NDK 工具链编，不需要系统 sqlite。
 rusqlite = { version = "0.41", features = ["bundled"] }

@@ -915,7 +915,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "core-graphics",
  "futures-util",
