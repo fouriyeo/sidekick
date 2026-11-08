@@ -34,7 +34,7 @@ base64 = "0.22"
 # Android 由 cargo-ndk 用 NDK 工具链编，不需要系统 sqlite。
 rusqlite = { version = "0.41", features = ["bundled"] }
 # 同步音频校验用；纯 Rust 实现。
-sha2 = "0.10"
+sha2 = "0.11"
 # 备忘录 ID / 设备 ID。
 uuid = { version = "1", features = ["v4"] }
 
