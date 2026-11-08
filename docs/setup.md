@@ -155,7 +155,7 @@ scripts/package-desktop.sh    # 只打桌面
 scripts/package-android.sh    # 只打安卓
 ```
 
-- 桌面：`pnpm tauri build` → `release/Sidekick-macOS.dmg`（arm64，未签名/未公证；Gatekeeper 拦截时右键 → 打开）。
+- 桌面：`pnpm tauri build` → `release/Sidekick-macOS.dmg`（arm64）。`package-desktop.sh` 会带上 `APPLE_SIGNING_IDENTITY`，用本机自签名证书「Sidekick Dev」签（`scripts/setup-dev-signing.sh` 建的那张），**这样 TCC 辅助功能授权可以跨重装保留**；没建身份时回退 ad-hoc 链接器签名，每次重装都要重新授权。产物未公证，Gatekeeper 拦截时右键 → 打开。
 - 安卓：release 构建（aarch64）→ `zipalign` + `apksigner` → `release/Sidekick-Android.apk`。
   - 首次运行自动在 `~/.sidekick/` 生成签名密钥 `android-release.jks` 与 `android-signing.properties`（0600）；**备份且不要提交**，密钥丢失后新包无法覆盖安装升级。
   - 想用已有 keystore：设置 `SIDEKICK_ANDROID_KEYSTORE` / `SIDEKICK_ANDROID_SIGNING_PROPS` 两个环境变量。

@@ -29,6 +29,17 @@ if command -v corepack >/dev/null 2>&1; then
   export PATH="$PNPM_SHIM_DIR:$PATH"
 fi
 
+# 用本机自签名证书签名（scripts/setup-dev-signing.sh 建的身份）：
+# TCC（辅助功能等）按代码身份记账，ad-hoc 产物每次重打包都换 cdhash，
+# 系统设置里勾着也不生效（tccd 日志：Failed to match existing code requirement）。
+SIGN_IDENTITY="${SIDEKICK_SIGN_IDENTITY:-Sidekick Dev}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_IDENTITY\""; then
+  export APPLE_SIGNING_IDENTITY="$SIGN_IDENTITY"
+  echo "[desktop] 用签名身份「$SIGN_IDENTITY」签名（辅助功能授权可跨重装保留）"
+else
+  echo "[desktop] 警告：没找到签名身份「$SIGN_IDENTITY」，产物是 ad-hoc —— 辅助功能每次重装都要重新授权（跑 scripts/setup-dev-signing.sh 建身份）" >&2
+fi
+
 echo "[desktop] pnpm tauri build"
 cd "$APP_DIR"
 pnpm tauri build
