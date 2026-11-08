@@ -286,6 +286,8 @@ sidekick/
 - **手机返回层级与录音**：settings / chat / asking / usage → pet、offline → 上一页、scan → offline；新增全屏页必须接入返回处理，否则按返回会被根页面当成退出确认；没有底部 tab，录音中所有换页入口由 `ui-store.setView` 拦截，不弹「录音中 · 松手后再切页」（那是旧 3 档文案）。
 - **首用清单 / 设备数 / focus**：手机本地判定「连接 + 麦克风（`micReady`）」，③ 百炼 Key / ④ 辅助功能由桌面 `desktop.status` 上报（`asrConfigured` / `asrHasKey` / `accessibilityTrusted`，只含布尔 + ts，不含 Key/掩码/路径）；手机在连接成功、回前台、打开设置页时发 `status.request` 刷新，只有桌面明确上报 true 才显示「已完成」，旧桌面/未收到显示「在电脑上完成」，不得伪造完成态。改字段要同步 `protocol/README.md`、Rust `desktop_server.rs`、手机 `protocol/messages.ts` 与 `first-use/store.ts` 四处。桌面「已连接 · N 台设备」= `system.clients - 1`（含本机窗口与网页预览），不显示设备名；浏览器 mock 无本地 WS，「在 DSH 打开」只能在 `pnpm tauri dev` / 真机验证。
 
+- **开发二进制的 TCC 授权要固定签名（2026-11-08）**：`cargo build` 的 `target/debug/desktop` 是 ad-hoc 链接器签名（`codesign -dv` 显示 `adhoc, linker-signed`、`Identifier=desktop-<hash>`、`Info.plist=not bound`），cdhash 每编译一次就变，TCC 按代码身份记账 → 系统设置里辅助功能勾着、App 里 `AXIsProcessTrusted()` 仍为 false（用户会报「明明授权了却识别不到」）。**不要建议用户反复重勾**，改成 `scripts/setup-dev-signing.sh`（本机自签名证书「Sidekick Dev」，p12 必须 `-legacy` 否则 `security import` 报 MAC verification failed；只在 `-p codeSign` 上 trustRoot）一次性建身份，`scripts/run-desktop.sh` 构建后自动调 `scripts/sign-desktop-dev.sh` 以固定 identifier `dev.sidekick.app` 重签（DR = `identifier "dev.sidekick.app" and certificate root = H"5d57…"`，重编译不变）。**`pnpm tauri dev` 没有构建后钩子**，重编译后要手动重签并重启 App；打包产物仍是 ad-hoc 未签名，正式分发前要换成 Apple Development/Developer ID 证书，否则每次重装也会掉授权。
+
 ## 9. 协作约定
 
 - 用户是中文母语：沟通用中文、直白、先基础后细节；环境配置由 AI 直接代劳，但破坏性操作（删库、重置、卸载）先问。

@@ -143,7 +143,8 @@ node scripts/patch-android-manifest.mjs
 - 本机数据目录：`~/.sidekick/`（`asr.json` / `asr_usage.json` / `clipboard.json`，均 `0600`）。首次启动会把旧 `~/Library/Application Support/Sidekick/` 里的同名 JSON 复制一次过来（旧文件保留，不删除）。
 - 用量统计：`~/.sidekick/asr_usage.json`（`0600`），按本机日期汇总；该页用区间切换看今天/近 7 天/近 1 个月/近 1 年金额/Token（今天无明细，1 年按月）；「清空统计」只重置该文件，不影响配置/Key。
 - 旧本机模型目录 `~/Library/Application Support/Sidekick/models/` 不会迁移、不参与运行，可手动删除；`whisper-rs`/cmake/libclang 不再是构建前提。
-- 自动粘贴需要在「系统设置 → 隐私与安全性 → 辅助功能」勾选当前 `desktop`（开发）或 `Sidekick.app`（正式）。设置页可请求权限、打开系统设置、在 Finder 中定位、重新检测。重新编译开发二进制后可能需要重新勾选。
+- 自动粘贴需要在「系统设置 → 隐私与安全性 → 辅助功能」勾选当前 `desktop`（开发）或 `Sidekick.app`（正式）。设置页可请求权限、打开系统设置、在 Finder 中定位、重新检测。
+- **开发二进制重编译就掉授权**：`cargo` 产物是 ad-hoc 链接器签名（无证书），cdhash 每次重新链接都变，TCC 只认旧身份——表现是系统设置里明明勾着、App 里「重新检测」仍显示未授权（macOS 26 更严格）。一次性解决：跑 `scripts/setup-dev-signing.sh` 建本机自签名证书「Sidekick Dev」（私钥/证书留底 `~/.sidekick/dev-signing/`，仅在「代码签名」策略上信任，不需要 sudo），之后 `scripts/run-desktop.sh` 构建完会自动调 `scripts/sign-desktop-dev.sh` 重签，设计需求固定为 `identifier "dev.sidekick.app" and certificate root = H"5d57…"`，重编译不变，授权一次长期有效。`pnpm tauri dev` 没有构建后钩子，重编译后要手动跑一次 `scripts/sign-desktop-dev.sh` 并重启 App；`--recreate` 可重建证书（重建后要在系统设置里重新授权一次）。本机已安装的 `/Applications/Sidekick.app` 也能用同一脚本重签（传 `.app` 路径时不覆盖 identifier，由 Info.plist 决定），签完两个产物的设计需求一致：`identifier "dev.sidekick.app" and certificate root = H"5d57…"`；但 `scripts/package-desktop.sh` 产出的 DMG 仍是 ad-hoc 链接器签名，重装/重新打包会换身份，要彻底固定得让 `pnpm tauri build` 用同一证书（`APPLE_SIGNING_IDENTITY`，自签名时不要开 `--timestamp`），或装完再补签一次。证书/私钥在 `~/.sidekick/dev-signing/`（`0600`），只在本机登录钥匙串里信任，不要提交或分享。
 - 剪贴板历史在 `~/.sidekick/clipboard.json`，权限 `600`；可在桌面「剪贴板」页暂停/清空。
 
 ## Release 打包（release/ 固定产物）
