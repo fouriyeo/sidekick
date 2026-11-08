@@ -71,7 +71,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 [target.'cfg(target_os = "android")'.dependencies]
 # 屏幕常亮：通过 JNI 直接调 Android Window.addFlags(FLAG_KEEP_SCREEN_ON)。
 # 版本必须与 tauri-runtime-wry 使用的 jni 对齐（0.21），否则 JniHandle::exec 的闭包类型不匹配。
-jni = "0.21"
+jni = "0.22"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 macos-accessibility-client = "0.0.2"
