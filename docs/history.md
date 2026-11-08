@@ -5,7 +5,7 @@
 
 ## 变更时间线
 
-1. **2026-10-31 · 立项与命名** — 命名「小跟班 / Sidekick」，建私有仓库 `fouriyeo/sidekick`。
+1. **2026-10-31 · 立项与命名** — 命名「小跟班 / Sidekick」，创建仓库 `fouriyeo/sidekick`（2026-11-08 起公开）。
 2. **2026-10-31 · 环境与安卓工程** — 装 Rust、JDK 21、Android cmdline-tools/SDK/NDK，配好 Tauri 安卓工程。
 3. **2026-10-31 · 蓝牙预研** — Python `bless` 验证 Mac 可作 BLE 外设；后暂停，主线转局域网（见 [ble-notes.md](./ble-notes.md)）。
 4. **2026-10-31 · 局域网 MVP 实现** — 桌面 axum HTTP/WS 服务 + 二维码 UI；安卓 App 用 Rust WS 客户端 + 手机 UI。
@@ -69,6 +69,8 @@
 62. **2026-11-08 · 看板卡片区铺原生磨砂「真玻璃」（D120，补 D108/D116）** — `backdrop-filter` 采不到透明窗口背后像素，改 `panel_glass.rs` 只给 320×432 卡片区（圆角 18）垫 `NSGlassEffectView`（低版本退 `NSVisualEffectView`），不铺整窗；`panel_glass_ready` 为 true 才把卡片换薄 tint；`SIDEKICK_UI_VIBRANCY=off` 回退；二次收紧去掉描边/投影并裁掉玻璃外溢柔光；证据：Rust 184、708 tests、A/B 区块 stdev 69.6→48.2。
 63. **2026-11-08 · 桌面备忘录独立一级页（D123）** — 桌面一级从 5 变 6：概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6；剪贴板恢复单一职责、删分段与 `topSlot`；新增 `memo-page.tsx`（只读镜像，桌面不编辑不删除）；旧 `?view=content&tab=memo` 重定向 `?view=memo`；证据：731 tests / 86 files、QA 66 张截图。
 64. **2026-11-08 · 备忘录交互改版 v0.3（D124）** — 手机底部固定录音条（64、距底 24+safe-area）+ C 双模（按住 ≥400ms 松手存；轻点 ≤400ms 锁定再点结束；上滑 80dp 取消）；周/月双视角日历（周条 44×52 可横滑、月网格 42 格 44×44、录音中全锁）；补首录隐私 Sheet、`memoBusyNow()` guard、取消二次确认、触感、`aria-live`、详情复制全文；桌面改宽幅两栏（`PageShell size="wide"` 956）；日期语义抽 `shared/lib/calendar.ts`；证据：761 tests / 89 files、`scripts/qa-memo.mjs` 14 用例、debug APK 314MB。
+
+65. **2026-11-08 · 仓库开源（D127）** — 仓库由私有转公开，源码 MIT；`LICENSE` / `NOTICE.md`（宠物图集例外、HarmonyOS Sans 字体协议全文）/ `.github`（贡献、安全、issue 模板、PR 模板、CI）/ 中文开源版 README（4 张 dev-mock 截图）；历史里真名、个人/公司邮箱、本机路径、公司 WiFi 名用 `git-filter-repo` 替换后 force push。证据：`check-docs` 通过、CI 首跑、公开后匿名 clone 通过。
 
 ## 验证记录（原「已验证」小节，未进时间线的项）
 

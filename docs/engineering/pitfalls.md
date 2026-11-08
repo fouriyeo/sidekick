@@ -42,7 +42,7 @@ owner: engineering
 - **麦克风权限**：Android 需 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`（补丁脚本写入 gen manifest）；Tauri 移动端 `on_permission_request` 允许 `Microphone`；WebView 103 的 `ScriptProcessor` buffer 必须是 2 的幂（已用 2048）。
 - **扫码要用相机（D74）**：manifest 声明 `CAMERA` 后，只需 `on_permission_request` 让 `PermissionKind::Camera` 返回 `Allow`，**不用改 MainActivity**；解码用 `jsqr`（动态 import，43KB gzip），**不要换 `BarcodeDetector`**（依赖 GMS，缺 GMS 静默失效）；解析只认 IPv4 与 http/https/ws/wss，忽略 path/query；全屏扫码页要 `pushBackHandler`。
 - **Android 16+ 局域网权限**：`targetSdk` 37 下访问局域网要 `ACCESS_LOCAL_NETWORK`（运行时权限，系统默认拒绝）。缺它时发现恒为 0 台、手动连接「连接超时」（`CONNECT_TIMEOUT` 4s），**但同一台手机 shell 里 `curl` 能通**——不要误判成防火墙。排查：`adb shell appops get dev.sidekick.app ACCESS_LOCAL_NETWORK` 出现 `Uid mode: ignore` 即被拒；`adb reverse tcp:47810 tcp:47810` 后连 `127.0.0.1` 能通反证是权限问题；`gen/` 每次 `tauri android init` 后要重跑补丁脚本。
-- **企业网只放行单播（D73）**：`example-corp` 这类 WiFi 广播与组播全丢（实测网段广播/受限广播/mDNS/all-hosts 全丢，手机侧发出计数正常）。**mDNS 不是替代方案**（同走组播）；只能手动输入地址（App 记住并自动重连）或扫码；单播扫 /24 接近端口扫描，可能触发安全告警。
+- **企业网只放行单播（D73）**：某些企业 WiFi（如只放行单播的办公网） 广播与组播全丢（实测网段广播/受限广播/mDNS/all-hosts 全丢，手机侧发出计数正常）。**mDNS 不是替代方案**（同走组播）；只能手动输入地址（App 记住并自动重连）或扫码；单播扫 /24 接近端口扫描，可能触发安全告警。
 - **无线调试两个端口不同**：配对弹窗里的是「配对端口」（`adb pair`），无线调试主页的是「连接端口」（`adb connect`）；配对码离开弹窗即失效。
 - **adb 重复设备**：mDNS 与 IP 两条 transport 并存会报 `more than one device/emulator`；`adb disconnect <mDNS 服务名>` 只留 IP。
 - **compileSdk 37**：SDK 包名是 `platforms;android-37.0`，不是 `android-37`。

@@ -631,3 +631,10 @@
 
 - 决策：`AGENTS.md` 只留项目上下文与 Top10 坑（≤24KB）；状态快照归 `docs/status.md`、历史归 `docs/history.md`、踩坑归 `docs/engineering/pitfalls.md`、设计归档合并为 `docs/design/ARCHIVE.md`；删除 `docs/README.md` 与 `docs/engineering/asr-model.md`（并入 `docs/engineering/asr-cloud-bailian.md`）。
 - 原因：`AGENTS.md` 曾超工作区指令预算（100KB 被截断），事实源必须按用途分家。
+
+## D127 · 仓库开源：MIT + 资产例外声明 + 历史隐私清理（2026-11-08）｜生效
+
+- 决策：仓库转公开（`fouriyeo/sidekick`），源码用 MIT；新增 `LICENSE`、`NOTICE.md`（第三方资产例外）、字体协议全文 `app/src/mobile/assets/fonts/LICENSE_Fonts`；补 `.github/{CONTRIBUTING,SECURITY,ISSUE_TEMPLATE,PULL_REQUEST_TEMPLATE,workflows/ci.yml}`；README 重写为中文开源版（徽章、4 张 dev-mock 截图、下载/构建/隐私/贡献/许可）。
+- 资产边界：宠物演示图集是社区流传的 DeepSeek 鲸鱼形象（原 zip 无 LICENSE），**不纳入 MIT**，NOTICE 写明「仅演示、fork/再分发前替换或取得授权」；HarmonyOS Sans 依其自身许可随包分发（不修改、不单独再分发、保留协议）。
+- 隐私：用 `git-filter-repo` 把历史里的真名、作者邮箱（个人 QQ / 公司邮箱）、本机绝对路径、公司 WiFi 名替换为占位，提交身份统一为 `Sidekick contributors`；随后 force push 再转公开。
+- 原因：开源前必须把「哪些能分发、哪些不能」写清；历史一旦公开不可撤回，先清理再公开。

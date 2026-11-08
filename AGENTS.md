@@ -7,7 +7,7 @@
 
 - 名称：Sidekick（英文；「小跟班」只是手机宠物角色名，D114）。
 - 一句话：把手机变成电脑的「外设 + AI 宠物」——电脑把 AI/任务状态推到手机；手机收状态、录音转文字、看用量、录音频备忘录。
-- 仓库：https://github.com/fouriyeo/sidekick （私有，owner fouriyeo）；本地 `/Users/dev/code/sidekick`。
+- 仓库：https://github.com/fouriyeo/sidekick （MIT 开源，owner fouriyeo）。
 - 平台：Android 优先（iOS 后续）；电脑端目前只 macOS。
 
 ## 2. 现在做到哪（快照）
@@ -55,6 +55,7 @@ sidekick/
 │  └─ src-tauri/{capabilities,icons,mobile/}/
 ├─ brand/                       # appicon.png 母版 + 矢量标记（+ gen-brand-mark.py 派生）
 ├─ release/                     # 本地构建产物（不入库，D125）
+├─ screenshots/                 # README 截图（scripts/qa-shots.mjs 生成）
 ├─ protocol/README.md           # 事件协议
 ├─ docs/                        # 文档树，入口 docs/INDEX.md
 └─ scripts/                     # 构建/安装/打包/发布/QA/文档检查

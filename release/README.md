@@ -3,7 +3,7 @@
 这个目录只放**当前这次构建**的可安装成品，文件名固定、每次打包覆盖，不建版本号子目录。
 
 > **不入库（D125，撤销 D63）**：`/release/*.dmg` 与 `/release/*.apk` 已 gitignore。
-> 分发入口是 GitHub Releases：<https://github.com/fouriyeo/sidekick/releases>（私有仓库，下载需登录）。
+> 分发入口是 GitHub Releases：<https://github.com/fouriyeo/sidekick/releases>（公开仓库，任意人可下载）。
 > **完整发版流程（打包顺序 / 签名 / tag / 验证 / 故障 / 回滚）见 [docs/engineering/release.md](../docs/engineering/release.md)**，本页只记目录约定。
 
 | 文件 | 平台 | 说明 |

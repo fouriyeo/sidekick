@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞（私有报告）
+    url: https://github.com/fouriyeo/sidekick/security/advisories/new
+    about: 不要公开提交安全 issue，请走私有漏洞报告。
+  - name: 使用与构建问题
+    url: https://github.com/fouriyeo/sidekick/blob/main/docs/setup.md
+    about: 环境、构建、真机调试、WebView 远程调试先看这里。

@@ -43,6 +43,7 @@ children:
 | 环境、构建、调试 | 直接读 | [setup.md](./setup.md) |
 | 发版：打包、签名、上传 GitHub Releases、回滚补发 | [engineering/release.md](./engineering/release.md) | [setup.md](./setup.md) |
 | 维护文档体系 | [standards/documentation.md](./standards/documentation.md) | 本页 |
+| 参与贡献 / 报告安全问题 | [../.github/CONTRIBUTING.md](../.github/CONTRIBUTING.md) / [../.github/SECURITY.md](../.github/SECURITY.md) | 无 |
 
 ## 2. 目录树
 

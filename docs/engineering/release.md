@@ -66,6 +66,7 @@ package-desktop.sh  →  release/Sidekick-macOS.dmg
 - 同日多次发布：用**同一个 tag** 重跑 `publish-release.sh`（脚本走 `gh release upload --clobber` 覆盖两个 asset），不要造 `-2` 后缀。
 - 需要语义化 tag：`scripts/publish-release.sh --tag v0.1.0`。
 - tag 是唯一版本号；`app/src-tauri/tauri.conf.json` 的 `version` 目前固定 `0.1.0`，未参与发布流程。
+- **只有二进制/功能有变化才发版**：纯文档、纯重构、纯 CI 调整不发 Release（它们进 git 历史与 [history.md](../history.md)）。
 
 ## 5. 发布
 
@@ -79,9 +80,17 @@ scripts/publish-release.sh             # 正式发布
 1. `gh auth status`、两个包是否存在；
 2. 打印体积，>100MB 告警（debug 包混进来时能立刻发现）；
 3. 有 JDK 时 `apksigner verify --print-certs` 自检（找不到 build-tools/JDK 则跳过，不阻塞）；
-4. 说明文件 = tag + 两个包的安装说明 + 最近 10 条提交；
+4. 说明文件 = 安装说明 + **自上个 tag 以来的 feat / fix / perf**（`--notes-file` 可手写覆盖）；
 5. `gh release view <tag>` 存在则 `upload --clobber`，否则 `release create`；
-6. 打印 release URL，提示私有仓库下载需登录。
+6. 打印 release URL。
+
+### 5.1 发布说明写什么
+
+- 只写**用户能感知的变化**：`feat` / `fix` / `perf` 提交的摘要；`docs` / `chore` / `style` / `test` / `ci`，以及内部 scope（`release` / `docs` / `ci` / `build` / `deps`）**不进 release 页面**（文档瘦身、重打包、格式化不算发布内容）。
+- 自动生成的说明会带一行指向 [history.md](../history.md) 与 [decisions.md](../decisions.md)，要细节的人自己去翻。
+- 首个版本或改动很多时，建议手写：`scripts/publish-release.sh --notes-file /tmp/notes.md`（覆盖自动生成）。
+- 同一 tag 覆盖重发时，基线是**该 tag 首次发布的提交**，说明里的人只看这次补了什么。
+- `--dry-run` 只预览说明与将上传的文件，不校验 APK 签名（正式发布会强制 `apksigner`）。
 
 ## 6. 发布后验证
 
@@ -104,7 +113,7 @@ scripts/publish-release.sh             # 正式发布
 | `Unable to locate a Java Runtime` | `apksigner` 需要 JDK，脚本所在 shell 没带 `JAVA_HOME` | 脚本已自动探测 JDK 21；仍失败则 `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` |
 | 覆盖安装报签名不一致 | 旧包是 debug 签名 | `adb uninstall dev.sidekick.app` 后装 release 包（App 数据会清空） |
 | 辅助功能授权每次重装失效 | 产物是 ad-hoc 签名（cdhash 变） | 装「Sidekick Dev」身份重打；或 `tccutil reset Accessibility dev.sidekick.app` 重授权 |
-| 手机上打不开 release 页面 | 仓库私有，未登录 GitHub | 登录后下载；局域网内也可用桌面 `/download/apk`（DMG 内嵌离线可用） |
+| 手机上 release 页面打不开 | 网络/DNS 被墙或企业网限制 | 直接打开 asset 链接重试；局域网内也可用桌面 `/download/apk`（DMG 内嵌离线可用） |
 | `HTTP 401/403` | `gh` 未登录或 token 缺 `repo` | `gh auth login`，`gh auth status` 确认 |
 | 本地 `release/` 被清空 | 只删了本地产物 | `gh release download <tag> -D release` 拉回，或重打 |
 | 想删掉某个发布 | tag 已推错 | `gh release delete <tag> --yes --cleanup-tag`（会同时删远端 tag） |

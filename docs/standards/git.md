@@ -71,3 +71,4 @@ fix(pet): 宠物图集按方形格子裁切，避免露出相邻行
 - 改动跨端或改协议：同步 `protocol/README.md` 与 docs（见 [documentation.md](./documentation.md)）。
 - 重大技术取舍：追加 `docs/decisions.md`（沿用现有 D 编号）。
 - 提交信息里引用相关文档/决策编号（如 `D57`），方便回溯。
+- Release 说明不直接摘 `git log`：由 `scripts/publish-release.sh` 只取 `feat/fix/perf`，`docs/chore/style/test/ci` 不进发布页面；纯文档改动不发版。

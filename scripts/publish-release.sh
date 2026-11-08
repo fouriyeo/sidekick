@@ -4,7 +4,8 @@
 # 用法：
 #   scripts/publish-release.sh                  # tag = vYYYY.MM.DD
 #   scripts/publish-release.sh --tag v0.1.0     # 指定 tag
-#   scripts/publish-release.sh --dry-run        # 只打印将执行的命令
+#   scripts/publish-release.sh --notes-file x.md # 手写说明（覆盖自动生成）
+#   scripts/publish-release.sh --dry-run        # 只打印将生成的说明，不创建 release
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,9 +16,11 @@ APK="$RELEASE_DIR/Sidekick-Android.apk"
 
 TAG="v$(date +%Y.%m.%d)"
 DRY_RUN=0
+NOTES_FILE=""
 while (( $# > 0 )); do
   case "$1" in
     --tag) TAG="${2:?--tag 需要一个值}"; shift 2 ;;
+    --notes-file) NOTES_FILE="${2:?--notes-file 需要一个路径}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "未知参数：$1" >&2; exit 1 ;;
@@ -52,7 +55,9 @@ fi
 
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 BUILD_TOOLS_DIR="${BUILD_TOOLS_DIR:-$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)}"
-if [[ -n "${BUILD_TOOLS_DIR:-}" && -x "$BUILD_TOOLS_DIR/apksigner" && -n "${JAVA_HOME:-}" ]]; then
+if (( DRY_RUN )); then
+  echo "[publish] dry-run：跳过 apksigner 校验（正式发布会强制校验）"
+elif [[ -n "${BUILD_TOOLS_DIR:-}" && -x "$BUILD_TOOLS_DIR/apksigner" && -n "${JAVA_HOME:-}" ]]; then
   "$BUILD_TOOLS_DIR/apksigner" verify --print-certs "$APK" | head -3
 else
   echo "[publish] 跳过 apksigner 校验（找不到 build-tools 或 JDK）" >&2
@@ -60,16 +65,50 @@ fi
 
 NOTES="$(mktemp -t sidekick-release-notes)"
 trap 'rm -f "$NOTES"' EXIT
-{
-  echo "## Sidekick $TAG"
-  echo
-  echo "- macOS：\`Sidekick-macOS.dmg\`（未签名；首次打开右键 → 打开）"
-  echo "- Android：\`Sidekick-Android.apk\`（arm64，release 签名；从 debug 包换过来需先卸载）"
-  echo
-  echo "本次包含："
-  echo
-  git -C "$ROOT_DIR" log --oneline -10 | sed 's/^/- /'
-} > "$NOTES"
+
+# 说明只讲「用户能感知的变化」：feat / fix / perf。
+# docs、chore、style、test、ci 这类工程与文档提交不进 release 页面（它们属于 git 历史与 docs/history.md）。
+if [[ -n "$NOTES_FILE" ]]; then
+  [[ -f "$NOTES_FILE" ]] || fail "找不到说明文件：$NOTES_FILE"
+  cp "$NOTES_FILE" "$NOTES"
+else
+  PREV_TAG="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --exclude="$TAG" 2>/dev/null || true)"
+  if [[ -n "$PREV_TAG" ]]; then
+    RANGE="$PREV_TAG..HEAD"
+    SCOPE="自 $PREV_TAG 以来"
+  elif git -C "$ROOT_DIR" rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+    # 同一 tag 覆盖重发：以该 tag 首次发布的提交为基线
+    RANGE="$TAG..HEAD"
+    SCOPE="自 $TAG 首次发布以来"
+  else
+    RANGE="HEAD"
+    SCOPE="最近提交中"
+  fi
+  # 先按 type 筛 feat/fix/perf，再排除内部 scope（release/deps/ci/build/docs）
+  CHANGES="$(git -C "$ROOT_DIR" log --no-merges --pretty=format:'%s' "$RANGE" 2>/dev/null \
+    | grep -E '^(feat|fix|perf)(\([^)]*\))?!?:' \
+    | grep -Ev '^[a-z]+\((release|deps|ci|build|docs)\)!?:' \
+    | head -20 || true)"
+  {
+    echo "## Sidekick $TAG"
+    echo
+    echo "### 安装"
+    echo
+    echo "- macOS：\`Sidekick-macOS.dmg\`（未签名；首次打开右键 → 打开）"
+    echo "- Android：\`Sidekick-Android.apk\`（arm64，release 签名；从 debug 包换过来需先卸载旧版）"
+    echo
+    echo "### 变更（$SCOPE feat / fix / perf）"
+    echo
+    if [[ -n "$CHANGES" ]]; then
+      echo "$CHANGES" | sed 's/^/- /'
+    else
+      echo "- 本版本为打包 / 文档 / 工程调整，没有用户可见的功能变化。"
+    fi
+    echo
+    echo "> 说明由 \`scripts/publish-release.sh\` 自动生成，只列 feat / fix / perf；"
+    echo "> 文档与工程提交见 [docs/history.md](https://github.com/fouriyeo/sidekick/blob/main/docs/history.md)，取舍见 [decisions.md](https://github.com/fouriyeo/sidekick/blob/main/docs/decisions.md)。"
+  } > "$NOTES"
+fi
 
 if (( DRY_RUN )); then
   echo "[publish] dry-run：将创建/更新 release $TAG 并上传两个安装包"
@@ -90,5 +129,4 @@ fi
 
 URL="$(gh release view "$TAG" --json url --jq .url)"
 echo "✅ 已发布：$URL"
-echo "[publish] 私有仓库的 release 下载需要登录 GitHub 账号。"
 echo "[publish] 最新版入口：https://github.com/fouriyeo/sidekick/releases/latest"

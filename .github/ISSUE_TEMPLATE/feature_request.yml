@@ -1,0 +1,48 @@
+name: feature_request
+description: 提一个功能或体验改进
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        新功能会先看是否在 [docs/product/scope.md](../docs/product/scope.md) 与 [docs/status.md](../docs/status.md) 的路线里；
+        协议/隐私/鉴权相关改动请同时在正文里说明影响。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 先写场景与痛点，不要直接跳到实现
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的方案
+      description: 可以写多个候选，并说明取舍
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及模块
+      options:
+        - 手机宠物 / 会话卡
+        - 语音输入（麦克风）
+        - 语音备忘录
+        - 剪贴板
+        - Token 用量看板
+        - AI 联动（DSH hook）
+        - 连接 / 发现 / 重连
+        - 电脑端界面 / 菜单栏
+        - 文档 / 构建 / 发布
+        - 其它
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: 隐私与兼容性影响
+      description: 是否会新增数据外发、权限、协议字段或平台差异；没有就写「无」
+    validations:
+      required: true

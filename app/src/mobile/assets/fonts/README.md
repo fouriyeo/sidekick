@@ -2,7 +2,8 @@
 
 - 文件：`HarmonyOS_SansSC_Regular.ttf`（约 8.1 MB，未做任何改动）
 - 来源：华为官方 HarmonyOS Sans v2 字体包 <https://developer.huawei.com/images/download/next/HarmonyOS-Sans-v2.zip>（解压后取 `HarmonyOS_SansSC/HarmonyOS_SansSC_Regular.ttf`）
-- 许可：《HarmonyOS Sans 字体许可协议》允许免费商用、嵌入与随软件分发，条件：
+- 许可：全文见同目录 [LICENSE_Fonts](./LICENSE_Fonts)（《HarmonyOS Sans Fonts License Agreement》，版权归 Huawei Device Co., Ltd.）
+- 许可要点：允许免费商用、嵌入与随软件分发，条件：
   1. 在软件中注明使用了 HarmonyOS Sans 字体；
   2. 不得修改字体文件本身；
   3. 不得单独再分发或销售字体；

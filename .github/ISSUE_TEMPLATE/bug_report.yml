@@ -1,0 +1,60 @@
+name: bug_report
+description: 报告一个可以复现的问题
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先搜一下已有 issue；日志、截图请先打码 API Key 与会话内容。
+        安全问题请走 [SECURITY.md](../SECURITY.md)，不要在这里公开。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 预期行为 vs 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 看到 ...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 出问题的端
+      options:
+        - 电脑端（macOS）
+        - 手机端（Android）
+        - 两端都有 / 连接问题
+        - 只是文档
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: release tag（如 v2026.11.08）或 commit sha
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: macOS 版本 / 手机型号 + Android 版本 + Android System WebView 版本
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 终端日志（tauri dev）、`adb logcat` 片段、截图；请打码 Key 与会话内容
+      render: text
+    validations:
+      required: false

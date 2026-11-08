@@ -48,5 +48,13 @@
     "typescript": "6.0.3",
     "vite": "8.3.5",
     "vitest": "5.0.5"
-  }
+  },
+  "description": "Sidekick：把手机变成电脑的外设与 AI 宠物（Tauri 桌面 + Android）",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fouriyeo/sidekick.git"
+  },
+  "homepage": "https://github.com/fouriyeo/sidekick",
+  "author": "Sidekick contributors"
 }
