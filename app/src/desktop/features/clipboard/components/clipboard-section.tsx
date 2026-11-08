@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import { Check, Pin, Search, Trash2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SPRING_POP, SPRING_SLIDE } from "@/desktop/lib/motion";
 import { ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
@@ -35,7 +35,7 @@ import {
  * 每行只留「摘要 + 来源 · 时间」；置顶标记常显，置顶 / 删除只在 hover 或键盘聚焦时出现。
  * 点击整行复制并 toast 反馈，不再放详情弹层与页脚说明。
  */
-export function ClipboardSection({ topSlot }: { topSlot?: ReactNode }) {
+export function ClipboardSection() {
   const snapshot = useClipboardStore((state) => state.snapshot);
   const error = useClipboardStore((state) => state.error);
   const refresh = useClipboardStore((state) => state.refresh);
@@ -104,7 +104,6 @@ export function ClipboardSection({ topSlot }: { topSlot?: ReactNode }) {
       />
 
       <PageBody>
-        {topSlot && <div className="w-fit">{topSlot}</div>}
         <div className="dsl-search">
           <Search aria-hidden="true" className="size-4 shrink-0" />
           <input

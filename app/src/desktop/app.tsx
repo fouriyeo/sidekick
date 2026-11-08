@@ -10,6 +10,7 @@ import {
   viewForShortcut,
 } from "@/desktop/lib/desktop-nav";
 import { ContentPage } from "@/desktop/pages/content-page";
+import { MemoPage } from "@/desktop/pages/memo-page";
 import { OverviewPage } from "@/desktop/pages/overview-page";
 import { SettingsPage } from "@/desktop/pages/settings-page";
 import { UsagePage } from "@/desktop/pages/usage-page";
@@ -22,7 +23,7 @@ import "@/desktop/styles/ios.css";
 import "@/desktop/styles/usage.css";
 import { useDesktopConnection } from "./use-desktop-connection";
 
-/** 输入框 / 下拉里不劫持 ⌘1–⌘5（浏览器默认的标签切换也不抢）。 */
+/** 输入框 / 下拉里不劫持 ⌘1–⌘6（浏览器默认的标签切换也不抢）。 */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -32,8 +33,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 /**
  * 电脑端「简约 iOS」外壳（2026-11-07，D104 语音升为第 4 个一级入口）。
  *
- * 结构固定：左侧 224 玻璃侧栏（4 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
- * （大标题 + iOS 分组列表）。⌘1–⌘5 切换一级页；默认概览。
+ * 结构固定：左侧 224 玻璃侧栏（5 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
+ * （大标题 + iOS 分组列表）。⌘1–⌘6 切换一级页；默认概览。
  * 麦克风浮层、辅助功能提示与 toast 是全局层。
  */
 export function DesktopApp() {
@@ -105,6 +106,7 @@ export function DesktopApp() {
       <main className="dsl-main flex min-h-0 min-w-0 flex-1 flex-col">
         {route.view === "overview" && <OverviewPage connection={connection} nav={nav} />}
         {route.view === "content" && <ContentPage />}
+        {route.view === "memo" && <MemoPage />}
         {route.view === "usage" && <UsagePage />}
         {route.view === "voice" && <VoicePage />}
         {route.view === "settings" && (

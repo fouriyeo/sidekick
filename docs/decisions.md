@@ -1208,3 +1208,15 @@
 - 代价：手机 Key 依赖 App 沙箱 + FBE（非 Keystore）；2 小时 WAV 约 230MB；同步每次全量扫描未同步行（条数少可接受）；桌面镜像在手机离线时不能更新。
 - 验证：Rust `cargo test` **201 passed**（memo 核心 13 + SK02 2）；前端 **724 tests / 84 files**、`tsc`、`biome`、`build`、`check-docs`、`check-boundaries` 全绿；Android debug APK 构建成功（含 rusqlite/reqwest/webpki roots）；浏览器 mock 截图（手机 390、桌面 1180）无溢出。真机录音/配对/同步待用户验收。
 - 规范：`app/src-tauri/src/memo/**`、`memo_protocol.rs`、`desktop_server.rs`、`mobile_client.rs`、`app/src/mobile/features/memo/**`、`app/src/desktop/features/memo/**`、`app/src/protocol/memo.ts`、`protocol/README.md`、`docs/engineering/memo-pipeline.md`、`docs/prd/memo/**`。
+
+## D123 · 桌面备忘录从剪贴板分段升为独立一级页（2026-11-08，收口 D115/D118 的桌面入口）
+
+- 背景：用户明确说「剪贴板是剪贴板，备忘录是备忘录，两个应该分开」。D115/D118 为了不扩桌面导航，把备忘录塞进剪贴板页的「剪贴板 / 备忘录」分段；实际使用时两个功能的数据源、列表长度和阅读方式都不同，分段让两件事看起来像同一页的两种模式。
+- 决策：
+  - 桌面一级页变成 **6 个**：概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6；侧栏上半 5 个入口，设置仍固定底部。
+  - 「剪贴板」页恢复单一职责，删除页内分段与 `topSlot`；「备忘录」成为独立页（`PageShell` + 页头 34/600「备忘录」+ 只读列表/详情/播放），数据仍来自桌面 SQLite 镜像。
+  - 桌面仍是手机备忘录的只读镜像：不编辑、不删除、不重新整理；手机单写者与 `memo.*` / SK02 同步协议完全不变。
+  - 旧 DEV 链接 `?view=content&tab=memo` / `?view=clipboard&tab=memo` 重定向到 `?view=memo`；生产不读 URL。
+- 取代：D115/D118 中「桌面不新增一级页、放剪贴板分段」的入口部分；D119 的「视图 id 仍为 `content`」、剪贴板设置留在剪贴板页继续有效。
+- 代价：用量 / 语音 / 设置的快捷键各后移一位（⌘3→⌘4、⌘4→⌘5、⌘5→⌘6）；侧栏多一项，960×640 下需要确认状态摘要不被挤掉。
+- 规范：`app/src/desktop/{lib/desktop-nav.ts,app.tsx,shell/sidebar.tsx,pages/content-page.tsx,pages/memo-page.tsx}`、`app/src/desktop/features/clipboard/components/clipboard-section.tsx`、`scripts/qa-desktop-ios.mjs`、`docs/prd/shell/**`、`docs/prd/memo/**`、`docs/engineering/{desktop-ios-ui,memo-pipeline}.md`、`docs/frontend-architecture.md`、`docs/standards/ux.md`、`docs/status.md`、`AGENTS.md`。

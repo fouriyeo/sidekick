@@ -133,11 +133,11 @@ node scripts/patch-android-manifest.mjs
 | APK 很大 | debug 版正常（含调试符号）；release 需签名，体积预计 10–20MB |
 | 首次构建很慢 | Gradle 首次下载依赖；`~/.gradle` 缓存后会明显加快 |
 
-## 百炼云端识别（语音一级页：配置 / 关键词 / 语音用量）/ 自动粘贴 / 内容（剪贴板）
+## 百炼云端识别（语音一级页：配置 / 关键词 / 语音用量）/ 自动粘贴 / 剪贴板 / 备忘录
 
 - 语音识别只走百炼云端：在阿里云百炼控制台创建 **API Key**（`sk-...`）；Key 存本机 `asr.json`（0600），不写日志、不上传；安全性低于系统钥匙串。
 - 服务地址：北京 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`；新加坡 `wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`。业务空间直接填完整 URL（把 `{WorkspaceId}` 换成真实 ID 后粘贴），没有单独的业务空间 ID 字段。
-- 桌面左侧「语音 ⌘4」一级页的配置段：填完整服务地址/API Key/模型（默认 `qwen-audio-3.1-asr-flash-streaming`），按需调语言/场景/静音断句/保留方言；勾选隐私同意 →「测试连接」→「保存」。不再需要钥匙串授权。
+- 桌面左侧「语音 ⌘5」一级页的配置段：填完整服务地址/API Key/模型（默认 `qwen-audio-3.1-asr-flash-streaming`），按需调语言/场景/静音断句/保留方言；勾选隐私同意 →「测试连接」→「保存」。不再需要钥匙串授权。
 - 关键词在同页「关键词」段管理：一行一个词，点「加一行」增加、点「保存」写入；最多 2000 个，录音时统一按权重 4 发送。
 - Key 保存到 `asr.json`（0600）；旧版本钥匙串里的 Key 需重新粘贴一次，之后不再弹密码。
 - 本机数据目录：`~/.sidekick/`（`asr.json` / `asr_usage.json` / `clipboard.json`，均 `0600`）。首次启动会把旧 `~/Library/Application Support/Sidekick/` 里的同名 JSON 复制一次过来（旧文件保留，不删除）。

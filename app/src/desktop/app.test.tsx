@@ -7,6 +7,9 @@ vi.mock("@/desktop/pages/overview-page", () => ({
 vi.mock("@/desktop/pages/content-page", () => ({
   ContentPage: () => <div>content-page</div>,
 }));
+vi.mock("@/desktop/pages/memo-page", () => ({
+  MemoPage: () => <div>memo-page</div>,
+}));
 vi.mock("@/desktop/pages/usage-page", () => ({
   UsagePage: () => <div>usage-page</div>,
 }));
@@ -71,21 +74,21 @@ function pressShortcut(key: string) {
   fireEvent.keyDown(window, { key, metaKey: true });
 }
 
-describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
-  it("默认概览，侧栏 4 个入口（语音在用量下）+ 底部设置 + 三行状态摘要", () => {
+describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
+  it("默认概览，侧栏 5 个入口 + 底部设置 + 三行状态摘要", () => {
     useDesktopClientsStore.setState({ clients: 2 });
 
     render(<DesktopApp />);
 
     expect(screen.getByText("overview-page")).toBeInTheDocument();
-    // 侧栏上半顺序：概览 / 剪贴板 / 用量 / 语音；设置固定底部。
+    // 侧栏上半顺序：概览 / 剪贴板 / 备忘录 / 用量 / 语音；设置固定底部。
     const nav = screen.getByRole("navigation", { name: "主导航" });
     expect(
       within(nav)
         .getAllByRole("button")
         .map((node) => node.textContent?.trim()),
-    ).toEqual(["概览", "剪贴板", "用量", "语音"]);
-    for (const label of ["概览", "剪贴板", "用量", "语音", "设置"]) {
+    ).toEqual(["概览", "剪贴板", "备忘录", "用量", "语音"]);
+    for (const label of ["概览", "剪贴板", "备忘录", "用量", "语音", "设置"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByText("服务")).toBeInTheDocument();
@@ -94,11 +97,14 @@ describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
     expect(screen.getByText("1 台")).toBeInTheDocument();
   });
 
-  it("点击侧栏切换 5 个一级页", () => {
+  it("点击侧栏切换 6 个一级页", () => {
     render(<DesktopApp />);
 
     fireEvent.click(screen.getByRole("button", { name: "剪贴板" }));
     expect(screen.getByText("content-page")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "备忘录" }));
+    expect(screen.getByText("memo-page")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "用量" }));
     expect(screen.getByText("usage-page")).toBeInTheDocument();
@@ -113,26 +119,29 @@ describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
-  it("⌘1–⌘5 切换一级页，⌘6 无动作", () => {
+  it("⌘1–⌘6 切换一级页，⌘7 无动作", () => {
     render(<DesktopApp />);
 
     pressShortcut("2");
     expect(screen.getByText("content-page")).toBeInTheDocument();
 
     pressShortcut("3");
-    expect(screen.getByText("usage-page")).toBeInTheDocument();
+    expect(screen.getByText("memo-page")).toBeInTheDocument();
 
     pressShortcut("4");
-    expect(screen.getByText("voice-page")).toBeInTheDocument();
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
 
     pressShortcut("5");
+    expect(screen.getByText("voice-page")).toBeInTheDocument();
+
+    pressShortcut("6");
     expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
     pressShortcut("1");
     expect(screen.getByText("overview-page")).toBeInTheDocument();
 
-    // 一级只有 5 个视图，⌘6 不改变当前页。
-    pressShortcut("6");
+    // 一级只有 6 个视图，⌘7 不改变当前页。
+    pressShortcut("7");
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
@@ -141,7 +150,7 @@ describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
     const input = document.createElement("input");
     document.body.appendChild(input);
 
-    fireEvent.keyDown(input, { key: "4", metaKey: true });
+    fireEvent.keyDown(input, { key: "3", metaKey: true });
 
     expect(screen.getByText("overview-page")).toBeInTheDocument();
     input.remove();
@@ -155,6 +164,18 @@ describe("DesktopApp 简约 iOS 外壳（语音升为一级页）", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^AI/ }));
     expect(screen.getByText("settings-page:hook")).toBeInTheDocument();
+  });
+
+  it("开发环境 ?view=memo 落到备忘录一级页", () => {
+    window.history.pushState({}, "", "/?view=memo");
+    render(<DesktopApp />);
+    expect(screen.getByText("memo-page")).toBeInTheDocument();
+  });
+
+  it("开发环境 ?view=content&tab=memo 兼容重定向到备忘录", () => {
+    window.history.pushState({}, "", "/?view=content&tab=memo");
+    render(<DesktopApp />);
+    expect(screen.getByText("memo-page")).toBeInTheDocument();
   });
 
   it("开发环境 ?view=voice 落到语音一级页", () => {

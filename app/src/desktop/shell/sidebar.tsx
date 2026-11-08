@@ -28,7 +28,7 @@ type SidebarProps = {
 
 /**
  * 侧栏（224）：Liquid Glass 导航层 —— 顶部 38 留给 mac 交通灯，
- * 下面 logo + 4 个一级入口（概览/内容/用量/语音，白色滑块用 spring 在入口之间 morph），
+ * 下面 logo + 5 个一级入口（概览/剪贴板/备忘录/用量/语音，白色滑块用 spring 在入口之间 morph），
  * 底部设置 + 三行状态摘要。内容层不进入玻璃。
  */
 export function Sidebar({ view, section, onSelect, onOpenSettings, connection }: SidebarProps) {

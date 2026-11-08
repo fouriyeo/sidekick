@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Loader2, NotebookPen } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
 import { useDesktopMemoStore } from "@/desktop/features/memo/memo-store";
 import { ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
@@ -38,12 +38,12 @@ function metaLine(item: MemoSummary): string {
 }
 
 /**
- * 桌面「备忘录」分段（D115/D118）：手机单写者、电脑只读。
+ * 桌面「备忘录」一级页（D123）：手机单写者、电脑只读。
  *
  * 数据来自桌面自己的 SQLite 镜像；收到手机推送/音频提交后由 `memo-changed`
  * 事件触发刷新。播放走 Tauri asset 协议，不把整段音频塞进 IPC。
  */
-export function MemoSection({ topSlot }: { topSlot?: ReactNode }) {
+export function MemoPage() {
   const items = useDesktopMemoStore((state) => state.items);
   const loading = useDesktopMemoStore((state) => state.loading);
   const error = useDesktopMemoStore((state) => state.error);
@@ -62,9 +62,8 @@ export function MemoSection({ topSlot }: { topSlot?: ReactNode }) {
 
   return (
     <PageShell>
-      <PageHeader title="剪贴板" />
+      <PageHeader title="备忘录" />
       <PageBody>
-        {topSlot && <div className="w-fit">{topSlot}</div>}
         {error && (
           <p role="alert" className="px-1 text-[12px] leading-[1.4] text-destructive">
             {error}

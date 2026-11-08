@@ -107,7 +107,7 @@ P1 预留：MemoRecorderService（ForegroundService + AudioRecord）+ Keystore
   └─ sidekick.db                       # SQLite
 ```
 
-桌面：`~/.sidekick/sidekick.db`、`~/.sidekick/memos/audio/<id>.wav`、`~/.sidekick/memo_devices.json`（只存 token 的 sha256，0600）。
+桌面：`~/.sidekick/sidekick.db`、`~/.sidekick/memos/audio/<id>.wav`、`~/.sidekick/memo_devices.json`（只存 token 的 sha256，0600）。桌面 UI 是独立一级页「备忘录 ⌘3」（D123，`app/src/desktop/pages/memo-page.tsx`），剪贴板页不再承载备忘录分段。
 
 ### 5.2 Schema（v1）
 

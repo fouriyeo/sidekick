@@ -50,7 +50,7 @@ children:
 - 宠物 P0 代码已完成；局域网自动发现与动态端口已实现。
 - AI 联动（DSH）开发中：本地脚本注入 + 回环桥 + status 协议 + 手机四态/三音效；见 [dsh-hook.md](./dsh-hook.md)。
 - Token 用量看板（2026-11-06）：只读 DSH cost-meter 账本 + OpenRouter/DeepSeek 价格表 + 缺价估算；见 [token-usage-pricing.md](./token-usage-pricing.md)（D82–D84）。
-- 电脑端「简约 iOS」壳（2026-11-06，D85；D104 把语音升为第 4 个一级入口后，一级为 5 个：概览/内容/用量/语音/设置）+ 224 侧栏 + iOS 分组列表 + 设置二级页；同日 D86 第二轮升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏 / 彩色图标块 / 胶囊控件 / spring 动效，玻璃只做控件层）；实现契约见 [desktop-ios-ui.md](./desktop-ios-ui.md)。
+- 电脑端「简约 iOS」壳（2026-11-06，D85；D104 把语音升为第 4 个一级入口、D123 拆出备忘录后，一级为 6 个：概览/剪贴板/备忘录/用量/语音/设置）+ 224 侧栏 + iOS 分组列表 + 设置二级页；同日 D86 第二轮升级为 Liquid Glass · iOS 26 质感层（sticky 玻璃工具栏 / 彩色图标块 / 胶囊控件 / spring 动效，玻璃只做控件层）；实现契约见 [desktop-ios-ui.md](./desktop-ios-ui.md)。
 - 电脑端菜单栏常驻（2026-11-06，D88）：关窗只隐藏窗口，HTTP/发现/hook 桥继续跑；Dock 图标隐藏（Accessory），左键图标显示窗口、右键菜单退出；见 [desktop-tray.md](./desktop-tray.md)。
 - 电脑端菜单栏 Token 用量小看板（2026-11-07，D108）：左键图标弹出 320×432 只读卡片（今天/7 天、7 天迷你柱、客户端/会话/模型 Top 3 分组、打开用量页），失焦/Esc/再点收起；独立 `usage-panel` 窗口预创建隐藏，复用 `token_usage_stats`；见 [desktop-usage-panel.md](./desktop-usage-panel.md)。
 - 自动发现与端口策略：[lan-discovery.md](./lan-discovery.md)（UDP 广播探测 + 动态端口回退）。
