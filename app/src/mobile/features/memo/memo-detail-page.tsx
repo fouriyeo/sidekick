@@ -141,7 +141,7 @@ export function MemoDetailPage({ id, onBack }: { id: string; onBack: () => void 
             </div>
 
             {current.status === "failed" && (
-              <div className="mt-4 rounded-2xl border-[0.5px] border-destructive/40 bg-destructive/10 px-4 py-3">
+              <div className="mt-4 rounded-2xl border-[0.5px] border-destructive bg-card px-4 py-3">
                 <p className="m-0 text-[13px] leading-[19px] text-foreground">
                   {current.lastError ?? "整理失败了，可以重试。"}
                 </p>
@@ -161,7 +161,7 @@ export function MemoDetailPage({ id, onBack }: { id: string; onBack: () => void 
             )}
 
             {current.status === "offline" && (
-              <div className="mt-4 rounded-2xl border-[0.5px] border-decide/40 bg-decide/10 px-4 py-3">
+              <div className="mt-4 rounded-2xl border-[0.5px] border-decide bg-card px-4 py-3">
                 <p className="m-0 text-[13px] leading-[19px] text-foreground">
                   {current.lastError ?? "等待网络，联网后会自动继续。"}
                 </p>

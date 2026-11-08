@@ -162,7 +162,7 @@ export function MemoPage() {
         {key && !key.hasKey && (
           <button
             type="button"
-            className="mt-2 flex w-full items-center gap-2 rounded-2xl border-[0.5px] border-decide/40 bg-decide/10 px-4 py-3 text-left"
+            className="mt-2 flex w-full items-center gap-2 rounded-2xl border-[0.5px] border-decide bg-card px-4 py-3 text-left"
             onClick={() => setView("settings")}
           >
             <span className="min-w-0 flex-1 text-[13px] leading-[19px] text-foreground">
