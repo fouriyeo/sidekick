@@ -1,28 +1,43 @@
 version: 2
 updates:
+  # 前端依赖：每周一组 minor/patch；主版本（含 @tauri-apps 工具链）一律不自动提，单独评估
   - package-ecosystem: npm
     directory: /app
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       web-deps:
         patterns: ["*"]
         update-types: ["minor", "patch"]
     ignore:
-      # Tauri 工具链与 Rust 侧版本联动，升级单独做
-      - dependency-name: "@tauri-apps/*"
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+
+  # Rust 依赖：同上；tauri / wry / tao 版本互锁，主版本必须手动升级
   - package-ecosystem: cargo
     directory: /app/src-tauri
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       rust-deps:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions：每月一次，只提 patch/minor
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
