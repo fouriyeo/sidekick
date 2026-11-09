@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   wordExplain: vi.fn(),
   wordDelete: vi.fn(),
   wordSetNote: vi.fn(),
+  wordTts: vi.fn(),
   wordGenerate: vi.fn(),
   wordUsage: vi.fn(),
   wordStatus: vi.fn(),
@@ -20,6 +21,10 @@ const api = vi.hoisted(() => ({
 vi.mock("@/shared/lib/tauri", () => ({
   ...api,
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  convertFileSrc: (path: string) => `asset://localhost/${path}`,
 }));
 
 import { WordDetail } from "./word-detail";
@@ -64,6 +69,8 @@ beforeEach(() => {
   api.wordExplain.mockResolvedValue(detail());
   api.wordDelete.mockResolvedValue(undefined);
   api.wordSetNote.mockResolvedValue(detail({ note: "在性能报告里看到的" }));
+  // fallback=true 模拟桌面已用系统语音：没有音频文件，hook 直接返回。
+  api.wordTts.mockResolvedValue({ path: "", characters: 10, cached: false, fallback: true });
 });
 
 afterEach(() => {
@@ -145,46 +152,57 @@ describe("单词详情", () => {
     expect(api.wordSetNote).toHaveBeenCalledTimes(1);
   });
 
-  it("没有 Web Speech API 时不显示发音按钮", async () => {
+  it("单词发音调用 word_tts 的 word 类型", async () => {
     render(<WordDetail word="throughput" onBack={() => undefined} />);
 
-    await screen.findByRole("heading", { level: 1, name: "throughput" });
-    expect(screen.queryByRole("button", { name: /朗读/ })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "朗读 throughput" }));
+    await waitFor(() => expect(api.wordTts).toHaveBeenCalledWith("throughput", "word"));
   });
 
-  it("有系统朗读时显示发音按钮，按 en-US 朗读当前单词", async () => {
-    const speak = vi.fn();
-    const cancel = vi.fn();
-    class FakeUtterance {
-      text: string;
-      lang = "";
-      constructor(text: string) {
-        this.text = text;
-      }
-    }
-    Object.defineProperty(window, "speechSynthesis", {
-      configurable: true,
-      value: { speak, cancel },
-    });
-    Object.defineProperty(window, "SpeechSynthesisUtterance", {
-      configurable: true,
-      value: FakeUtterance,
-    });
+  it("例句发音调用 word_tts 的 sentence 类型", async () => {
+    render(<WordDetail word="throughput" onBack={() => undefined} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "朗读例句 1" }));
+    await waitFor(() =>
+      expect(api.wordTts).toHaveBeenCalledWith("We improved throughput.", "sentence"),
+    );
+  });
+
+  it("播放中再点同一条 = 停止，不重复合成", async () => {
+    api.wordTts.mockResolvedValue({
+      path: "/tmp/word.wav",
+      characters: 10,
+      cached: true,
+      fallback: false,
+    });
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockImplementation(() => Promise.resolve());
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
     try {
       render(<WordDetail word="throughput" onBack={() => undefined} />);
 
       fireEvent.click(await screen.findByRole("button", { name: "朗读 throughput" }));
+      fireEvent.click(await screen.findByRole("button", { name: "停止朗读 throughput" }));
 
-      expect(cancel).toHaveBeenCalled();
-      expect(speak).toHaveBeenCalledTimes(1);
-      const utterance = speak.mock.calls[0]?.[0] as { text: string; lang: string };
-      expect(utterance.text).toBe("throughput");
-      expect(utterance.lang).toBe("en-US");
+      expect(await screen.findByRole("button", { name: "朗读 throughput" })).toBeInTheDocument();
+      expect(api.wordTts).toHaveBeenCalledTimes(1);
+      expect(playSpy).toHaveBeenCalled();
+      expect(pauseSpy).toHaveBeenCalled();
     } finally {
-      Reflect.deleteProperty(window, "speechSynthesis");
-      Reflect.deleteProperty(window, "SpeechSynthesisUtterance");
+      playSpy.mockRestore();
+      pauseSpy.mockRestore();
     }
+  });
+
+  it("合成失败在按钮附近显示中文错误，不弹窗", async () => {
+    api.wordTts.mockRejectedValue(new Error("tts_failed"));
+    render(<WordDetail word="throughput" onBack={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "朗读 throughput" }));
+
+    expect(await screen.findByText(/语音合成失败，稍后重试/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("返回键回列表", async () => {

@@ -8,7 +8,7 @@ const tauri = vi.hoisted(() => ({
   wordAdd: vi.fn(),
   wordExplain: vi.fn(),
   wordSetNote: vi.fn(),
-  wordSpeak: vi.fn(),
+  wordTts: vi.fn(),
   wordDelete: vi.fn(),
   wordGenerate: vi.fn(),
   wordUsage: vi.fn(),
@@ -18,6 +18,7 @@ const tauri = vi.hoisted(() => ({
 }));
 
 vi.mock("@/shared/lib/tauri", () => tauri);
+vi.mock("@tauri-apps/api/core", () => ({ convertFileSrc: (path: string) => path }));
 
 import { useWordsStore } from "../words-store";
 import { WordDetailView } from "./word-detail";
@@ -105,15 +106,44 @@ describe("WordDetailView 词条详情", () => {
     expect(screen.queryByText("词根")).toBeNull();
   });
 
-  it("发音按钮调用 wordSpeak，失败给一句提示", async () => {
+  it("单词发音调用 wordTts，失败提示可关闭", async () => {
     useWordsStore.setState({ detail: makeDetail() });
-    tauri.wordSpeak.mockRejectedValue(new Error("say_failed"));
+    tauri.wordTts.mockRejectedValue(new Error("tts_failed"));
     render(<WordDetailView canRequest />);
 
     fireEvent.click(screen.getByRole("button", { name: "发音" }));
 
-    await waitFor(() => expect(tauri.wordSpeak).toHaveBeenCalledWith("resilient"));
-    expect(await screen.findByRole("alert")).toHaveTextContent("发音失败，稍后重试");
+    await waitFor(() => expect(tauri.wordTts).toHaveBeenCalledWith("resilient", "word"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("语音合成失败，稍后重试");
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("例句喇叭调用 wordTts(sentence)，播放中再点即停", async () => {
+    useWordsStore.setState({ detail: makeDetail() });
+    tauri.wordTts.mockResolvedValue({
+      path: "/tmp/tts-sentence.mp3",
+      characters: 24,
+      cached: false,
+      fallback: false,
+    });
+    const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    render(<WordDetailView canRequest />);
+
+    fireEvent.click(screen.getByRole("button", { name: "朗读例句" }));
+
+    await waitFor(() =>
+      expect(tauri.wordTts).toHaveBeenCalledWith("The team stayed resilient.", "sentence"),
+    );
+    const stop = await screen.findByRole("button", { name: "停止朗读例句" });
+    fireEvent.click(stop);
+
+    expect(tauri.wordTts).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("button", { name: "朗读例句" })).toBeInTheDocument();
+    play.mockRestore();
+    pause.mockRestore();
   });
 
   it("编辑备注保存成功后更新详情与列表行", async () => {

@@ -25,8 +25,24 @@ import { useWordsStore } from "./words-store";
 
 function usage(): WordUsageStats {
   return {
-    today: { calls: 2, promptTokens: 300, completionTokens: 200, costCnyMicros: 1200 },
-    last30Days: { calls: 9, promptTokens: 1000, completionTokens: 900, costCnyMicros: 5800 },
+    today: {
+      calls: 2,
+      promptTokens: 300,
+      completionTokens: 200,
+      costCnyMicros: 1200,
+      ttsCalls: 2,
+      ttsCharacters: 80,
+      ttsCostCnyMicros: 400,
+    },
+    last30Days: {
+      calls: 9,
+      promptTokens: 1000,
+      completionTokens: 900,
+      costCnyMicros: 5800,
+      ttsCalls: 7,
+      ttsCharacters: 300,
+      ttsCostCnyMicros: 1800,
+    },
     days: [
       {
         date: "2026-11-09",
@@ -59,6 +75,9 @@ describe("英语角用量页", () => {
     expect(screen.getByText("约 500 Token")).toBeInTheDocument();
     expect(screen.getByText("2026-11-09")).toBeInTheDocument();
     expect(screen.getByText(/qwen3.8-flash · 估算/)).toBeInTheDocument();
+    // 语音合成单独一行，次数/字符/估算花费。
+    expect(screen.getByText(/语音合成 2 次 · 80 字符/)).toBeInTheDocument();
+    expect(screen.getByText(/语音合成 7 次 · 300 字符/)).toBeInTheDocument();
   });
 
   it("读取失败显示错误与重试", async () => {

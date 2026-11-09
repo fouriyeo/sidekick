@@ -219,7 +219,17 @@ pub struct WordDetail {
     pub model: Option<String>,
 }
 
-/// `word.json`：同意标记 + 可选的模型覆盖（两端共用）。
+/// 语音合成结果：命中缓存时 `characters=0`；桌面系统发音兜底时 `fallback=true`。
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TtsResult {
+    pub path: String,
+    pub characters: u64,
+    pub cached: bool,
+    pub fallback: bool,
+}
+
+/// `word.json`：同意标记 + 可选的模型/音色覆盖（两端共用）。
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WordConfig {
@@ -227,6 +237,9 @@ pub struct WordConfig {
     pub agreed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// 语音合成音色覆盖（默认 `longanhuan_v3.1`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice: Option<String>,
 }
 
 /// 英语角就绪状态（命令 `word_status`）。

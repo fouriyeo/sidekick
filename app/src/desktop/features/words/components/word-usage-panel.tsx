@@ -6,9 +6,10 @@ import { Button } from "@/shared/ui/button";
 import { useWordsStore } from "../words-store";
 
 /**
- * 页内 AI 用量：今日 / 近 30 天的调用次数与估算花费。
+ * 页内 AI 用量：今日 / 近 30 天的调用次数、估算花费与语音合成。
  *
- * 与 DSH 账本分开统计，只算本机英语角的解释与造句；金额永远是「估算」。
+ * 与 DSH 账本分开统计，只算本机英语角的解释、造句与 TTS；金额永远是「估算」。
+ * TTS 字段是后加的（旧数据可能没有），读的时候统一 `?? 0`。
  */
 export function WordUsagePanel() {
   const usage = useWordsStore((state) => state.usage);
@@ -43,6 +44,13 @@ export function WordUsagePanel() {
               )}`}
             />
             <ListRow
+              title="语音合成"
+              detail="估算 · 今日"
+              meta={`${formatTokens(usage.today.ttsCalls ?? 0)} 次 · ${formatTokens(
+                usage.today.ttsCharacters ?? 0,
+              )} 字符 · 约 ${formatCnyMicros(usage.today.ttsCostCnyMicros ?? 0)}`}
+            />
+            <ListRow
               title="近 30 天"
               detail={`输入 ${formatTokens(usage.last30Days.promptTokens)} · 输出 ${formatTokens(
                 usage.last30Days.completionTokens,
@@ -50,6 +58,13 @@ export function WordUsagePanel() {
               meta={`${formatTokens(usage.last30Days.calls)} 次 · 估算 ${formatCnyMicros(
                 usage.last30Days.costCnyMicros,
               )}`}
+            />
+            <ListRow
+              title="语音合成"
+              detail="估算 · 近 30 天"
+              meta={`${formatTokens(usage.last30Days.ttsCalls ?? 0)} 次 · ${formatTokens(
+                usage.last30Days.ttsCharacters ?? 0,
+              )} 字符 · 约 ${formatCnyMicros(usage.last30Days.ttsCostCnyMicros ?? 0)}`}
             />
           </>
         ) : (

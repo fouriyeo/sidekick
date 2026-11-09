@@ -72,6 +72,7 @@
 
 65. **2026-11-08 · 仓库开源（D127）** — 仓库由私有转公开，源码 MIT；`LICENSE` / `NOTICE.md`（宠物图集例外、HarmonyOS Sans 字体协议全文）/ `.github`（贡献、安全、issue 模板、PR 模板、CI）/ 中文开源版 README（4 张 dev-mock 截图）；历史里真名、个人/公司邮箱、本机路径、公司 WiFi 名用 `git-filter-repo` 替换后 force push。证据：`check-docs` 通过、CI 首跑、公开后匿名 clone 通过。
 65. **2026-11-09 · 英语角（生词本）双端落地（D128/D129）** — 桌面第 7 个一级页「英语角 ⌘7」+ 手机全屏页（顶栏原消息位）；Rust `word` 模块（SQLite 词库、百炼 `qwen3.8-flash` 解释/造句、JSON 修复兜底、日用量 `word_usage.json`、字段级双向同步 `word.*`）；桌面/手机各自本地库，配对后局域网合并；Key 复用桌面 `asr.json` 与手机备忘录配对下发；证据：Rust 231 tests、前端 838 tests / 100 files、`pnpm typecheck/lint/build`、`qa-desktop-ios.mjs` 72 张截图无溢出、Android debug APK 构建通过；真机（Android 13 / ColorOS）双向同步已验证（桌面 → 手机快照、手机离线新增 dirty → 联网补推、ack 清 dirty）；账单对账待补。
+66. **2026-11-10 · 英语角语音朗读（D130）** — 接入 qwen-audio-3.1-tts-plus：单词 0.85 语速、例句自然语速、`language_hints:["en"]` + 指令控制；音频按 `sha256(model|voice|rate|text)` 缓存到 `word_audio/`，重复播放 0 请求 0 费用；桌面失败回退 macOS `say`；用量新增语音合成次数/字符/估算费用。证据：真机（Android 13）单词与例句合成成功（mp3 24kHz）、二次播放缓存命中（文件数/计费不变）、按字符记账正确；Rust 235 tests、前端 105 files / 872 tests、桌面 QA 72 截图无溢出。
 
 ## 验证记录（原「已验证」小节，未进时间线的项）
 

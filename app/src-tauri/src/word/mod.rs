@@ -8,6 +8,7 @@ pub mod db;
 pub mod llm;
 pub mod paths;
 pub mod sync;
+pub mod tts;
 pub mod types;
 pub mod usage;
 

@@ -88,10 +88,21 @@ CREATE TABLE words(
 - 合并（字段级）：`created_at=min`；`updated_at=max`；解释/状态优先「ready 且 explained_at 较新」；`note/context` 后写胜；较新墓碑删除；`rev+1`。
 - 单飞锁照 memo 的 `syncing` 标志；未连接/未配对是常态，不打错误日志。
 
+## 5.5 语音合成（qwen-audio-3.1-tts-plus）
+
+- 接口：`POST https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer`（非流式），body 含 `model/input{text,voice,format:"mp3",sample_rate:24000,rate,language_hints:["en"],instruction}`。
+- 音色：默认 `longanhuan_v3.1`（旗舰女声，中英双语），可用 `word.json › voice` 覆盖；单词语速 0.85、句子 1.0。
+- 指令：单词「清晰标准的英式英语、只读单词」；句子「自然流畅、注意连读语调」。
+- 返回：`output.audio.url`（24h）+ `usage.characters`；Rust 下载后写入 `word_audio/<sha256>.mp3`（0600，tmp+rename），**同文本+音色+语速只合成一次**，重复播放 0 请求 0 费用。
+- 缓存键：`sha256(model|voice|rate|text)`；改音色/语速/文本会重新合成。
+- 失败兜底：桌面回退 macOS `say`（离线），返回 `fallback=true` 且无文件；手机直接返回错误码。
+- 计费：按字符，1.4 元/万字符（北京），记入 `word_usage.json` 的 `ttsCalls/ttsCharacters/ttsCostCnyMicros`；缓存命中不重复计费。
+- 播放：前端 `useWordAudio()` 把本地路径用 `convertFileSrc` 转 URL 播放；同一时刻只播一条，重复点停止。asset 协议作用域已加 `$HOME/.sidekick/word_audio/**`、`$APPDATA/word/**`。
+
 ## 6. 用量与价格
 
 - `word_usage.json`（0600，tmp+rename）：`{version, days: {date: {calls, promptTokens, completionTokens, costCnyMicros}}}`。
-- 价格常量（元/百万 token，2026-11-09 探测后暂定，待账单对账）：输入 `0.8`、输出 `2.7`；`cost_micros = round(in*0.8e6/1e6 + out*2.7e6/1e6)`。
+- 价格常量（元/百万 token）：解释/造句输入 `0.8`、输出 `2.7`；语音合成 `1.4` 元/万字符。
 - 只在本页展示「今日/近 30 天 + 估算」，不并入 DSH 账本看板（口径不同，见 [token_usage.rs](../../app/src-tauri/src/token_usage.rs)）。
 
 ## 7. 隐私

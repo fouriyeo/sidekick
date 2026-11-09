@@ -21,7 +21,10 @@ pub const INPUT_CNY_PER_M: f64 = 0.8;
 pub const OUTPUT_CNY_PER_M: f64 = 2.7;
 
 pub const PRICE_NOTE: &str =
-    "qwen3.8-flash · 估算（元/百万 token：输入 0.8、输出 2.7；未计缓存命中折扣）";
+    "qwen3.8-flash 解释/造句 · 估算（元/百万 token：输入 0.8、输出 2.7）；qwen-audio-3.1-tts-plus 语音 · 1.4 元/万字符";
+
+/// 语音合成单价：元 / 万字符（qwen-audio-3.1-tts-plus，北京）。
+pub const TTS_CNY_PER_10K_CHARS: f64 = 1.4;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +34,12 @@ pub struct UsageDay {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     pub cost_cny_micros: u64,
+    #[serde(default)]
+    pub tts_calls: u64,
+    #[serde(default)]
+    pub tts_characters: u64,
+    #[serde(default)]
+    pub tts_cost_cny_micros: u64,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -40,6 +49,12 @@ pub struct UsageSummary {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     pub cost_cny_micros: u64,
+    #[serde(default)]
+    pub tts_calls: u64,
+    #[serde(default)]
+    pub tts_characters: u64,
+    #[serde(default)]
+    pub tts_cost_cny_micros: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -107,6 +122,25 @@ impl UsageStore {
         let _ = save(&self.path, &data);
     }
 
+    /// 记一次语音合成（按字符计费）。
+    pub fn record_tts(&self, characters: u64) {
+        let mut data = match self.inner.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        let date = Local::now().format("%Y-%m-%d").to_string();
+        let cost = tts_cost_micros(characters);
+        let entry = data.days.entry(date.clone()).or_insert_with(|| UsageDay {
+            date,
+            ..UsageDay::default()
+        });
+        entry.tts_calls += 1;
+        entry.tts_characters += characters;
+        entry.tts_cost_cny_micros += cost;
+        prune(&mut data);
+        let _ = save(&self.path, &data);
+    }
+
     pub fn stats(&self) -> UsageStats {
         let data = match self.inner.lock() {
             Ok(guard) => guard.clone(),
@@ -125,6 +159,9 @@ impl UsageStore {
                 last30.prompt_tokens += day.prompt_tokens;
                 last30.completion_tokens += day.completion_tokens;
                 last30.cost_cny_micros += day.cost_cny_micros;
+                last30.tts_calls += day.tts_calls;
+                last30.tts_characters += day.tts_characters;
+                last30.tts_cost_cny_micros += day.tts_cost_cny_micros;
             }
         }
         let today_summary = data
@@ -135,6 +172,9 @@ impl UsageStore {
                 prompt_tokens: day.prompt_tokens,
                 completion_tokens: day.completion_tokens,
                 cost_cny_micros: day.cost_cny_micros,
+                tts_calls: day.tts_calls,
+                tts_characters: day.tts_characters,
+                tts_cost_cny_micros: day.tts_cost_cny_micros,
             })
             .unwrap_or_default();
         let days = data
@@ -150,6 +190,11 @@ impl UsageStore {
             price_note: PRICE_NOTE.to_string(),
         }
     }
+}
+
+/// 微元：字符 × 单价（元/万字符）折算。1 元 = 1e6 微元，1 万字符 = 1e4 字符。
+pub fn tts_cost_micros(characters: u64) -> u64 {
+    (characters as f64 * TTS_CNY_PER_10K_CHARS / 10_000.0 * 1_000_000.0).round() as u64
 }
 
 /// 微元：token × 单价（元/百万）即为微元数。
@@ -235,6 +280,13 @@ mod tests {
     }
 
     #[test]
+    fn tts_cost_uses_characters() {
+        // 1 万字符 = 1.4 元 = 1_400_000 微元
+        assert_eq!(tts_cost_micros(10_000), 1_400_000);
+        assert_eq!(tts_cost_micros(0), 0);
+    }
+
+    #[test]
     fn record_accumulates_and_persists() {
         let path = temp_path("record");
         let store = UsageStore::new(path.clone());
@@ -247,9 +299,16 @@ mod tests {
         assert_eq!(stats.last30_days.calls, 2);
         assert!(stats.today.cost_cny_micros > 0);
 
+        store.record_tts(42);
+        let stats = store.stats();
+        assert_eq!(stats.today.tts_calls, 1);
+        assert_eq!(stats.today.tts_characters, 42);
+        assert!(stats.today.tts_cost_cny_micros > 0);
+
         // 重新加载仍能读到（落盘成功）。
         let reloaded = UsageStore::new(path.clone()).stats();
         assert_eq!(reloaded.today.calls, 2);
+        assert_eq!(reloaded.today.tts_calls, 1);
         let _ = std::fs::remove_file(path);
     }
 

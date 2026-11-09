@@ -271,7 +271,7 @@ pub fn run() {
             word::desktop::word_status,
             word::desktop::word_consent,
             word::desktop::word_clipboard_candidates,
-            word::desktop::word_speak,
+            word::desktop::word_tts,
             word::desktop::word_export_markdown
         ]);
 
@@ -354,7 +354,7 @@ pub fn run() {
             word::mobile::word_status,
             word::mobile::word_consent,
             word::mobile::word_sync_now,
-            word::mobile::word_speak,
+            word::mobile::word_tts,
             word::mobile::word_export_markdown
         ]);
 

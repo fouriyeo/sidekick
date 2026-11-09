@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Loader2, RotateCcw, Trash2, Volume2 } from "lucide-react";
+import { Loader2, RotateCcw, Square, Trash2, Volume2 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -11,24 +11,11 @@ import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
 import { pushBackHandler } from "@/mobile/system-back";
 import type { WordDetail as WordDetailData, WordStatus } from "@/protocol/words";
+import { useWordAudio } from "@/shared/hooks/use-word-audio";
 
 const CARD = "rounded-2xl border-[0.5px] border-border bg-card px-4 py-3";
 const ACTION =
   "flex min-h-11 items-center gap-1.5 text-[13px] leading-[19px] font-medium disabled:opacity-50";
-
-/**
- * 手机发音走 WebView 自带的 Web Speech API（Rust `word_speak` 在手机端返回
- * unsupported_platform）。没有该 API 的 WebView 直接不显示按钮，避免死按钮。
- */
-type SpeechCtor = new (text: string) => SpeechSynthesisUtterance;
-
-function speechAvailable(): boolean {
-  if (typeof window === "undefined") return false;
-  const synth = window.speechSynthesis;
-  const UtteranceCtor = (window as unknown as { SpeechSynthesisUtterance?: unknown })
-    .SpeechSynthesisUtterance;
-  return Boolean(synth && typeof synth.speak === "function" && typeof UtteranceCtor === "function");
-}
 
 const STATUS_DOT: Record<WordStatus, string> = {
   pending: "bg-decide",
@@ -48,7 +35,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** 完整解释：只渲染模型真的给出的部分，缺省不占位。 */
-function ExplanationBody({ detail }: { detail: WordDetailData }) {
+function ExplanationBody({
+  detail,
+  playing,
+  onPlay,
+}: {
+  detail: WordDetailData;
+  playing: string | null;
+  onPlay: (text: string) => void;
+}) {
   const explanation = detail.explanation;
   const definitions = (explanation?.definitions ?? []).filter((item) => item.zh.trim());
   const examples = (explanation?.examples ?? []).filter((item) => item.en.trim());
@@ -81,17 +76,38 @@ function ExplanationBody({ detail }: { detail: WordDetailData }) {
       {examples.length > 0 && (
         <Section title="例句">
           <ol className="m-0 list-none p-0">
-            {examples.map((item, index) => (
-              <li
-                key={item.en}
-                className={cn(index > 0 && "mt-2 border-t-[0.5px] border-border pt-2")}
-              >
-                <p className="m-0 text-[14px] leading-[21px] text-foreground">{item.en}</p>
-                <p className="m-0 mt-0.5 text-[12px] leading-[18px] text-muted-foreground">
-                  {item.zh}
-                </p>
-              </li>
-            ))}
+            {examples.map((item, index) => {
+              const speakingSentence = playing === item.en;
+              return (
+                <li
+                  key={item.en}
+                  className={cn(index > 0 && "mt-2 border-t-[0.5px] border-border pt-2")}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 text-[14px] leading-[21px] text-foreground">{item.en}</p>
+                      <p className="m-0 mt-0.5 text-[12px] leading-[18px] text-muted-foreground">
+                        {item.zh}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={
+                        speakingSentence ? `停止朗读例句 ${index + 1}` : `朗读例句 ${index + 1}`
+                      }
+                      className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-wash"
+                      onClick={() => onPlay(item.en)}
+                    >
+                      {speakingSentence ? (
+                        <Square aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                      ) : (
+                        <Volume2 aria-hidden="true" className="size-[18px]" strokeWidth={1.6} />
+                      )}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </Section>
       )}
@@ -154,6 +170,7 @@ export function WordDetail({
   const explain = useWordsStore((state) => state.explain);
   const remove = useWordsStore((state) => state.remove);
   const saveNote = useWordsStore((state) => state.saveNote);
+  const { playing, error: audioError, play: playAudio } = useWordAudio();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -222,20 +239,13 @@ export function WordDetail({
       .catch((error: unknown) => toast.error(wordErrorText(error)));
   };
 
-  const speak = () => {
-    try {
-      const synth = window.speechSynthesis;
-      const UtteranceCtor = (window as unknown as { SpeechSynthesisUtterance?: SpeechCtor })
-        .SpeechSynthesisUtterance;
-      if (!synth || !UtteranceCtor) return;
-      synth.cancel();
-      const utterance = new UtteranceCtor(current?.word ?? word);
-      utterance.lang = "en-US";
-      synth.speak(utterance);
-    } catch {
-      // 极少数 WebView 有接口但合成失败：给一句可读的降级提示，不留死按钮。
-      toast("这台设备暂时发不了音，可以用系统朗读");
-    }
+  const playWord = () => {
+    if (!current) return;
+    void playAudio(current.word, "word");
+  };
+
+  const playSentence = (text: string) => {
+    void playAudio(text, "sentence");
   };
 
   const startEditNote = () => {
@@ -275,19 +285,34 @@ export function WordDetail({
         onBack={onBack}
         backLabel="返回英语角"
         right={
-          speechAvailable() ? (
+          current ? (
             <button
               type="button"
-              aria-label={`朗读 ${current?.word ?? word}`}
+              aria-label={
+                playing === current.word ? `停止朗读 ${current.word}` : `朗读 ${current.word}`
+              }
               className="flex size-11 items-center justify-center rounded-full text-primary active:bg-wash"
-              onClick={speak}
+              onClick={playWord}
             >
-              <Volume2 aria-hidden="true" className="size-5" strokeWidth={1.6} />
+              {playing === current.word ? (
+                <Square aria-hidden="true" className="size-5" strokeWidth={1.8} />
+              ) : (
+                <Volume2 aria-hidden="true" className="size-5" strokeWidth={1.6} />
+              )}
             </button>
           ) : undefined
         }
       />
       <PageScroll className="px-4 pt-0 pb-[calc(env(safe-area-inset-bottom)+28px)]">
+        {audioError && (
+          <p
+            role="alert"
+            className="mb-2 mt-1 rounded-xl border-[0.5px] border-destructive bg-card px-3 py-2 text-[12px] leading-[18px] text-destructive"
+          >
+            {audioError}
+          </p>
+        )}
+
         {!current && !detailError && (
           <div className="mt-16 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
             <Loader2 aria-hidden="true" className="size-4 animate-spin" />
@@ -396,7 +421,7 @@ export function WordDetail({
               </Section>
             )}
 
-            <ExplanationBody detail={current} />
+            <ExplanationBody detail={current} playing={playing} onPlay={playSentence} />
 
             <Section title="备注">
               {editingNote ? (

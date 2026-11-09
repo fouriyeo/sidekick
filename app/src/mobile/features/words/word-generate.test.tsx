@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   wordExplain: vi.fn(),
   wordDelete: vi.fn(),
   wordGenerate: vi.fn(),
+  wordTts: vi.fn(),
   wordUsage: vi.fn(),
   wordStatus: vi.fn(),
   wordConsent: vi.fn(),
@@ -51,6 +52,7 @@ beforeEach(() => {
     model: "qwen3.8-flash",
     sentences: [{ en: "We stayed resilient.", zh: "我们保持韧性。", words: ["resilient"] }],
   });
+  api.wordTts.mockResolvedValue({ path: "", characters: 20, cached: false, fallback: true });
 });
 
 afterEach(() => {
@@ -103,6 +105,22 @@ describe("造句页", () => {
     expect(await screen.findByText(/等太久没有回应/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     await waitFor(() => expect(api.wordGenerate).toHaveBeenCalledTimes(2));
+  });
+
+  it("生成结果的每句可以单独朗读（sentence 类型）", async () => {
+    useWordsStore.setState({
+      items: WORDS.map(summary),
+      generated: {
+        model: "qwen3.8-flash",
+        sentences: [{ en: "We stayed resilient.", zh: "我们保持韧性。", words: ["resilient"] }],
+      },
+    });
+    render(<WordGenerate onBack={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "朗读例句 1" }));
+    await waitFor(() =>
+      expect(api.wordTts).toHaveBeenCalledWith("We stayed resilient.", "sentence"),
+    );
   });
 
   it("返回键回列表", () => {

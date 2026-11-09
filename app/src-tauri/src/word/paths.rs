@@ -11,11 +11,15 @@ pub struct WordPaths {
     pub db: PathBuf,
     pub usage: PathBuf,
     pub config: PathBuf,
+    /// 语音合成缓存目录（mp3，按内容哈希命名）。
+    pub audio: PathBuf,
 }
 
 impl WordPaths {
     fn ensure(self) -> Result<Self, String> {
-        std::fs::create_dir_all(&self.root).map_err(|error| format!("创建目录失败: {error}"))?;
+        for dir in [&self.root, &self.audio] {
+            std::fs::create_dir_all(dir).map_err(|error| format!("创建目录失败: {error}"))?;
+        }
         Ok(self)
     }
 
@@ -26,6 +30,7 @@ impl WordPaths {
             db: root.join("words.db"),
             usage: root.join("word_usage.json"),
             config: root.join("word.json"),
+            audio: root.join("word_audio"),
             root,
         }
         .ensure()
@@ -43,6 +48,7 @@ impl WordPaths {
             db: root.join("words.db"),
             usage: root.join("word_usage.json"),
             config: root.join("word.json"),
+            audio: root.join("word_audio"),
             root,
         }
         .ensure()
@@ -68,6 +74,7 @@ mod tests {
             db: root.join("words.db"),
             usage: root.join("word_usage.json"),
             config: root.join("word.json"),
+            audio: root.join("word_audio"),
             root: root.clone(),
         }
         .ensure()

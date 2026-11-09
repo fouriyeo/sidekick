@@ -1224,7 +1224,10 @@ export function installTauriMock(): void {
         return ["throughput", "resilient", "idempotent"];
       }
       if (command === "word_sync_now") return null;
-      if (command === "word_speak") return null;
+      if (command === "word_tts") {
+        // 浏览器没有原生音频文件：按桌面系统发音兜底返回，UI 只显示提示。
+        return { path: "", characters: 0, cached: true, fallback: true };
+      }
       if (command === "word_export_markdown") {
         return `# 英语角词库（${mockWordState.items.length} 个词）\n\n## throughput\n- 吞吐量；处理量\n`;
       }

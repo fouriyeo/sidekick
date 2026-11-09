@@ -9,6 +9,7 @@ const tauri = vi.hoisted(() => ({
   wordExplain: vi.fn(),
   wordDelete: vi.fn(),
   wordGenerate: vi.fn(),
+  wordTts: vi.fn(),
   wordUsage: vi.fn(),
   wordStatus: vi.fn(),
   wordConsent: vi.fn(),
@@ -43,6 +44,12 @@ beforeEach(() => {
   useWordsStore.getState().reset();
   vi.resetAllMocks();
   tauri.wordUsage.mockResolvedValue(USAGE);
+  tauri.wordTts.mockResolvedValue({
+    path: "",
+    characters: 32,
+    cached: false,
+    fallback: true,
+  });
   tauri.wordGenerate.mockResolvedValue({
     model: "qwen3.8-flash",
     sentences: [
@@ -116,6 +123,27 @@ describe("WordGenerateCard 造句卡", () => {
     expect(screen.getByText("团队在故障期间保持了韧性。")).toBeInTheDocument();
     expect(screen.getByText("例句 · qwen3.8-flash")).toBeInTheDocument();
     expect(screen.getByText("resilient")).toBeInTheDocument();
+  });
+
+  it("生成结果的喇叭调用 wordTts 朗读整句", async () => {
+    const items = ["alpha", "bravo", "charlie", "delta", "echo"].map((item) => word(item));
+    render(<WordGenerateCard items={items} canRequest />);
+
+    for (const item of items) {
+      fireEvent.click(screen.getByLabelText(`选择 ${item.word}`));
+    }
+    fireEvent.click(screen.getByRole("button", { name: "生成例句" }));
+
+    const sentence = await screen.findByText("The team stayed resilient through the outage.");
+    expect(sentence).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "朗读例句" }));
+
+    await waitFor(() =>
+      expect(tauri.wordTts).toHaveBeenCalledWith(
+        "The team stayed resilient through the outage.",
+        "sentence",
+      ),
+    );
   });
 
   it("未完成前置条件时禁用生成", () => {

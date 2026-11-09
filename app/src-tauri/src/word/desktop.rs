@@ -12,8 +12,10 @@ use tokio::sync::broadcast;
 use super::db::WordDb;
 use super::paths::WordPaths;
 use super::types::{
-    WordConfig, WordDetail, WordGenerateResult, WordRow, WordSource, WordStatusInfo, WordSummary,
+    TtsResult, WordConfig, WordDetail, WordGenerateResult, WordRow, WordSource, WordStatusInfo,
+    WordSummary,
 };
+use super::tts::{TtsKind, TTS_VOICE};
 use super::usage::{UsageStats, UsageStore};
 use super::{MAX_GENERATE_WORDS, MODEL, PROMPT_VERSION, normalize, trim_context, validate_word};
 
@@ -23,6 +25,7 @@ pub struct WordHub {
     usage: UsageStore,
     config_path: PathBuf,
     config: Mutex<WordConfig>,
+    audio_dir: PathBuf,
     broadcaster: Mutex<Option<broadcast::Sender<String>>>,
 }
 
@@ -39,6 +42,7 @@ impl WordHub {
             usage,
             config_path: paths.config,
             config: Mutex::new(config),
+            audio_dir: paths.audio,
             broadcaster: Mutex::new(None),
         })
     }
@@ -62,6 +66,15 @@ impl WordHub {
             .lock()
             .map(|guard| guard.agreed)
             .unwrap_or(false)
+    }
+
+    fn voice(&self) -> String {
+        self.config
+            .lock()
+            .ok()
+            .and_then(|guard| guard.voice.clone())
+            .filter(|voice| !voice.trim().is_empty())
+            .unwrap_or_else(|| TTS_VOICE.to_string())
     }
 
     fn model(&self) -> String {
@@ -238,6 +251,17 @@ impl WordHub {
         self.usage.stats()
     }
 
+    /// 语音合成（qwen-audio-3.1-tts-plus）：命中缓存 0 请求；成功按字符记账。
+    pub async fn tts(&self, text: &str, kind: TtsKind) -> Result<TtsResult, String> {
+        let key = self.api_key().ok_or_else(|| "no_key".to_string())?;
+        let voice = self.voice();
+        let result = super::tts::synthesize(&key, text, kind, &self.audio_dir, &voice).await?;
+        if !result.cached && result.characters > 0 {
+            self.usage.record_tts(result.characters);
+        }
+        Ok(result)
+    }
+
     /// 导出全部词条为 Markdown（供「导出」弹层复制；不写文件、不联网）。
     pub fn export_markdown(&self) -> Result<String, String> {
         Ok(super::sync::to_markdown(&self.db.list(None)?))
@@ -380,10 +404,35 @@ pub fn word_consent(hub: State<'_, Arc<WordHub>>, agreed: bool) -> Result<WordSt
     hub.set_agreed(agreed)
 }
 
-/// macOS 系统发音（零依赖、离线、不联网）。
+/// 语音合成：优先 qwen-audio-3.1-tts-plus（缓存优先），失败回退 macOS `say`（离线）。
 #[tauri::command]
-pub fn word_speak(word: String) -> Result<(), String> {
-    let text = word.trim();
+pub async fn word_tts(
+    hub: State<'_, Arc<WordHub>>,
+    text: String,
+    kind: Option<String>,
+) -> Result<TtsResult, String> {
+    let kind = TtsKind::parse(kind.as_deref().unwrap_or("word"));
+    match hub.tts(&text, kind).await {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            // 桌面有系统语音兜底：网络/额度问题也能读出来。
+            if speak_system(&text).is_ok() {
+                Ok(TtsResult {
+                    path: String::new(),
+                    characters: 0,
+                    cached: false,
+                    fallback: true,
+                })
+            } else {
+                Err(error)
+            }
+        }
+    }
+}
+
+/// macOS 系统发音（离线兜底，不联网）。
+fn speak_system(text: &str) -> Result<(), String> {
+    let text = text.trim();
     if text.is_empty() {
         return Err("invalid_word".into());
     }

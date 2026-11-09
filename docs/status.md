@@ -14,7 +14,8 @@
 | 手机壳：宠物页（顶栏 / 会话卡浮层 / 鲸鱼 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局 | ✅ 代码完成（真机走查待补） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [frontend-architecture.md](./frontend-architecture.md) |
 | 语音输入：百炼云端流式 ASR（唯一）→ 写剪贴板 + 合成 Cmd+V；结果卡手动「回车 / 清空」 | ✅ 真机验证（完整矩阵待补） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 语音备忘录：手机前台录音 → 分段转写 → LLM 归类 → 本地 rusqlite；电脑只读镜像 + 6 位码配对 | ✅ 代码完成（真机验收待） |
-| 英语角（生词本）：记录 → 百炼 qwen3.8-flash 解释 → 词库造句；桌面 ⌘7 + 手机全屏页 + 局域网双向同步 | ✅ 代码完成（浏览器 QA 通过；真机双向同步已验证；账单对账待补） | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md) | [prd/memo/INDEX.md](./prd/memo/INDEX.md) · [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
+| 英语角（生词本）：记录 → 百炼 qwen3.8-flash 解释 → 词库造句；桌面 ⌘7 + 手机全屏页 + 局域网双向同步 | ✅ 代码完成（浏览器 QA 通过；真机双向同步已验证；账单对账待补） |
+| 英语角语音朗读：qwen-audio-3.1-tts-plus（单词/例句/造句句）→ 本地 mp3 缓存 → 双端播放；桌面失败回退系统 `say` | ✅ 真机验证（首次 1–2s、缓存命中 0 请求、按字符记账） | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md#55-语音合成qwen-audio-31-tts-plus) | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md) | [prd/memo/INDEX.md](./prd/memo/INDEX.md) · [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
 | Token 用量看板：桌面「用量」页 + 手机顶栏数字/用量页 + 菜单栏小看板 | ✅ 代码完成（对账/真机待） | [prd/usage/INDEX.md](./prd/usage/INDEX.md) · [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
 | 菜单栏常驻：关窗 = 隐藏窗口，HTTP / UDP / hook 继续跑；左键弹出用量小看板（原生玻璃卡片） | ✅ 代码完成（人工目检待） | [engineering/desktop-tray.md](./engineering/desktop-tray.md) · [engineering/desktop-usage-panel.md](./engineering/desktop-usage-panel.md) |
 | 剪贴板历史：搜索 / 置顶 / 隐私过滤 / 暂停，最多保留 10–200 可配 | ✅ 真机已验证 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) |

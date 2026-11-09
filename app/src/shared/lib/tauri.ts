@@ -33,6 +33,7 @@ import {
   type WordGenerateResult,
   type WordStatusInfo,
   type WordSummary,
+  type WordTtsResult,
   type WordUsageStats,
 } from "@/protocol/words";
 
@@ -239,7 +240,7 @@ const COMMANDS = {
   wordConsent: "word_consent",
   wordClipboardCandidates: "word_clipboard_candidates",
   wordSyncNow: "word_sync_now",
-  wordSpeak: "word_speak",
+  wordTts: "word_tts",
   wordExportMarkdown: "word_export_markdown",
 } as const;
 
@@ -841,9 +842,12 @@ export function wordClipboardCandidates(): Promise<string[]> {
   return invoke<string[]>(COMMANDS.wordClipboardCandidates);
 }
 
-/** 桌面：用系统语音朗读单词（macOS `say`，离线、不联网）；手机返回 unsupported_platform。 */
-export function wordSpeak(word: string): Promise<void> {
-  return invoke<void>(COMMANDS.wordSpeak, { word });
+/**
+ * 语音合成（qwen-audio-3.1-tts-plus）：返回本地音频路径（缓存命中不发请求）。
+ * 桌面在云端失败时回退系统 `say`，此时 `fallback=true`、`path` 为空。
+ */
+export function wordTts(text: string, kind: "word" | "sentence" = "word"): Promise<WordTtsResult> {
+  return invoke<WordTtsResult>(COMMANDS.wordTts, { text, kind });
 }
 
 /** 导出全部词条为 Markdown 文本（前端展示并复制，不写文件、不联网）。 */

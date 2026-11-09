@@ -1,11 +1,12 @@
 import { cn } from "cn";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Square, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useWordsStore } from "@/mobile/features/words/words-store";
 import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
 import { pushBackHandler } from "@/mobile/system-back";
+import { useWordAudio } from "@/shared/hooks/use-word-audio";
 
 const CARD = "rounded-2xl border-[0.5px] border-border bg-card px-4 py-3";
 const ROW = "flex min-h-12 w-full items-center gap-3 px-4 text-left active:bg-wash";
@@ -27,6 +28,7 @@ export function WordGenerate({ onBack }: { onBack: () => void }) {
   const generateSentences = useWordsStore((state) => state.generateSentences);
 
   const [selected, setSelected] = useState<string[]>([]);
+  const { playing, error: audioError, play: playAudio } = useWordAudio();
 
   const ready = items.filter((item) => item.status === "ready");
 
@@ -138,29 +140,60 @@ export function WordGenerate({ onBack }: { onBack: () => void }) {
                 <h2 className="m-0 mb-2 px-1 text-[12px] leading-[17px] font-normal text-muted-foreground">
                   生成的句子
                 </h2>
-                {generated.sentences.map((sentence) => (
-                  <div key={sentence.en} className={cn(CARD, "mt-2")}>
-                    <p className="m-0 text-[14px] leading-[21px] text-foreground">{sentence.en}</p>
-                    <p className="m-0 mt-1 text-[12px] leading-[18px] text-muted-foreground">
-                      {sentence.zh}
-                    </p>
-                    {sentence.words.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                        <span className="text-[11px] leading-[16px] text-muted-foreground">
-                          用到：
-                        </span>
-                        {sentence.words.map((word) => (
-                          <span
-                            key={word}
-                            className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-[16px] text-foreground"
-                          >
-                            {word}
-                          </span>
-                        ))}
+                {audioError && (
+                  <p
+                    role="alert"
+                    className="mb-2 rounded-xl border-[0.5px] border-destructive bg-card px-3 py-2 text-[12px] leading-[18px] text-destructive"
+                  >
+                    {audioError}
+                  </p>
+                )}
+                {generated.sentences.map((sentence, index) => {
+                  const speakingSentence = playing === sentence.en;
+                  return (
+                    <div key={sentence.en} className={cn(CARD, "mt-2")}>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="m-0 text-[14px] leading-[21px] text-foreground">
+                            {sentence.en}
+                          </p>
+                          <p className="m-0 mt-1 text-[12px] leading-[18px] text-muted-foreground">
+                            {sentence.zh}
+                          </p>
+                          {sentence.words.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                              <span className="text-[11px] leading-[16px] text-muted-foreground">
+                                用到：
+                              </span>
+                              {sentence.words.map((word) => (
+                                <span
+                                  key={word}
+                                  className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-[16px] text-foreground"
+                                >
+                                  {word}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={
+                            speakingSentence ? `停止朗读例句 ${index + 1}` : `朗读例句 ${index + 1}`
+                          }
+                          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-wash"
+                          onClick={() => void playAudio(sentence.en, "sentence")}
+                        >
+                          {speakingSentence ? (
+                            <Square aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                          ) : (
+                            <Volume2 aria-hidden="true" className="size-[18px]" strokeWidth={1.6} />
+                          )}
+                        </button>
                       </div>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
                 <p className="mt-2 text-center text-[11px] leading-[16px] text-muted-foreground">
                   AI 生成 · {generated.model}
                 </p>

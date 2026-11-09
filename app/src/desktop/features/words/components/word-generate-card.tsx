@@ -1,15 +1,16 @@
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ListEmpty, ListGroup } from "@/desktop/shell/list";
 import type { WordSummary } from "@/protocol/words";
+import { useWordAudio } from "@/shared/hooks/use-word-audio";
 import { Button } from "@/shared/ui/button";
 import { MAX_GENERATE_WORDS, MIN_GENERATE_WORDS, useWordsStore } from "../words-store";
 
 /**
  * 造句卡：只列「已解释」的词，多选 5–10 个 → 生成 3–5 句。
  *
- * 每句给英文 + 中文翻译，并把这句用到的词标成小胶囊；生成结果留在页内，
- * 换选择不会自动清空，方便对比着再生成一版。
+ * 每句给英文 + 中文翻译，并把这句用到的词标成小胶囊；右侧喇叭用与详情页
+ * 同款 hook 朗读整句（同一条再点即停）。生成结果留在页内，换选择不会自动清空。
  */
 export function WordGenerateCard({
   items,
@@ -25,6 +26,12 @@ export function WordGenerateCard({
 
   const readyWords = useMemo(() => items.filter((item) => item.status === "ready"), [items]);
   const [selected, setSelected] = useState<string[]>([]);
+  const {
+    play: playAudio,
+    playing: audioPlaying,
+    error: audioError,
+    clearError: clearAudioError,
+  } = useWordAudio();
 
   // 词条被删除 / 重新解释后，把失效的选择剔掉。
   useEffect(() => {
@@ -108,25 +115,62 @@ export function WordGenerateCard({
 
       {result && result.sentences.length > 0 && (
         <ListGroup title={`例句 · ${result.model}`}>
-          {result.sentences.map((sentence) => (
-            <div key={sentence.en} className="dsl-row flex-col items-start gap-1.5">
-              <p className="m-0 text-[15px] leading-[1.5] text-foreground">{sentence.en}</p>
-              <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{sentence.zh}</p>
-              {sentence.words.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {sentence.words.map((word) => (
-                    <span
-                      key={word}
-                      className="rounded-full bg-muted px-2 py-0.5 text-[12px] leading-[1.4] text-signal"
-                    >
-                      {word}
-                    </span>
-                  ))}
+          {result.sentences.map((sentence) => {
+            const playing = audioPlaying === sentence.en;
+            return (
+              <div key={sentence.en} className="dsl-row flex-col items-start gap-1.5">
+                <div className="flex w-full items-start gap-2">
+                  <p className="m-0 min-w-0 flex-1 text-[15px] leading-[1.5] text-foreground">
+                    {sentence.en}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={`h-11 w-11 shrink-0${playing ? " text-signal" : ""}`}
+                    aria-label={playing ? "停止朗读例句" : "朗读例句"}
+                    onClick={() => void playAudio(sentence.en, "sentence")}
+                  >
+                    <Volume2 aria-hidden="true" className="size-[18px]" />
+                  </Button>
                 </div>
-              )}
-            </div>
-          ))}
+                <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{sentence.zh}</p>
+                {sentence.words.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {sentence.words.map((word) => (
+                      <span
+                        key={word}
+                        className="rounded-full bg-muted px-2 py-0.5 text-[12px] leading-[1.4] text-signal"
+                      >
+                        {word}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </ListGroup>
+      )}
+
+      {audioError && (
+        <div className="flex items-center gap-2 px-1.5">
+          <p
+            role="alert"
+            className="m-0 min-w-0 flex-1 text-[13px] leading-[1.45] text-destructive"
+          >
+            {audioError}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 shrink-0"
+            onClick={clearAudioError}
+          >
+            关闭
+          </Button>
+        </div>
       )}
     </div>
   );

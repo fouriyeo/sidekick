@@ -13,9 +13,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use super::db::WordDb;
 use super::paths::WordPaths;
 use super::types::{
-    WordConfig, WordDetail, WordGenerateResult, WordRow, WordSource, WordStatusInfo, WordSummary,
-    row_from_sync_json, row_to_sync_json,
+    TtsResult, WordConfig, WordDetail, WordGenerateResult, WordRow, WordSource, WordStatusInfo,
+    WordSummary, row_from_sync_json, row_to_sync_json,
 };
+use super::tts::{TtsKind, TTS_VOICE};
 use super::usage::{UsageStats, UsageStore};
 use super::{MAX_GENERATE_WORDS, MODEL, PROMPT_VERSION, normalize, now_ms, trim_context, validate_word};
 
@@ -28,6 +29,7 @@ pub struct WordMobile {
     usage: UsageStore,
     config_path: PathBuf,
     config: Mutex<WordConfig>,
+    audio_dir: PathBuf,
     sync_path: PathBuf,
     cursor: Mutex<i64>,
     syncing: AtomicBool,
@@ -48,6 +50,7 @@ impl WordMobile {
             usage,
             config_path: paths.config,
             config: Mutex::new(config),
+            audio_dir: paths.audio,
             sync_path,
             cursor: Mutex::new(cursor),
             syncing: AtomicBool::new(false),
@@ -79,6 +82,15 @@ impl WordMobile {
             .lock()
             .map(|guard| guard.agreed)
             .unwrap_or(false)
+    }
+
+    fn voice(&self) -> String {
+        self.config
+            .lock()
+            .ok()
+            .and_then(|guard| guard.voice.clone())
+            .filter(|voice| !voice.trim().is_empty())
+            .unwrap_or_else(|| TTS_VOICE.to_string())
     }
 
     fn model(&self) -> String {
@@ -256,6 +268,17 @@ impl WordMobile {
 
     pub fn usage_stats(&self) -> UsageStats {
         self.usage.stats()
+    }
+
+    /// 语音合成（qwen-audio-3.1-tts-plus）：命中缓存 0 请求；成功按字符记账。
+    pub async fn tts(&self, text: &str, kind: TtsKind) -> Result<TtsResult, String> {
+        let key = self.api_key().ok_or_else(|| "no_key".to_string())?;
+        let voice = self.voice();
+        let result = super::tts::synthesize(&key, text, kind, &self.audio_dir, &voice).await?;
+        if !result.cached && result.characters > 0 {
+            self.usage.record_tts(result.characters);
+        }
+        Ok(result)
     }
 
     /// 导出全部词条为 Markdown（供「导出」弹层复制）。
@@ -556,10 +579,15 @@ pub fn word_export_markdown(state: State<'_, Arc<WordMobile>>) -> Result<String,
     state.export_markdown()
 }
 
-/// 手机端暂不支持系统发音（WebView speechSynthesis 在 Android WebView 不可靠）。
+/// 语音合成：手机端没有系统发音兜底，失败直接返回错误码。
 #[tauri::command]
-pub fn word_speak(_word: String) -> Result<(), String> {
-    Err("unsupported_platform".into())
+pub async fn word_tts(
+    state: State<'_, Arc<WordMobile>>,
+    text: String,
+    kind: Option<String>,
+) -> Result<TtsResult, String> {
+    let kind = TtsKind::parse(kind.as_deref().unwrap_or("word"));
+    state.tts(&text, kind).await
 }
 
 #[tauri::command]

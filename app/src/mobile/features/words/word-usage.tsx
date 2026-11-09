@@ -15,6 +15,9 @@ function calls(summary: WordUsageSummary): string {
 /** 一行汇总：次数是主信息，花费标「估算」。 */
 function UsageCard({ title, summary }: { title: string; summary: WordUsageSummary }) {
   const tokens = summary.promptTokens + summary.completionTokens;
+  const ttsCalls = summary.ttsCalls ?? 0;
+  const ttsCharacters = summary.ttsCharacters ?? 0;
+  const ttsCost = summary.ttsCostCnyMicros ?? 0;
   return (
     <section aria-label={title} className={CARD}>
       <div className="flex items-baseline justify-between">
@@ -36,6 +39,9 @@ function UsageCard({ title, summary }: { title: string; summary: WordUsageSummar
       </div>
       <p className="m-0 mt-1 text-[11.5px] leading-[17px] text-muted-foreground">
         约 {formatTokenCompact(tokens)} Token
+      </p>
+      <p className="m-0 mt-1 text-[11.5px] leading-[17px] text-muted-foreground">
+        语音合成 {ttsCalls} 次 · {ttsCharacters} 字符 · 约 {formatCny(ttsCost, 4)}（估算）
       </p>
     </section>
   );

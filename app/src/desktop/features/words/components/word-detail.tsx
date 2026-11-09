@@ -5,8 +5,8 @@ import { ListActionRow, ListEmpty, ListGroup, ListRow } from "@/desktop/shell/li
 import { PageHeader } from "@/desktop/shell/page-header";
 import { PageBody, PageShell } from "@/desktop/shell/page-shell";
 import type { WordExplanation, WordStatus } from "@/protocol/words";
+import { useWordAudio, type WordAudioState } from "@/shared/hooks/use-word-audio";
 import { formatRelativeTime } from "@/shared/lib/format";
-import { wordSpeak } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -45,7 +45,13 @@ function TextBlock({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function ExplanationGroups({ explanation }: { explanation: WordExplanation }) {
+function ExplanationGroups({
+  explanation,
+  audio,
+}: {
+  explanation: WordExplanation;
+  audio: WordAudioState;
+}) {
   const definitions = explanation.definitions ?? [];
   const examples = explanation.examples ?? [];
 
@@ -71,13 +77,30 @@ function ExplanationGroups({ explanation }: { explanation: WordExplanation }) {
 
       {examples.length > 0 && (
         <TextBlock label="例句">
-          <div className="flex flex-col gap-2">
-            {examples.map((example) => (
-              <div key={`${example.en}-${example.zh}`} className="flex flex-col gap-0.5">
-                <p className="m-0 text-[15px] leading-[1.5]">{example.en}</p>
-                <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{example.zh}</p>
-              </div>
-            ))}
+          <div className="flex flex-col gap-1">
+            {examples.map((example) => {
+              const playing = audio.playing === example.en;
+              return (
+                <div key={`${example.en}-${example.zh}`} className="flex items-start gap-2 py-1">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <p className="m-0 text-[15px] leading-[1.5]">{example.en}</p>
+                    <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">
+                      {example.zh}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn("h-11 w-11 shrink-0", playing && "text-signal")}
+                    aria-label={playing ? "停止朗读例句" : "朗读例句"}
+                    onClick={() => void audio.play(example.en, "sentence")}
+                  >
+                    <Volume2 aria-hidden="true" className="size-[18px]" />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </TextBlock>
       )}
@@ -135,7 +158,13 @@ export function WordDetailView({ canRequest }: { canRequest: boolean }) {
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
-  const [speakError, setSpeakError] = useState<string | null>(null);
+  const audio = useWordAudio();
+  const {
+    play: playAudio,
+    playing: speaking,
+    error: speakError,
+    clearError: clearAudioError,
+  } = audio;
 
   const explanation = detail?.status === "ready" ? detail.explanation : undefined;
   // 换词或详情重新加载（解释完成 / 同步落库）时退出编辑并丢弃草稿。
@@ -144,14 +173,12 @@ export function WordDetailView({ canRequest }: { canRequest: boolean }) {
     setEditingNote(false);
     setNoteDraft("");
     setNoteError(null);
-    setSpeakError(null);
   }, [detail?.word, detail?.updatedAt]);
 
   const speak = () => {
     if (!detail) return;
-    setSpeakError(null);
-    // macOS 本地 say，离线朗读；失败只给一句提示，不弹窗。
-    void wordSpeak(detail.word).catch(() => setSpeakError("发音失败，稍后重试"));
+    // qwen-audio-3.1-tts-plus（本地缓存）；桌面云端失败时回退系统 say。
+    void playAudio(detail.word, "word");
   };
 
   const startEditNote = () => {
@@ -196,7 +223,7 @@ export function WordDetailView({ canRequest }: { canRequest: boolean }) {
               variant="ghost"
               size="icon"
               className="h-11 w-11"
-              aria-label="发音"
+              aria-label={speaking === detail?.word ? "停止朗读" : "发音"}
               onClick={speak}
             >
               <Volume2 aria-hidden="true" className="size-[18px]" />
@@ -207,9 +234,23 @@ export function WordDetailView({ canRequest }: { canRequest: boolean }) {
 
       <PageBody>
         {speakError && (
-          <p role="alert" className="px-1.5 text-[13px] leading-[1.45] text-destructive">
-            {speakError}
-          </p>
+          <div className="flex items-center gap-2 px-1.5">
+            <p
+              role="alert"
+              className="m-0 min-w-0 flex-1 text-[13px] leading-[1.45] text-destructive"
+            >
+              {speakError}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 shrink-0"
+              onClick={clearAudioError}
+            >
+              关闭
+            </Button>
+          </div>
         )}
 
         {loading && !detail && (
@@ -236,7 +277,7 @@ export function WordDetailView({ canRequest }: { canRequest: boolean }) {
               }
             >
               {explanation ? (
-                <ExplanationGroups explanation={explanation} />
+                <ExplanationGroups explanation={explanation} audio={audio} />
               ) : detail.status === "failed" ? (
                 <ListEmpty>
                   解释失败{detail.lastError ? `（${detail.lastError}）` : ""}，可以重试。

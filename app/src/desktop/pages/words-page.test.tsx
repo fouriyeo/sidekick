@@ -13,8 +13,8 @@ const tauri = vi.hoisted(() => ({
   wordStatus: vi.fn(),
   wordConsent: vi.fn(),
   wordClipboardCandidates: vi.fn(),
-  wordSpeak: vi.fn(),
   wordExportMarkdown: vi.fn(),
+  wordTts: vi.fn(),
   subscribeWordChanged: vi.fn(() => () => {}),
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));

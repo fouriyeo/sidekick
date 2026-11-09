@@ -26,7 +26,12 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/.sidekick/memos/**", "$APPDATA/memo/**"]
+        "scope": [
+          "$HOME/.sidekick/memos/**",
+          "$HOME/.sidekick/word_audio/**",
+          "$APPDATA/memo/**",
+          "$APPDATA/word/**"
+        ]
       }
     }
   },

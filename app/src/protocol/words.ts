@@ -75,6 +75,11 @@ export type WordUsageSummary = {
   promptTokens: number;
   completionTokens: number;
   costCnyMicros: number;
+  /** 语音合成次数（qwen-audio-3.1-tts-plus）；旧数据可能没有。 */
+  ttsCalls?: number;
+  /** 语音合成计费字符数。 */
+  ttsCharacters?: number;
+  ttsCostCnyMicros?: number;
 };
 
 export type WordUsageStats = {
@@ -86,8 +91,19 @@ export type WordUsageStats = {
     promptTokens: number;
     completionTokens: number;
     costCnyMicros: number;
+    ttsCalls?: number;
+    ttsCharacters?: number;
+    ttsCostCnyMicros?: number;
   }[];
   priceNote: string;
+};
+
+/** 语音合成结果：`fallback=true` 表示桌面已用系统语音朗读（无音频文件）。 */
+export type WordTtsResult = {
+  path: string;
+  characters: number;
+  cached: boolean;
+  fallback: boolean;
 };
 
 /** 英语角就绪状态：Key / 同意 / 配对（手机）/ 当前模型。 */
