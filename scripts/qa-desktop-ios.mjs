@@ -8,7 +8,7 @@
  * 输出：artifacts/desktop-ios-qa/*.png + qa.json
  *
  * 检查：控制台错误、横向溢出、视口、浅/深两套主题、1180 与 960 两个宽度、
- * 6 个一级视图（含设置）+ 6 个设置二级页 +「语音」一级页三段（滚动截图）。只读，不改代码。
+ * 7 个一级视图（含设置）+ 6 个设置二级页 +「语音」一级页三段（滚动截图）。只读，不改代码。
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -23,13 +23,14 @@ const BASE = process.env.SIDEKICK_QA_BASE ?? "http://127.0.0.1:1420";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const noShots = process.argv.includes("--no-shots");
 
-/** 一级页（显式列出；侧栏上半 概览/剪贴板/备忘录/用量/语音，设置固定在底部）。 */
+/** 一级页（显式列出；侧栏上半 概览/剪贴板/备忘录/用量/语音/英语角，设置固定在底部）。 */
 const PRIMARY_PAGES = [
   { name: "overview", view: "", label: "概览", query: "&ai=asking" },
   { name: "clipboard", view: "content", label: "剪贴板" },
   { name: "memo", view: "memo", label: "备忘录" },
   { name: "usage", view: "usage", label: "用量" },
   { name: "voice", view: "voice", label: "语音" },
+  { name: "words", view: "words", label: "英语角" },
   { name: "settings", view: "settings", label: "设置" },
 ];
 
@@ -370,7 +371,7 @@ async function main() {
     // 滚动后：验证 sticky 玻璃工具栏 + 紧凑标题（内容从玻璃下经过）
     for (const theme of ["dark", "light"]) {
       await js(cdp, `localStorage.setItem('sidekick:theme', ${JSON.stringify(theme)})`);
-      for (const view of ["", "content", "memo", "usage", "voice", "settings"]) {
+      for (const view of ["", "content", "memo", "usage", "voice", "words", "settings"]) {
         await navigate(cdp, urlFor({ view }));
         await js(
           cdp,

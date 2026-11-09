@@ -15,6 +15,7 @@ import { OverviewPage } from "@/desktop/pages/overview-page";
 import { SettingsPage } from "@/desktop/pages/settings-page";
 import { UsagePage } from "@/desktop/pages/usage-page";
 import { VoicePage } from "@/desktop/pages/voice-page";
+import { WordsPage } from "@/desktop/pages/words-page";
 import { Sidebar } from "@/desktop/shell/sidebar";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import { subscribeNavigate } from "@/shared/lib/tauri";
@@ -23,7 +24,7 @@ import "@/desktop/styles/ios.css";
 import "@/desktop/styles/usage.css";
 import { useDesktopConnection } from "./use-desktop-connection";
 
-/** 输入框 / 下拉里不劫持 ⌘1–⌘6（浏览器默认的标签切换也不抢）。 */
+/** 输入框 / 下拉里不劫持 ⌘1–⌘7（浏览器默认的标签切换也不抢）。 */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -33,8 +34,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 /**
  * 电脑端「简约 iOS」外壳（2026-11-07，D104 语音升为第 4 个一级入口）。
  *
- * 结构固定：左侧 224 玻璃侧栏（5 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
- * （大标题 + iOS 分组列表）。⌘1–⌘6 切换一级页；默认概览。
+ * 结构固定：左侧 224 玻璃侧栏（6 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
+ * （大标题 + iOS 分组列表）。⌘1–⌘7 切换一级页；默认概览。
  * 麦克风浮层、辅助功能提示与 toast 是全局层。
  */
 export function DesktopApp() {
@@ -109,6 +110,7 @@ export function DesktopApp() {
         {route.view === "memo" && <MemoPage />}
         {route.view === "usage" && <UsagePage />}
         {route.view === "voice" && <VoicePage />}
+        {route.view === "words" && <WordsPage nav={nav} />}
         {route.view === "settings" && (
           <SettingsPage
             connection={connection}

@@ -813,6 +813,90 @@ export function installTauriMock(): void {
     return empty;
   }
 
+  // ── 英语角 mock：浏览器里模拟词库/解释/造句，不联网 ──────────────────
+  const mockWordState = {
+    agreed: params.get("word") !== "consent",
+    fail: params.get("word") === "fail",
+    empty: params.get("word") === "empty",
+    items: [
+      {
+        word: "throughput",
+        phonetic: "/ˈθruːpʊt/",
+        pos: "n.",
+        zh: "吞吐量；处理量",
+        status: "ready" as const,
+      },
+      {
+        word: "deprecate",
+        phonetic: "/ˈdeprəkeɪt/",
+        pos: "v.",
+        zh: "弃用；不推荐使用",
+        status: "ready" as const,
+      },
+      {
+        word: "resilient",
+        phonetic: "/rɪˈzɪliənt/",
+        pos: "adj.",
+        zh: "有韧性的；能迅速恢复的",
+        status: "pending" as const,
+      },
+    ].filter(() => !mockWordStateEmpty()),
+  };
+  function mockWordStateEmpty() {
+    return params.get("word") === "empty";
+  }
+  function wordExplanationOf(word: string, phonetic: string, pos: string, zh: string) {
+    return {
+      word,
+      phonetic,
+      pos,
+      definitions: [{ zh, en: `the meaning of ${word}` }],
+      examples: [
+        { en: `The ${word} improved after the refactor.`, zh: `重构之后，${word} 有所改善。` },
+        { en: `We measured ${word} every day.`, zh: `我们每天测量 ${word}。` },
+      ],
+      collocations: [`high ${word}`],
+      mistakes: "",
+      roots: "",
+    };
+  }
+  const mockWordDetail = (item: (typeof mockWordState.items)[number]) => ({
+    id: item.word,
+    word: item.word,
+    status: item.status,
+    source: "manual" as const,
+    createdAt: Date.now() - 86_400_000,
+    updatedAt: Date.now(),
+    phonetic: item.phonetic,
+    pos: item.pos,
+    firstDefinition: item.zh,
+    explanation:
+      item.status === "ready"
+        ? wordExplanationOf(item.word, item.phonetic, item.pos, item.zh)
+        : undefined,
+    model: "qwen3.8-flash",
+  });
+  const mockWordSummary = (item: (typeof mockWordState.items)[number]) => {
+    const detail = mockWordDetail(item);
+    return {
+      id: detail.id,
+      word: detail.word,
+      status: detail.status,
+      source: detail.source,
+      createdAt: detail.createdAt,
+      updatedAt: detail.updatedAt,
+      phonetic: detail.phonetic,
+      pos: detail.pos,
+      firstDefinition: detail.firstDefinition,
+    };
+  };
+  const mockWordUsage = () => ({
+    today: { calls: 4, promptTokens: 712, completionTokens: 806, costCnyMicros: 2746 },
+    last30Days: { calls: 26, promptTokens: 4394, completionTokens: 5120, costCnyMicros: 17344 },
+    days: [],
+    priceNote: "qwen3.8-flash · 估算（浏览器 mock）",
+  });
+
   const internals: MockInternals = {
     async invoke(command, args) {
       if (command === "app_role") return role;
@@ -1054,6 +1138,95 @@ export function installTauriMock(): void {
         clipboard.items = clipboard.items.slice(0, clipboard.maxItems);
         emitClipboard();
         return clipboardSnapshot();
+      }
+
+      // ── 英语角 ──────────────────────────────────────────────────────────
+      if (command === "word_list") {
+        const query = String(args?.query ?? "")
+          .trim()
+          .toLowerCase();
+        return mockWordState.items
+          .filter((item) => !query || item.word.includes(query))
+          .map(mockWordSummary);
+      }
+      if (command === "word_get") {
+        const item = mockWordState.items.find((entry) => entry.word === args?.word);
+        return item ? mockWordDetail(item) : null;
+      }
+      if (command === "word_add") {
+        const word = String(args?.word ?? "")
+          .trim()
+          .toLowerCase();
+        if (!word) throw new Error("请输入一个英文单词");
+        if (!mockWordState.items.some((entry) => entry.word === word)) {
+          mockWordState.items.unshift({
+            word,
+            phonetic: "",
+            pos: "",
+            zh: "（mock）待解释",
+            status: "pending",
+          });
+        }
+        const added = mockWordState.items.find((entry) => entry.word === word);
+        if (!added) throw new Error("词条写入失败");
+        return mockWordDetail(added);
+      }
+      if (command === "word_set_note") {
+        const item = mockWordState.items.find((entry) => entry.word === args?.word);
+        if (!item) throw new Error("词条不存在");
+        return mockWordDetail(item);
+      }
+      if (command === "word_explain") {
+        if (!mockWordState.agreed) throw new Error("need_consent");
+        if (mockWordState.fail) throw new Error("model_error");
+        const item = mockWordState.items.find((entry) => entry.word === args?.word);
+        if (!item) throw new Error("词条不存在");
+        item.status = "ready";
+        item.zh = item.zh === "（mock）待解释" ? "（mock）AI 解释结果" : item.zh;
+        return mockWordDetail(item);
+      }
+      if (command === "word_delete") {
+        mockWordState.items = mockWordState.items.filter((entry) => entry.word !== args?.word);
+        return null;
+      }
+      if (command === "word_generate") {
+        const words = ((args?.words ?? []) as string[]).slice(0, 10);
+        return {
+          model: "qwen3.8-flash",
+          sentences: words.map((word, index) => ({
+            en: `Sentence ${index + 1} uses the word ${word} naturally.`,
+            zh: `第 ${index + 1} 句自然地使用了 ${word}。`,
+            words: [word],
+          })),
+        };
+      }
+      if (command === "word_usage") return mockWordUsage();
+      if (command === "word_status") {
+        return {
+          hasKey: true,
+          agreed: mockWordState.agreed,
+          paired: role === "desktop" ? undefined : true,
+          model: "qwen3.8-flash",
+          total: mockWordState.items.length,
+        };
+      }
+      if (command === "word_consent") {
+        mockWordState.agreed = Boolean(args?.agreed);
+        return {
+          hasKey: true,
+          agreed: mockWordState.agreed,
+          paired: role === "desktop" ? undefined : true,
+          model: "qwen3.8-flash",
+          total: mockWordState.items.length,
+        };
+      }
+      if (command === "word_clipboard_candidates") {
+        return ["throughput", "resilient", "idempotent"];
+      }
+      if (command === "word_sync_now") return null;
+      if (command === "word_speak") return null;
+      if (command === "word_export_markdown") {
+        return `# 英语角词库（${mockWordState.items.length} 个词）\n\n## throughput\n- 吞吐量；处理量\n`;
       }
 
       if (command === "memo_list") return memos.map(memoSummary);

@@ -75,6 +75,7 @@ owner: engineering
 - **桌面 IP 不写死**：`server_info` 每次按网卡实时选 IPv4（`pick_lan_ip`：en* 优先，跳过 utun/bridge/awdl/anpi，防 VPN 地址进二维码）；手机地址来自 UDP **源 IP** + 回包端口。
 - **手动输入在连接页**：顶部连接状态 → 连接页 →「手动输入地址」；扫码是主按钮；发现失败空态卡也有入口。
 - **桌面端单实例（D60）**：`tauri-plugin-single-instance` 在 `Builder` 最先注册，第二个进程只聚焦已有窗口后退出。多开代价隐蔽：后启动实例会把 `~/.dsh/sidekick/config.json` 的 `endpoint` 改到它的回环端口（47816），退出后 hook 上报打空、桥永远 idle；手机发现只认持有 UDP 47820 的先启动实例。状态不更新时先查 `lsof -nP -iTCP:47815-47819` 与 config.json 的 endpoint 是否指向活着的进程。
+- **待机/省电会把 App 网络置为 DOZE（ColorOS 实测）**：手机能 ping 通电脑、`adb shell` 里 `nc` 也通，但 App 内 WS 连接恒超时（4s）。用 `adb shell dumpsys netpolicy | grep UID=<app uid>` 看到 `blocked_state={blocked=DOZE,...}`；修复：`adb shell cmd deviceidle whitelist +<pkg>`、`am set-standby-bucket <pkg> active`，再重启 App。真机排查「只有 App 连不上」时先看这个，不要先怀疑代码或防火墙。
 - **重复连接**：手机 `connect_server` 已串行化（abort 旧连接 + generation 守卫），自动连接与手动点击并发不会互相覆盖。
 - **自动重连**：`connection-store` 用模块级单一定时器，退避 1s→2s→4s→8s→16s→30s；每次先静默 UDP 重新发现，发现 0 台退回上次地址，多台回上次那台、无地址停止；手动连接/重新搜索取消排期并清零退避；`document.hidden` 暂停、回前台立即重试。
 - **无心跳**：协议没有 ping/pong，进程退出/断网靠 FIN/RST（实测 ~0.5s），电脑睡眠/静默丢包可能长时间仍显示「已连接」，待补心跳。
@@ -88,7 +89,7 @@ owner: engineering
 
 ## 7. 桌面壳与看板
 
-- **壳体结构（D85+D86+D104/D119/D123）**：视图切换是组件状态（桌面 `route.view`、手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框/下拉/contentEditable 里不劫持。一级 = 概览/剪贴板/备忘录/用量/语音/设置（语音第 4 个一级页单页三段、内部不 push；备忘录 ⌘3 独立只读页；剪贴板 ⌘2，历史与设置都在该页，设置里没有剪贴板行与二级页）。**会话列表页、系统页、48 状态条、72 图标 rail 已删除，不要恢复**；AI 在做什么只在「概览 › 当前会话」。
+- **壳体结构（D85+D86+D104/D119/D123）**：视图切换是组件状态（桌面 `route.view`、手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框/下拉/contentEditable 里不劫持。一级 = 概览/剪贴板/备忘录/用量/语音/设置/英语角（语音第 4 个一级页单页三段、内部不 push；备忘录 ⌘3 独立只读页；剪贴板 ⌘2，历史与设置都在该页，设置里没有剪贴板行与二级页；英语角 ⌘7 是独立页，快捷键按 `item.shortcut` 反查，别再按下标算）。**会话列表页、系统页、48 状态条、72 图标 rail 已删除，不要恢复**；AI 在做什么只在「概览 › 当前会话」。
 - **玻璃只做控件层**（HIG 红线）：侧栏、sticky 工具栏、`dsl-action-group`、`dsl-glass` 提示卡/聊天输入栏可用玻璃；**列表卡/内容区/表单卡一律不透明**，不叠玻璃、不玻璃套玻璃，同屏别超过 3–4 块。
 - **桌面列表/分段基元**：列表用 `desktop/shell/list.tsx`（ListGroup/ListRow/ListActionRow/ListEmpty，`iconTone` 出彩色图标块），分段用 `shell/segmented-control.tsx`；旧 `Card`/`MetaRow`/`CardHint` 是无人使用的兼容导出，下一轮删。
 - **宽幅数据页（用量，D97）**：用量页是「730 单列」唯一例外——`PageShell size="wide"`（max-w 956）、`tone="usage"`、`bottomGap="compact"`；`PageHeader compact` 不画 34/600 大标题，只留工具栏 17/600 + `sr-only h1`。样式在 `desktop/styles/usage.css`，不要塞回 `ios.css`/`tokens.css`；图表是手写 SVG，不要引图表库。

@@ -7,7 +7,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 已落地：宠物（OpenPets 图集）、麦克风、剪贴板、AI 联动、Token 用量、语音备忘录、桌面 Liquid Glass 壳（6 个一级页 + 设置二级页）、手机两页壳 + 备忘录全屏页。规格见 [prd/](./prd/INDEX.md)。
+- 已落地：宠物（OpenPets 图集）、麦克风、剪贴板、AI 联动、Token 用量、语音备忘录、英语角、桌面 Liquid Glass 壳（7 个一级页 + 设置二级页）、手机两页壳 + 备忘录/英语角全屏页。规格见 [prd/](./prd/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -46,7 +46,7 @@ app/
 │  └─ dev/                    # 仅开发环境的 Tauri mock
 ```
 
-- 桌面 `desktop/pages/`：overview / content（剪贴板）/ memo / usage / voice / settings 六个一级页；`features/` 放各页 Section，不自带页头。
+- 桌面 `desktop/pages/`：overview / content（剪贴板）/ memo / usage / voice / settings / words（英语角）七个一级页；`features/` 放各页 Section，不自带页头。
 - 手机 `mobile/features/`：pet / asking / sessions / mic / connect / chat / usage / settings / first-use / memo。
 
 **依赖方向（必须遵守）**
@@ -264,7 +264,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - 组件局部 UI 状态（展开/收起、输入草稿）留在组件内，不进全局 store。
 **壳与视图（D85 桌面 / D80 手机）**
 
-- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | content | memo | usage | voice | settings`、`SettingsSection = root | connection | hook | accessibility | about | messages`、导航项与 ⌘1–⌘6；壳只维护「当前一级视图 + 设置二级页」；语音是一级页单页（三段、内部不再 push），不进 URL、不引路由。剪贴板是一级页（视图 id 仍是 `content`，⌘2；D119 从「内容」改名），记录开关 / 上限 / 清空都在该页，设置里没有剪贴板条目与二级页；备忘录是独立一级页（⌘3，D123），只读镜像。侧栏 `shell/sidebar.tsx`（224 玻璃层）的三行状态摘要分别跳「设置 › 手机连接 / AI 联动」；页面骨架统一走 `shell/page-shell.tsx`（内容列 730 / 左右 28 / 滚动容器 + 状态交给页头）、`shell/page-header.tsx`（sticky 玻璃工具栏 + 34/600 大标题 + 滚动后 17/600 紧凑标题 + 二级页「‹ 设置」返回）、`shell/list.tsx`（ListGroup / ListRow / ListActionRow / ListEmpty，行 52–54、彩色图标块 30）与 `shell/segmented-control.tsx`（胶囊玻璃轨道 + spring 滑块）。动效 class 在 `ios.css`：`dsl-page-in`（一级页 fade）、`dsl-page-push`（设置二级页 push）、`dsl-glass` / `dsl-card` / `dsl-topbar` / `dsl-tile`。`shell/card.tsx` 与 `shell/page-chips.tsx` 已无页面使用（仅保留导出、待删）。`app.tsx` 把 `.desktop-ios` 同时挂到 `<html>`，Dialog / Sheet 的 portal 才吃得到桌面令牌。
+- 桌面：`desktop/lib/desktop-nav.ts` 定义 `DesktopView = overview | content | memo | usage | voice | settings | words`、`SettingsSection = root | connection | hook | accessibility | about | messages`、导航项与 ⌘1–⌘7（快捷键按 `item.shortcut` 反查）；壳只维护「当前一级视图 + 设置二级页」；语音是一级页单页（三段、内部不再 push），不进 URL、不引路由。剪贴板是一级页（视图 id 仍是 `content`，⌘2；D119 从「内容」改名），记录开关 / 上限 / 清空都在该页，设置里没有剪贴板条目与二级页；备忘录是独立一级页（⌘3，D123），只读镜像。侧栏 `shell/sidebar.tsx`（224 玻璃层）的三行状态摘要分别跳「设置 › 手机连接 / AI 联动」；页面骨架统一走 `shell/page-shell.tsx`（内容列 730 / 左右 28 / 滚动容器 + 状态交给页头）、`shell/page-header.tsx`（sticky 玻璃工具栏 + 34/600 大标题 + 滚动后 17/600 紧凑标题 + 二级页「‹ 设置」返回）、`shell/list.tsx`（ListGroup / ListRow / ListActionRow / ListEmpty，行 52–54、彩色图标块 30）与 `shell/segmented-control.tsx`（胶囊玻璃轨道 + spring 滑块）。动效 class 在 `ios.css`：`dsl-page-in`（一级页 fade）、`dsl-page-push`（设置二级页 push）、`dsl-glass` / `dsl-card` / `dsl-topbar` / `dsl-tile`。`shell/card.tsx` 与 `shell/page-chips.tsx` 已无页面使用（仅保留导出、待删）。`app.tsx` 把 `.desktop-ios` 同时挂到 `<html>`，Dialog / Sheet 的 portal 才吃得到桌面令牌。
 - 手机：`mobile/ui-store.ts` 的 `MobileView = pet | settings | chat | asking | offline` + `scanOpen`；根页面按 view 渲染宠物/设置/二级页，无底部 tab；返回栈在 `mobile/system-back.ts`。
 - 视图切换不是数据状态：当页数据由数据 store 提供——桌面 `useDesktopStatusStore`（status / sessionList / updatedAt）、`useDesktopClientsStore`（clients 近似台数）、`useDesktopVoiceStore`（最近一次语音）、`useHookStore`（联动状态与设置）；`useDesktopActivityStore` / `desktop-activity-events.ts` 仍保留但不再有 UI 渲染（D80 后无活动流）。手机 `session-store`（会话卡 + 清除标记）与 `first-use/store.ts`（`micReady` / `dismissed` 本机持久化）。
 - `status` 解析集中在数据 store；D78 的工具动作文案由 `shared/lib/sessions.ts` 统一派生，桌面与手机共用，不各写一套映射。

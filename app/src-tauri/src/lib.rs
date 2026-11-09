@@ -39,6 +39,7 @@ mod keep_awake;
 mod menu;
 mod memo;
 mod memo_protocol;
+mod word;
 mod mic_protocol;
 #[cfg(mobile)]
 mod mobile_client;
@@ -113,6 +114,12 @@ pub fn run() {
             );
             app.manage(memo.clone());
 
+            // 英语角（生词本）：本地词库 + 百炼解释；WS 广播由 server 注入。
+            let word = std::sync::Arc::new(
+                word::desktop::WordHub::new(handle.clone()).map_err(std::io::Error::other)?,
+            );
+            app.manage(word.clone());
+
             // DSH AI 联动：回环监听 + 状态广播桥，WS 与设置页共用。
             let hook = dsh_hook::HookBridge::new(handle.clone());
             app.manage(hook.clone());
@@ -125,6 +132,7 @@ pub fn run() {
                 usage,
                 token_usage,
                 memo,
+                word,
             ));
 
             // 菜单栏常驻（D88）：隐藏 Dock 图标，入口只在菜单栏。
@@ -251,7 +259,20 @@ pub fn run() {
             usage_panel::panel_glass_ready,
             memo::desktop::memo_list,
             memo::desktop::memo_get,
-            memo::desktop::memo_pair_code_create
+            memo::desktop::memo_pair_code_create,
+            word::desktop::word_list,
+            word::desktop::word_get,
+            word::desktop::word_add,
+            word::desktop::word_explain,
+            word::desktop::word_set_note,
+            word::desktop::word_delete,
+            word::desktop::word_generate,
+            word::desktop::word_usage,
+            word::desktop::word_status,
+            word::desktop::word_consent,
+            word::desktop::word_clipboard_candidates,
+            word::desktop::word_speak,
+            word::desktop::word_export_markdown
         ]);
 
     #[cfg(mobile)]
@@ -270,6 +291,11 @@ pub fn run() {
                 memo::mobile::MemoState::new(app.handle()).map_err(std::io::Error::other)?,
             );
             app.manage(memo_state.clone());
+            // 英语角（生词本）：本地词库 + 百炼解释 + 局域网同步。
+            let word_state = std::sync::Arc::new(
+                word::mobile::WordMobile::new(app.handle().clone()).map_err(std::io::Error::other)?,
+            );
+            app.manage(word_state);
             // 恢复可能要修 WAV 头/算 sha256，放到阻塞线程，别卡启动。
             let recover_handle = app.handle().clone();
             let recover_state = memo_state.clone();
@@ -316,7 +342,20 @@ pub fn run() {
             memo::mobile::memo_pair_request,
             memo::mobile::memo_pair_apply,
             memo::mobile::memo_sync_now,
-            memo::mobile::memo_sync_pending
+            memo::mobile::memo_sync_pending,
+            word::mobile::word_list,
+            word::mobile::word_get,
+            word::mobile::word_add,
+            word::mobile::word_explain,
+            word::mobile::word_set_note,
+            word::mobile::word_delete,
+            word::mobile::word_generate,
+            word::mobile::word_usage,
+            word::mobile::word_status,
+            word::mobile::word_consent,
+            word::mobile::word_sync_now,
+            word::mobile::word_speak,
+            word::mobile::word_export_markdown
         ]);
 
     builder

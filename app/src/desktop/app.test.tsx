@@ -16,6 +16,9 @@ vi.mock("@/desktop/pages/usage-page", () => ({
 vi.mock("@/desktop/pages/voice-page", () => ({
   VoicePage: () => <div>voice-page</div>,
 }));
+vi.mock("@/desktop/pages/words-page", () => ({
+  WordsPage: () => <div>words-page</div>,
+}));
 vi.mock("@/desktop/pages/settings-page", () => ({
   SettingsPage: ({ section }: { section: string }) => <div>settings-page:{section}</div>,
 }));
@@ -75,20 +78,20 @@ function pressShortcut(key: string) {
 }
 
 describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
-  it("默认概览，侧栏 5 个入口 + 底部设置 + 三行状态摘要", () => {
+  it("默认概览，侧栏 6 个入口 + 底部设置 + 三行状态摘要", () => {
     useDesktopClientsStore.setState({ clients: 2 });
 
     render(<DesktopApp />);
 
     expect(screen.getByText("overview-page")).toBeInTheDocument();
-    // 侧栏上半顺序：概览 / 剪贴板 / 备忘录 / 用量 / 语音；设置固定底部。
+    // 侧栏上半顺序：概览 / 剪贴板 / 备忘录 / 用量 / 语音 / 英语角；设置固定底部。
     const nav = screen.getByRole("navigation", { name: "主导航" });
     expect(
       within(nav)
         .getAllByRole("button")
         .map((node) => node.textContent?.trim()),
-    ).toEqual(["概览", "剪贴板", "备忘录", "用量", "语音"]);
-    for (const label of ["概览", "剪贴板", "备忘录", "用量", "语音", "设置"]) {
+    ).toEqual(["概览", "剪贴板", "备忘录", "用量", "语音", "英语角"]);
+    for (const label of ["概览", "剪贴板", "备忘录", "用量", "语音", "英语角", "设置"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByText("服务")).toBeInTheDocument();
@@ -97,7 +100,7 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     expect(screen.getByText("1 台")).toBeInTheDocument();
   });
 
-  it("点击侧栏切换 6 个一级页", () => {
+  it("点击侧栏切换 7 个一级页", () => {
     render(<DesktopApp />);
 
     fireEvent.click(screen.getByRole("button", { name: "剪贴板" }));
@@ -112,6 +115,9 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     fireEvent.click(screen.getByRole("button", { name: "语音" }));
     expect(screen.getByText("voice-page")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
+    expect(screen.getByText("words-page")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
@@ -119,7 +125,7 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
-  it("⌘1–⌘6 切换一级页，⌘7 无动作", () => {
+  it("⌘1–⌘7 切换一级页，⌘8 无动作", () => {
     render(<DesktopApp />);
 
     pressShortcut("2");
@@ -137,11 +143,14 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     pressShortcut("6");
     expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
+    pressShortcut("7");
+    expect(screen.getByText("words-page")).toBeInTheDocument();
+
     pressShortcut("1");
     expect(screen.getByText("overview-page")).toBeInTheDocument();
 
-    // 一级只有 6 个视图，⌘7 不改变当前页。
-    pressShortcut("7");
+    // 一级只有 7 个视图，⌘8 不改变当前页。
+    pressShortcut("8");
     expect(screen.getByText("overview-page")).toBeInTheDocument();
   });
 
@@ -189,6 +198,12 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     window.history.pushState({}, "", "/?view=models");
     render(<DesktopApp />);
     expect(screen.getByText("voice-page")).toBeInTheDocument();
+  });
+
+  it("开发环境 ?view=words 落到英语角一级页", () => {
+    window.history.pushState({}, "", "/?view=words");
+    render(<DesktopApp />);
+    expect(screen.getByText("words-page")).toBeInTheDocument();
   });
 
   it("?view=settings&section=voice 不再有效，按设置根页处理", () => {

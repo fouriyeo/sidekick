@@ -68,6 +68,8 @@ struct AppState {
     key_limiter: Arc<IntervalLimiter>,
     /// 语音备忘录镜像（D115/D118）。
     memo: Arc<MemoHub>,
+    /// 英语角词库（双向同步）。
+    word: Arc<crate::word::desktop::WordHub>,
     /// WS 定向发送：Key / token / 音频 ack 只回给发起请求的那台设备。
     senders: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>,
 }
@@ -381,6 +383,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         }
                         if kind.starts_with("memo.") {
                             handle_memo_text(&recv_state, client_id, &text);
+                            continue;
+                        }
+                        if kind.starts_with("word.") {
+                            handle_word_text(&recv_state, client_id, &text);
                             continue;
                         }
                         if kind == "status.request" {
@@ -866,6 +872,162 @@ fn handle_memo_frame(state: &AppState, client_id: u64, data: &[u8]) {
     }
 }
 
+/// 英语角同步：握手 / 快照下行 / 变更上行。
+///
+/// 鉴权复用备忘录配对令牌（`MemoHub::hello` / `is_trusted`），未配对一律拒绝、不落库。
+fn handle_word_text(state: &AppState, client_id: u64, text: &str) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return;
+    };
+    let kind = value.get("type").and_then(|item| item.as_str()).unwrap_or("");
+    println!("[word] recv {kind} from client {client_id}");
+    match kind {
+        "word.hello" => {
+            let device_id = value.get("deviceId").and_then(|item| item.as_str()).unwrap_or("");
+            let token = value.get("token").and_then(|item| item.as_str()).unwrap_or("");
+            match state.memo.hello(client_id, device_id, token) {
+                Ok(()) => {
+                    send_to(
+                        state,
+                        client_id,
+                        serde_json::json!({
+                            "v": 1,
+                            "type": "word.hello.ack",
+                            "ok": true,
+                            "ts": crate::word::now_ms(),
+                        }),
+                    );
+                    let since = value.get("since").and_then(|item| item.as_i64()).unwrap_or(0);
+                    send_word_snapshot(state, client_id, since);
+                }
+                Err(error) => {
+                    eprintln!("[word] 握手失败: {error}");
+                    send_to(
+                        state,
+                        client_id,
+                        serde_json::json!({
+                            "v": 1,
+                            "type": "word.error",
+                            "code": "sync_failed",
+                            "ts": crate::word::now_ms(),
+                        }),
+                    );
+                }
+            }
+        }
+        "word.push" => {
+            if !state.memo.is_trusted(client_id) {
+                send_to(
+                    state,
+                    client_id,
+                    serde_json::json!({
+                        "v": 1,
+                        "type": "word.error",
+                        "code": "sync_failed",
+                        "ts": crate::word::now_ms(),
+                    }),
+                );
+                return;
+            }
+            let words = value
+                .get("words")
+                .and_then(|item| item.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let mut rows = Vec::new();
+            for word in &words {
+                if let Ok(row) = crate::word::types::row_from_sync_json(word) {
+                    rows.push(row);
+                }
+            }
+            match state.word.merge_incoming(rows) {
+                Ok(ids) => send_to(
+                    state,
+                    client_id,
+                    serde_json::json!({
+                        "v": 1,
+                        "type": "word.push.ack",
+                        "ids": ids,
+                        "cursor": crate::word::now_ms(),
+                        "ts": crate::word::now_ms(),
+                    }),
+                ),
+                Err(error) => {
+                    eprintln!("[word] 合并失败: {error}");
+                    send_to(
+                        state,
+                        client_id,
+                        serde_json::json!({
+                            "v": 1,
+                            "type": "word.error",
+                            "code": "sync_failed",
+                            "ts": crate::word::now_ms(),
+                        }),
+                    );
+                }
+            }
+        }
+        _ => {
+            send_to(
+                state,
+                client_id,
+                serde_json::json!({
+                    "v": 1,
+                    "type": "word.error",
+                    "code": "bad_request",
+                    "ts": crate::word::now_ms(),
+                }),
+            );
+        }
+    }
+}
+
+/// 分页下发词条快照；最后一批 `done: true`，并带上桌面时钟供手机设游标。
+fn send_word_snapshot(state: &AppState, client_id: u64, since: i64) {
+    const BATCH: usize = 100;
+    let mut offset = 0usize;
+    loop {
+        let rows = match state.word.snapshot(since, offset, BATCH) {
+            Ok(rows) => rows,
+            Err(error) => {
+                eprintln!("[word] 读取快照失败: {error}");
+                send_to(
+                    state,
+                    client_id,
+                    serde_json::json!({
+                        "v": 1,
+                        "type": "word.error",
+                        "code": "sync_failed",
+                        "ts": crate::word::now_ms(),
+                    }),
+                );
+                return;
+            }
+        };
+        let done = rows.len() < BATCH;
+        let words: Vec<serde_json::Value> = rows
+            .iter()
+            .map(crate::word::types::row_to_sync_json)
+            .collect();
+        send_to(
+            state,
+            client_id,
+            serde_json::json!({
+                "v": 1,
+                "type": "word.snapshot",
+                "words": words,
+                "done": done,
+                "serverNow": crate::word::now_ms(),
+                "ts": crate::word::now_ms(),
+            }),
+        );
+        if done {
+            return;
+        }
+        offset += rows.len();
+    }
+}
+
 fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
     let Ok(value) = serde_json::from_str::<Value>(text) else {
         return;
@@ -1347,6 +1509,7 @@ pub async fn start(
     usage: Arc<UsageStore>,
     token_usage: Arc<TokenUsageStore>,
     memo: Arc<MemoHub>,
+    word: Arc<crate::word::desktop::WordHub>,
 ) {
     let state = AppState {
         tx: hook.sender(),
@@ -1364,8 +1527,11 @@ pub async fn start(
             desktop_keys::KEY_MIN_INTERVAL,
         )),
         memo,
+        word,
         senders: Arc::new(Mutex::new(HashMap::new())),
     };
+    // 英语角的本地/对端变更要广播给其他已连接客户端。
+    state.word.set_broadcaster(state.tx.clone());
     let app = Router::new()
         .route("/", get(mobile_page))
         .route("/ws", get(ws_handler))

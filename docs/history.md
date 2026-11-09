@@ -1,6 +1,6 @@
 # 变更历史
 
-> 2026-10-31 → 2026-11-08 的变更记录，按日期排序；每条保留主题、决策编号（D）、结论/影响与验证证据，细节见 [decisions.md](./decisions.md)，当前快照见 [status.md](./status.md)。
+> 2026-10-31 → 2026-11-09 的变更记录，按日期排序；每条保留主题、决策编号（D）、结论/影响与验证证据，细节见 [decisions.md](./decisions.md)，当前快照见 [status.md](./status.md)。
 > 编号只作文档索引：原 `status.md`「时间线」1–44 条 + 末尾错位追加的 45–63 条合并重排为 1–64（重复编号「46」的两条按不同主题分别保留）。
 
 ## 变更时间线
@@ -71,6 +71,7 @@
 64. **2026-11-08 · 备忘录交互改版 v0.3（D124）** — 手机底部固定录音条（64、距底 24+safe-area）+ C 双模（按住 ≥400ms 松手存；轻点 ≤400ms 锁定再点结束；上滑 80dp 取消）；周/月双视角日历（周条 44×52 可横滑、月网格 42 格 44×44、录音中全锁）；补首录隐私 Sheet、`memoBusyNow()` guard、取消二次确认、触感、`aria-live`、详情复制全文；桌面改宽幅两栏（`PageShell size="wide"` 956）；日期语义抽 `shared/lib/calendar.ts`；证据：761 tests / 89 files、`scripts/qa-memo.mjs` 14 用例、debug APK 314MB。
 
 65. **2026-11-08 · 仓库开源（D127）** — 仓库由私有转公开，源码 MIT；`LICENSE` / `NOTICE.md`（宠物图集例外、HarmonyOS Sans 字体协议全文）/ `.github`（贡献、安全、issue 模板、PR 模板、CI）/ 中文开源版 README（4 张 dev-mock 截图）；历史里真名、个人/公司邮箱、本机路径、公司 WiFi 名用 `git-filter-repo` 替换后 force push。证据：`check-docs` 通过、CI 首跑、公开后匿名 clone 通过。
+65. **2026-11-09 · 英语角（生词本）双端落地（D128/D129）** — 桌面第 7 个一级页「英语角 ⌘7」+ 手机全屏页（顶栏原消息位）；Rust `word` 模块（SQLite 词库、百炼 `qwen3.8-flash` 解释/造句、JSON 修复兜底、日用量 `word_usage.json`、字段级双向同步 `word.*`）；桌面/手机各自本地库，配对后局域网合并；Key 复用桌面 `asr.json` 与手机备忘录配对下发；证据：Rust 231 tests、前端 838 tests / 100 files、`pnpm typecheck/lint/build`、`qa-desktop-ios.mjs` 72 张截图无溢出、Android debug APK 构建通过；真机（Android 13 / ColorOS）双向同步已验证（桌面 → 手机快照、手机离线新增 dirty → 联网补推、ack 清 dirty）；账单对账待补。
 
 ## 验证记录（原「已验证」小节，未进时间线的项）
 

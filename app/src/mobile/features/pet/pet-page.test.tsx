@@ -91,26 +91,27 @@ afterEach(() => {
 });
 
 describe("PetPage v16 顶栏", () => {
-  it("左设置、中连接状态、右消息；状态点按打开连接页", () => {
+  it("左设置、中连接状态、右英语角；状态点按打开连接页", () => {
     render(<PetPage />);
 
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "消息" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "英语角" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "消息" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /连接状态：已连接/ }));
     expect(useUiStore.getState().view).toBe("offline");
     expect(useUiStore.getState().offlineReturnView).toBe("pet");
   });
 
-  it("设置与消息按钮跳到对应页面", () => {
+  it("设置与英语角按钮跳到对应页面", () => {
     render(<PetPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     expect(useUiStore.getState().view).toBe("settings");
 
     act(() => useUiStore.setState({ view: "pet" }));
-    fireEvent.click(screen.getByRole("button", { name: "消息" }));
-    expect(useUiStore.getState().view).toBe("chat");
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
+    expect(useUiStore.getState().view).toBe("words");
   });
 });
 

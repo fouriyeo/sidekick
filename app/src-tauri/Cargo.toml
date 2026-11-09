@@ -67,6 +67,8 @@ tokio-tungstenite = { version = "0.24", features = ["connect", "rustls-tls-webpk
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
+# 英语角用量按本机日期分桶（与桌面 asr_usage 同一口径）；chrono 是项目既有依赖。
+chrono = { version = "0.4", features = ["clock"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # 屏幕常亮：通过 JNI 直接调 Android Window.addFlags(FLAG_KEEP_SCREEN_ON)。

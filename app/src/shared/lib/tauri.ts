@@ -27,6 +27,14 @@ import {
   type TokenUsageStats,
   type UsageRange,
 } from "@/protocol/messages";
+import {
+  isWordChangedEvent,
+  type WordDetail,
+  type WordGenerateResult,
+  type WordStatusInfo,
+  type WordSummary,
+  type WordUsageStats,
+} from "@/protocol/words";
 
 export type AppRole = "desktop" | "mobile";
 export type Unsubscribe = () => void;
@@ -219,6 +227,20 @@ const COMMANDS = {
   memoSyncNow: "memo_sync_now",
   memoSyncPending: "memo_sync_pending",
   memoPairCodeCreate: "memo_pair_code_create",
+  wordList: "word_list",
+  wordGet: "word_get",
+  wordAdd: "word_add",
+  wordExplain: "word_explain",
+  wordSetNote: "word_set_note",
+  wordDelete: "word_delete",
+  wordGenerate: "word_generate",
+  wordUsage: "word_usage",
+  wordStatus: "word_status",
+  wordConsent: "word_consent",
+  wordClipboardCandidates: "word_clipboard_candidates",
+  wordSyncNow: "word_sync_now",
+  wordSpeak: "word_speak",
+  wordExportMarkdown: "word_export_markdown",
 } as const;
 
 const EVENTS = {
@@ -229,6 +251,7 @@ const EVENTS = {
   navigate: "sidekick-navigate",
   memo: "memo",
   memoChanged: "memo-changed",
+  wordChanged: "word-changed",
 } as const;
 
 type Listener<T> = (payload: T) => void;
@@ -295,6 +318,7 @@ const dshHookChannel = createEventChannel(EVENTS.dshHookStatus);
 const navigateChannel = createEventChannel(EVENTS.navigate);
 const memoChannel = createEventChannel(EVENTS.memo);
 const memoChangedChannel = createEventChannel(EVENTS.memoChanged);
+const wordChangedChannel = createEventChannel(EVENTS.wordChanged);
 
 export async function getAppRole(): Promise<AppRole> {
   const role = await invoke<string>(COMMANDS.appRole);
@@ -753,4 +777,88 @@ export function normalizeError(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+// ── 英语角（生词本）─────────────────────────────────────────────────────
+
+/** 词库列表；`query` 为空返回全部（Rust 侧按 updated_at 倒序）。 */
+export function wordList(query?: string): Promise<WordSummary[]> {
+  return invoke<WordSummary[]>(COMMANDS.wordList, { query: query ?? null });
+}
+
+export function wordGet(word: string): Promise<WordDetail | null> {
+  return invoke<WordDetail | null>(COMMANDS.wordGet, { word });
+}
+
+/** 新增词条（pending）；解释由 `wordExplain` 单独触发，失败可重试。 */
+export function wordAdd(input: {
+  word: string;
+  context?: string;
+  source?: string;
+}): Promise<WordDetail> {
+  return invoke<WordDetail>(COMMANDS.wordAdd, {
+    word: input.word,
+    context: input.context ?? null,
+    source: input.source ?? "manual",
+  });
+}
+
+/** 调用百炼解释一个词；成功返回 ready 详情，失败抛错（词条保留为 failed）。 */
+export function wordExplain(word: string, context?: string): Promise<WordDetail> {
+  return invoke<WordDetail>(COMMANDS.wordExplain, { word, context: context ?? null });
+}
+
+/** 修改备注（空字符串表示清空）。 */
+export function wordSetNote(word: string, note: string | null): Promise<WordDetail> {
+  return invoke<WordDetail>(COMMANDS.wordSetNote, { word, note });
+}
+
+/** 删除（墓碑）；同步后另一端也会消失。 */
+export function wordDelete(word: string): Promise<void> {
+  return invoke<void>(COMMANDS.wordDelete, { word });
+}
+
+/** 用选中的词生成 3–5 个例句。 */
+export function wordGenerate(words: string[]): Promise<WordGenerateResult> {
+  return invoke<WordGenerateResult>(COMMANDS.wordGenerate, { words });
+}
+
+export function wordUsage(): Promise<WordUsageStats> {
+  return invoke<WordUsageStats>(COMMANDS.wordUsage);
+}
+
+export function wordStatus(): Promise<WordStatusInfo> {
+  return invoke<WordStatusInfo>(COMMANDS.wordStatus);
+}
+
+/** 首次使用同意（把单词原文/可选语境发送到百炼）。 */
+export function wordConsent(agreed: boolean): Promise<WordStatusInfo> {
+  return invoke<WordStatusInfo>(COMMANDS.wordConsent, { agreed });
+}
+
+/** 桌面：从剪贴板历史里提取英文候选词（只读，不自动入库）。 */
+export function wordClipboardCandidates(): Promise<string[]> {
+  return invoke<string[]>(COMMANDS.wordClipboardCandidates);
+}
+
+/** 桌面：用系统语音朗读单词（macOS `say`，离线、不联网）；手机返回 unsupported_platform。 */
+export function wordSpeak(word: string): Promise<void> {
+  return invoke<void>(COMMANDS.wordSpeak, { word });
+}
+
+/** 导出全部词条为 Markdown 文本（前端展示并复制，不写文件、不联网）。 */
+export function wordExportMarkdown(): Promise<string> {
+  return invoke<string>(COMMANDS.wordExportMarkdown);
+}
+
+/** 手机：立即同步一次词库（连上电脑时调用）。 */
+export function wordSyncNow(): Promise<void> {
+  return invoke<void>(COMMANDS.wordSyncNow);
+}
+
+/** 本机或对端改了词库（新增/解释完成/删除/同步落库）后触发，订阅方重新拉列表。 */
+export function subscribeWordChanged(handler: () => void): Unsubscribe {
+  return wordChangedChannel((payload) => {
+    if (isWordChangedEvent(payload)) handler();
+  });
 }

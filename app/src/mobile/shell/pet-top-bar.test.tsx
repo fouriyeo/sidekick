@@ -157,6 +157,17 @@ describe("PetTopBar v17", () => {
     expect(tauri.sendUsageRequest).toHaveBeenCalledTimes(1);
   });
 
+  it("英语角入口：点 BookOpen 进 words 页，消息入口不再占顶栏", () => {
+    render(<PetTopBar />);
+
+    // 5 个热区：设置 / 连接 / 用量 / 备忘录 / 英语角；消息已移到设置。
+    expect(screen.getByRole("banner").querySelectorAll("button")).toHaveLength(5);
+    expect(screen.queryByRole("button", { name: "消息" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
+    expect(useUiStore.getState().view).toBe("words");
+  });
+
   it("断连时不请求今日用量", () => {
     useConnectionStore.setState({ status: "disconnected", retryAt: null });
     render(<PetTopBar />);

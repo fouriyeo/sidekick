@@ -1,6 +1,6 @@
 # 项目状态
 
-最后更新：2026-11-08
+最后更新：2026-11-09
 
 > 当前快照（能跑什么 / 待验收 / 技术债 / 下一步）。逐日变更见 [history.md](./history.md)，关键取舍见 [decisions.md](./decisions.md)，回归测试见 [engineering/quality.md](./engineering/quality.md#8)。
 
@@ -13,7 +13,8 @@
 | 桌面壳：6 个一级页 概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6 + 224 玻璃侧栏 + sticky 玻璃工具栏 + push 式设置 | ✅ 代码完成、浏览器 QA 通过（真窗口目检待） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [engineering/desktop-ios-ui.md](./engineering/desktop-ios-ui.md) |
 | 手机壳：宠物页（顶栏 / 会话卡浮层 / 鲸鱼 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局 | ✅ 代码完成（真机走查待补） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [frontend-architecture.md](./frontend-architecture.md) |
 | 语音输入：百炼云端流式 ASR（唯一）→ 写剪贴板 + 合成 Cmd+V；结果卡手动「回车 / 清空」 | ✅ 真机验证（完整矩阵待补） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
-| 语音备忘录：手机前台录音 → 分段转写 → LLM 归类 → 本地 rusqlite；电脑只读镜像 + 6 位码配对 | ✅ 代码完成（真机验收待） | [prd/memo/INDEX.md](./prd/memo/INDEX.md) · [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
+| 语音备忘录：手机前台录音 → 分段转写 → LLM 归类 → 本地 rusqlite；电脑只读镜像 + 6 位码配对 | ✅ 代码完成（真机验收待） |
+| 英语角（生词本）：记录 → 百炼 qwen3.8-flash 解释 → 词库造句；桌面 ⌘7 + 手机全屏页 + 局域网双向同步 | ✅ 代码完成（浏览器 QA 通过；真机双向同步已验证；账单对账待补） | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md) | [prd/memo/INDEX.md](./prd/memo/INDEX.md) · [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
 | Token 用量看板：桌面「用量」页 + 手机顶栏数字/用量页 + 菜单栏小看板 | ✅ 代码完成（对账/真机待） | [prd/usage/INDEX.md](./prd/usage/INDEX.md) · [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
 | 菜单栏常驻：关窗 = 隐藏窗口，HTTP / UDP / hook 继续跑；左键弹出用量小看板（原生玻璃卡片） | ✅ 代码完成（人工目检待） | [engineering/desktop-tray.md](./engineering/desktop-tray.md) · [engineering/desktop-usage-panel.md](./engineering/desktop-usage-panel.md) |
 | 剪贴板历史：搜索 / 置顶 / 隐私过滤 / 暂停，最多保留 10–200 可配 | ✅ 真机已验证 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) |
@@ -30,6 +31,7 @@
 - **AI 联动**：真实 DSH 重启与插件加载、四态动作与三音效、杀 DSH 15s 内静态、隐私抓包审计（无工具名原文/参数/路径）。
 - **用量看板**：真实账本对账、价格联网 / 断网 / 覆盖文件、空/损坏账本、手机模型分组开关。
 - **宠物**：320 宽真机、3 分钟 60fps、存档跨重启、TalkBack、扩展状态行。
+- **英语角**：真机配对→双向同步→断网重试→删除传播；桌面 1180/960 深浅目检；模型对账单。
 - 浏览器已覆盖：`scripts/qa-desktop-ios.mjs`、`scripts/qa-memo.mjs` 无横向溢出 / console error；真机仍待走查。
 
 ## 3. 已知问题 / 技术债
@@ -64,6 +66,7 @@
 - 备忘录真机验收：录音 / 转写 / 配对 / 镜像同步 + C 手势、TalkBack、320×720。
 - AI 联动真机与隐私验收；桌面真窗口与菜单栏人工目检（含 D120 面板玻璃）。
 - 用量账本对账与价格降级路径；语音 60s / 断连 / 密码框 / 辅助功能矩阵。
+- 英语角：真机双向同步已验（桌面 → 手机快照、手机离线新增 → 联网补推）；剩余：删除传播与断网重试的 UI 级走查、桌面 1180/960 深浅目检、模型账单对账。
 
 ### P1
 

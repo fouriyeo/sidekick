@@ -17,6 +17,7 @@ import { useSessionStore } from "@/mobile/features/sessions/session-store";
 import { MorePage } from "@/mobile/features/settings/more-page";
 import { UsagePage } from "@/mobile/features/usage/usage-page";
 import { useMobileUsageStore } from "@/mobile/features/usage/usage-store";
+import { WordsPage } from "@/mobile/features/words/words-page";
 import { handleBack } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
 import {
@@ -110,7 +111,7 @@ export function MobileApp() {
   }, []);
 
   // App 启动时注册唯一的返回键监听；页面内弹层/确认态先由返回栈消费。
-  // 返回层级：scan → 上一页；settings/chat/usage/asking → pet；offline → 上一页；
+  // 返回层级：scan → 上一页；settings/chat/usage/asking/memo/words → pet；offline → 上一页；
   // 根页面 pet 走「再按一次退出」。
   const onSystemBack = useCallback(() => {
     if (micBusyNow()) return;
@@ -134,6 +135,7 @@ export function MobileApp() {
         case "asking":
         case "usage":
         case "memo":
+        case "words":
           ui.setView("pet");
           break;
         case "offline":
@@ -319,6 +321,7 @@ export function MobileApp() {
       {view === "pet" && <PetPage />}
       {view === "settings" && <MorePage />}
       {view === "memo" && <MemoPage />}
+      {view === "words" && <WordsPage />}
       {view === "usage" && <UsagePage />}
       {view === "chat" && <ChatPage />}
       {view === "asking" && <AskingPage />}

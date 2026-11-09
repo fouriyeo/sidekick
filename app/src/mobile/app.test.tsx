@@ -74,6 +74,10 @@ vi.mock("@/shared/lib/tauri", () => ({
   subscribeMemo: () => () => {},
 }));
 
+vi.mock("@/mobile/features/words/words-page", () => ({
+  WordsPage: () => <h1>英语角测试页</h1>,
+}));
+
 vi.mock("@/mobile/features/mic/mic-button", () => ({
   MicButton: () => <button type="button">按住说话，麦克风</button>,
 }));
@@ -227,11 +231,12 @@ function pressBack() {
 }
 
 describe("MobileApp 壳", () => {
-  it("默认落在宠物页：没有底部三档，顶栏设置/消息可用", async () => {
+  it("默认落在宠物页：没有底部三档，顶栏设置/英语角可用", async () => {
     await renderApp();
 
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "消息" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "英语角" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "消息" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
     expect(screen.queryByText("首用清单")).not.toBeInTheDocument();
   });
@@ -246,23 +251,24 @@ describe("MobileApp 壳", () => {
     expect(useUiStore.getState().view).toBe("pet");
   });
 
-  it("消息从右上 chat 进入，返回回到宠物", async () => {
+  it("英语角从右上 BookOpen 进入，返回回到宠物", async () => {
     await renderApp();
 
-    fireEvent.click(screen.getByRole("button", { name: "消息" }));
-    expect(useUiStore.getState().view).toBe("chat");
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
+    expect(useUiStore.getState().view).toBe("words");
+    expect(screen.getByRole("heading", { level: 1, name: "英语角测试页" })).toBeInTheDocument();
 
     pressBack();
     expect(useUiStore.getState().view).toBe("pet");
   });
 
-  it("录音中禁止切页：gear / chat 都被拦截", async () => {
+  it("录音中禁止切页：gear / 英语角都被拦截", async () => {
     await renderApp();
 
     act(() => useMicStore.setState({ phase: "listening" }));
 
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    fireEvent.click(screen.getByRole("button", { name: "消息" }));
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
     expect(useUiStore.getState().view).toBe("pet");
   });
 });
@@ -278,10 +284,20 @@ describe("MobileApp 返回层级", () => {
     expect(tauri.exitApp).not.toHaveBeenCalled();
   });
 
-  it("chat → pet", async () => {
+  it("chat（设置里的消息通道）→ pet", async () => {
     await renderApp();
-    fireEvent.click(screen.getByRole("button", { name: "消息" }));
+    act(() => useUiStore.setState({ view: "chat" }));
 
+    pressBack();
+
+    expect(useUiStore.getState().view).toBe("pet");
+  });
+
+  it("words → pet", async () => {
+    await renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
+
+    expect(useUiStore.getState().view).toBe("words");
     pressBack();
 
     expect(useUiStore.getState().view).toBe("pet");
@@ -362,7 +378,7 @@ describe("MobileApp 返回层级", () => {
 });
 
 describe("MobileApp 屏幕常亮", () => {
-  it("只在宠物页请求常亮，进设置/消息后释放", async () => {
+  it("只在宠物页请求常亮，进设置/英语角后释放", async () => {
     await renderApp();
 
     expect(tauri.setKeepScreenOn).toHaveBeenCalledWith(true);
@@ -373,7 +389,7 @@ describe("MobileApp 屏幕常亮", () => {
     pressBack();
     expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "消息" }));
+    fireEvent.click(screen.getByRole("button", { name: "英语角" }));
     expect(tauri.setKeepScreenOn).toHaveBeenLastCalledWith(false);
   });
 

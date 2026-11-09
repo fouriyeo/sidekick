@@ -11,11 +11,12 @@ children:
   - usage/INDEX.md
   - shell/INDEX.md
   - memo/INDEX.md
+  - english-corner/INDEX.md
 ---
 
 # 功能需求分支
 
-本期六类需求。**不要同时读两份 PRD**，除非你在处理跨功能契约。变更历史见 [history.md](../history.md)，当前状态与待验收项见 [status.md](../status.md)。
+本期七类需求。**不要同时读两份 PRD**，除非你在处理跨功能契约。变更历史见 [history.md](../history.md)，当前状态与待验收项见 [status.md](../status.md)。
 
 ## 读哪篇
 
@@ -27,6 +28,7 @@ children:
 | Token 用量看板 | 桌面「用量 ⌘4」+ 手机顶栏今日数字；客户端/会话/模型分组 + 价格表 | 代码完成，真实账本对账待补 | [usage/INDEX.md](./usage/INDEX.md) |
 | 应用外壳 | 桌面 6 个一级页（概览/剪贴板/备忘录/用量/语音/设置）+ Liquid Glass；手机两页 + 备忘录全屏页；状态词 + 首用清单 | 代码完成，窗口/真机目检待补 | [shell/INDEX.md](./shell/INDEX.md) |
 | 语音备忘录 | 手机前台录音 → 分段转写 → LLM 归类 → 本地库；电脑同局域网只读镜像 | S1+S2 代码完成，真机配对/同步待验收 | [memo/INDEX.md](./memo/INDEX.md) |
+| 英语角 | 生词本：记录 → AI 解释 → 用我的词造句；桌面 ⌘7 + 手机全屏页 + 局域网双向同步 | 代码完成，真机/QA 待验收 | [english-corner/INDEX.md](./english-corner/INDEX.md) |
 
 ## 每个功能怎么读
 

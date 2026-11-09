@@ -38,7 +38,7 @@ children:
 | 写 / 评审 PRD、验收标准 | [prd/INDEX.md](./prd/INDEX.md) | [standards/product.md](./standards/product.md) |
 | 交互、竖屏、反馈、无障碍 | [standards/INDEX.md](./standards/INDEX.md) | [standards/ux.md](./standards/ux.md) |
 | 视觉、配色、动效、宠物资产 | [standards/INDEX.md](./standards/INDEX.md) | [standards/visual.md](./standards/visual.md) |
-| 实现任何功能（宠物 / 麦克风 / 备忘录 / 用量 / 外壳 / AI 联动） | [prd/INDEX.md](./prd/INDEX.md) | 该功能 INDEX + engineering 对应篇 |
+| 实现任何功能（宠物 / 麦克风 / 备忘录 / 用量 / 外壳 / AI 联动 / 英语角） | [prd/INDEX.md](./prd/INDEX.md) | 该功能 INDEX + engineering 对应篇 |
 | 前端架构、依赖、平台边界 | [standards/engineering.md](./standards/engineering.md) | [frontend-architecture.md](./frontend-architecture.md) / [dependency-policy.md](./dependency-policy.md) |
 | 环境、构建、调试 | 直接读 | [setup.md](./setup.md) |
 | 发版：打包、签名、上传 GitHub Releases、回滚补发 | [engineering/release.md](./engineering/release.md) | [setup.md](./setup.md) |

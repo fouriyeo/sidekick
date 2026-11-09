@@ -1,19 +1,35 @@
 import type { LucideIcon } from "lucide-react";
-import { AudioLines, Clipboard, Gauge, LayoutGrid, NotebookPen, Settings } from "lucide-react";
+import {
+  AudioLines,
+  Clipboard,
+  Gauge,
+  Languages,
+  LayoutGrid,
+  NotebookPen,
+  Settings,
+} from "lucide-react";
 
 /**
  * 电脑端「简约 iOS」导航模型（2026-11-07，D85 结构 + D86 质感 + D104 语音一级页）。
  *
- * 一级 6 个：概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6；
- * 设置固定在侧栏底部，侧栏上半有 5 个入口。语音是一级页里的**单页**
+ * 一级 7 个：概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6 /
+ * 英语角 ⌘7；设置固定在侧栏底部，侧栏上半有 6 个入口。语音是**单页**
  * （百炼配置 / 关键词 / 语音用量三段纵向排列），内部不再 push。
+ * 英语角也是单页 + 页内 push 详情（词库列表 ↔ 词条详情）。
  *
  * 剪贴板原叫「内容」，D119 改名：历史与设置都只在这一页，设置里不再有剪贴板。
  * 视图 id 仍是 `content`（`?view=content` / `?view=clipboard` 两个旧别名都落到它）。
  * 备忘录从剪贴板分段拆成独立一级页（D123）：桌面仍是手机镜像，只读。
  */
 
-export type DesktopView = "overview" | "content" | "memo" | "usage" | "voice" | "settings";
+export type DesktopView =
+  | "overview"
+  | "content"
+  | "memo"
+  | "usage"
+  | "voice"
+  | "settings"
+  | "words";
 
 /** 设置里的二级页；`root` 是设置首页那张列表（语音不在设置里）。 */
 export type SettingsSection =
@@ -41,7 +57,7 @@ export type DesktopNavItem = {
   icon: LucideIcon;
 };
 
-/** 一级导航（侧栏顺序）；⌘ 序号与数组顺序一致，设置固定底部。 */
+/** 一级导航（侧栏顺序）；`shortcut` 是 ⌘ 数字的唯一来源，设置固定底部。 */
 export const DESKTOP_NAV: readonly DesktopNavItem[] = [
   { id: "overview", label: "概览", shortcut: "⌘1", icon: LayoutGrid },
   { id: "content", label: "剪贴板", shortcut: "⌘2", icon: Clipboard },
@@ -49,6 +65,7 @@ export const DESKTOP_NAV: readonly DesktopNavItem[] = [
   { id: "usage", label: "用量", shortcut: "⌘4", icon: Gauge },
   { id: "voice", label: "语音", shortcut: "⌘5", icon: AudioLines },
   { id: "settings", label: "设置", shortcut: "⌘6", icon: Settings },
+  { id: "words", label: "英语角", shortcut: "⌘7", icon: Languages },
 ];
 
 /** 侧栏上半部分的一级项（设置单独固定在底部）。 */
@@ -71,13 +88,17 @@ export const VIEW_TITLE: Record<DesktopView, string> = {
   usage: "用量",
   voice: "语音",
   settings: "设置",
+  words: "英语角",
 };
 
-/** ⌘1–⌘6 → 一级视图；只认单个数字键。 */
+/**
+ * ⌘1–⌘7 → 一级视图：从 `item.shortcut` 反查，增删入口不用再同步数组下标。
+ * 只认单个数字键，多字符（如 "12"）与其它键返回 null。
+ */
 export function viewForShortcut(key: string): DesktopView | null {
-  const index = Number(key) - 1;
-  if (!Number.isInteger(index) || index < 0 || index >= DESKTOP_NAV.length) return null;
-  return DESKTOP_NAV[index]?.id ?? null;
+  if (!/^\d$/.test(key)) return null;
+  const shortcut = `⌘${key}`;
+  return DESKTOP_NAV.find((item) => item.shortcut === shortcut)?.id ?? null;
 }
 
 /** 浏览器开发时 ?view=… 的兼容映射（旧名字保留，方便直接打开某一页）。 */
@@ -91,6 +112,8 @@ const VIEW_ALIASES: Record<string, DesktopRoute> = {
   // 语音是第 4 个一级页（D104）；旧调试别名 models 也落到这里。
   voice: { view: "voice", section: "root" },
   models: { view: "voice", section: "root" },
+  // 英语角是第 7 个一级页（词库 + 造句 + 页内用量）。
+  words: { view: "words", section: "root" },
   settings: { view: "settings", section: "root" },
   system: { view: "settings", section: "root" },
   connection: { view: "settings", section: "connection" },

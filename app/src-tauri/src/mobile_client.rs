@@ -152,6 +152,9 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
                 Message::Text(text) => {
                     // 备忘录同步 ack 由 Rust 消费（落 synced_at），不进入聊天记录。
                     let text = text.to_string();
+                    if crate::word::mobile::handle_server_message(&read_app, &text) {
+                        continue;
+                    }
                     if crate::memo::mobile::sync::handle_server_message(&read_app, &text) {
                         continue;
                     }
@@ -203,6 +206,8 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
     }
     println!("[mobile] connected to {url}");
     let _ = app.emit("conn", serde_json::json!({ "online": true, "url": url }));
+    // 连上后补一次英语角同步（未配对会静默跳过）。
+    crate::word::mobile::kick(app.clone());
 
     Ok(())
 }

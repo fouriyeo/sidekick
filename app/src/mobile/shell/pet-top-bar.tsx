@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Gauge, MessageCircle, NotebookPen, RadioTower, Settings } from "lucide-react";
+import { BookOpen, Gauge, NotebookPen, RadioTower, Settings } from "lucide-react";
 import { useEffect } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
@@ -33,7 +33,8 @@ function todayNumbers(stats: TokenUsageStats | null): { cost: string; tokens: st
 
 /**
  * 宠物页顶部 44 条（v17）：左侧 gear（→ 设置）+ 连接状态信号塔图标（→ 连接页），
- * 右侧今日用量数字（→ 用量页）+ chat（→ 消息）。
+ * 右侧今日用量数字（→ 用量页）+ 备忘录（→ 备忘录）+ 英语角（→ 生词本）。
+ * 聊天入口移到设置「消息通道」，不再占顶栏热区。
  *
  * 连接状态不再是主要信息：连上时只显示 20 的信号塔图标（不写「已连接 · 局域网」），
  * 没连上时才在图标旁补最短状态词（连接中 / 重连中 / 重连 Ns / 未连接）；
@@ -118,11 +119,11 @@ export function PetTopBar() {
 
         <button
           type="button"
-          aria-label="消息"
+          aria-label="英语角"
           className={cn(HIT_CLASS, "size-11")}
-          onClick={() => setView("chat")}
+          onClick={() => setView("words")}
         >
-          <MessageCircle aria-hidden="true" className={ICON_CLASS} strokeWidth={1.6} />
+          <BookOpen aria-hidden="true" className={ICON_CLASS} strokeWidth={1.6} />
         </button>
       </div>
     </header>

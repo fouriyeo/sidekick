@@ -20,6 +20,7 @@ children:
   - desktop-ios-ui.md
   - desktop-tray.md
   - desktop-usage-panel.md
+  - english-corner.md
 ---
 
 # 工程方案分支
@@ -39,6 +40,7 @@ children:
 | 做 AI 联动：DSH 脚本注入、Rust 桥、四态协议 | [dsh-hook.md](./dsh-hook.md) | M |
 | 做 Token 用量看板、读 DSH 账本、模型价格 | [token-usage-pricing.md](./token-usage-pricing.md) | L |
 | 做语音备忘录：录音、分段转写、LLM 归类、镜像 | [memo-pipeline.md](./memo-pipeline.md) | M |
+| 做英语角：词库、AI 解释/造句、双端同步、用量 | [english-corner.md](./english-corner.md) | M |
 | 改电脑端界面（Liquid Glass 结构 / 导航 / 列表 / 文案红线） | [desktop-ios-ui.md](./desktop-ios-ui.md) | S |
 | 做菜单栏常驻 / 关窗隐藏 / Dock 图标 / 退出入口 | [desktop-tray.md](./desktop-tray.md) | S |
 | 做菜单栏 Token 小看板 / 第二窗口 / 图标下方定位 | [desktop-usage-panel.md](./desktop-usage-panel.md) | M |

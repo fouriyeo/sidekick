@@ -6,12 +6,21 @@ import { micBusyNow } from "@/mobile/features/mic/mic-store";
  * 手机端视图（v16 干净版）。
  *
  * - 只有 `pet` 是根页面；没有底部三档；
- * - `settings` 从左上 gear 进入，`chat` 从右上 chat 进入，都是二级全屏页；
+ * - `settings` 从左上 gear 进入，`chat` 从设置「消息通道」进入，都是二级全屏页；
  * - `usage` 从宠物页顶栏的今日数字进入（v17，D92），返回回宠物；
+ * - `words`（英语角）从宠物页顶栏的 BookOpen 进入，返回回宠物；
  * - `asking` / `offline` 也是二级页，返回时按层级回 pet / 上一页；
  * - `offline` 记录打开它的视图，返回时回到原页面（「连接」是多入口的排障页）。
  */
-export type MobileView = "pet" | "settings" | "chat" | "usage" | "asking" | "offline" | "memo";
+export type MobileView =
+  | "pet"
+  | "settings"
+  | "chat"
+  | "usage"
+  | "asking"
+  | "offline"
+  | "memo"
+  | "words";
 
 /** 浏览器开发时可用 ?view=usage 直接打开二级页；生产恒为宠物根页。 */
 function initialView(): MobileView {
@@ -21,7 +30,8 @@ function initialView(): MobileView {
     requested === "usage" ||
     requested === "settings" ||
     requested === "chat" ||
-    requested === "memo"
+    requested === "memo" ||
+    requested === "words"
   ) {
     return requested;
   }

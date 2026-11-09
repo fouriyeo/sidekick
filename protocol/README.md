@@ -223,6 +223,17 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 
 未配对连接发 `memo.push/audio.*` 一律 `memo.error{code:"sync_failed"|"audio_*_failed"}`，不落库。同步是手机单写者，不做 CRDT/双向编辑。
 
+## 英语角词库（word.*，已实现）
+
+词库是**双向同步**：桌面与手机各自持有本地 SQLite，连上后合并。鉴权复用备忘录配对令牌（先 `memo.hello` 或直接带 token 的 `word.hello`）；未配对一律 `word.error{sync_failed}`，不落库。合并是字段级、幂等的（见 `docs/engineering/english-corner.md §5`）。
+
+- 握手：手机 → 桌面 `word.hello {deviceId, token, since}`；桌面校验后回 `word.hello.ack {ok}`，随后分批下发快照。
+- 下行：桌面 → 手机 `word.snapshot {words:[…], done, serverNow}`，每批 ≤100 条，`updatedAt > since`（含 90 天内墓碑）；`done:true` 时手机把游标设为 `serverNow`（桌面时钟权威）。
+- 上行：手机 → 桌面 `word.push {words:[…]}`（≤200/批，只发本地 dirty 条目）→ `word.push.ack {ids, cursor}`。
+- 变更广播：任一端变更后桌面广播 `word.changed {words:[…]}` 给其他已配对连接。
+- 词条字段：`id`（=归一化词形）、`word`、`normalized`、`status`（pending/ready/failed）、`explanation`（对象或 null）、`note`、`context`、`source`、`createdAt`、`updatedAt`、`explainedAt`、`deletedAt`、`model`、`promptVersion`、`rev`、`lastError`。
+- 隐私：只同步词条本身；不同步剪贴板历史、设备信息、音频。日志不打印词条正文。
+
 ## 实现映射（当前代码）
 
 - 桌面服务端：`app/src-tauri/src/desktop_server.rs`（axum `/ws`、动态端口、UDP 发现、麦克风会话）
@@ -230,6 +241,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 - 手机 App：`app/src-tauri/src/mobile_client.rs`；前端通过 `connect_server` / `send_chat` / `mic_*` 命令与 `conn` / `chat` 事件通信
 - 麦克风协议：`app/src-tauri/src/mic_protocol.rs`、`app/src/protocol/messages.ts`、`audio-frame.ts`（细节见 [protocol-audio.md](../docs/engineering/protocol-audio.md)）
 - 结果卡片手动按键：`app/src-tauri/src/desktop_keys.rs`（安全闸门/按键计划/目标注册表）、`desktop_server.rs`、`mobile_client.rs`、`app/src/mobile/features/mic/mic-store.ts`
+- 英语角：`app/src-tauri/src/word/`（desktop/mobile/sync/llm/usage/db）、`app/src/protocol/words.ts`、`app/src/desktop/features/words/`、`app/src/mobile/features/words/`
 - 云端识别：`app/src-tauri/src/asr_config.rs`、`asr_keychain.rs`、`asr_cloud.rs`、`bailian_asr.rs`、`asr_usage.rs`、`asr_pricing.rs`（见 [asr-cloud-bailian.md](../docs/engineering/asr-cloud-bailian.md)）
 - 局域网发现（UDP，非本协议）：`app/src-tauri/src/discovery.rs`，报文与算法见 [lan-discovery.md](../docs/engineering/lan-discovery.md)
 - AI 状态：`app/src-tauri/src/dsh_hook.rs`（回环接收/聚合/广播/快照）、`app/src/dsh-hook/sidekick-hook.mjs`、`app/src/mobile/features/pet/ai-status.ts`（手机四态）
