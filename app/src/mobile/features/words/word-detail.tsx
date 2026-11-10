@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Loader2, RotateCcw, Square, Trash2, Volume2 } from "lucide-react";
+import { Loader2, Pause, RotateCcw, Trash2, Volume2 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -37,10 +37,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** 完整解释：只渲染模型真的给出的部分，缺省不占位。 */
 function ExplanationBody({
   detail,
+  pending,
   playing,
   onPlay,
 }: {
   detail: WordDetailData;
+  pending: string | null;
   playing: string | null;
   onPlay: (text: string) => void;
 }) {
@@ -78,6 +80,7 @@ function ExplanationBody({
           <ol className="m-0 list-none p-0">
             {examples.map((item, index) => {
               const speakingSentence = playing === item.en;
+              const pendingSentence = pending === item.en;
               return (
                 <li
                   key={item.en}
@@ -93,13 +96,19 @@ function ExplanationBody({
                     <button
                       type="button"
                       aria-label={
-                        speakingSentence ? `停止朗读例句 ${index + 1}` : `朗读例句 ${index + 1}`
+                        pendingSentence
+                          ? `正在合成例句 ${index + 1}`
+                          : speakingSentence
+                            ? `停止朗读例句 ${index + 1}`
+                            : `朗读例句 ${index + 1}`
                       }
                       className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-wash"
                       onClick={() => onPlay(item.en)}
                     >
-                      {speakingSentence ? (
-                        <Square aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                      {pendingSentence ? (
+                        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+                      ) : speakingSentence ? (
+                        <Pause aria-hidden="true" className="size-4" strokeWidth={2} />
                       ) : (
                         <Volume2 aria-hidden="true" className="size-[18px]" strokeWidth={1.6} />
                       )}
@@ -170,7 +179,7 @@ export function WordDetail({
   const explain = useWordsStore((state) => state.explain);
   const remove = useWordsStore((state) => state.remove);
   const saveNote = useWordsStore((state) => state.saveNote);
-  const { playing, error: audioError, play: playAudio } = useWordAudio();
+  const { pending, playing, error: audioError, play: playAudio } = useWordAudio();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -289,13 +298,19 @@ export function WordDetail({
             <button
               type="button"
               aria-label={
-                playing === current.word ? `停止朗读 ${current.word}` : `朗读 ${current.word}`
+                pending === current.word
+                  ? `正在合成 ${current.word}`
+                  : playing === current.word
+                    ? `停止朗读 ${current.word}`
+                    : `朗读 ${current.word}`
               }
               className="flex size-11 items-center justify-center rounded-full text-primary active:bg-wash"
               onClick={playWord}
             >
-              {playing === current.word ? (
-                <Square aria-hidden="true" className="size-5" strokeWidth={1.8} />
+              {pending === current.word ? (
+                <Loader2 aria-hidden="true" className="size-5 animate-spin" />
+              ) : playing === current.word ? (
+                <Pause aria-hidden="true" className="size-5" strokeWidth={2} />
               ) : (
                 <Volume2 aria-hidden="true" className="size-5" strokeWidth={1.6} />
               )}
@@ -421,7 +436,12 @@ export function WordDetail({
               </Section>
             )}
 
-            <ExplanationBody detail={current} playing={playing} onPlay={playSentence} />
+            <ExplanationBody
+              detail={current}
+              pending={pending}
+              playing={playing}
+              onPlay={playSentence}
+            />
 
             <Section title="备注">
               {editingNote ? (

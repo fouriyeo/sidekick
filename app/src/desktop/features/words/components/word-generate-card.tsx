@@ -1,4 +1,4 @@
-import { Loader2, Sparkles, Volume2 } from "lucide-react";
+import { Loader2, Pause, Sparkles, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ListEmpty, ListGroup } from "@/desktop/shell/list";
 import type { WordSummary } from "@/protocol/words";
@@ -29,6 +29,7 @@ export function WordGenerateCard({
   const {
     play: playAudio,
     playing: audioPlaying,
+    pending: audioPending,
     error: audioError,
     clearError: clearAudioError,
   } = useWordAudio();
@@ -117,6 +118,7 @@ export function WordGenerateCard({
         <ListGroup title={`例句 · ${result.model}`}>
           {result.sentences.map((sentence) => {
             const playing = audioPlaying === sentence.en;
+            const pending = audioPending === sentence.en;
             return (
               <div key={sentence.en} className="dsl-row flex-col items-start gap-1.5">
                 <div className="flex w-full items-start gap-2">
@@ -128,10 +130,17 @@ export function WordGenerateCard({
                     variant="ghost"
                     size="icon"
                     className={`h-11 w-11 shrink-0${playing ? " text-signal" : ""}`}
-                    aria-label={playing ? "停止朗读例句" : "朗读例句"}
+                    aria-label={pending ? "正在合成例句" : playing ? "停止朗读例句" : "朗读例句"}
+                    disabled={pending}
                     onClick={() => void playAudio(sentence.en, "sentence")}
                   >
-                    <Volume2 aria-hidden="true" className="size-[18px]" />
+                    {pending ? (
+                      <Loader2 aria-hidden="true" className="size-[18px] animate-spin" />
+                    ) : playing ? (
+                      <Pause aria-hidden="true" className="size-[18px]" strokeWidth={2} />
+                    ) : (
+                      <Volume2 aria-hidden="true" className="size-[18px]" />
+                    )}
                   </Button>
                 </div>
                 <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{sentence.zh}</p>

@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Loader2, Sparkles, Square, Volume2 } from "lucide-react";
+import { Loader2, Pause, Sparkles, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useWordsStore } from "@/mobile/features/words/words-store";
@@ -28,7 +28,7 @@ export function WordGenerate({ onBack }: { onBack: () => void }) {
   const generateSentences = useWordsStore((state) => state.generateSentences);
 
   const [selected, setSelected] = useState<string[]>([]);
-  const { playing, error: audioError, play: playAudio } = useWordAudio();
+  const { pending, playing, error: audioError, play: playAudio } = useWordAudio();
 
   const ready = items.filter((item) => item.status === "ready");
 
@@ -150,6 +150,7 @@ export function WordGenerate({ onBack }: { onBack: () => void }) {
                 )}
                 {generated.sentences.map((sentence, index) => {
                   const speakingSentence = playing === sentence.en;
+                  const pendingSentence = pending === sentence.en;
                   return (
                     <div key={sentence.en} className={cn(CARD, "mt-2")}>
                       <div className="flex items-start gap-2">
@@ -179,13 +180,19 @@ export function WordGenerate({ onBack }: { onBack: () => void }) {
                         <button
                           type="button"
                           aria-label={
-                            speakingSentence ? `停止朗读例句 ${index + 1}` : `朗读例句 ${index + 1}`
+                            pendingSentence
+                              ? `正在合成例句 ${index + 1}`
+                              : speakingSentence
+                                ? `停止朗读例句 ${index + 1}`
+                                : `朗读例句 ${index + 1}`
                           }
                           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-wash"
                           onClick={() => void playAudio(sentence.en, "sentence")}
                         >
-                          {speakingSentence ? (
-                            <Square aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                          {pendingSentence ? (
+                            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+                          ) : speakingSentence ? (
+                            <Pause aria-hidden="true" className="size-4" strokeWidth={2} />
                           ) : (
                             <Volume2 aria-hidden="true" className="size-[18px]" strokeWidth={1.6} />
                           )}

@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Loader2, RefreshCw, Trash2, Volume2 } from "lucide-react";
+import { Loader2, Pause, RefreshCw, Trash2, Volume2 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { ListActionRow, ListEmpty, ListGroup, ListRow } from "@/desktop/shell/list";
 import { PageHeader } from "@/desktop/shell/page-header";
@@ -80,6 +80,7 @@ function ExplanationGroups({
           <div className="flex flex-col gap-1">
             {examples.map((example) => {
               const playing = audio.playing === example.en;
+              const pending = audio.pending === example.en;
               return (
                 <div key={`${example.en}-${example.zh}`} className="flex items-start gap-2 py-1">
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -93,10 +94,17 @@ function ExplanationGroups({
                     variant="ghost"
                     size="icon"
                     className={cn("h-11 w-11 shrink-0", playing && "text-signal")}
-                    aria-label={playing ? "停止朗读例句" : "朗读例句"}
+                    aria-label={pending ? "正在合成例句" : playing ? "停止朗读例句" : "朗读例句"}
+                    disabled={pending}
                     onClick={() => void audio.play(example.en, "sentence")}
                   >
-                    <Volume2 aria-hidden="true" className="size-[18px]" />
+                    {pending ? (
+                      <Loader2 aria-hidden="true" className="size-[18px] animate-spin" />
+                    ) : playing ? (
+                      <Pause aria-hidden="true" className="size-[18px]" strokeWidth={2} />
+                    ) : (
+                      <Volume2 aria-hidden="true" className="size-[18px]" />
+                    )}
                   </Button>
                 </div>
               );
@@ -223,10 +231,23 @@ export function WordDetailView({ canRequest }: { canRequest: boolean }) {
               variant="ghost"
               size="icon"
               className="h-11 w-11"
-              aria-label={speaking === detail?.word ? "停止朗读" : "发音"}
+              aria-label={
+                audio.pending === detail?.word
+                  ? "正在合成"
+                  : speaking === detail?.word
+                    ? "停止朗读"
+                    : "发音"
+              }
+              disabled={audio.pending === detail?.word}
               onClick={speak}
             >
-              <Volume2 aria-hidden="true" className="size-[18px]" />
+              {audio.pending === detail?.word ? (
+                <Loader2 aria-hidden="true" className="size-[18px] animate-spin" />
+              ) : speaking === detail?.word ? (
+                <Pause aria-hidden="true" className="size-[18px]" strokeWidth={2} />
+              ) : (
+                <Volume2 aria-hidden="true" className="size-[18px]" />
+              )}
             </Button>
           ) : null
         }
