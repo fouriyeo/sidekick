@@ -6,6 +6,11 @@ export type AiState = StatusState;
 
 /** completed 默认展示时长；桌面端会在消息里带 remainingMs 校正。 */
 export const AI_COMPLETED_MS = 3000;
+/**
+ * 桌面与手机时钟可能存在几秒偏差（本机实测约 2 秒）。completed 的「迟到」
+ * 估算先扣掉这个容差：容差内当作在线到达完整播放，只有明显迟到的补发快照才丢弃。
+ */
+export const COMPLETED_CLOCK_TOLERANCE_MS = 5_000;
 /** 工作态文案展示时长；之后只保留动作。 */
 export const AI_WORK_CAPTION_MS = 5000;
 
@@ -75,6 +80,14 @@ function completedDuration(remainingMs: number | null | undefined): number {
 }
 
 /**
+ * completed 的「迟到」时长：手机与桌面时钟可能差几秒，先扣掉容差，
+ * 避免本地时钟快几秒就把在线到达的完成脉冲当成过期消息丢掉。
+ */
+function completedLag(now: number, ts: number): number {
+  return Math.max(0, now - ts - COMPLETED_CLOCK_TOLERANCE_MS);
+}
+
+/**
  * 把 AI 状态推进到 `now`：completed 到期后回到 resume 态。
  * asking 没有到期时间，会一直保留到下一份状态消息。
  */
@@ -107,8 +120,9 @@ export function finishCompleted(status: AiStatus, now: number): AiStatus {
 /**
  * 应用一条协议状态消息。
  *
- * - completed 用 remainingMs（缺省 3000ms）展示，并用消息 ts 估算已经过去的时间；
- *   太旧的 completed 直接忽略，避免回前台/重连时重播庆祝。
+ * - completed 用 remainingMs（缺省 3000ms）展示，并按消息 ts 估算已经过去的时间；
+ *   手机与桌面时钟可能有几秒偏差，先扣掉 COMPLETED_CLOCK_TOLERANCE_MS 再判断，
+ *   只忽略明显迟到的补发快照，避免回前台/重连时重播庆祝。
  * - asking 持续到下一份状态消息；新状态会取消旧的 completed 计时。
  * - 同状态快照只更新元数据，不重置 enteredAt（避免轮询把文案计时一直续命）。
  */
@@ -122,17 +136,18 @@ export function applyAiStatus(
 
   if (message.state === "completed") {
     const duration = completedDuration(message.remainingMs);
-    const age = Math.max(0, now - message.ts);
-    if (duration <= 0 || age >= duration) {
+    const lag = completedLag(now, message.ts);
+    if (duration <= 0 || lag >= duration) {
       return { status: settled, transition: null, stale: true };
     }
 
+    const remaining = duration - lag;
     const resume = toStableState(message.resume);
     const status: AiStatus = {
       state: "completed",
       resume,
       enteredAt: now,
-      completedUntil: now + (duration - age),
+      completedUntil: now + remaining,
       sessions: message.sessions,
       source: message.source,
       messageTs: message.ts,
@@ -147,7 +162,7 @@ export function applyAiStatus(
               from: settled.state,
               to: "completed",
               at: now,
-              completedMs: duration - age,
+              completedMs: remaining,
               resume,
             },
       stale: false,

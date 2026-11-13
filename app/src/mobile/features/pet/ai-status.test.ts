@@ -72,14 +72,14 @@ describe("applyAiStatus", () => {
     expect(completed.stale).toBe(false);
     expect(completed.status.state).toBe("completed");
     expect(completed.status.resume).toBe("working");
-    // 消息 ts 是 NOW，now 已到 NOW+500，所以只剩 2500ms。
-    expect(completed.status.completedUntil).toBe(NOW + AI_COMPLETED_MS);
-    expect(completed.transition?.completedMs).toBe(AI_COMPLETED_MS - 500);
+    // 500ms 的到达延迟在时钟容差内，按完整 3 秒展示。
+    expect(completed.status.completedUntil).toBe(NOW + 500 + AI_COMPLETED_MS);
+    expect(completed.transition?.completedMs).toBe(AI_COMPLETED_MS);
 
-    const stillCelebrating = settleAiStatus(completed.status, NOW + AI_COMPLETED_MS - 1);
+    const stillCelebrating = settleAiStatus(completed.status, NOW + 500 + AI_COMPLETED_MS - 1);
     expect(stillCelebrating.state).toBe("completed");
 
-    const settled = settleAiStatus(completed.status, NOW + AI_COMPLETED_MS);
+    const settled = settleAiStatus(completed.status, NOW + 500 + AI_COMPLETED_MS);
     expect(settled.state).toBe("working");
     expect(settled.completedUntil).toBeNull();
   });
@@ -107,11 +107,11 @@ describe("applyAiStatus", () => {
     expect(completed.transition?.completedMs).toBe(AI_COMPLETED_MS);
   });
 
-  it("消息已经比 remainingMs 更老时视为过期 completed 并忽略", () => {
+  it("明显迟到的 completed（超过时钟容差）视为过期并忽略", () => {
     const asking = applyAiStatus(createIdleAiStatus(), statusMessage("asking"), { now: NOW });
     const staleCompleted = applyAiStatus(
       asking.status,
-      statusMessage("completed", { resume: "idle", remainingMs: 2000, ts: NOW - 2500 }),
+      statusMessage("completed", { resume: "idle", remainingMs: 2000, ts: NOW - 9_000 }),
       { now: NOW },
     );
 
@@ -120,15 +120,27 @@ describe("applyAiStatus", () => {
     expect(staleCompleted.status.state).toBe("asking");
   });
 
-  it("部分过期时只展示剩余时间", () => {
+  it("时钟在容差内（手机比桌面快 2 秒）时 completed 仍完整展示", () => {
     const completed = applyAiStatus(
       createIdleAiStatus(),
-      statusMessage("completed", { resume: "idle", remainingMs: 3000, ts: NOW - 2500 }),
+      statusMessage("completed", { resume: "idle", remainingMs: 3000, ts: NOW - 2100 }),
       { now: NOW },
     );
 
     expect(completed.stale).toBe(false);
-    expect(completed.status.completedUntil).toBe(NOW + 500);
+    expect(completed.status.completedUntil).toBe(NOW + 3000);
+    expect(completed.transition?.completedMs).toBe(3000);
+  });
+
+  it("超过容差后只扣减超出部分", () => {
+    const completed = applyAiStatus(
+      createIdleAiStatus(),
+      statusMessage("completed", { resume: "idle", remainingMs: 3000, ts: NOW - 7000 }),
+      { now: NOW },
+    );
+
+    expect(completed.stale).toBe(false);
+    expect(completed.status.completedUntil).toBe(NOW + 1000);
   });
 
   it("新状态取消旧的 completed 计时", () => {

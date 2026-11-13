@@ -50,6 +50,8 @@ type PetStoreDeps = {
 const BUBBLE_COOLDOWN_MS = 30_000;
 const BUBBLE_DURATION_MS = 4000;
 const SAVE_DEBOUNCE_MS = 500;
+/** 开工音限流：任一会话新开工，最多每 5 秒响一次（多会话并行时避免连响）。 */
+const WORK_START_MIN_GAP_MS = 5_000;
 
 function defaultAppVisible(): boolean {
   if (typeof document === "undefined") return true;
@@ -85,6 +87,10 @@ export function createPetStore(deps: PetStoreDeps) {
   let lastBubbleAt = 0;
   let bubbleId = 0;
   let captionId = 0;
+  /** 上一份快照里处于 working 的会话 id；null = 还没收到过带列表的快照。 */
+  let workingSessionIds: Set<string> | null = null;
+  /** 开工音上次播放时间；跨会话共享的 5 秒限流。 */
+  let lastWorkStartAt = 0;
 
   return create<PetStoreState>((set, get) => {
     function scheduleSave() {
@@ -195,10 +201,21 @@ export function createPetStore(deps: PetStoreDeps) {
       }, delay);
     }
 
+    /**
+     * 开工音：任一会话新进入 working 都算，但 5 秒内最多响一次。
+     * 仍然复用 sounds.playWork 的四道门（声音开关/前台/宠物页/录音）与解锁态；
+     * 门没开时 playWork 返回 false，不占用限流窗口。
+     */
+    function playWorkStart(now: number) {
+      if (lastWorkStartAt > 0 && now - lastWorkStartAt < WORK_START_MIN_GAP_MS) return;
+      if (deps.sounds?.playWork()) lastWorkStartAt = now;
+    }
+
     function applyAiSignals(
       transition: { from: AiState; to: AiState },
       visible: boolean,
       mic: boolean,
+      now: number,
     ) {
       if (transition.to === "asking") {
         if (get().pet.settings.haptics && visible && !mic) {
@@ -225,7 +242,7 @@ export function createPetStore(deps: PetStoreDeps) {
           deps.sounds?.stopAsking();
           return;
         }
-        deps.sounds?.playWork();
+        playWorkStart(now);
         return;
       }
 
@@ -318,6 +335,27 @@ export function createPetStore(deps: PetStoreDeps) {
         const micListening = options.micListening ?? get().micListening;
         const visible = options.visible ?? appVisible();
 
+        // 开工音按会话判定：任一会话从非 working 变为 working 就触发一次，
+        // 由 playWorkStart 做 5 秒限流。首份带列表的快照只建基线，不重复补响。
+        const sessionList = message.sessionList;
+        if (Array.isArray(sessionList)) {
+          const working = new Set<string>();
+          for (const session of sessionList) {
+            if (session.state === "working") working.add(session.id);
+          }
+          if (workingSessionIds !== null) {
+            let started = false;
+            for (const id of working) {
+              if (!workingSessionIds.has(id)) {
+                started = true;
+                break;
+              }
+            }
+            if (started) playWorkStart(now);
+          }
+          workingSessionIds = working;
+        }
+
         if (options.micListening !== undefined && options.micListening !== get().micListening) {
           set({ micListening: options.micListening });
         }
@@ -331,7 +369,7 @@ export function createPetStore(deps: PetStoreDeps) {
         if (!transition) return;
 
         updateAiCaption(status, now, true);
-        applyAiSignals(transition, visible, micListening);
+        applyAiSignals(transition, visible, micListening, now);
       },
 
       setMicListening: (listening: boolean) => {

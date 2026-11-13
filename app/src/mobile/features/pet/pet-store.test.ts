@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StatusMessage, StatusState } from "@/protocol/messages";
+import type { SessionSummary, StatusMessage, StatusState } from "@/protocol/messages";
 import { createDefaultSave } from "./persistence";
 import { createPetStore } from "./pet-store";
 import type { PetSaveV1 } from "./types";
@@ -297,7 +297,7 @@ describe("pet store AI 联动", () => {
 
     store
       .getState()
-      .applyAiStatus(aiMessage("completed", { resume: "idle", ts: clock.now - 5000 }), {
+      .applyAiStatus(aiMessage("completed", { resume: "idle", ts: clock.now - 9000 }), {
         now: clock.now,
       });
 
@@ -339,6 +339,135 @@ describe("pet store AI 联动", () => {
     sounds.playWork.mockClear();
     store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
     expect(sounds.playWork).not.toHaveBeenCalled();
+  });
+
+  describe("开工音按会话触发", () => {
+    function sessionSummary(
+      id: string,
+      state: "working" | "idle" | "asking" = "working",
+    ): SessionSummary {
+      return {
+        id,
+        title: id,
+        source: "dsh",
+        state,
+        askKind: null,
+        lastEventAt: NOW,
+        completedAt: null,
+      };
+    }
+
+    it("聚合已是 working 时，新会话开工也响开工音", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store.getState().applyAiStatus(aiMessage("working", { sessionList: [sessionSummary("a")] }), {
+        now: clock.now,
+      });
+      expect(sounds.playWork).toHaveBeenCalledTimes(1);
+
+      sounds.playWork.mockClear();
+      clock.now = NOW + 6000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("working", { sessionList: [sessionSummary("a"), sessionSummary("b")] }),
+          { now: clock.now },
+        );
+
+      expect(store.getState().ai.state).toBe("working");
+      expect(sounds.playWork).toHaveBeenCalledTimes(1);
+    });
+
+    it("同一份会话列表的心跳不重复响；新开工 5 秒内最多一次", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("working", { sessionList: [sessionSummary("a"), sessionSummary("b")] }),
+          { now: clock.now },
+        );
+      sounds.playWork.mockClear();
+
+      // 1 秒后新会话 c 开工：被 5 秒限流吞掉，但仍进入基线。
+      clock.now = NOW + 1000;
+      store.getState().applyAiStatus(
+        aiMessage("working", {
+          sessionList: [sessionSummary("a"), sessionSummary("b"), sessionSummary("c")],
+        }),
+        { now: clock.now },
+      );
+      expect(sounds.playWork).not.toHaveBeenCalled();
+
+      // 心跳重复同一列表：不响。
+      clock.now = NOW + 5000;
+      store.getState().applyAiStatus(
+        aiMessage("working", {
+          sessionList: [sessionSummary("a"), sessionSummary("b"), sessionSummary("c")],
+        }),
+        { now: clock.now },
+      );
+      expect(sounds.playWork).not.toHaveBeenCalled();
+
+      // 限流窗口过后新会话 d 开工：重新响一次。
+      clock.now = NOW + 12_000;
+      store.getState().applyAiStatus(
+        aiMessage("working", {
+          sessionList: [
+            sessionSummary("a"),
+            sessionSummary("b"),
+            sessionSummary("c"),
+            sessionSummary("d"),
+          ],
+        }),
+        { now: clock.now },
+      );
+      expect(sounds.playWork).toHaveBeenCalledTimes(1);
+    });
+
+    it("会话完成后再开工（聚合仍 working）会重新响", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("working", { sessionList: [sessionSummary("a"), sessionSummary("b")] }),
+          { now: clock.now },
+        );
+      sounds.playWork.mockClear();
+
+      clock.now = NOW + 6000;
+      store.getState().applyAiStatus(
+        aiMessage("working", {
+          sessionList: [sessionSummary("a"), sessionSummary("b", "idle")],
+        }),
+        { now: clock.now },
+      );
+      expect(sounds.playWork).not.toHaveBeenCalled();
+
+      clock.now = NOW + 7000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("working", { sessionList: [sessionSummary("a"), sessionSummary("b")] }),
+          { now: clock.now },
+        );
+      expect(sounds.playWork).toHaveBeenCalledTimes(1);
+    });
+
+    it("首份列表不会因为基线初始化额外响一次", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("working", { sessionList: [sessionSummary("a"), sessionSummary("b")] }),
+          { now: clock.now },
+        );
+
+      // 只有聚合 idle→working 的那一次，不因两条会话重复计数。
+      expect(sounds.playWork).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("关闭震动、后台或录音中都不发 AI 触感", async () => {
