@@ -38,7 +38,7 @@ description: Sidekick 功能交付流程。用户要“做宠物/做麦克风/�
 ### 2. 技术 spike（高风险才做）
 
 - 麦克风：Android 采集、本机 ASR、macOS 文本输入，各设通过门槛。
-- 宠物：OpenPets 帧动画图集/状态机、真机 60fps、poster 降级。
+- 宠物：BoopFace 皮肤/动作总线、真机 60fps、兜底色降级。
 - Spike 代码可丢弃；结论写回 `engineering/` 和 `decisions.md`。
 
 ### 3. 实现
@@ -46,7 +46,7 @@ description: Sidekick 功能交付流程。用户要“做宠物/做麦克风/�
 - 目录：`mobile/features/<feature>`、`desktop/features/<feature>`、`shared/`、`protocol/`。
 - Tauri 只走 `shared/lib/tauri.ts`；协议类型集中；不裸 invoke。
 - 音频不落盘、不后台、不日志全文；文本输入不自动回车/发送。
-- 宠物只动 transform/opacity；图集加载/解码失败要有 poster 降级。
+- 宠物只动 transform/opacity；皮肤加载失败要有兜底色，不白屏。
 - 文案集中管理；错误文案说明原因 + 下一步。
 
 ### 4. 验证

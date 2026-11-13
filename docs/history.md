@@ -1,6 +1,6 @@
 # 变更历史
 
-> 2026-10-31 → 2026-11-09 的变更记录，按日期排序；每条保留主题、决策编号（D）、结论/影响与验证证据，细节见 [decisions.md](./decisions.md)，当前快照见 [status.md](./status.md)。
+> 2026-10-31 → 2026-11-13 的变更记录，按日期排序；每条保留主题、决策编号（D）、结论/影响与验证证据，细节见 [decisions.md](./decisions.md)，当前快照见 [status.md](./status.md)。
 > 编号只作文档索引：原 `status.md`「时间线」1–44 条 + 末尾错位追加的 45–63 条合并重排为 1–64（重复编号「46」的两条按不同主题分别保留）。
 
 ## 变更时间线
@@ -73,6 +73,18 @@
 65. **2026-11-08 · 仓库开源（D127）** — 仓库由私有转公开，源码 MIT；`LICENSE` / `NOTICE.md`（宠物图集例外、HarmonyOS Sans 字体协议全文）/ `.github`（贡献、安全、issue 模板、PR 模板、CI）/ 中文开源版 README（4 张 dev-mock 截图）；历史里真名、个人/公司邮箱、本机路径、公司 WiFi 名用 `git-filter-repo` 替换后 force push。证据：`check-docs` 通过、CI 首跑、公开后匿名 clone 通过。
 65. **2026-11-09 · 英语角（生词本）双端落地（D128/D129）** — 桌面第 7 个一级页「英语角 ⌘7」+ 手机全屏页（顶栏原消息位）；Rust `word` 模块（SQLite 词库、百炼 `qwen3.8-flash` 解释/造句、JSON 修复兜底、日用量 `word_usage.json`、字段级双向同步 `word.*`）；桌面/手机各自本地库，配对后局域网合并；Key 复用桌面 `asr.json` 与手机备忘录配对下发；证据：Rust 231 tests、前端 838 tests / 100 files、`pnpm typecheck/lint/build`、`qa-desktop-ios.mjs` 72 张截图无溢出、Android debug APK 构建通过；真机（Android 13 / ColorOS）双向同步已验证（桌面 → 手机快照、手机离线新增 dirty → 联网补推、ack 清 dirty）；账单对账待补。
 66. **2026-11-10 · 英语角语音朗读（D130）** — 接入 qwen-audio-3.1-tts-plus：单词 0.85 语速、例句自然语速、`language_hints:["en"]` + 指令控制；音频按 `sha256(model|voice|rate|text)` 缓存到 `word_audio/`，重复播放 0 请求 0 费用；桌面失败回退 macOS `say`；用量新增语音合成次数/字符/估算费用。证据：真机（Android 13）单词与例句合成成功（mp3 24kHz）、二次播放缓存命中（文件数/计费不变）、按字符记账正确；Rust 235 tests、前端 105 files / 872 tests、桌面 QA 72 截图无溢出。
+
+67. **2026-11-13 · 玩法模块方案 + K歌/扩音调研（D131）** — 新增 `docs/prd/playground/`：非主功能小功能候选池（入口、Gate 0、生命周期、候选表）；K歌/人声扩音完成产品/UX/架构三方评审与可行性调研：蓝牙音响 + 手机麦（E）最可行、手机喇叭 + 耳机麦（A）最难、电脑放伴奏 + 手机无线麦（D）最稳；结论是**暂不开发**，先用现成扩音 App 试听感；证据：`docs/prd/playground/INDEX.md`、`karaoke.md`、`node scripts/check-docs.mjs` 通过。
+
+68. **2026-11-13 · 桌面快捷键遥控手机录音（D132/D133）** — 桌面新增全局快捷键：默认关闭、默认单键「按一下右 Command」，可自由改左/右 Command、Control、Shift、Option 或任意单键，也可录制组合键（组合键可切按住式）；Rust 新增 `hotkey`（NSEvent 全局+本地旁听、不吞键、单键按一下判定 + 剔除 ⌘C 类误触、Esc 取消、`~/.sidekick/hotkey.json`）、`mic_remote`（单手机路由、2s ack 超时、多手机拒绝）、`mic_hud`（always-on-top 非激活窗口、2.5s 自动收起）；协议新增 `mic.remote` / `mic.remote.ack` / `mic.remote.status`；手机端新增「电脑遥控录音」开关（更多 › 麦克风，默认开）与 `AudioBlockedError → audio_blocked` 明确失败；语音页新增「键盘快捷键」卡。证据：Rust 新增 11 条单测（hotkey 判定 10 + remote 1）、前端 894 tests / 109 files、`pnpm typecheck/lint/build`、`cargo check --tests`、`check-docs`/`check-boundaries`；真机与真窗口验收待补。
+
+69. **2026-11-13 · AI 音效开工音按会话触发 + 完成态时钟容差（D134）** — 手机端 `pet-store` 比对 `status.sessionList` 里处于 working 的会话 id：任一会话新开工就响开工音（5 秒限流、首份快照只建基线不补响），解决多会话并行时聚合状态长期 working、发消息不响的问题；`ai-status` 给 completed 的迟到估算加 5 秒时钟容差（本机手机比 Mac 快约 2.1 秒），避免完成音被误判过期。证据：pet/ai-status 139 tests 通过、`pnpm typecheck` 通过；真机验收待补。
+
+70. **2026-11-13 · 菜单栏看板间隙收到 4pt + 钉住（D135）** — 把原来兼任「窗口上举量」和「卡片间距」的 8pt 顶部留白拆成 `WINDOW_LIFT = 8`（窗口位置公式不动，托盘图标点击区零影响）与 `PAD_TOP = 4`（卡片视觉间隙 8→4pt），窗口 360×468→360×464，玻璃底衬矩形与 `.dsl-panel` 顶部留白同步；面板 header 新增 pin：钉住后只豁免失焦收起（点其它 App / 桌面仍挂最上层），Esc / 再点图标 / Cmd+W 照收，收起不取消钉住、重启重置。证据：Rust 251 tests（`usage_panel` 9 例，含钉住往返与失焦闸门）、前端 113 files / 937 tests（面板 12 例）、`pnpm typecheck/lint/build`、`check-docs`/`check-boundaries`；真窗口间隙与钉住目检待补。
+
+
+71. **2026-11-14 · 宠物换装 BoopFace + 12 个动作（D136/D137）** — 手机宠物从 OpenPets 图集（`sprite-*` + 760KB WebP）换成 `boopface@0.8.0` 原生 Web Component，固定皮肤 201「冰透蓝」、圆度 50、按压/拖天线/视线跟随全关；新增动作总线（`pet-action.ts` 优先级纯函数 + `pet-reaction.ts` 瞬态反应 + `pet-reaction-wiring.ts` 边沿触发），动作从 4 态扩到 12 个：录音中 `input`、转写中 `inspect`、上屏 `affirm`、失败 `failure`、断连 `failure`、重连 `affirm`（首连不算）、新会话 `surprise`、回来问候 `love`；等待态用 `waiting-wave`（`waiting-spin` 会重叠成独眼、`waiting-wrap` 会空白脸）。**推翻 D77 的「麦克风不产生宠物事件」视觉部分**，保留录音静音音效/触感与「触摸无互动」。授权侧同时清掉 D127 唯一无 LICENSE 的图集资产，NOTICE 改为 BoopFace 声明（代码 MIT、形象不转让）。证据：前端 113 files / 931 tests、`pnpm typecheck/lint/build`、构建产物无 WebP 图集；真机（RMX3370 / Android 13 / WebView 103）working 态 rAF 60fps、`data-pet-action` 四态正确、深浅主题通过；30 分钟 soak 与动作逐项触发待补。
+
 
 ## 验证记录（原「已验证」小节，未进时间线的项）
 

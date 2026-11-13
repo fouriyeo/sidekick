@@ -107,7 +107,7 @@ describe("PetStage AI 联动展示", () => {
 
   it("点击、长按、滑动宠物都没有任何反应、也不写存档", () => {
     const { container } = renderStage();
-    const pet = container.querySelector("[data-sprite-state]");
+    const pet = container.querySelector("[data-pet-action]");
     if (!(pet instanceof HTMLElement)) throw new Error("宠物未渲染");
 
     const before = usePetStore.getState();
@@ -147,7 +147,7 @@ describe("PetStage D77 舞台红线", () => {
 
   it("点击、长按、滑动宠物都没有任何反应、也不写存档", () => {
     const { container } = renderStage();
-    const pet = container.querySelector("[data-sprite-state]");
+    const pet = container.querySelector("[data-pet-action]");
     if (!(pet instanceof HTMLElement)) throw new Error("宠物未渲染");
 
     const before = usePetStore.getState();

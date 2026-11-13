@@ -68,7 +68,7 @@
 ### 3.6 换得掉吗？
 
 - 网络/存储/传输/动画必须包一层 adapter；feature 只依赖项目内接口。
-- 不把第三方库的类型（如 Base UI 内部类型、图集播放器内部类型）暴露到 feature 之外。
+- 不把第三方库的类型（如 Base UI 内部类型、宠物组件内部类型）暴露到 feature 之外。
 - PR 中写一句“如果不用它，替代方案是什么”。
 
 ## 4. 许可证策略
@@ -104,8 +104,8 @@
 | 首屏 JS | ≤ 150KB gzip | React + 基础组件 + 连接/聊天壳 |
 | 首屏 CSS | ≤ 40KB gzip | Tailwind 按需输出 |
 | 单次新增依赖 | ≤ 20KB gzip 首屏 | 超过需说明；> 50KB 必须懒加载 |
-| 宠物 chunk | ≤ 600KB JS | 图集播放器在 mobile chunk 内 |
-| 宠物图集 | ≤ 1MB WebP | 只进 mobile 按需 chunk；poster ≤ 20KB |
+| 宠物 chunk | ≤ 600KB JS | BoopFace 组件 + 皮肤 catalog 在 mobile chunk 内 |
+| 宠物皮肤 painter | ≤ 250KB（懒加载） | 只在用到皮肤时下载；201 只触发 material 一族 |
 | 中端安卓首屏 | ≤ 1.5s | Realme 真机 |
 | 动画 | 60fps | 只动 transform/opacity |
 
@@ -149,6 +149,7 @@
 | `@testing-library/jest-dom` | DOM 断言 | 开发期 | MIT | 7.0.x |
 | `jsdom` | 测试 DOM 环境 | 开发期 | MIT | 30.x |
 | `vite-bundle-visualizer` | 体积分析 | 开发期 | MIT | 按需 |
+| `boopface` | 手机宠物渲染器 + 皮肤（例外，见下） | 运行时 | MIT | 0.8.0（精确锁） |
 
 说明：
 
@@ -157,7 +158,12 @@
 - `tw-animate-css` 是 shadcn 组件的 CSS 过渡类，不是第二套 JS 动画引擎。
 - 复制出来的组件由项目维护，见第 9 节。
 - `qrcode` 如果后续被 React 组件替代，按新增依赖流程走。
-- 宠物图集来自外部资产（当前为 DeepSeek 鲸鱼，zip 内无 LICENSE）；仅用于本地实验，正式发版前必须确认授权或替换为自有资产。
+- **`boopface@0.8.0`（例外登记，2026-11-14）**：手机宠物的渲染器与皮肤，原生 Web Component、零运行时依赖、MIT。准入六问的实际结论：
+  - 用途明确：替换 D127 里唯一无 LICENSE 的随包资产（760KB 图集），同时把矢量/皮肤/动作一次拿到。
+  - 体积：首屏 +约 38KB gzip（超过 §3 的 20KB 说明线）；皮肤 painter 是懒加载 chunk（约 190KB，随包但不首屏）。
+  - **维护方只有一位（CX ArtLab），不满足 §3.2「≥2 名维护者」** → 按例外处理：精确锁 `0.8.0`（不用 `^`），负责人 = 项目所有者，复核时间 = 2027-05 或上游发布 1.0 时，退出方案 = vendor 源码到 `app/src/mobile/features/pet/vendor/`（MIT 允许）或 fork。
+  - 授权：代码 MIT，角色形象不随 MIT 转让 → 只作内嵌形象，不宣称原创（NOTICE 记录）。
+  - 不满足「pre-release 不入生产」的字面要求（0.8.0 是 1.0 前版本，但非 RC/pre-release）；风险由锁版本 + 单点调用面（`boop-pet.tsx` 一个文件）兜住。
 
 ## 8. 禁止与慎用
 

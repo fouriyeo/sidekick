@@ -47,7 +47,7 @@ DSH session/event
 | `app/src/mobile/features/sessions/session-storage.ts` | 本地清除标记（`sidekick-sessions.json`，只存 id + 时间） |
 | `app/src-tauri/src/app_focus.rs` | 手机 focus 请求 → 激活/启动 DSH（macOS `open -a`） |
 | `app/src/mobile/features/pet/sound.ts` | Web Audio 三音效 |
-| `app/src/mobile/features/pet/pet-stage.tsx` / `sprite-pet.tsx` / `pet.module.css` | 宠物舞台与帧动画图集播放（四态姿态）；只 transform/opacity |
+| `app/src/mobile/features/pet/pet-stage.tsx` / `boop-pet.tsx` / `pet-action.ts` / `pet.module.css` | 宠物舞台与 BoopFace 动作（四态 + 录音/连接/会话/问候）；只 transform/opacity |
 
 ## 3. DSH 注入
 
@@ -195,8 +195,8 @@ DSH session/event
   - asking 持久；working 覆盖 sleep；away 优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
 - `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
 - `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音；总音量 `MASTER_GAIN = 3.9`（在 3 倍基础上再 +30%，约 +2.3 dB；单音峰值最高 0.702，不削波）。
-- `pet-stage.tsx` / `sprite-pet.tsx`：`data-ai-state`；帧动画图集按状态候选链播放；只 transform/opacity。
-- `pet-page.tsx`：宠物页组装（顶部条 → 会话卡 → 鲸鱼 → 麦克风）。
+- `pet-stage.tsx` / `boop-pet.tsx`：`data-ai-state` + `data-pet-action`；动作由 `pet-action.ts` 优先级决定；只 transform/opacity。
+- `pet-page.tsx`：宠物页组装（顶部条 → 会话卡 → 宠物 → 麦克风）。
 - `app.tsx`：上线/回前台 `sendStatusRequest()`；状态不追加到聊天。
 - 旧存档 schema 不变；AI 状态只存内存。
 - 会话卡：`session-store` 过滤本地清除标记（`lastEventAt <= cleared.through` 隐藏）、排序 asking/working/completed/idle；`session-feed` 置顶在宠物页，折叠 1 行 / 展开最多 5 行（无自动展开），超出的只保留 header 计数；点 asking 行进「等你决定」页，其他行只读。工作中行显示小圆环 spinner + 「正在<动作>」（bash 运行命令 / read 阅读文件 / edit 修改文件 / search 搜索代码 / web 查资料 / agent 处理子任务 / plan 整理计划 / tool 使用工具；无 `tool` 显示「正在思考」），行尾保留「 · 相对时间」。

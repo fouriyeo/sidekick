@@ -8,7 +8,7 @@ load: on-demand
 
 # 视觉与动效规范
 
-> 概念：**深海声呐（Direction B · Sonar）**——鲸鱼在深海里发声，电脑和手机用声呐互相找到；信号与连接本身就是品牌。
+> 概念：**深海声呐（Direction B · Sonar）**——宠物在深海里发声，电脑和手机用声呐互相找到；信号与连接本身就是品牌。
 > 两套主题：深色「深海自发光」与浅色「海面雾光 + 海玻璃」（第二主题，重新设计光源，不是把深色反色）。外观默认跟随系统；宠物舞台随主题——深色是深海自发光，浅色换成「海玻璃舞台」。
 > 唯一事实源：颜色、圆角、字体、动效令牌以 [`app/src/shared/styles/tokens.css`](../../app/src/shared/styles/tokens.css) 为基线；桌面另有 [`app/src/desktop/styles/ios.css`](../../app/src/desktop/styles/ios.css)（`.desktop-ios` 作用域；D85 定「简约 iOS」结构，**D86 升级为 Liquid Glass · iOS 26 质感层**），手机另有 `app/src/mobile/styles/clean.css`（`.mobile-clean`，D80；字体 D91），两者互不影响。本文档解释语义与用法。2026-11-04 起取代「夜灯桌宠」单暗色方案（[D71](../decisions.md)）；同日 D76 把默认值改为跟随系统、宠物舞台随主题；2026-11-06 D85 桌面换「简约 iOS」，D86 换 Liquid Glass。
 
@@ -37,7 +37,7 @@ load: on-demand
 
 - 默认跟随系统：`sidekick:theme` 缺失/非法一律视为 `system`，首次启动、无存档时随系统亮暗（运行时见 [frontend-architecture](../frontend-architecture.md#6-样式规范)）；只有 localStorage 不可用（隐私模式等）时运行时静默回退深色，偏好本身不会写成 `dark`。
 - 浅色是独立手调的一套，不是反色；两套都必须单独验收对比度与视觉层级。
-- **宠物舞台随主题**：深色 `--pet-bg #030e12` 深海自发光；浅色换成「海玻璃舞台」`--pet-bg #dcebe7`（表面 `#f7fcfa`/`#edf7f3`、文字 `#0e2a2b`/`#3f5e5d`）。鲸鱼资产不重绘、不加 CSS filter，浅底对比度偏低是已知代价（见 §8）。
+- **宠物舞台随主题**：深色 `--pet-bg #030e12` 深海自发光；浅色换成「海玻璃舞台」`--pet-bg #dcebe7`（表面 `#f7fcfa`/`#edf7f3`、文字 `#0e2a2b`/`#3f5e5d`）。宠物资产不重绘、不加 CSS filter，浅底对比度偏低是已知代价（见 §8）。
 
 **桌面「Liquid Glass · iOS 26」作用域（D85 结构 + D86 质感，`ios.css` 只挂 `.desktop-ios`）**
 
@@ -111,14 +111,14 @@ load: on-demand
 | `--destructive` / `--destructive-foreground` | `#9c3a2b` / `#fff8f6` | `#e6847a` / `#2b100c` | 删除/失败，只小面积 | 6.52 / 6.10（卡片） |
 | `--chart-1…5` | 见 tokens.css | 见 tokens.css | 图表，顺序 = signal / whale / decide / destructive / success | — |
 
-**宠物作用域**：`--pet-*` 随主题切成两套。深色：`--pet-bg #030e12`、surface `#0b242c`/`#11313a`、wash `#10393b`、text `#dceceb`、muted `#93b4b2`、border `#2b5560`、input `#578893`、primary `#3fc4a0`/`#032019`、signal `#6ef0c8`、coral `#e6847a`、coral-foreground `#2b100c`、ask `#eab173`、success `#64d9a4`、danger `#e6847a`。浅色「海玻璃舞台」：`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、wash `#cfe4de`、text `#0e2a2b`、muted `#3f5e5d`、border `#9dbab4`、input `#6f8f89`、primary `#095b51`/`#f7fdfb`、signal `#0a7764`、coral `#b34628`、coral-foreground `#fff8f6`、ask `#8a5410`、success `#186b49`、danger `#9c3a2b`。始终深色的表面（桌面麦克风浮层）加 `.deep-sea-scope` 重新钉住深色 pet 令牌，以及浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），避免浅色主题把深底浮层刷成深底深字/深底深信号色。鲸鱼本体颜色归 OpenPets 图集，CSS 不再定义 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek`。
+**宠物作用域**：`--pet-*` 随主题切成两套。深色：`--pet-bg #030e12`、surface `#0b242c`/`#11313a`、wash `#10393b`、text `#dceceb`、muted `#93b4b2`、border `#2b5560`、input `#578893`、primary `#3fc4a0`/`#032019`、signal `#6ef0c8`、coral `#e6847a`、coral-foreground `#2b100c`、ask `#eab173`、success `#64d9a4`、danger `#e6847a`。浅色「海玻璃舞台」：`--pet-bg #dcebe7`、surface `#f7fcfa`/`#edf7f3`、wash `#cfe4de`、text `#0e2a2b`、muted `#3f5e5d`、border `#9dbab4`、input `#6f8f89`、primary `#095b51`/`#f7fdfb`、signal `#0a7764`、coral `#b34628`、coral-foreground `#fff8f6`、ask `#8a5410`、success `#186b49`、danger `#9c3a2b`。始终深色的表面（桌面麦克风浮层）加 `.deep-sea-scope` 重新钉住深色 pet 令牌，以及浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），避免浅色主题把深底浮层刷成深底深字/深底深信号色。宠物本体颜色归 OpenPets 图集，CSS 不再定义 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek`。
 
 ### 3.1 语义约定
 
 - **`--signal`（= `--ring`）**：负责「读数」——数据字、声呐环、状态点、导航高亮、focus ring。它比 `--primary` 更亮/更青一档（同族两级），不单独承担大块实色。
 - **`--primary`**：负责「可点」——主按钮实色。浅色主题必须保持深水青 `#095b51`，不要为了“亮”提亮成荧光绿，否则会退化成「白底亮绿按钮」。
 - **`--decide`（琥珀）**：只出现在「等你决定 / 需要你确认」。表单校验失败、连接失败用 `--destructive`，不能用琥珀。
-- **`--whale`（鲸蓝）**：次层信息、鲸鱼剪影、完成态、图表第二色。**不要写进 `--accent`**——`--accent` 是 shadcn 的 hover/选中面，语义上等于 `--wash`；改 `--accent` 会让所有组件 hover 变蓝块。
+- **`--whale`（鲸蓝）**：次层信息、宠物剪影、完成态、图表第二色。**不要写进 `--accent`**——`--accent` 是 shadcn 的 hover/选中面，语义上等于 `--wash`；改 `--accent` 会让所有组件 hover 变蓝块。
 - **`--wash`**：选中、悬停、我方气泡的薄荷薄层，不是实色。
 - **`--abyss` / `--glow`**：只在深色舷窗/宠物舞台内部使用；`--glow` 是装饰光，不能做文字色，也不能铺大面积。
 - **`--border` 是 hairline（约 1.9:1）**：只做分隔和轮廓，靠 1px 线 + 相邻表面明度差 + 2px focus ring 建立边界。为满足 WCAG 1.4.11（非文字 ≥ 3:1），表单控件（input/textarea/select/checkbox 边框）单独用加强的 **`--input`**，而不是把全站描边加粗——整页 3:1 描边会把仪器感变成工程图，而卡片/分隔线并不参与控件识别。
@@ -192,11 +192,11 @@ load: on-demand
 | --- | --- | --- | --- |
 | 微动效 | CSS transition | hover、按下、颜色、透明度、呼吸点 | 120–180ms；只动 transform/opacity/color |
 | 界面 | Motion | 弹层/抽屉、页面进入、滑块 morph、数字/柱阵入场 | 240–420ms；桌面用 spring 或 `cubic-bezier(.16,1,.3,1)`（详见下） |
-| 角色 | 帧动画图集 | 宠物 AI 四态与状态行 | 10fps；后台/覆盖层暂停；减少动效冻结第 0 帧 |
+| 角色 | BoopFace SVG 组件 | 宠物 12 个动作（四态 + 录音/连接/会话/问候） | 约 30fps；页面卸载即停；减少动效 `motion=reduce` |
 | 装饰 | CSS keyframes | 桌面状态点声呐环、呼吸点 | 见下；纯装饰、`aria-hidden` |
 
 - 时长令牌：`--dur-1 120ms` / `--dur-2 180ms` / `--dur-3 240ms` / `--dur-4 320ms`；缓动统一 `--motion-ease-out-soft`（`cubic-bezier(.22,1,.36,1)`）。
-- **声呐环**：只剩桌面「已连接」状态点的 5.6s 极慢同心环（`.sonar-dot-ring`，细描边、低亮度，已落地）；手机宠物舞台的背景环已删除（D77，舞台不再绘制声呐环）。环只动 `transform`/`opacity`，不发光、不叠 `filter`；是背景装饰，不参与宠物帧选择，也不包住鲸鱼本体。
+- **声呐环**：只剩桌面「已连接」状态点的 5.6s 极慢同心环（`.sonar-dot-ring`，细描边、低亮度，已落地）；手机宠物舞台的背景环已删除（D77，舞台不再绘制声呐环）。环只动 `transform`/`opacity`，不发光、不叠 `filter`；是背景装饰，不参与宠物帧选择，也不包住宠物本体。
 - 呼吸光点 3.2s：已连接但空闲时一个 8px 光点极慢呼吸，不闪不转。
 - 按钮/状态反馈 ≤ 100ms；宠物瞬态庆祝已随首次命名下线（2026-11-05）；已无失败关心短态（D77）。
 - **桌面 Liquid Glass 动效（D86）**：一级页 fade 320ms、设置二级页 push 340ms（右侧 26px 推入）；侧栏滑块 spring（stiffness 520 / damping 40 / mass 0.8）、分段滑块 spring（520 / 38 / 0.7）；按压缩放行 0.996、按钮 0.97、checkbox 0.94；弹层入场 300ms + 遮罩 220ms（blur 0→10）；用量数字 400ms 补间、柱阵 420ms / 20ms 错峰。只动 `transform` / `opacity` / 颜色，不做循环装饰。
@@ -227,14 +227,16 @@ load: on-demand
 - 图标统一 lucide-react；尺寸 16/20/24/28，线宽 1.8（组件可按需微调）；不只靠图标表达状态。桌面列表可配 iOS 同款 30×30 彩色图标块（圆角 10、白字、7 个 system color），普通图标仍用薄荷线性。
 - **玻璃纪律**：玻璃只允许出现在控件层（侧栏 / 工具栏 / 动作组 / 分段轨道 / 次级按钮 / 辅助功能提示 / 弹层遮罩）；不在内容卡、列表或滚动内容上叠 `backdrop-filter`，不做整页磨砂、发光边框、扫描线动画。
 
-## 8. 宠物资产红线（不可越界）
+## 8. 宠物形象与动作红线（不可越界）
 
-1. **复用现有 OpenPets schema 2 图集 + `SpritePet`**：资产在 `app/src/mobile/features/pet/assets/openpet/`（`pet.json` + `spritesheet.webp` + `poster.webp`）。不重绘、不染色、不新增鲸鱼，不用 CSS `filter` 调鲸鱼颜色。
-2. **颜色归图集**：`tokens.css` 不再定义 `--pet-body` / `--pet-belly` / `--pet-eye` / `--pet-cheek`；不要再为鲸鱼本体加颜色变量或内联 fill。
-3. **舞台随主题（浅色海玻璃）**：`--pet-*` 跟随 `data-theme`——深色是 `--pet-bg #030e12` 深海自发光，浅色换成「海玻璃舞台」`--pet-bg #dcebe7`（surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`/`#3f5e5d`、border `#9dbab4`）。始终深色的表面（桌面麦克风浮层等）加 `.deep-sea-scope` 钉住深色 pet 令牌与浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），不随浅色主题漂白。鲸鱼资产不重绘、不加 CSS `filter`：浅色舞台下白色围裙/亮部对比度偏低（实测约 26% 不透明像素对比度 <1.5，中位数约 3.5）是明确接受的代价，不能靠重绘图集、加光晕或加描边 filter「修」（违反第 1、2、5 条）。
-4. **声呐环只做装饰（仅桌面状态点）**：手机宠物舞台的环已删除（D77），舞台不再绘制声呐环；桌面 `SignalDot` 的 `.sonar-dot-ring` 保留，细描边低亮度、只动 transform/opacity，不改变宠物帧、不跟随宠物姿态、不包住鲸鱼做发光描边。如未来恢复手机环，必须遵守本节与 §6 的约束。
+1. **唯一渲染器是 BoopFace**：`<boop-face skin="201">`，包装在 `mobile/features/pet/boop-pet.tsx`（D136）。不重绘角色、不改皮肤素材，也不再引入第二套宠物动画方案（图集 / Rive / Lottie 都不进包）。
+2. **皮肤固定 201「冰透蓝」、圆度 50**：深浅主题共用一套（D132）；皮肤 painter 未就绪时用兜底色 `#d5e4f5` 画纯色脸。换皮肤只改 `PET_SKIN` 一个常量，换之前必须在浅底和深底上各看一遍。
+3. **舞台随主题（浅色海玻璃）**：`--pet-*` 跟随 `data-theme`——深色是 `--pet-bg #030e12` 深海自发光，浅色换成「海玻璃舞台」`--pet-bg #dcebe7`（surface `#f7fcfa`/`#edf7f3`、text `#0e2a2b`/`#3f5e5d`、border `#9dbab4`）。始终深色的表面（桌面麦克风浮层等）加 `.deep-sea-scope` 钉住深色 pet 令牌与浮层用到的壳层信号色（`--signal`/`--ring`/`--decide`/`--destructive`/`--abyss`），不随浅色主题漂白。宠物本体不重绘、不加描边/发光类 `filter`；唯一允许的是夜间轻微压暗（`brightness(.9) saturate(.96)`，D76）。浅色舞台下冰透蓝与背景对比偏弱是明确接受的代价（靠深色眼睛撑辨识度），不能靠加描边或光晕「修」（违反第 1、2、5 条）。
+4. **声呐环只做装饰（仅桌面状态点）**：手机宠物舞台的环已删除（D77），舞台不再绘制声呐环；桌面 `SignalDot` 的 `.sonar-dot-ring` 保留，细描边低亮度、只动 transform/opacity，不改变宠物帧、不跟随宠物姿态、不包住宠物做发光描边。如未来恢复手机环，必须遵守本节与 §6 的约束。
 5. **不加光晕**：OLED 像素自发光，光晕/大面积亮色渐变直接耗电；舞台只保留单一纯色底 + 小面积低亮度装饰（深色主题为深海深底，D58 于 2026-11-02 移除 `--pet-glow`；浅色海玻璃舞台同样不叠加光晕/大面积亮色渐变）。
-6. 帧动画要求继续按 [engineering/pet-runtime.md](../engineering/pet-runtime.md) 执行：一列一帧、单状态 ≤32 帧、后台暂停、减少动效冻结、失败降级 poster；资产来源/授权/体积登记到 [dependency-policy](../dependency-policy.md)。
+6. **动作走优先级总线**：`mobile/features/pet/pet-action.ts` 的优先级表是唯一真相（D137）——瞬态反应最短 1.2s、同动作去抖、首帧/重连整表快照不触发；不要在组件里写第二套 if-else 抢状态。
+7. **触摸不产生宠物事件**：BoopFace 的按压/拖天线/视线跟随保持关闭（D69/D77）；麦克风只驱动动作，不写存档、不放音效。
+8. **性能**：组件以约 30fps rAF 常驻，`auto-sleep` 与「无操作变暗」同线、减少动效走 `motion="reduce"`；真机 60fps 与掉电门槛按 [engineering/pet-runtime.md](../engineering/pet-runtime.md) §8。
 
 ## 9. 声音
 
@@ -247,7 +249,7 @@ load: on-demand
 
 ## 10. 资源与性能
 
-- 图片 WebP；图标 SVG；宠物图集只进 mobile 按需 chunk，不进桌面首屏。
+- 图片 WebP；图标 SVG；宠物皮肤 painter 只进 mobile 按需 chunk，不进桌面首屏。
 - 中文字体：手机随包 HarmonyOS Sans SC Regular 400（D91，约 8.1MB 原始 TTF，免费商用需注明）；不新增其它中文字体，品牌字体必须子集化并走依赖审批。
 - 宠物舞台 `devicePixelRatio` 上限 2；安卓避免大面积 blur/shadow 动画。
 - 真机 60fps 是硬指标；掉帧就减粒子/网格，不降整体帧率目标。
@@ -267,7 +269,7 @@ load: on-demand
 
 - 令牌落地：基线 `app/src/shared/styles/tokens.css`，桌面覆盖 `app/src/desktop/styles/ios.css`（`.desktop-ios`），手机覆盖 `app/src/mobile/styles/clean.css`（`.mobile-clean`）；组件只引用语义令牌；主题运行时见 [frontend-architecture.md](../frontend-architecture.md#6-样式规范)。
 - 具体数值看可视化总表 [style-guide.html](./style-guide.html)：字号 / 行高 / 文字间距 / 间距刻度 / 圆角 / 阴影与组件几何，含深浅两套实物与标本；改令牌时同步该页。
-- 图集状态映射写入 [engineering/pet-runtime.md](../engineering/pet-runtime.md)；不在 UI 组件里硬编码状态行/帧号。
+- 动作优先级写入 [engineering/pet-runtime.md](../engineering/pet-runtime.md)；不在 UI 组件里硬编码状态分支。
 - 新视觉资产登记来源、许可证、体积到 [dependency-policy.md](../dependency-policy.md) 的资源规则。
 - 任何视觉方案变更影响 PRD/SPEC 时同步更新文档；两套主题的改动要同时验证深浅色与对比度。
 
@@ -280,7 +282,7 @@ load: on-demand
 | 数据用等宽字、tabular-nums 对齐 | 用红绿黄当状态灯 |
 | 琥珀只给「等你决定」 | 浅色主题做白底 + 亮绿按钮 |
 | 浅色主题重新设计光源与表面 | 把深色直接反色当浅色 |
-| 桌面声呐环细描边、低亮度、可暂停 | 给鲸鱼加光晕/滤镜/大面积亮像素；在手机舞台恢复背景环 |
-| 复用现有图集与 SpritePet | 重绘/染色/新增鲸鱼，或改 `--pet-*` 本体色 |
+| 桌面声呐环细描边、低亮度、可暂停 | 给宠物加光晕/滤镜/大面积亮像素；在手机舞台恢复背景环 |
+| 固定皮肤 201 + BoopFace 渲染器 | 重绘角色、改皮肤素材、引第二套动画方案，或往令牌里塞本体色 |
 | 用 `--whale` 表达鲸蓝 | 改 `--accent` 当品牌次色 |
 | 令牌只用 hex（`#rrggbb`） | 用 `oklch` / `color-mix` 定义最终令牌 |

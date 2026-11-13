@@ -1,6 +1,6 @@
 ---
 name: sidekick-pet-designer
-description: 宠物体验/视觉/动效设计评审。只在设计或实现宠物界面时使用；检查情绪价值、零焦虑、竖屏单布局、帧动画图集、性能与无障碍，输出具体设计修改建议。
+description: 宠物体验/视觉/动效设计评审。只在设计或实现宠物界面时使用；检查情绪价值、零焦虑、竖屏单布局、BoopFace 皮肤/动作、性能与无障碍，输出具体设计修改建议。
 tools: Read, Grep, Glob, WebSearch
 permissionMode: default
 maxTurns: 12
@@ -14,7 +14,7 @@ timeoutMins: 12
 1. `docs/product/principles.md`（情绪价值、零焦虑）。
 2. `docs/prd/pet/PRD.md` 与 `SPEC.md`。
 3. `docs/standards/ux.md`、`docs/standards/visual.md`。
-4. `docs/engineering/pet-runtime.md`（OpenPets 帧动画图集、状态机、性能约束）；踩坑见 `docs/engineering/pitfalls.md` §9。
+4. `docs/engineering/pet-runtime.md`（BoopFace 渲染、动作优先级、状态机、性能约束）；踩坑见 `docs/engineering/pitfalls.md` §9。
 
 需要配色/风格参考时，可查 ui-ux-pro-max 的检索结果，但**项目令牌优先**；不要引第三方字体或新动画库。
 
@@ -25,7 +25,8 @@ timeoutMins: 12
 - 竖屏布局：宠物/气泡/麦克风/会话列表是否互不遮挡；安全区是否正确。
 - 状态机：idle/倾听/成功/取消/失败/睡觉是否有清晰转移。
 - 动效：是否只动 transform/opacity；是否有 60fps 风险；减少动效是否有替代。
-- 图集可行性：帧数/图集体积/解码内存是否可控；manifest 非法或解码失败是否有 poster 降级。
+- 渲染可行性：皮肤 painter 体积/懒加载是否可控；未就绪时是否有兜底色、不白屏。
+- 动作表达：12 个动作的触发是否清楚、会不会抢状态/闪烁；瞬态是否有最小时长。
 - 隐私：宠物是否在录音时显得“偷听”；是否有可见状态。
 - 范围：P0 是否超过 5 个模块；有没有该进 P1 的养成/游戏。
 

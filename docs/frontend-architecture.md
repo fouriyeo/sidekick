@@ -7,7 +7,7 @@
 ## 1. 目标与约束
 
 - 双端共用基础层（协议/设计令牌/无平台语义组件），但 UI 按平台分包；桌面与手机各自固定布局，**不做跨端自适应**。
-- 已落地：宠物（OpenPets 图集）、麦克风、剪贴板、AI 联动、Token 用量、语音备忘录、英语角、桌面 Liquid Glass 壳（7 个一级页 + 设置二级页）、手机两页壳 + 备忘录/英语角全屏页。规格见 [prd/](./prd/INDEX.md)。
+- 已落地：宠物（BoopFace 组件）、麦克风、剪贴板、AI 联动、Token 用量、语音备忘录、英语角、桌面 Liquid Glass 壳（7 个一级页 + 设置二级页）、手机两页壳 + 备忘录/英语角全屏页。规格见 [prd/](./prd/INDEX.md)。
 - 高度依赖 AI 编码：优先选生态成熟、示例多、可复制控制的方案。
 - 运行在 Tauri WebView：macOS WKWebView + Android System WebView；没有 Node、没有 SSR。
 - 小团队维护：不引入重型框架、重复能力或需要长期专人维护的依赖。
@@ -22,7 +22,7 @@
 | 组件 | shadcn/ui + Base UI | shadcn 4.23.x（base-nova）/ `@base-ui/react` 1.9.x | 组件复制进仓库；Base UI 为唯一 primitive base |
 | 类名合并 | `cn` + CVA | `cn` 0.5.x / CVA 0.7.x | `cn` 替代 clsx + tailwind-merge |
 | UI 动画 | Motion | 14.8.x | 进出场、布局、手势、spring |
-| 宠物动画 | 帧动画图集 | OpenPets schema 2（WebP） | 一列一帧；rAF 播放；mobile chunk 内 |
+| 宠物动画 | BoopFace Web Component | SVG + 皮肤 201（D136） | 约 30fps rAF；手势关闭；mobile chunk 内 |
 | 状态 | Zustand | 5.0.x | 跨 feature 客户端状态 |
 | 图标 | lucide-react | 1.65.x | SVG，按需 tree-shake |
 | 动效工具 | `tw-animate-css` | 1.4.x | shadcn 组件内置 CSS 过渡类，不替代 Motion |
@@ -103,7 +103,7 @@ void bootstrap();
 规则：
 
 - 不再给 `<body>` 加 `mobile` 类来切换视图；两个 entry 各自挂载，CSS 作用域冲突从结构上消失。
-- `mobile/features/pet` 内部加载 `assets/openpet/` 的图集与播放器；图集独立文件、只进 mobile chunk，不进入桌面首屏。
+- `mobile/features/pet` 加载 `boopface` 组件与皮肤 painter chunk；只进 mobile chunk，不进入桌面首屏。
 - 开发时开启 `StrictMode`，用来暴露重复订阅/缺失清理；所有 `listen` 必须返回清理函数。
 - 落地页 `app/src-tauri/mobile/index.html` 继续走 Rust `include_str!`，不接 React。
 
@@ -235,7 +235,7 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 | --- | --- | --- | --- |
 | 微动效 | CSS transition/keyframes | hover、press、颜色、透明度、呼吸灯 | ≤ 150–200ms；只动 transform/opacity/color |
 | 界面 | Motion | 进出场、列表增删、布局变化、弹窗/抽屉、手势 | spring 或统一 easing；`AnimatePresence` 管卸载 |
-| 角色 | 帧动画图集 | 宠物 idle/工作/等待/完成与后续状态行 | 10fps；后台暂停；减少动效冻结首帧；图集失败降级 poster |
+| 角色 | BoopFace SVG 组件 | 宠物 12 个动作（四态 + 录音/连接/会话/问候） | 约 30fps；页面卸载即停；减少动效 `motion=reduce`；painter 失败用兜底色 |
 
 规则：
 
@@ -246,12 +246,12 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 - 首屏关键内容不做入场动画；避免“先空后跳”。
 - 长列表（> 50 条）不做 `layout` 动画；超过 200 条考虑虚拟列表（按需引入）。
 
-**宠物与帧动画图集**
+**宠物与动作**
 
-- App 语义 → 图集状态的映射集中在 `mobile/features/pet/sprite-state-map.ts`（候选链，先匹配存在的状态行，否则回落 idle）；AI 四态由 `ai-status.ts` 独立驱动。
-- 图集在 mobile entry 内按需加载；播放器 `sprite-pet.tsx` 只改 `background-position`，不创建额外 canvas。
-- 监听 `visibilitychange` / 覆盖层状态，后台暂停帧循环，回前台继续；减少动效冻结第 0 帧。
-- 先在 Realme 真机测 60fps；单帧 256px 在 ~500px 舞台是 2 倍放大，必要时换 512 cell 资产（代码不用改）。
+- App 语义 → 动作的映射集中在 `mobile/features/pet/pet-action.ts`（优先级纯函数）；麦克风/连接/会话/问候的一次性反应走 `pet-reaction*.ts`（边沿触发，D137）。
+- `boop-pet.tsx` 只负责属性与动作切换；渲染器是 BoopFace（`boopface@0.8.0`，皮肤 201，D136），不进桌面 chunk。
+- 页面卸载即停 rAF（组件 `disconnectedCallback`），`document.hidden` 自动暂停；减少动效用 `motion="reduce"`。
+- 先在 Realme 真机测 60fps；`auto-sleep` 与「无操作变暗」用同一个 `dimMinutes`。
 - 新增状态行流程见 `docs/engineering/pet-runtime.md` §3.2；不再引入 Rive 等重运行时。
 
 ## 9. 状态管理
@@ -283,13 +283,13 @@ pnpm dlx shadcn@latest add button input label dialog sheet tabs switch tooltip s
 | 首屏 JS（gzip） | ≤ 150KB | `pnpm build` + 可视化分析 |
 | 首屏 CSS（gzip） | ≤ 40KB | 同上 |
 | 宠物懒加载 chunk | ≤ 600KB（JS+WASM） | 同上 |
-| 宠物图集 | ≤ 1MB WebP，按需 | 构建产物 |
+| 宠物皮肤 painter | ≤ 250KB（懒加载，按需） | 构建产物 |
 | 中端安卓首屏 | ≤ 1.5s | Realme 真机 + WebView 远程调试 |
 | 动画帧率 | 60fps | Chrome Performance / 真机目测 |
 | 长任务 | 无 > 50ms 的主线程任务 | Performance 面板 |
 
 - 预算是目标值；Phase 1 测完基线后校准一次，放宽必须记录到 `decisions.md`。
-- 只有首屏需要的依赖进主 chunk；图集、Markdown、语法高亮、虚拟列表一律按需。
+- 只有首屏需要的依赖进主 chunk；皮肤 painter、Markdown、语法高亮、虚拟列表一律按需。
 - 禁止全量引入：`import { Button } from "..."` 而不是 `import * as ...`。
 - 图片用 WebP/AVIF；图标用 SVG；不打包字体文件（品牌字体必须子集化）。
 

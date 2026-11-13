@@ -2,11 +2,12 @@ import { cn } from "cn";
 import { useEffect } from "react";
 import { useMicStore } from "@/mobile/features/mic/mic-store";
 import { type AiState, displayStateOf } from "./ai-status";
+import { BoopPet } from "./boop-pet";
 import { isNight } from "./mood";
 import styles from "./pet.module.css";
 import { PET_DISPLAY_NAME } from "./pet-name";
+import { installPetReactions } from "./pet-reaction-wiring";
 import { usePetStore } from "./pet-store";
-import { SpritePet } from "./sprite-pet";
 import type { PetState } from "./types";
 import { useReducedMotion } from "./use-reduced-motion";
 
@@ -63,6 +64,9 @@ export function PetStage({ className, reserveTop = 0 }: PetStageProps) {
     void hydrate();
   }, [hydrate]);
 
+  // 麦克风/连接/会话/问候 → 宠物瞬时反应（D133）；卸载即退订。
+  useEffect(() => installPetReactions(), []);
+
   useEffect(() => {
     dispatch({ type: "TICK", now: Date.now() });
     const timer = window.setInterval(() => {
@@ -110,19 +114,19 @@ export function PetStage({ className, reserveTop = 0 }: PetStageProps) {
       data-ai-state={displayAi}
       data-reduced-motion={reducedMotion ? "true" : "false"}
     >
-      {/* 鲸鱼在「折叠会话卡底」与「麦克风顶」之间居中偏下（不铺底、不描边、不加光晕）。 */}
+      {/* 宠物在「折叠会话卡底」与「麦克风顶」之间居中偏下（不铺底、不描边、不加光晕）。 */}
       <div
         className="absolute inset-x-0 bottom-0 flex items-center justify-center"
         style={{ top: reserveTop }}
       >
         <div className={cn(styles.petSlot, "mt-9")}>
           <div className="relative h-full w-full touch-none select-none" aria-hidden="true">
-            <SpritePet
+            <BoopPet
               ai={displayAi}
               phase={pet.phase}
               night={night}
-              active
               reducedMotion={reducedMotion}
+              autoSleepMs={pet.settings.dimMinutes * 60_000}
             />
           </div>
         </div>

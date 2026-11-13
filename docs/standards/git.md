@@ -30,7 +30,7 @@ type(scope): 中文摘要
 - 示例：
 
 ```text
-fix(pet): 宠物图集按方形格子裁切，避免露出相邻行
+feat(pet): 宠物改用 BoopFace 渲染与皮肤 201（D136）
 
 - .petSlot 被 max-width 卡成竖长时，按 min(宽,高) 取方形格子
 - sprite 层设为方形 + overflow:hidden 居中，相邻行不再泄漏
@@ -42,8 +42,8 @@ fix(pet): 宠物图集按方形格子裁切，避免露出相邻行
 | 改动范围 | 必跑 |
 | --- | --- |
 | 前端/逻辑 | `pnpm typecheck`、`pnpm lint`、`pnpm test` |
-| 构建/资源 | `pnpm build`（确认图集等资源只进对应平台 chunk） |
-| 手机端（`app/src/mobile`、图集/资源、原生命令） | `scripts/build-android.sh && scripts/install-android.sh`，真机至少验证关键路径 |
+| 构建/资源 | `pnpm build`（确认皮肤等资源只进对应平台 chunk） |
+| 手机端（`app/src/mobile`、皮肤/资源、原生命令） | `scripts/build-android.sh && scripts/install-android.sh`，真机至少验证关键路径 |
 | 文档 | `node scripts/check-docs.mjs` |
 | 平台目录/依赖 | `node scripts/check-boundaries.mjs` |
 | 发布安装包 | `scripts/package-release.sh` → `scripts/publish-release.sh`；确认 APK `apksigner verify` 通过、dmg 可挂载、Releases 上传成功 |

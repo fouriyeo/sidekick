@@ -2,15 +2,16 @@
 
 本项目源码以 [MIT](./LICENSE) 许可发布。以下是**不适用 MIT** 的部分，以及随包第三方组件的声明。
 
-## 1. 例外：宠物演示图集（不在 MIT 范围内）
+## 1. 宠物形象：BoopFace（代码 MIT，角色形象不随 MIT 转让）
 
 | 项 | 说明 |
 | --- | --- |
-| 文件 | `app/src/mobile/features/pet/assets/openpet/{pet.json,spritesheet.webp,poster.webp}`、`brand/pet-character/openpet-review/pet.json` |
-| 来源 | 社区流传的 DeepSeek 鲸鱼形象 OpenPets / Codex schema 2 图集（原始 zip `deepseek-openpet.zip` 内**没有 LICENSE**）；拆包记录见 [brand/pet-character/openpet-review](./brand/pet-character/openpet-review/README.md) |
-| 权利状态 | 角色形象可能归 DeepSeek 所有；本项目**未取得明示授权**，随仓库提供仅作格式演示与本地体验用途 |
-| 许可结论 | **不受 MIT 覆盖**；fork / 二次分发 / 商业使用前，请替换为自己的 OpenPets schema 2 图集，或先取得权利人许可 |
-| 如何替换 | 图集放 `app/src/mobile/features/pet/assets/openpet/`，保留 `pet.json` 格式（一列一帧、单状态 ≤32 帧）；渲染器无需改动，缺行会回落 idle |
+| 组件 | `boopface@0.8.0`（`app/package.json` 精确锁版本），原生 Web Component，零运行时依赖 |
+| 来源 | [CX-ArtLab/BoopFace](https://github.com/CX-ArtLab/BoopFace)，MIT License，© CX ArtLab |
+| 使用范围 | 只作为 App 内的手机宠物形象（皮肤 201）；不修改角色设计，不单独再分发角色素材 |
+| 权利边界 | MIT 只覆盖**软件与源码**；项目方明确保留 BoopFace 的名称、角色身份与视觉形象，不授权把它们当作他方原创角色或独立品牌。本项目因此**不宣称**该角色为 Sidekick 原创，也不把它做成独立 IP/周边 |
+| 如何替换 | 换皮肤只改 `app/src/mobile/features/pet/boop-pet.tsx` 的 `PET_SKIN`；换渲染器见 [decisions.md](./docs/decisions.md) D136 |
+| 说明 | 2026-11-14 起，原「DeepSeek 鲸鱼 OpenPets 图集」（无 LICENSE）已从包内移除，历史记录见 [brand/pet-character/openpet-review](./brand/pet-character/openpet-review/README.md) |
 
 `brand/logo-*`、`brand/appicon.png` 与本项目生成的品牌标记属于本项目，随 MIT 授权。
 

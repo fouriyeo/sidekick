@@ -44,7 +44,7 @@ load: on-demand
 ## P6 · 可替换
 
 - **意味着**：传输、转写、动画引擎都通过 adapter 隔离；UI 不直接依赖第三方库类型。
-- **不意味着**：过度抽象。只隔离真正可能替换的边界：WebSocket/BLE、ASR 引擎、图集播放器。
+- **不意味着**：过度抽象。只隔离真正可能替换的边界：WebSocket/BLE、ASR 引擎、宠物渲染器。
 - **决策例子**：换 BLE 只改 Rust 传输层和 `shared/lib/tauri.ts`，手机 UI 不变（见 [frontend-architecture.md](../frontend-architecture.md)）。
 
 ## 反原则（明确不做）

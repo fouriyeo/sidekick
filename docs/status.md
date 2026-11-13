@@ -11,27 +11,29 @@
 | 局域网连接：桌面 axum WS 服务 + 手机主动连；UDP 发现 47820，服务端口 47810–47814 / 8848 回退 | ✅ 真机已验证（含端口回退） | [architecture.md](./architecture.md) · [engineering/lan-discovery.md](./engineering/lan-discovery.md) |
 | 断连自动重连：1s→30s 退避 + 每次静默重新发现，切后台暂停、回前台重试 | ✅ 真机已验证 | [engineering/lan-discovery.md](./engineering/lan-discovery.md) |
 | 桌面壳：6 个一级页 概览 ⌘1 / 剪贴板 ⌘2 / 备忘录 ⌘3 / 用量 ⌘4 / 语音 ⌘5 / 设置 ⌘6 + 224 玻璃侧栏 + sticky 玻璃工具栏 + push 式设置 | ✅ 代码完成、浏览器 QA 通过（真窗口目检待） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [engineering/desktop-ios-ui.md](./engineering/desktop-ios-ui.md) |
-| 手机壳：宠物页（顶栏 / 会话卡浮层 / 鲸鱼 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局 | ✅ 代码完成（真机走查待补） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [frontend-architecture.md](./frontend-architecture.md) |
+| 手机壳：宠物页（顶栏 / 会话卡浮层 / 宠物 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局 | ✅ 代码完成（真机走查待补） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [frontend-architecture.md](./frontend-architecture.md) |
 | 语音输入：百炼云端流式 ASR（唯一）→ 写剪贴板 + 合成 Cmd+V；结果卡手动「回车 / 清空」 | ✅ 真机验证（完整矩阵待补） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
+| 键盘遥控录音：桌面全局快捷键（双击右 Control 等）→ 手机开始/结束 → 结果插入前台应用；未连接弹顶部提示、Esc 取消 | 🚧 代码完成（真机/真窗口/冲突矩阵待验收） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
 | 语音备忘录：手机前台录音 → 分段转写 → LLM 归类 → 本地 rusqlite；电脑只读镜像 + 6 位码配对 | ✅ 代码完成（真机验收待） |
 | 英语角（生词本）：记录 → 百炼 qwen3.8-flash 解释 → 词库造句；桌面 ⌘7 + 手机全屏页 + 局域网双向同步 | ✅ 代码完成（浏览器 QA 通过；真机双向同步已验证；账单对账待补） |
 | 英语角语音朗读：qwen-audio-3.1-tts-plus（单词/例句/造句句）→ 本地 mp3 缓存 → 双端播放；桌面失败回退系统 `say` | ✅ 真机验证（首次 1–2s、缓存命中 0 请求、按字符记账） | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md#55-语音合成qwen-audio-31-tts-plus) | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md) | [prd/memo/INDEX.md](./prd/memo/INDEX.md) · [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
 | Token 用量看板：桌面「用量」页 + 手机顶栏数字/用量页 + 菜单栏小看板 | ✅ 代码完成（对账/真机待） | [prd/usage/INDEX.md](./prd/usage/INDEX.md) · [engineering/token-usage-pricing.md](./engineering/token-usage-pricing.md) |
-| 菜单栏常驻：关窗 = 隐藏窗口，HTTP / UDP / hook 继续跑；左键弹出用量小看板（原生玻璃卡片） | ✅ 代码完成（人工目检待） | [engineering/desktop-tray.md](./engineering/desktop-tray.md) · [engineering/desktop-usage-panel.md](./engineering/desktop-usage-panel.md) |
+| 菜单栏常驻：关窗 = 隐藏窗口，HTTP / UDP / hook 继续跑；左键弹出用量小看板（原生玻璃卡片，可钉住） | ✅ 代码完成（人工目检待） | [engineering/desktop-tray.md](./engineering/desktop-tray.md) · [engineering/desktop-usage-panel.md](./engineering/desktop-usage-panel.md) |
 | 剪贴板历史：搜索 / 置顶 / 隐私过滤 / 暂停，最多保留 10–200 可配 | ✅ 真机已验证 | [engineering/clipboard-manager.md](./engineering/clipboard-manager.md) |
 | AI 联动（DSH hook v3）：会话状态与粗粒度工具类别推手机、一键唤起 DSH | 🚧 代码完成（真机/隐私验收待） | [prd/hook/INDEX.md](./prd/hook/INDEX.md) · [engineering/dsh-hook.md](./engineering/dsh-hook.md) |
-| 宠物：图集帧动画 4 态 + 状态机/存档 + 屏幕常亮 + 触感 | ✅ 代码完成（60fps/存档回归待） | [prd/pet/INDEX.md](./prd/pet/INDEX.md) · [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
+| 宠物：BoopFace 皮肤 201 + 12 个动作（四态 + 录音/连接/会话/问候）+ 状态机/存档 + 屏幕常亮 + 触感 | 🚧 代码完成（真机首轮通过，30 分钟 soak 与动作逐项待补） | [prd/pet/INDEX.md](./prd/pet/INDEX.md) · [engineering/pet-runtime.md](./engineering/pet-runtime.md) |
 | 发布打包：固定文件名 dmg + 本地密钥签名 APK；`release/` 不入库（D125），分发走 GitHub Releases | ✅ 脚本可用（正式签名/公证未做） | [release/README.md](../release/README.md) · [decisions.md](./decisions.md)（D63/D125） |
 
 ## 2. 待验收（真机 / 目检 / 回归）
 
 - **备忘录真机**：录音 → 转写 → 配对 → 镜像同步全链路；C 手势阈值（400/600/80/32）、TalkBack、手势条遮挡、320×720 月视角。
 - **桌面真窗口目检**：交通灯位置、拖动区、滚动玻璃与紧凑标题过渡、窗口级 vibrancy、深浅主题、1180/960 两档。
-- **菜单栏与看板**：左键弹出位置与收起（点外部 / Esc / Cmd+W）、多屏不越界、D120 玻璃深色观感与 `SIDEKICK_UI_VIBRANCY=off` 回退。
+- **菜单栏与看板**：左键弹出位置（顶部 16×8 指引尖、尖顶距菜单栏 2pt，D136）与收起（点外部 / Esc / Cmd+W）、钉住后失焦不收起（D135）、尖在贴边时是否指回图标、玻璃态尖端磨砂与卡片是否同一块材质、多屏不越界、D120 玻璃深色观感与 `SIDEKICK_UI_VIBRANCY=off` 回退。
+- **键盘遥控录音**：真机端到端（开始/结束/6 类失败/Esc 取消/多手机拒绝）、HUD 在其它 App 前台与全屏 Space 的可见性、不抢焦点（插入仍 same_app）、快捷键与 IDE/输入法冲突、现有手机按住流程回归。
 - **语音**：真实百炼账号下 60 秒 / 断连 / 密码框矩阵、辅助功能实测、2000 词首包延迟；回车/清空在终端等非标准输入框与焦点切换矩阵。
 - **AI 联动**：真实 DSH 重启与插件加载、四态动作与三音效、杀 DSH 15s 内静态、隐私抓包审计（无工具名原文/参数/路径）。
 - **用量看板**：真实账本对账、价格联网 / 断网 / 覆盖文件、空/损坏账本、手机模型分组开关。
-- **宠物**：320 宽真机、3 分钟 60fps、存档跨重启、TalkBack、扩展状态行。
+- **宠物**：30 分钟 soak（掉帧/发热）、320 宽真机、存档跨重启、TalkBack；12 个动作的真机逐项触发见 PET-AC-52–65。
 - **英语角**：真机配对→双向同步→断网重试→删除传播；桌面 1180/960 深浅目检；模型对账单。
 - 浏览器已覆盖：`scripts/qa-desktop-ios.mjs`、`scripts/qa-memo.mjs` 无横向溢出 / console error；真机仍待走查。
 
@@ -54,7 +56,7 @@
 | 备忘录 MVP 偏差 | Key 存 App 私有文件（0600，Keystore 列 P1）；手机固定官方端点；锁屏/后台录音与 AAC 压缩暂缓；WAV 约 115MB/h |
 | 手机台数为近似 | 「N 台设备」来自 `system.clients - 1`，无角色握手、不显示设备名 |
 | 剪贴板限制 | 仅桌面运行时记录、无全局快捷键、仅文本；图片/文件/富文本不支持 |
-| 宠物图集仅四态 | 睡眠等状态行待美术；扩展状态待补 |
+| 宠物动作未接满 18 个 | angry/refuse/random 等没有触发源，等真实事件再接（D137 §3.4） |
 | 端口候选回退 | 47810–47814、8848 全被占用时服务启动失败（`server_info` 报错） |
 | 桌面端仍开发模式 | 未开机自启；正式签名/公证待做（分发已改 GitHub Releases，D125） |
 | 包名遗留 / withGlobalTauri | npm/Cargo 包名仍是 `desktop`；`tauri.conf.json` 的 `withGlobalTauri` 仍为 `true`，收紧时需回归 IPC/事件/QR |
@@ -72,6 +74,7 @@
 ### P1
 
 - 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息。
+- 键盘遥控录音（D132/D133）：代码已完成，补真机与真窗口验收矩阵；裸修饰键若被发现还需要「输入监控」授权，补授权引导。
 - 配对与鉴权（首次扫码配对、长期密钥、信道加密）；精确手机台数（角色握手）。
 - 备忘录：Keystore、锁屏/后台录音、AAC 压缩、cursor/心跳；宠物扩展状态行。
 

@@ -17,6 +17,9 @@ importers:
       '@tauri-apps/plugin-store':
         specifier: 2.5.0
         version: 2.5.0
+      boopface:
+        specifier: 0.8.0
+        version: 0.8.0
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -931,6 +934,9 @@ packages:
 
   bidi-js@1.1.0:
     resolution: {integrity: sha512-fX1Onk0tdVPC7obPWB5EbJ1z7NVhLq4m2xZLq2YXBkxzMXIGRpNMU88n0EPgWseKl12J7zXs7qrDxPK4sRs2fg==}
+
+  boopface@0.8.0:
+    resolution: {integrity: sha512-V3VI+SoCqopipRNQqNrRmMbtSFMQTY6CnvMMtYMgIa8WIAtF+6nWTyPQISVpA974un0FFKpo7lYGQ+zUTLlk4w==}
 
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
@@ -3036,6 +3042,8 @@ snapshots:
     dependencies:
       require-from-string: 2.0.2
 
+  boopface@0.8.0: {}
+
   brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
@@ -3730,7 +3738,7 @@ snapshots:
   pretty-format@27.0.2:
     dependencies:
       '@jest/types': 27.0.2
-      ansi-regex: 5.0.1
+      ansi-regex: 5.0.0
       ansi-styles: 5.0.0
       react-is: 17.0.1
 

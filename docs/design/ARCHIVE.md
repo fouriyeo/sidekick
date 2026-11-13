@@ -9,6 +9,8 @@ owner: design
 
 # 设计归档（只读结论）
 
+> **宠物相关条目已被 D136 取代（2026-11-14）**：文中「鲸鱼/图集」都是当时的图集宠物，现行宠物是 BoopFace + 皮肤 201，见 [engineering/pet-runtime.md](../engineering/pet-runtime.md)。
+>
 > 2026-11-08 把三份已落地设计稿压成结论（原 `mobile-ui-v16/`、`token-dashboard-v1/`、`usage-dashboard-v2/` 子目录已删除；D71：HTML 原型、多版对比稿与截图等过程素材不入库）。
 > **只读归档，不作为事实源**：视觉以已落地页面为准（`app/src/`），规则以 [prd/](../prd/INDEX.md) 与 [decisions.md](../decisions.md) 为准。
 

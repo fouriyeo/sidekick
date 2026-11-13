@@ -14,19 +14,19 @@ html[data-theme="dark"] .stage {
   --tertiary: #636366;
 }
 
-/* 鲸鱼槽位：固定方形 230（D107 起不再随会话卡展开缩到 220），由外层 flex 居中。 */
+/* 宠物槽位：固定方形 230（D107 起不再随会话卡展开缩到 220），由外层 flex 居中。 */
 .petSlot {
   position: relative;
   width: min(230px, 62vw);
   aspect-ratio: 1 / 1;
-  /* 舞台高度不足时按可用高度再收一次，保证鲸鱼不被裁切。 */
+  /* 舞台高度不足时按可用高度再收一次，保证宠物不被裁切。 */
   max-height: calc(100% - 36px);
   transform: translate3d(var(--pet-x, 0%), var(--pet-y, 0%), 0) scale(var(--pet-scale, 1));
   transition: transform 320ms var(--ease-out-soft);
   will-change: transform;
 }
 
-/* 精灵图集容器：保持方形，内部 sprite 用 background-position 逐帧。 */
+/* BoopFace 宿主：跟随槽位尺寸（320 宽时槽位按 62vw 收，这里不用再算）。 */
 .motionLayer {
   --pet-amber: #e8a33d;
   width: 100%;
@@ -35,27 +35,12 @@ html[data-theme="dark"] .stage {
   transition: opacity 120ms var(--ease-out-soft);
 }
 
-.sprite {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  overflow: hidden;
-  background-repeat: no-repeat;
-  background-position: 0 0;
-  transition: opacity 120ms var(--ease-out-soft);
+.face {
+  --face-size: 100%;
+  display: block;
 }
 
-/* 图集未就绪/失败时的静态降级；night 只轻微压暗，不改图集。 */
-.poster {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.motionLayer[data-night="true"] .sprite,
-.motionLayer[data-night="true"] .poster {
+/* 夜间只轻微压暗，不换素材。 */
+.motionLayer[data-night="true"] .face {
   filter: brightness(0.9) saturate(0.96);
 }

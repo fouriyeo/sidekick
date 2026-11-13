@@ -257,7 +257,7 @@ owner: product
 
 | 阶段 | 预估 | 依赖 | 风险 |
 | --- | --- | --- | --- |
-| 美术方向 + 角色设定 | 4–6 天 | 视觉规范、帧动画图集 | 剪影/表情不满意会返工 |
+| 美术方向 + 角色设定 | 1–2 天 | 视觉规范、皮肤与动作表 | 皮肤/动作不满意会返工 |
 | 舞台与平台壳 | 2–3 天 | 前端平台分目录 | 迁移未完成 |
 | 状态机 + 持久化 | 3 天 | 心情/精力规则 | 时间/存档边界 |
 | 设置/文案 | 2 天 | 文案库 | 文案返工 |
@@ -282,7 +282,7 @@ owner: product
 
 - 已关闭（D28–D35）：姿态/方向（D62 起只做竖屏单布局）、存档走 plugin-store、声音未接；导出/备份归 P1。屏幕常亮已落地（D46）；自动变暗/最长常亮可配（D52）；触感接管 WebView（D51）；竖屏单布局 + 宽矮麦克风胶囊（D62）；触摸互动下线（D69，取代 D30）；麦克风联动下线（D77）；首次命名下线（2026-11-05）：宠物固定显示「小跟班」，`onboarded` 只表示是否已见过面，不再收集/保存用户自定义名字。
 - AI 联动 P1 已先做四态；手机回答 AI 提问、文本消息、Claude Code/Qoder 的优先级待定。
-- 美术资产来源（自绘/AI 辅助/外部资产）与图集授权。
+- 皮肤编号与角色形象授权（BoopFace：代码 MIT、形象不转让，见 NOTICE）。
 - 是否需要“睡眠时间”跟随用户作息，而不是固定 23:00。
 
 ## 10. 质量自检
@@ -304,7 +304,7 @@ owner: product
 
 - [SPEC.md](./SPEC.md)：布局、状态机、AI 联动、文案
 - [ACCEPTANCE.md](./ACCEPTANCE.md)：完整验收
-- [engineering/pet-runtime.md](../../engineering/pet-runtime.md)：帧动画图集/状态机/持久化
+- [engineering/pet-runtime.md](../../engineering/pet-runtime.md)：BoopFace 渲染/动作总线/状态机/持久化
 - [hook PRD](../hook/PRD.md) / [hook SPEC](../hook/SPEC.md)：AI 联动四态与声音
 - [standards/visual.md](../../standards/visual.md)：视觉与宠物资产
 - [standards/ux.md](../../standards/ux.md)：反馈、安全区与 AI 联动标准

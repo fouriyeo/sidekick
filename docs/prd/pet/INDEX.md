@@ -58,7 +58,7 @@ children:
 ## 已定决策
 
 - 纯陪伴优先，AI 状态映射后置（D20）。
-- 宠物美术是 OpenPets schema 2 帧动画图集（WebP + poster，D57b）；不用 Rive / SVG 运行时。
+- 宠物美术是 BoopFace 原生 Web Component + 皮肤 201（D136，取代 D57b）；动作由 `pet-action.ts` 优先级总线决定（D137）。
 - 单竖屏布局（D62）：只有一套竖屏壳，无方向检测与姿态切换。
 - 存档：plugin-store + PetStorage adapter（D28）。
 - 触摸互动已下线（D69，取代 D30）；麦克风联动已下线（D77）；首次命名/改名下线（2026-11-05）：固定显示「小跟班」，`onboarded` 只表示是否已见过面；宠物为手机默认主界面（D32）。

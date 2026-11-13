@@ -53,7 +53,7 @@
 - `Sidekick-macOS.dmg`（arm64）：**未签名/未公证**，首次打开请右键 → 打开
 - `Sidekick-Android.apk`（arm64）：release 签名；从 debug 包换过来需先 `adb uninstall dev.sidekick.app`
 
-> 包里的 UI 字体是 HarmonyOS Sans、宠物是演示图集，两者的许可与例外见 [NOTICE.md](NOTICE.md)。
+> 包里的 UI 字体是 HarmonyOS Sans、宠物形象来自 BoopFace（代码 MIT、角色形象不转让），两者的许可与例外见 [NOTICE.md](NOTICE.md)。
 
 ## 从源码运行
 
@@ -116,5 +116,5 @@ scripts/      构建 / 安装 / 打包 / 发布 / QA / 文档检查
 ## 许可
 
 - 源码以 [MIT](LICENSE) 发布。
-- **例外**：宠物演示图集来自社区流传的 DeepSeek 鲸鱼形象（原 zip 无 LICENSE），**不在 MIT 范围内**，fork/再分发前请替换或取得授权；随包 HarmonyOS Sans 字体同理受其自身许可约束。详见 [NOTICE.md](NOTICE.md)。
+- **第三方**：手机宠物使用 [BoopFace](https://github.com/CX-ArtLab/BoopFace)（MIT，© CX ArtLab）；其角色形象不随 MIT 转让，本项目只把它作为 App 内形象使用、不宣称为原创角色。随包 HarmonyOS Sans 字体受其自身许可约束。详见 [NOTICE.md](NOTICE.md)。
 - 「Sidekick」为本项目代号，与其它同名产品无关。

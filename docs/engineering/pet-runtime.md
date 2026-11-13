@@ -2,65 +2,78 @@
 doc: engineering/pet-runtime
 title: 宠物运行时方案
 status: draft
-updated: 2026-11-08
+updated: 2026-11-14
 load: on-demand
 owner: engineering
 ---
 
 # 宠物运行时方案
 
-> 目标：手机里稳定跑一只会呼吸、会陪伴、会记住你的宠物；图集加载失败也能优雅降级。
-> 产品/体验规则见 [pet PRD](../prd/pet/PRD.md) 与 [SPEC](../prd/pet/SPEC.md)。
+> 目标：手机里稳定跑一只会呼吸、会陪伴、会记住你的宠物。
+> 渲染层是 BoopFace（D132），动作由一条显式的优先级总线决定（D133）；产品/体验规则见 [pet PRD](../prd/pet/PRD.md) 与 [SPEC](../prd/pet/SPEC.md)。
 
 ## 1. 目录
 
 ```text
 app/src/mobile/features/pet/
-├─ pet-page.tsx           # 宠物页屏幕壳（顶栏 / 会话卡 / 麦克风 / 变暗）
-├─ pet-stage.tsx          # 舞台：鲸鱼图集 + 读屏播报
-├─ sprite-pet.tsx         # 帧动画播放器（OpenPets schema 2 图集）
-├─ sprite-manifest.ts     # 图集 manifest 解析与校验
-├─ sprite-state-map.ts    # App 语义 → 图集状态候选链
-├─ sprite-player.ts       # 纯函数帧推进（loop / once）
-├─ assets/openpet/        # pet.json + spritesheet.webp + poster.webp
-├─ state-machine.ts       # 状态/心情/转移（纯函数优先）
-├─ ai-status.ts           # AI 四态展示状态（独立内存 store）
-├─ mood.ts                # 精力/时间计算
-├─ sound.ts               # AI 三音效（Web Audio 合成）
-├─ persistence.ts         # 存档 schema、迁移与 PetStorage 接口
-├─ tauri-pet-storage.ts   # plugin-store adapter
-├─ pet-store.ts           # Zustand store 与副作用
-├─ pet-name.ts            # 固定显示名「小跟班」（无用户自定义名字）
-├─ copy.ts                # 文案库（copy_id）
-├─ haptics.ts             # 触感语义 → 原生 haptic 命令（浏览器回退 navigator.vibrate）
-├─ use-keep-awake.ts      # 宠物页常亮（含最长时长与到点释放）
-├─ use-reduced-motion.ts  # 系统减少动效
-├─ pet.module.css         # 舞台 / 鲸鱼槽位样式
-└─ types.ts               # PetState / PetEvent 等类型
+├─ pet-page.tsx            # 宠物页屏幕壳（顶栏 / 会话卡 / 麦克风 / 变暗）
+├─ pet-stage.tsx           # 舞台：BoopPet + 读屏播报 + 反应订阅的挂载点
+├─ boop-pet.tsx            # BoopFace 包装：属性、动作切换、去重、兜底色
+├─ boop-face.d.ts          # React 19 自定义元素 JSX 声明
+├─ pet-action.ts           # 动作优先级纯函数（可单测）
+├─ pet-reaction.ts         # 瞬态反应 store（最短 1.2s、同动作去抖）
+├─ pet-reaction-wiring.ts  # 麦克风/连接/会话/问候 → 反应（边沿触发）
+├─ state-machine.ts        # 状态/心情/转移（纯函数优先）
+├─ ai-status.ts            # AI 四态展示状态（独立内存 store）
+├─ mood.ts                 # 精力/时间计算
+├─ sound.ts                # AI 三音效（Web Audio 合成）
+├─ persistence.ts          # 存档 schema、迁移与 PetStorage 接口
+├─ tauri-pet-storage.ts    # plugin-store adapter
+├─ pet-store.ts            # Zustand store 与副作用
+├─ pet-name.ts             # 固定显示名「小跟班」（无用户自定义名字）
+├─ copy.ts                 # 文案库（copy_id）
+├─ haptics.ts              # 触感语义 → 原生 haptic 命令（浏览器回退 navigator.vibrate）
+├─ use-keep-awake.ts       # 宠物页常亮（含最长时长与到点释放）
+├─ use-reduced-motion.ts   # 系统减少动效
+├─ pet.module.css          # 舞台 / 宠物槽位 / 夜间滤镜
+└─ types.ts                # PetState / PetEvent 等类型
 ```
 
 - 只允许 `mobile/` 内部引用（入口经 `entries/mobile.tsx` → `mobile/app.tsx`）；桌面不 import。
-- 业务状态用纯函数 + Zustand；图集状态名只出现在 manifest / `sprite-state-map.ts`。
+- 业务状态用纯函数 + Zustand；动作名只出现在 `pet-action.ts` 与 `boop-pet.tsx`。
 - 触感统一走 `haptics.ts` → 原生 `haptic` 命令（`performHapticFeedback`，无 VIBRATE 权限）；WebView 默认长按触感在 App 启动时关闭。
 - 文件命名 kebab-case，组件导出 PascalCase（与 [frontend-architecture](../frontend-architecture.md) 第 7 节一致）。
 - 文案用 `copy_id`，不在组件里散落字符串。
+- **图集管线已删除**（`sprite-pet/manifest/player/state-map` 与 `assets/openpet/`，D136）。
 
-## 2. 帧动画图集（OpenPets schema 2）
+## 2. 渲染：BoopFace + 皮肤 201（D132）
 
-- 资产：`app/src/mobile/features/pet/assets/openpet/`（`pet.json` + `spritesheet.webp` + `poster.webp`），通过 Vite 资源导入，只进 mobile 包，桌面包不引用。
-- **一列一帧**：`grid.cell` 是单帧边长（当前 256），`grid.cols` 是列数（当前 16；上限 32），行号由 `states.*.row` 声明。
-- 单状态帧数 1–32，兼容 16；不同状态可以帧数不同，只播 `frames` 里列出的列。
-- 播放：按 `frames[].duration` 累计推进（rAF，只在帧号变化时改 `background-position`）；`loop` 无限循环，`once` 播完停在末帧。内置图集 `done` 已改为 `loop`：一轮 16×100ms=1.6 秒，completed 展示 3 秒内约循环 1.875 轮，不再末帧定格；`once` 能力保留给未来需要定格的状态，当前内置图集没有 `once` 状态。
-- 尺寸：`ResizeObserver` 量容器后取 `min(宽,高)` 做方形格子（`.petSlot` 可能被 max-width 卡成竖长），元素本身设成该方形 + `overflow:hidden` 居中，再按 px 设置 `background-size/position`；旋转（竖屏锁定）不重新解码，DPR 上限 2。
-- 降级：manifest 校验失败、解码失败、或图片尺寸与 `cols/cell` 不匹配 → 显示 `poster.webp`；气泡/触感/录音不受影响。
-- 内存：4096×1024 解码约 16.8MB；需要再降可拆状态条按需解码（协议不变）。
+- 依赖：`boopface@0.8.0`（精确版本，见 [dependency-policy](../dependency-policy.md) §7 例外登记）；全量构建（要用皮肤，不用 `boopface/lite`），只进 mobile chunk。
+- 宿主属性：
 
-## 3. 状态映射
+```html
+<boop-face skin="201" color="#d5e4f5" motion="auto|reduce"
+           auto-sleep="300000" wake-on="activity"
+           press-squeeze="false" antenna-drag="false" />
+```
+
+- **皮肤**：201「冰透蓝」（Ice glass · Blue）。深浅主题共用一套（D132 的选择：单一代码路径，避免主题切换时重新加载 painter 闪一下）；圆度保持默认 `50`，不做个性化。
+- **尺寸**：不传 `size`，用 `.face { --face-size: 100% }` 跟随 `.petSlot`（`min(230px, 62vw)`）——390 宽是 230、320 宽是 198，不需要第二套断点。
+- **预加载**：模块加载时 `void loadSkins()` 提前拉 skin painter；painter 到位前宿主先用 `color="#d5e4f5"` 兜底，避免浅色页面上闪一下默认近黑脸。
+- **手势**：中心按压、拖天线、视线跟随全部关闭——D77「触摸不产生宠物事件」仍然成立。`press-squeeze` 在触摸设备本来就不触发（只认鼠标/笔），显式关掉是防止以后接鼠标时行为漂移。
+- **夜间**：`.motionLayer[data-night="true"] .face { filter: brightness(.9) saturate(.96) }`，只压暗不换素材。
+- **减少动效**：`motion="reduce"`；同时冻结一次性动作之外的自动眨眼/瞟视。
+- **自动睡眠**：`auto-sleep` 取 `settings.dimMinutes * 60_000`，和「无操作变暗」同一条时间线；`wake-on="activity"` 让任何触摸把它叫醒。AI 事件触发 `play()` 前会显式 `wake()`，睡眠态不会吞掉完成态。
+- **生命周期**：`PetPage` 是条件渲染，离开即卸载 → 组件 `disconnectedCallback` 停 rAF 并复位；`document.hidden` 时自动暂停。
+- **失败模式**：元素未升级（打包异常/脚本错误）→ 舞台空白但页面不崩；`customElements.whenDefined('boop-face')` 后会补一次动作同步。
+- **体积**：web 资产从 746KB 图集 + 14KB poster 换成约 190KB 皮肤 chunk（201 只用 material 一族，native 那 76KB 不会下载）。
+
+## 3. 状态与动作
 
 ### 3.1 应用状态
 
 `idle` / `sleeping` / `away`。
-转移规则见 [SPEC](../prd/pet/SPEC.md#3-状态机)；实现集中在 `state-machine.ts`，UI 不写条件分支。点击/抚摸宠物不产生事件（D69）；麦克风不产生宠物事件（D77）；首次命名/`celebrating` 已下线（2026-11-05）。
+转移规则见 [SPEC](../prd/pet/SPEC.md#3-状态机)；实现集中在 `state-machine.ts`，UI 不写条件分支。点击/抚摸宠物不产生事件（D69）；首次命名/`celebrating` 已下线（2026-11-05）。
 
 ```ts
 type PetEvent =
@@ -75,27 +88,49 @@ function reducePet(state: PetState, event: PetEvent): { state: PetState; effects
 
 - 副作用（触感/气泡/存档）由 `effects` 描述，执行层统一处理；首次命名/爱心/`phaseUntil`/`schedulePhaseExpiry` 已随命名功能删除（2026-11-05）。
 - 首次 BOOT 置 `onboarded=true` 并落盘；首次见面只发 `first_meet` 气泡（「你来了。我是小跟班。」），不再有命名弹窗或 `NAME_SET`。
-- 麦克风联动已下线（D77）：没有 `MIC_*` 事件、`listening`/`concerned` 姿态与成功/失败触感；录音时只通过 `micListening` 门禁静音 AI 音效/触感，宠物本身不变。
-- **AI 联动四态不新增 `PetPhase`**：静态=idle，工作中/等你决定/完成由 `mobile/features/pet/ai-status.ts` 的独立内存 store 驱动；`displayStateOf` 只决定最终展示姿态，AI 状态不落盘。优先级与动作见 [hook SPEC](../prd/hook/SPEC.md) §2。
+- 麦克风联动：D133 起**恢复为纯视觉**——录音/转写/成功/失败会切换动作，但不产生 `PetEvent`、不写存档、不放额外音效；录音中仍然静音 AI 音效/触感（`micListening` 门禁不变）。
+- **AI 联动四态仍不新增 `PetPhase`**：静态=idle，工作中/等你决定/完成由 `ai-status.ts` 的独立内存 store 驱动；`displayStateOf` 只决定最终展示姿态，AI 状态不落盘。
 
-### 3.2 图集状态映射（候选链）
+### 3.2 动作优先级（D133）
 
-App 不硬编码四个状态名：`sprite-state-map.ts` 给出**候选链**，`SpritePet` 取第一个在 manifest 里存在的状态；都不存在时回落 `defaultState` → `idle`。以后加行不用改渲染器。
+`resolvePetAction({ phase, ai, mic, reaction, now })`，从高到低：
 
-| 场景（phase / AI） | 候选链（从左到右） |
-| --- | --- |
-| sleeping | `sleeping` → `idle`（AI 非静态时跟随 AI） |
-| away | `away` → `idle` |
-| AI working | `working` → `idle` |
-| AI asking | `attention` → `idle` |
-| AI completed | `done` → `celebrate` → `idle` |
+| 优先 | 条件 | 动作 | 说明 |
+| --- | --- | --- | --- |
+| 1 | 瞬态反应未过期 | `affirm` / `failure` / `surprise` / `love` | 一次性，最短 1.2s |
+| 2 | `mic=processing` | `inspect` | 眯眼扫描（转写中） |
+| 3 | `mic=arming|listening` | `input` | 眼睛变文本光标（录音中） |
+| 4 | `ai=asking` | `wary` | 侧头打量「等你决定」 |
+| 5 | `ai=working` | `waiting-wave` | 循环等待 |
+| 6 | `ai=completed` | `success` | 3 秒窗口（延续原完成态） |
+| 7 | `phase=sleeping` 且 AI 静态 | `sleep` | 夜间/久无操作 |
+| 8 | `phase=away` | `bored` | 离开 |
+| 9 | 其他 | `idle` | 待机（眨眼/瞟视由组件自己做） |
 
-- 当前资产只有 `idle/working/attention/done` 四行，预留状态会自动回落。
-- 麦克风联动已下线（D77）：不再有 listening/concerned 候选链；录音时宠物不切换姿态。
-- **新增状态行**：① 图集底部加一行；② `pet.json` 增加 `states.<name> = { row, frames, loop? }`（一列一帧，≤32 帧）；③ 如需新触发，在 `sprite-state-map.ts` 的候选链里加名字；④ 渲染器/播放器不用改。
-- 减少动效：冻结每个状态的第 0 帧，保留四套可区分的静态轮廓。
-- 夜间/睡眠：只降亮度或冻结，不额外播素材（当前无睡眠行）。
-- 行数不要求连续；实际行数以解码后的图片高度为准，manifest 声明的行必须都存在。
+- 「睡着」只能压静态：夜间正在跑 AI 任务时仍然展示 AI 状态（沿用 D20 规则）。
+- 录音相关的三档压过 AI：录音时用户正看着麦克风，麦的反馈优先。
+
+### 3.3 触发源
+
+| 事件 | 动作 | 时长 / 约束 |
+| --- | --- | --- |
+| AI working / asking / completed | `waiting-wave` / `wary` / `success` | 跟随 AI store；completed 3s |
+| 无操作入睡、离开 | `sleep` / `bored` | 跟随 `phase` |
+| 录音中（arming→listening） | `input` | 保持到 processing 结束 |
+| 转写中（processing） | `inspect` | 保持 |
+| 结果上屏（→ delivered 边沿） | `affirm` | 1.6s |
+| 识别失败（→ error 边沿） | `failure` | 2.0s |
+| 连接断开 / 连接失败 | `failure` | 2.0s；只在 `connected|connecting → disconnected|error` |
+| 重连成功 | `affirm` | 1.6s；**首次连接不算重连** |
+| 新会话（一次新增 1–2 条） | `surprise` | 1.2s，5s 冷却；批量快照不触发 |
+| 回来问候（`returning` / `returning_long` 气泡） | `love` | 2.4s |
+
+- 全部走**边沿触发**：首帧、重连补发的整表快照都不会误触发；订阅用引用计数，StrictMode 双挂载只有一套。
+- 反应不是状态：到期自动回落，不写存档、不进 `PetEvent`。
+
+### 3.4 暂不接的动作
+
+`angry` / `refuse` / `random` / `waiting-spin` / `waiting-wrap` / `wake`：没有诚实的触发源（策略拦截、彩蛋、鼠标悬停等尚未存在）。等待动作固定用 `waiting-wave`（眼睛轮流上下浮动）——`waiting-spin` 会让两只眼睛在画面中间重叠成一个「独眼」帧，`waiting-wrap` 会出现整张空白脸。API 保留，等真实事件再接，不要为了「用满 18 个」硬造状态。
 
 ## 4. 心情与精力
 
@@ -104,9 +139,9 @@ type Mood = "content" | "curious" | "sleepy";
 ```
 
 - 精力：初值 100、clamp 0–100；前台每 30 分钟 -1，后台每 2 小时 -1，睡眠每小时 +5。
-- 心情：只持久化基线（content/sleepy）；curious 为瞬态，不落盘；启动按时段/精力重算基线。curious 来自首次见面；`happy` 随命名流程下线删除（2026-11-05）。麦克风联动已下线（D77），不再有 listening/proud/concerned。
+- 心情：只持久化基线（content/sleepy）；curious 为瞬态，不落盘；启动按时段/精力重算基线。curious 来自首次见面；`happy` 随命名流程下线删除（2026-11-05）。
 - 低精力 `[假设]`：energy<30 哈欠增加、<15 sleepy；`energy_bucket` 取 0–25/26–50/51–75/76–100。
-- 没有负面状态与惩罚（麦克风失败关心已随 D77 下线）；不使用真实时间戳做“奖励结算”，只做衰减/恢复，避免时区/改时间刷值。
+- 没有负面状态与惩罚；不使用真实时间戳做「奖励结算」，只做衰减/恢复，避免时区/改时间刷值。
 - 所有数值隐藏；UI 不显示进度条/等级。
 
 ## 5. 持久化
@@ -158,52 +193,61 @@ type PetSaveV1 = {
 ```text
 BOOT / TICK / VISIBILITY / OVERLAY / RESET
   → reducePet / dispatch(event)
-  → 副作用：震动 + 气泡 + 存档（画图层由 phase/AI 驱动）
+  → 副作用：震动 + 气泡 + 存档
+
+麦克风 / 连接 / 会话 / 问候气泡
+  → pet-reaction-wiring（边沿触发）
+  → pet-reaction（最小时长 + 同动作去抖）
+  → resolvePetAction 优先级
+  → <boop-face> 换动作
 ```
 
-- 宠物舞台不挂 pointer 处理器；点击、长按、来回抚摸不产生 `PetEvent`（D69），因此没有手势阈值/冷却/热区。
-- 麦克风不产生 `PetEvent`（D77）；录音时只由 `micListening` 门禁静音 AI 音效/触感，宠物姿态/气泡不变。
+- 宠物舞台不挂 pointer 处理器；点击、长按、来回抚摸不产生 `PetEvent`（D69），BoopFace 的手势也显式关闭。
+- 麦克风只影响**动作**（D133），不产生 `PetEvent`、不写存档；录音时 AI 音效/触感仍由 `micListening` 门禁静音。
 - 震动/声音通过 adapter；测试时 mock。
 - 气泡受频率限制，`copy_id` + 触发原因，方便统计关闭率。
-- 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；非宠物页/后台/卸载时释放（D79：设置改为「更多」整页）。原生不支持或 JNI 失败时静默降级，不做用户可见报错。
+- 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；非宠物页/后台/卸载时释放（D79）。原生不支持或 JNI 失败时静默降级。
 
 ## 8. 性能
 
 - 目标：真机 60fps；单帧主线程 <16ms；长任务 <50ms。
-- 图集单帧 256px、10fps 播放，主线程只做背景位置更新；无粒子层。
-- 不在动画中改 width/height/filter/box-shadow；只 transform/opacity。
-- 舞台不可见时暂停；低电量降频；减少动效去随机 idle。
-- 内存：宠物页常驻 ≤150MB `[待基线]`；图集解码约 16.8MB，卸载时释放。
-- 首屏：宠物 chunk 懒加载；图集 WebP ≤1MB；poster ≤20KB。
+- BoopFace 以约 30fps 的 rAF 循环更新 SVG 属性（眨眼/视线/拖拽），皮肤高光跟随指针；`motion="reduce"` 或入睡后 `_canPauseFrames` 会停循环。
+- 舞台不可见（页面卸载）时组件 `disconnectedCallback` 停 rAF；`document.hidden` 自动暂停。
+- 内存：宠物页常驻 ≤150MB `[待基线]`；无图集解码（原图集约 16.8MB 解码内存随之消失）。
+- 首屏：宠物 chunk 懒加载；首屏 JS +约 38KB gzip（组件 + 皮肤 catalog），皮肤 painter 为懒加载 chunk。
+- 真机基线（2026-11-14，Realme RMX3370 / Android 13 / WebView 103.0.5060.129）：
+  - 旧图集（working）：rAF 60.2fps；20s 主线程 TaskDuration 占用 59.1%；JS heap 2.7MB；DOM 节点 5315。
+  - 新组件（asking/wary 首轮）：rAF 60.1fps；TaskDuration 66.4%；JS heap 3.9MB；DOM 节点 1169。
+  - 结论：帧率不掉；主线程占用 +7 个百分点（仍在 1.5× 门槛内）；DOM 节点从 5315 降到 1169。final 构建（`waiting-wave`）的 working 态复测与 30 分钟 soak 待补。
 
 ## 9. 测试
 
-- 单元：状态转移（含覆盖层/后台/睡眠/醒来）、精力边界、时段/问候、plugin-store 迁移/损坏、旧存档带 `name` 忽略并恢复其他字段、首启无弹窗/无权限请求、点击宠物不产生事件、录音不产生事件。
-- 组件：四态行/候选链回落、done 循环（3 秒内约 1.875 轮、无末帧定格）、减少动效冻结、气泡频率、设置章节与保存、解码失败降级。
-- 集成：录音中宠物无变化（D77）；后台/回前台；低电量。
-- 真机：Realme 16:9/20:9 竖屏、旋转锁竖屏、60fps、掉电、锁屏恢复。
-- Mock：震动、时间、PetStorage adapter、Image 解码。
+- 单元：状态转移（覆盖层/后台/睡眠/醒来）、精力边界、时段/问候、plugin-store 迁移/损坏、点击宠物不产生事件、录音不产生 `PetEvent`。
+- 动作：`pet-action.test.ts` 覆盖优先级全矩阵；`pet-reaction.test.ts` 覆盖最小时长/去抖/到期；`pet-reaction-wiring.test.ts` 覆盖边沿触发、首帧/批量快照、首连不算重连、退订与重复挂载。
+- 组件：`boop-pet.test.tsx` 覆盖宿主属性（皮肤/兜底色/auto-sleep/手势关闭）、四态与录音态动作、瞬态反应压过 AI、同动作不重播。
+- 降级：元素未升级时舞台空白不崩（组件层 `whenDefined` 补同步）。
+- 真机：RMX3370 竖屏 60fps/掉电/30 分钟 soak、锁屏恢复、深浅主题、TalkBack。
+- Mock：震动、时间、PetStorage adapter、麦克风/连接 store 直接 setState。
 
 ## 10. 风险
 
 | 风险 | 缓解 |
 | --- | --- |
-| 图集资产/分辨率不够 | 复用 OpenPets 格式，换资产只改 `assets/openpet/`；256 帧放大偏软时可换 512 cell |
-| 中端安卓掉帧 | 只改背景位置；真机门禁；降级 poster |
-| 存档格式变更 | 版本号 + 迁移测试；损坏回退 |
-| plugin-store Android 兼容未验证 | Android 编译已通过；真机读写/杀进程恢复待回归，失败则回到 PetStorage adapter 的另一实现 |
-| 屏幕常亮耗电 | 设置可关；仅宠物页前台生效（聊天/后台释放）；最长常亮默认 2 小时（可调，0 = 不限）；无操作默认 5 分钟自动变暗（可调）；JNI 失败静默降级为系统默认熄屏 |
+| 上游 1.0 前 API 变动（单人维护） | 精确锁 0.8.0；`dependency-policy` §7 登记例外、复核时间与退出方案（vendor/fork） |
+| 角色形象与授权 | 代码 MIT；形象不转让 → NOTICE 写明只作内嵌形象、不宣称原创 |
+| 30fps rAF 常驻掉帧/耗电 | 真机门槛（掉帧率/CPU/TaskDuration）；`auto-sleep` 与变暗同线；`motion="reduce"` |
+| 动作抖动（连续状态消息） | 优先级收敛 + 最短 1.2s + 同动作去抖 + 5s 新会话冷却 |
+| 麦克风联动分散注意力 | 只在动作层表达，文案/音效/触感不变；D77 保留「不产生 PetEvent」 |
+| 皮肤 painter 首帧空白/闪黑 | `loadSkins()` 预热 + `color` 兜底 |
+| 深色主题刺眼/浅色对比不足 | 201 冰透蓝深浅共用（已对比）；真机目检兜底 |
+| 存档格式变更 | 不变；版本号 1 |
 | 时间/时区边界 | 可注入时钟；只做衰减/恢复 |
-| 图集授权/品牌 | 当前资产来自 DeepSeek 鲸鱼（zip 无 LICENSE）；正式发版前确认授权或替换同格式资产 |
-| 麦克风与宠物已解耦 | D77 后麦克风不再驱动宠物；录音中只静音 AI 音效/触感，避免两套反馈抢注意力 |
-| 卸载丢宠物 | 关于页说明；P1 备份/导出 |
 
 ## 11. 交付物
 
-- [ ] `state-machine.ts` + 单元测试。
-- [ ] `persistence.ts` + `tauri-pet-storage.ts`（plugin-store adapter）+ 迁移/损坏测试。
-- [ ] `pet-stage.tsx` / `sprite-pet.tsx` / `sprite-manifest.ts` / `sprite-state-map.ts` / `sprite-player.ts`。
-- [ ] 图集 manifest（一列一帧、≤32 帧、多状态行）与资产清单。
-- [x] 文案库 `copy.ts`（固定显示名，无用户自定义名字）。
-- [ ] 真机性能报告 + plugin-store 读写验证。
-- [ ] 文档：SPEC 状态表与本文输入表同步。
+- [x] `pet-action.ts` / `pet-reaction.ts` / `pet-reaction-wiring.ts` + 三个单测。
+- [x] `boop-pet.tsx` / `boop-face.d.ts` / `boop-pet.test.tsx`。
+- [x] `pet-stage.tsx` / `pet.module.css` 切换到 BoopFace。
+- [ ] 删除 `sprite-pet.tsx` / `sprite-manifest.ts` / `sprite-player.ts` / `sprite-state-map.ts` 与 `assets/openpet/`（真机签字后单独提交）。
+- [x] 文档：SPEC 状态表与本文动作表同步；D132/D133；依赖登记；NOTICE。
+- [ ] 真机性能报告（掉帧/CPU/heap + 30 分钟 soak）。
