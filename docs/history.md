@@ -86,6 +86,8 @@
 71. **2026-11-14 · 宠物换装 BoopFace + 12 个动作（D136/D137）** — 手机宠物从 OpenPets 图集（`sprite-*` + 760KB WebP）换成 `boopface@0.8.0` 原生 Web Component，固定皮肤 201「冰透蓝」、圆度 50、按压/拖天线/视线跟随全关；新增动作总线（`pet-action.ts` 优先级纯函数 + `pet-reaction.ts` 瞬态反应 + `pet-reaction-wiring.ts` 边沿触发），动作从 4 态扩到 12 个：录音中 `input`、转写中 `inspect`、上屏 `affirm`、失败 `failure`、断连 `failure`、重连 `affirm`（首连不算）、新会话 `surprise`、回来问候 `love`；等待态用 `waiting-wave`（`waiting-spin` 会重叠成独眼、`waiting-wrap` 会空白脸）。**推翻 D77 的「麦克风不产生宠物事件」视觉部分**，保留录音静音音效/触感与「触摸无互动」。授权侧同时清掉 D127 唯一无 LICENSE 的图集资产，NOTICE 改为 BoopFace 声明（代码 MIT、形象不转让）。证据：前端 113 files / 931 tests、`pnpm typecheck/lint/build`、构建产物无 WebP 图集；真机（RMX3370 / Android 13 / WebView 103）working 态 rAF 60fps、`data-pet-action` 四态正确、深浅主题通过；30 分钟 soak 与动作逐项触发待补。
 
 
+72. **2026-11-13 · 菜单栏看板顶部指引尖（D138）** — 卡片顶部加 16×8 三角指向托盘图标：窗口位置公式不动，顶部留白 4→10（尖 8 + 顶缝 2），尖顶离菜单栏 2pt；尖的横向位置每次定位按「图标中心 − 卡片左边」重算（夹 28–292），写进 CSS 变量并同步重建原生蒙版；玻璃态把圆角裁剪换成「圆角矩形 + 三角」的 `CAShapeLayer` 蒙版（尖与卡片同一块材质），实色态阴影从 `box-shadow` 换成外壳 `filter: drop-shadow()`（投影跟着轮廓走）；新增 `SIDEKICK_PANEL_ARROW=off` 应急开关。证据：Rust 252 tests（`usage_panel` 10 例含尖锚点夹取）、前端 113 files / 939 tests（面板 14 例）、`pnpm typecheck/lint/build`、QA 72 张截图（360×470，卡片 320×432 不裁切）；真窗口用 `SIDEKICK_PANEL_PREVIEW` 截图验证：尖端与卡片是同一块玻璃、贴边夹取时尖跟着图标走、`SIDEKICK_PANEL_ARROW=off` 时玻璃被蒙版裁回卡片矩形（卡上方无磨砂带）。
+
 ## 验证记录（原「已验证」小节，未进时间线的项）
 
 - **2026-10-31 · 早期 MVP 端到端** — 手机浏览器扫码打开桌面 `http://<IP>:<端口>/`；桌面窗口显示地址/二维码、展开出现 160px 二维码；`/download/apk` 返回带正确 content-type 与文件名的 APK；安卓 App 安装启动、双向消息与气泡方向通过（Realme RMX3370 / Android 13）。

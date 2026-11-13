@@ -208,6 +208,10 @@ const COMMANDS = {
   hideUsagePanel: "hide_usage_panel",
   openUsagePage: "open_usage_page",
   panelGlassReady: "panel_glass_ready",
+  usagePanelPinned: "usage_panel_pinned",
+  setUsagePanelPinned: "set_usage_panel_pinned",
+  usagePanelArrowX: "usage_panel_arrow_x",
+  usagePanelArrowEnabled: "usage_panel_arrow_enabled",
   memoList: "memo_list",
   memoGet: "memo_get",
   memoUpdate: "memo_update",
@@ -483,6 +487,36 @@ export function openUsagePage(): Promise<void> {
  */
 export function panelGlassReady(): Promise<boolean> {
   return invoke<boolean>(COMMANDS.panelGlassReady);
+}
+
+/**
+ * 小看板「钉住」状态（D135）：钉住后失焦不收起，Esc / 再点图标 / Cmd+W 仍照收。
+ *
+ * 真值在 Rust（失焦判断在窗口事件里）；面板挂载时读一次校准按钮态，
+ * 防止 WebView 重载后 JS 状态与 Rust 不一致。
+ */
+export function usagePanelPinned(): Promise<boolean> {
+  return invoke<boolean>(COMMANDS.usagePanelPinned);
+}
+
+/** 写钉住状态；返回生效后的值，前端用它收敛按钮。 */
+export function setUsagePanelPinned(pinned: boolean): Promise<boolean> {
+  return invoke<boolean>(COMMANDS.setUsagePanelPinned, { pinned });
+}
+
+/**
+ * 顶部指引尖的横向中心（逻辑像素，相对卡片左边；D138）。
+ *
+ * 卡片会被夹在屏幕安全边内、图标不会，所以贴边时尖要跟着图标挪。
+ * Rust 在每次定位后算出这个值，并在 show 之前写进 CSS 变量；这里只是兜底校准。
+ */
+export function usagePanelArrowX(): Promise<number> {
+  return invoke<number>(COMMANDS.usagePanelArrowX);
+}
+
+/** 尖是否启用（`SIDEKICK_PANEL_ARROW=off` 时前端不画三角）。 */
+export function usagePanelArrowEnabled(): Promise<boolean> {
+  return invoke<boolean>(COMMANDS.usagePanelArrowEnabled);
 }
 
 /**

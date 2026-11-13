@@ -10,6 +10,10 @@ const tauri = vi.hoisted(() => ({
   setTokenPricingMobileModels: vi.fn(),
   hideUsagePanel: vi.fn(),
   openUsagePage: vi.fn(),
+  usagePanelPinned: vi.fn(),
+  setUsagePanelPinned: vi.fn(),
+  usagePanelArrowX: vi.fn(),
+  usagePanelArrowEnabled: vi.fn(),
   // 测试环境没有原生材质（D117），一律按「没铺玻璃」处理 → 卡片保持不透明实色。
   panelGlassReady: vi.fn(),
   normalizeError: (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
@@ -214,6 +218,14 @@ beforeEach(() => {
   tauri.openUsagePage.mockResolvedValue(undefined);
   tauri.panelGlassReady.mockReset();
   tauri.panelGlassReady.mockResolvedValue(false);
+  tauri.usagePanelPinned.mockReset();
+  tauri.usagePanelPinned.mockResolvedValue(false);
+  tauri.setUsagePanelPinned.mockReset();
+  tauri.setUsagePanelPinned.mockImplementation(async (pinned: boolean) => pinned);
+  tauri.usagePanelArrowX.mockReset();
+  tauri.usagePanelArrowX.mockResolvedValue(160);
+  tauri.usagePanelArrowEnabled.mockReset();
+  tauri.usagePanelArrowEnabled.mockResolvedValue(true);
 });
 
 afterEach(() => cleanup());
@@ -350,5 +362,83 @@ describe("UsagePanel 菜单栏用量看板", () => {
     fireEvent.click(screen.getByRole("button", { name: /打开用量页/ }));
 
     await waitFor(() => expect(tauri.openUsagePage).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("UsagePanel 钉住（D135）", () => {
+  it("默认未钉住，按钮是 pin 且 aria-pressed=false", async () => {
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+
+    const pin = screen.getByRole("button", { name: "钉住面板" });
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+    expect(tauri.setUsagePanelPinned).not.toHaveBeenCalled();
+  });
+
+  it("点 pin 写入 true 并反映在按钮上", async () => {
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+
+    fireEvent.click(screen.getByRole("button", { name: "钉住面板" }));
+
+    await waitFor(() => expect(tauri.setUsagePanelPinned).toHaveBeenCalledWith(true));
+    const pinned = await screen.findByRole("button", { name: "取消钉住面板" });
+    expect(pinned).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(pinned);
+    await waitFor(() => expect(tauri.setUsagePanelPinned).toHaveBeenLastCalledWith(false));
+    expect(screen.getByRole("button", { name: "钉住面板" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("挂载时按 Rust 的钉住态校准按钮（WebView 重载后 JS 状态会清零）", async () => {
+    tauri.usagePanelPinned.mockResolvedValue(true);
+
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+
+    const pinned = await screen.findByRole("button", { name: "取消钉住面板" });
+    expect(pinned).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("写入失败时回滚按钮态", async () => {
+    tauri.setUsagePanelPinned.mockRejectedValue(new Error("boom"));
+
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+    fireEvent.click(screen.getByRole("button", { name: "钉住面板" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "钉住面板" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      ),
+    );
+  });
+});
+
+describe("UsagePanel 顶部指引尖（D138）", () => {
+  it("挂载时把尖的位置落成 CSS 变量，并写入开关", async () => {
+    tauri.usagePanelArrowX.mockResolvedValue(212);
+
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--panel-arrow-x")).toBe("212px"),
+    );
+    await waitFor(() => expect(document.documentElement.dataset.panelArrow).toBe("on"));
+    expect(document.querySelector(".dsl-panel-arrow")).not.toBeNull();
+  });
+
+  it("开关关闭时给 html 打 off，三角由 CSS 隐藏", async () => {
+    tauri.usagePanelArrowEnabled.mockResolvedValue(false);
+
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+
+    await waitFor(() => expect(document.documentElement.dataset.panelArrow).toBe("off"));
   });
 });

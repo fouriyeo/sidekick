@@ -210,12 +210,17 @@ pub fn run() {
                     api.prevent_close();
                     let _ = window.hide();
                 }
-                // 点其它 App / 桌面：失焦即收起。右键菜单与托盘点击不会让面板失焦。
+                // 点其它 App / 桌面：失焦即收起；钉住（D135）或 QA 预览时不收。
+                // 右键菜单与托盘点击不会让面板失焦。
                 tauri::WindowEvent::Focused(false)
                     if window.label() == usage_panel::PANEL_WINDOW =>
                 {
-                    // QA 预览时不收：预览一启动焦点就被别的 App 拿走，截图脚本又点不回来。
-                    if !usage_panel::preview_holds_open() {
+                    // 预览：一启动焦点就被别的 App 拿走，截图脚本又点不回来。
+                    // 钉住：用户明确要求它一直挂在那儿，只有 Esc / 再点图标 / Cmd+W 能收。
+                    if usage_panel::should_hide_on_blur(
+                        usage_panel::preview_holds_open(),
+                        usage_panel::pinned(),
+                    ) {
                         let _ = window.hide();
                     }
                 }
@@ -257,6 +262,10 @@ pub fn run() {
             usage_panel::hide_usage_panel,
             usage_panel::open_usage_page,
             usage_panel::panel_glass_ready,
+            usage_panel::usage_panel_pinned,
+            usage_panel::set_usage_panel_pinned,
+            usage_panel::usage_panel_arrow_x,
+            usage_panel::usage_panel_arrow_enabled,
             memo::desktop::memo_list,
             memo::desktop::memo_get,
             memo::desktop::memo_pair_code_create,

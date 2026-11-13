@@ -3,8 +3,9 @@
    ----------------------------------------------------------------------------
    只由 entries/panel.tsx 引入，作用域独立于主窗口。窗口是透明的（Rust 建窗时
    transparent(true)），因此：
-   - html/body/#root 必须透明；留白非对称（左右 20 / 上 8 / 下 28），
-     只用来放 .dsl-panel-card 向外延伸的 CSS 阴影；
+   - html/body/#root 必须透明；留白非对称（左右 20 / 上 10 / 下 28），
+     只用来放卡片向外延伸的投影；上 10 = 指引尖 8 + 尖顶留白 2
+     （D138，与 Rust 的 usage_panel::PAD_TOP 必须一致）；
    - 卡片默认铺不透明背景（D86：内容层不透明，不假装毛玻璃）；只有当 Rust 真的在
      WebView 下垫了系统玻璃层（D120：Liquid Glass / NSVisualEffectView）时，
      `html[data-panel-glass="on"]` 才把
@@ -33,10 +34,73 @@ body {
 }
 
 .dsl-panel {
+  /* 令牌放在这一层而不是卡片上：顶部的三角是卡片的兄弟节点，也要读 --panel-bg。 */
+  --panel-bg: #ffffff;
+  --panel-fg: #1c1c1e;
+  --panel-muted: #8a8a8e;
+  --panel-border: rgba(15, 45, 38, 0.1);
+  --panel-divider: rgba(15, 45, 38, 0.09);
+  --panel-accent: #0a7764;
+  --panel-accent-fg: #ffffff;
+  --panel-seg-bg: #eceef1;
+  --panel-seg-active: #ffffff;
+  --panel-hover: rgba(15, 45, 38, 0.06);
+  --panel-up: #c0522f;
+  --panel-down: #1d7a4f;
+  --panel-tip-bg: #1c1c1e;
+  --panel-tip-fg: #ffffff;
+  --panel-mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, "Roboto Mono", monospace;
+
   height: 100%;
   box-sizing: border-box;
-  padding: 8px 20px 28px;
+  /* 上 10 = 尖高 8 + 尖顶留白 2，必须与 Rust 的 usage_panel::PAD_TOP 一致。 */
+  padding: 10px 20px 28px;
   color: var(--foreground);
+}
+
+/* 卡片外壳：只有它带投影（drop-shadow 会跟着「卡片 + 尖」的轮廓走，
+   box-shadow 只会沿着圆角矩形画，尖的两条斜边会没有影子）。 */
+.dsl-panel-shell {
+  position: relative;
+  height: 100%;
+  filter: drop-shadow(0 8px 18px rgba(15, 45, 38, 0.16))
+    drop-shadow(0 2px 6px rgba(15, 45, 38, 0.06));
+}
+
+/* 顶部指引尖（D138）：16×8 的三角，横向位置由 Rust 按图标中心算（CSS 变量）。 */
+.dsl-panel-arrow {
+  position: absolute;
+  top: -8px;
+  left: var(--panel-arrow-x, 160px);
+  width: 16px;
+  height: 8px;
+  margin-left: -8px;
+  background: var(--panel-bg);
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+/* 实色态：三角往下盖 1px，压住卡片顶边的 hairline，不然尖根会横着一条线。 */
+html:not([data-panel-glass="on"]) .dsl-panel-arrow {
+  top: -9px;
+  height: 9px;
+}
+
+/* 应急开关：SIDEKICK_PANEL_ARROW=off 时 Rust 不裁三角，这里也不画。 */
+html[data-panel-arrow="off"] .dsl-panel-arrow {
+  display: none;
+}
+
+/* 深色实色卡：投影比浅色重一档（原来在 --panel-shadow 里，换成 filter 后放这儿）。 */
+html[data-theme="dark"] .dsl-panel-shell,
+html.dark .dsl-panel-shell {
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.5)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.32));
+}
+
+/* 玻璃态不投影（D120）：边界交给系统材质自己的高光。放在深色规则之后才压得住。 */
+html[data-panel-glass="on"] .dsl-panel-shell,
+html[data-panel-glass="on"][data-theme="dark"] .dsl-panel-shell,
+html[data-panel-glass="on"].dark .dsl-panel-shell {
+  filter: none;
 }
 
 /* 用 :where() 把重置的权重降到最低：普通 `.dsl-panel button`(0,1,1) 会压过
@@ -58,24 +122,6 @@ body {
 }
 
 .dsl-panel-card {
-  --panel-bg: #ffffff;
-  --panel-fg: #1c1c1e;
-  --panel-muted: #8a8a8e;
-  --panel-border: rgba(15, 45, 38, 0.1);
-  --panel-divider: rgba(15, 45, 38, 0.09);
-  --panel-shadow:
-    0 8px 18px rgba(15, 45, 38, 0.16), 0 2px 6px rgba(15, 45, 38, 0.06);
-  --panel-accent: #0a7764;
-  --panel-accent-fg: #ffffff;
-  --panel-seg-bg: #eceef1;
-  --panel-seg-active: #ffffff;
-  --panel-hover: rgba(15, 45, 38, 0.06);
-  --panel-up: #c0522f;
-  --panel-down: #1d7a4f;
-  --panel-tip-bg: #1c1c1e;
-  --panel-tip-fg: #ffffff;
-  --panel-mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, "Roboto Mono", monospace;
-
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -85,7 +131,6 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 18px;
   background: var(--panel-bg);
-  box-shadow: var(--panel-shadow);
   color: var(--panel-fg);
 }
 
@@ -94,7 +139,7 @@ body {
    由 `panel_glass_ready` 命令确认后才给 <html> 打 data-panel-glass="on"。
    这里只负责「一层薄 tint + 更轻的边界」：模糊由系统材质做，CSS 不再叠
    backdrop-filter（透明窗口里它没有可采样的像素，只会白烧 GPU）。 */
-html[data-panel-glass="on"] .dsl-panel-card {
+html[data-panel-glass="on"] .dsl-panel {
   --panel-bg: rgba(255, 255, 255, 0.3);
   /* 玻璃态不要深色描边：它会在卡片边界画出一圈 1px 灰线（实测 214 → 197 的暗带），
      叠在玻璃亮边上就像「周围一圈阴影」。边界交给系统玻璃层自己的边高光。 */
@@ -103,21 +148,17 @@ html[data-panel-glass="on"] .dsl-panel-card {
   --panel-seg-active: rgba(255, 255, 255, 0.92);
   --panel-hover: rgba(15, 45, 38, 0.07);
   /* 玻璃态**不要投影**：卡片边缘已经有系统玻璃的边高光做界定，
-     任何 box-shadow 都会在透明留白里画出一圈灰晕（实测边缘外侧 40px 内有 22 级亮度差，
+     任何阴影都会在透明留白里画出一圈灰晕（实测边缘外侧 40px 内有 22 级亮度差，
      关掉后同一区域是平的 247）。留白只留给「向外淡出」的幻觉，不放真阴影。 */
-  --panel-shadow: none;
 }
 
-html[data-theme="dark"] .dsl-panel-card,
-html.dark .dsl-panel-card {
+html[data-theme="dark"] .dsl-panel,
+html.dark .dsl-panel {
   --panel-bg: #1c1c1e;
   --panel-fg: #f2f2f7;
   --panel-muted: #98989d;
   --panel-border: rgba(255, 255, 255, 0.11);
   --panel-divider: rgba(255, 255, 255, 0.1);
-  /* 阴影必须落在窗口留白里（左右 20 / 上 8 / 下 28），否则会被窗口边界裁成
-     「卡片外一圈灰框」。曾用的 0 18px 44px 向下延伸约 62px，必然被裁。 */
-  --panel-shadow: 0 8px 18px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.32);
   --panel-accent: #46d6b0;
   --panel-accent-fg: #062b24;
   --panel-seg-bg: rgba(118, 118, 128, 0.24);
@@ -129,14 +170,13 @@ html.dark .dsl-panel-card {
   --panel-tip-fg: #f2f2f7;
 }
 
-html[data-panel-glass="on"][data-theme="dark"] .dsl-panel-card,
-html[data-panel-glass="on"].dark .dsl-panel-card {
+html[data-panel-glass="on"][data-theme="dark"] .dsl-panel,
+html[data-panel-glass="on"].dark .dsl-panel {
   --panel-bg: rgba(28, 28, 30, 0.38);
   /* 同浅色：不要白色描边，否则边界一圈亮线。 */
   --panel-border: transparent;
   --panel-seg-bg: rgba(118, 118, 128, 0.22);
   --panel-seg-active: rgba(72, 72, 74, 0.9);
-  --panel-shadow: none;
 }
 
 /* ---------------- 头部 ---------------- */
@@ -195,6 +235,29 @@ html[data-panel-glass="on"].dark .dsl-panel-card {
 
 .dsl-panel-refresh[aria-busy="true"] svg {
   animation: dsl-panel-spin 1s linear infinite;
+}
+
+/* 钉住（D135）：按下 = 失焦也不收起。激活色用主色 + 图标填实，一眼看出「钉死了」。 */
+.dsl-panel-pin {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--panel-muted);
+}
+
+.dsl-panel-pin:hover {
+  background: var(--panel-hover);
+}
+
+.dsl-panel-pin[aria-pressed="true"] {
+  color: var(--panel-accent);
+}
+
+.dsl-panel-pin[aria-pressed="true"] svg {
+  fill: currentColor;
 }
 
 @keyframes dsl-panel-spin {

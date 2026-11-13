@@ -1,7 +1,8 @@
 //! 菜单栏 Token 用量小看板（D108）。
 //!
-//! 左键点菜单栏图标 → 在图标正下方弹出一个约 320×392 的只读小窗；
+//! 左键点菜单栏图标 → 在图标正下方弹出一个 320×432 的只读小窗；
 //! 再点图标 / 点其它应用（失焦）/ Esc 收起；右键菜单仍是主窗口与退出入口。
+//! 钉住（D135）后失焦不再收起，Esc / 再点图标 / Cmd+W 仍照收。
 //!
 //! 目的是「扫一眼今天花了多少」，不是第二个主界面：小窗只渲染紧凑面板，
 //! 数据仍走已有的 `token_usage_stats`（只读本机 DSH 账本，不新增协议/不写账本）。
@@ -12,6 +13,10 @@
 //!
 //! 位置取自托盘事件里的 `rect`（tauri/tray-icon 在 macOS 上已换算成顶部原点的物理坐标），
 //! 再按图标所在显示器夹取，避免贴边时越界。
+//!
+//! D135：顶部间隙从 8pt 收到 4pt，并新增「钉住」（钉住后失焦不收，Esc / 再点图标仍收）。
+
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, Rect, Runtime, WebviewUrl, WebviewWindow,
@@ -33,19 +38,72 @@ pub const CARD_H: f64 = 432.0;
 pub const CARD_RADIUS: f64 = 18.0;
 /// 左右透明留白：只用来让卡片阴影向外延伸、自然淡出，不参与视觉卡片。
 pub const SIDE_PAD: f64 = 20.0;
-/// 顶部留白刻意做小：窗口顶边保持在菜单栏底线（30pt），
-/// 否则透明窗口会盖住托盘图标下半区，再点图标关不掉面板。
-pub const TOP_PAD: f64 = 8.0;
+/// 窗口顶边相对托盘图标矩形底边的上举量。
+///
+/// 窗口顶边必须停在菜单栏底线附近：再往上，透明窗口会盖住托盘图标下半区，
+/// 再点图标就关不掉面板。它只决定窗口位置，不再兼任卡片间距。
+pub const WINDOW_LIFT: f64 = 8.0;
+/// 顶部指引尖：宽 16、高 8，指向菜单栏图标（D138）。
+///
+/// 尖是卡片轮廓的一部分（原生玻璃蒙版与 CSS 三角用同一组尺寸），
+/// 所以尺寸只在这里定义。
+pub const ARROW_W: f64 = 16.0;
+pub const ARROW_H: f64 = 8.0;
+/// 尖顶到窗口顶边的留白（菜单栏与尖之间那一丝缝）。
+pub const ARROW_TOP_GAP: f64 = 2.0;
+/// 卡片顶边到窗口顶边的透明留白 = 尖高 + 尖顶留白。
+///
+/// `panel.css` 里 `.dsl-panel { padding-top }` 必须与它保持一致，
+/// 否则玻璃底衬、三角与卡片三者错位。
+pub const PAD_TOP: f64 = ARROW_H + ARROW_TOP_GAP;
 /// 底部留白最大：阴影向下偏移，需要空间淡出。
 pub const BOTTOM_PAD: f64 = 28.0;
-/// 卡片顶边与菜单栏图标矩形底边的间距（0 = 紧贴事件矩形，视觉约在菜单栏下 8pt）。
-const GAP: f64 = 0.0;
 /// 夹取时与显示器左右边缘保留的安全边。
 const EDGE: f64 = 8.0;
 
-/// 窗口整体尺寸 = 卡片 + 非对称透明留白（360×468）。
+/// 窗口整体尺寸 = 卡片 + 非对称透明留白（360×470）。
 pub const WINDOW_W: f64 = CARD_W + SIDE_PAD * 2.0;
-pub const WINDOW_H: f64 = CARD_H + TOP_PAD + BOTTOM_PAD;
+pub const WINDOW_H: f64 = CARD_H + PAD_TOP + BOTTOM_PAD;
+
+/// 尖的横向中心（相对卡片左边，逻辑像素）。
+///
+/// 卡片会被夹在屏幕左右安全边内，图标却不是——贴着屏幕右边时卡片会左移、
+/// 图标仍在原处。所以尖的位置每次定位时按「图标中心 − 卡片左边」重算，
+/// 玻璃蒙版与 CSS 三角共用这个值。
+static ARROW_X: AtomicU32 = AtomicU32::new((CARD_W / 2.0) as u32);
+
+/// 尖允许的横向范围：别压到卡片圆角，也别顶到边。
+pub fn arrow_x_bounds() -> (f64, f64) {
+    let inset = CARD_RADIUS + ARROW_W / 2.0 + 2.0;
+    (inset, CARD_W - inset)
+}
+
+/// 尖角开关（应急）：`SIDEKICK_PANEL_ARROW=off` 回退到「只有卡片、没有尖」。
+pub fn arrow_enabled() -> bool {
+    !matches!(
+        std::env::var("SIDEKICK_PANEL_ARROW").ok().as_deref(),
+        Some("off" | "0" | "false")
+    )
+}
+
+/// 当前尖的横向中心（逻辑像素，相对卡片左边）。
+pub fn arrow_x() -> f64 {
+    f64::from(ARROW_X.load(Ordering::Relaxed))
+}
+
+/// 按图标中心算尖的位置：图标中心对齐卡片左边 + 返回值，全套逻辑像素。
+fn arrow_anchor(tray_x: f64, tray_w: f64, window_x: i32, scale: f64) -> f64 {
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let icon_center = tray_x + tray_w / 2.0;
+    let card_left = f64::from(window_x) + SIDE_PAD * scale;
+    let anchor = (icon_center - card_left) / scale;
+    let (min, max) = arrow_x_bounds();
+    anchor.clamp(min, max)
+}
 
 /// 启动时预创建隐藏窗口。失败只打日志：第一次点按 `toggle` 会再试一次。
 pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
@@ -74,6 +132,12 @@ pub fn toggle<R: Runtime>(app: &AppHandle<R>, tray_rect: Rect) {
         // 定位失败仍要显示（会出现在主屏默认位置），只是不贴着图标。
         eprintln!("[panel] 定位失败，按默认位置显示: {error}");
     }
+    // 尖的位置先在 WebView 里落成 CSS 变量，再 show：窗口一出现就是对的，
+    // 不会先画在中间再跳一下（前端挂载/聚焦时还会用命令校准一次兜底）。
+    let _ = window.eval(&format!(
+        "document.documentElement.style.setProperty('--panel-arrow-x','{:.1}px')",
+        arrow_x()
+    ));
     if let Err(error) = window.show() {
         eprintln!("[panel] 显示失败，回退主窗口: {error}");
         tray::show_main_window(app);
@@ -143,6 +207,51 @@ pub fn panel_glass_ready() -> bool {
     #[cfg(not(target_os = "macos"))]
     let ready = false;
     ready
+}
+
+/// 面板钉住状态（D135）。
+///
+/// 钉住 = 失焦不收：点其它 App / 桌面时面板继续挂在最上层（建窗时已是
+/// `always_on_top(true)`）。Esc、再点菜单栏图标、Cmd+W 仍然照收，钉住状态保留。
+///
+/// 状态放 Rust 而不是只放前端：收起判断在窗口事件（`Focused(false)`）里，
+/// 前端按钮只是这个开关的遥控器；面板窗口 hide 不销毁，所以状态跨「收起再点开」保留，
+/// 重启进程重置为未钉住。
+static PANEL_PINNED: AtomicBool = AtomicBool::new(false);
+
+pub fn pinned() -> bool {
+    PANEL_PINNED.load(Ordering::Relaxed)
+}
+
+/// 失焦时是否要收起：QA 预览态与钉住态都不收。
+pub(crate) fn should_hide_on_blur(holds_open: bool, pinned: bool) -> bool {
+    !holds_open && !pinned
+}
+
+/// 读钉住状态：面板挂载时校准按钮（WebView 重载后 JS 状态会清零）。
+#[tauri::command]
+pub fn usage_panel_pinned() -> bool {
+    pinned()
+}
+
+/// 写钉住状态，回显生效后的值，前端据此收敛按钮态。
+#[tauri::command]
+pub fn set_usage_panel_pinned(pinned: bool) -> bool {
+    PANEL_PINNED.store(pinned, Ordering::Relaxed);
+    eprintln!("[panel] 钉住={pinned}");
+    pinned
+}
+
+/// 尖的横向中心（逻辑像素，相对卡片左边）：前端 CSS 变量用它。
+#[tauri::command]
+pub fn usage_panel_arrow_x() -> f64 {
+    arrow_x()
+}
+
+/// 尖是否启用（`SIDEKICK_PANEL_ARROW=off` 时前端不画三角）。
+#[tauri::command]
+pub fn usage_panel_arrow_enabled() -> bool {
+    arrow_enabled()
 }
 
 fn ensure_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R>> {
@@ -225,6 +334,13 @@ fn position_window<R: Runtime>(
         bounds,
         scale,
     );
+
+    // 尖要指回图标：卡片被夹取后，图标相对卡片的位置会偏移，每次定位都重算。
+    let anchor = arrow_anchor(tray_x, tray_w, x, scale);
+    ARROW_X.store(anchor.round() as u32, Ordering::Relaxed);
+    #[cfg(target_os = "macos")]
+    crate::panel_glass::set_arrow_anchor(window, anchor);
+
     window.set_position(PhysicalPosition::new(x, y))
 }
 
@@ -238,7 +354,8 @@ fn physical_tray_rect(rect: &Rect, scale: f64) -> (f64, f64, f64, f64) {
 /// 面板左上角位置（物理像素）的纯数学部分，单测覆盖。
 ///
 /// - 水平：图标中心对齐窗口中心，再夹到显示器左右安全边内；
-/// - 垂直：卡片顶边 = 图标底边 + `GAP`，窗口顶边再减掉顶部透明留白（`TOP_PAD`）；
+/// - 垂直：窗口顶边 = 图标矩形底边 − `WINDOW_LIFT`；卡片在窗口内再下移 `PAD_TOP`，
+///   所以「卡片到菜单栏的间隙」就是 `PAD_TOP`（窗口顶边贴在菜单栏底线附近）；
 /// - `bounds` 为 None（拿不到显示器）时不夹取。
 #[allow(clippy::too_many_arguments)]
 fn panel_origin(
@@ -260,8 +377,8 @@ fn panel_origin(
     let win_h_f = f64::from(win_h);
 
     let mut x = tray_x + tray_w / 2.0 - win_w_f / 2.0;
-    // 卡片顶边贴图标底边，窗口顶边回退一个透明留白。
-    let mut y = tray_y + tray_h + GAP * scale - TOP_PAD * scale;
+    // 窗口顶边比图标矩形底边高 `WINDOW_LIFT`（卡片间距由 `PAD_TOP` 决定，不在这里加）。
+    let mut y = tray_y + tray_h - WINDOW_LIFT * scale;
 
     if let Some((monitor_x, monitor_y, monitor_w, monitor_h)) = bounds {
         let left = f64::from(monitor_x) + EDGE * scale;
@@ -303,7 +420,7 @@ mod tests {
         let (ww, wh) = window_size();
         let (x, y) = panel_origin(tx, ty, tw, th, ww, wh, Some((0, 0, 3840, 2160)), 2.0);
 
-        // 图标中心 1736，窗口宽 720 → 左上角 1376；卡片顶边 = 48，窗口顶边再 -16。
+        // 图标中心 1736，窗口宽 720 → 左上角 1376；窗口顶边 = 48 − 8×2 = 32。
         assert_eq!(x, 1376);
         assert_eq!(y, 32);
     }
@@ -366,5 +483,51 @@ mod tests {
         let (_, y) = panel_origin(100.0, 0.0, 72.0, 48.0, ww, wh, None, 0.0);
         // scale 非法时按 1.0：48 + 0 - 8。
         assert_eq!(y, 40);
+    }
+
+    #[test]
+    fn arrow_tip_sits_two_points_below_window_top() {
+        // D138：窗口位置只由 WINDOW_LIFT 决定（与 D135 完全一致）；
+        // 顶部 10pt = 尖高 8 + 尖顶留白 2，卡片从窗口顶边下 10pt 开始。
+        let (tx, ty, tw, th) = primary_tray();
+        let (ww, wh) = window_size();
+        let (_, y) = panel_origin(tx, ty, tw, th, ww, wh, Some((0, 0, 3840, 2160)), 2.0);
+
+        // 窗口顶边 32（48 − 8×2），卡片顶边 52（+10×2）。
+        assert_eq!(y, 32);
+        assert_eq!(f64::from(y) + PAD_TOP * 2.0, 52.0);
+        // 窗口高度：432 + 10 + 28。
+        assert_eq!(WINDOW_H, 470.0);
+    }
+
+    #[test]
+    fn arrow_anchor_follows_icon_and_clamps_at_edges() {
+        // 主屏：图标中心 1736、窗口左边 1376 + 左右留白 40 → 卡片左边 1416，尖正好在卡片中心。
+        assert_eq!(arrow_anchor(1700.0, 72.0, 1376, 2.0), 160.0);
+
+        // 贴屏幕右边：窗口被夹到 3104，图标中心仍在 3836 → 尖被夹到右边界。
+        let (_, max) = arrow_x_bounds();
+        assert_eq!(arrow_anchor(3800.0, 72.0, 3104, 2.0), max);
+
+        // 贴屏幕左边：窗口被夹到 16，图标中心 36 → 尖被夹到左边界。
+        let (min, _) = arrow_x_bounds();
+        assert_eq!(arrow_anchor(0.0, 72.0, 16, 2.0), min);
+    }
+
+    #[test]
+    fn blur_hide_skipped_when_pinned_or_previewing() {
+        assert!(should_hide_on_blur(false, false));
+        assert!(!should_hide_on_blur(false, true));
+        assert!(!should_hide_on_blur(true, false));
+        assert!(!should_hide_on_blur(true, true));
+    }
+
+    #[test]
+    fn pin_state_round_trips() {
+        assert!(!pinned());
+        assert!(set_usage_panel_pinned(true));
+        assert!(pinned());
+        assert!(!set_usage_panel_pinned(false));
+        assert!(!pinned());
     }
 }

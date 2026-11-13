@@ -575,6 +575,8 @@ export function installTauriMock(): void {
   let mockPricingUpdatedAt = Date.now() - 2 * 60 * 60 * 1000;
   let mockPricingAuto = true;
   let mockMobileModels = true;
+  /** 菜单栏看板钉住态（D135）：浏览器里只记状态，不做失焦收起。 */
+  let mockPanelPinned = false;
 
   const usageBucketShares = {
     cacheRead: 0.955,
@@ -987,6 +989,15 @@ export function installTauriMock(): void {
       if (command === "hide_usage_panel" || command === "open_usage_page") return null;
       // 浏览器里没有原生材质（D120）：看板保持不透明实色卡，与真机回退态一致。
       if (command === "panel_glass_ready") return false;
+      // 钉住（D135）：浏览器里没有失焦收起，只要记住状态，方便 QA 看到按下态。
+      if (command === "usage_panel_pinned") return mockPanelPinned;
+      if (command === "set_usage_panel_pinned") {
+        mockPanelPinned = args?.pinned === true;
+        return mockPanelPinned;
+      }
+      // 尖（D138）：浏览器里没有原生窗口定位，固定在卡片中间，开关默认开。
+      if (command === "usage_panel_arrow_x") return 160;
+      if (command === "usage_panel_arrow_enabled") return true;
       if (command === "send_focus_request") {
         const requestId = typeof args?.requestId === "string" ? args.requestId : "";
         window.setTimeout(() => {

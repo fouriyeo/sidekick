@@ -5,7 +5,8 @@
 //! 背后一个像素都没有 → 纯 CSS 永远糊不到桌面壁纸。真正的磨砂只能由系统材质出：
 //! 在 WebView **之下**垫一块 `NSVisualEffectView`，模糊由 WindowServer 合成。
 //!
-//! 关键取舍：这块 view **只铺卡片矩形**（320×432、圆角 18），不铺整个窗口。
+//! 关键取舍：这块 view **只铺卡片轮廓**（320×432 圆角 18 + 顶部 16×8 的指引尖，D138），
+//! 不铺整个窗口。
 //! 窗口四周 20/8/28 的透明留白是留给 CSS 阴影的：
 //! - 整窗铺 → 留白变成一圈磨砂（和 D116 修掉的「卡片外一圈别的颜色」是同一类观感问题）；
 //! - 阴影会叠在模糊壁纸上发灰发脏，深色主题直接糊成一团。
@@ -22,10 +23,15 @@ use objc2_app_kit::{
     NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView,
     NSWindowOrderingMode,
 };
-use objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize};
+use objc2_core_foundation::{CFRetained, CGPoint, CGRect, CGSize};
+use objc2_core_graphics::CGMutablePath;
+use objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize, NSString};
+use objc2_quartz_core::CAShapeLayer;
 use tauri::{Runtime, WebviewWindow};
 
-use crate::usage_panel::{CARD_H, CARD_RADIUS, CARD_W, SIDE_PAD, TOP_PAD};
+use crate::usage_panel::{
+    ARROW_H, ARROW_W, CARD_H, CARD_RADIUS, CARD_W, PAD_TOP, SIDE_PAD, arrow_enabled, arrow_x,
+};
 
 /// 底衬是否真的铺上了。前端 `panel_glass_ready` 读它决定卡片用 tint 还是实色。
 static INSTALLED: AtomicBool = AtomicBool::new(false);
@@ -110,7 +116,121 @@ pub fn apply<R: Runtime>(window: &WebviewWindow<R>) {
     }
 }
 
-/// 把 `NSVisualEffectView` 垫到 WebView 下面，只覆盖卡片矩形。
+/// 蒙版 layer 的名字：定位后靠它从 contentView 里找回这块玻璃。
+const GLASS_LAYER: &str = "sidekick.panel.glass";
+
+/// 卡片 + 尖的合成路径（holder 坐标系：原点左下，卡片占 y = 0..CARD_H）。
+///
+/// 尖是卡片轮廓的一部分：原生玻璃与 CSS 三角用同一组尺寸，形状对不齐会在尖端
+/// 露出一条「有磨砂 / 没磨砂」的缝。
+fn shape_path(anchor: f64) -> CFRetained<CGMutablePath> {
+    let path = CGMutablePath::new();
+    let card = CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(CARD_W, CARD_H));
+    // SAFETY: transform 传 null；path 是本函数刚创建的可变路径，调用期间一直存活。
+    unsafe {
+        CGMutablePath::add_rounded_rect(
+            Some(&path),
+            std::ptr::null(),
+            card,
+            CARD_RADIUS,
+            CARD_RADIUS,
+        );
+        if arrow_enabled() {
+            // 三角底边正好压在卡片顶边上，两个子路径同向 → 非零填充就是并集，无缝。
+            CGMutablePath::move_to_point(
+                Some(&path),
+                std::ptr::null(),
+                anchor - ARROW_W / 2.0,
+                CARD_H,
+            );
+            CGMutablePath::add_line_to_point(
+                Some(&path),
+                std::ptr::null(),
+                anchor,
+                CARD_H + ARROW_H,
+            );
+            CGMutablePath::add_line_to_point(
+                Some(&path),
+                std::ptr::null(),
+                anchor + ARROW_W / 2.0,
+                CARD_H,
+            );
+        }
+    }
+    CGMutablePath::close_subpath(Some(&path));
+    path
+}
+
+/// 把 holder 的裁剪换成「圆角矩形 + 三角」蒙版。
+fn apply_mask(holder: &NSView, anchor: f64) {
+    let Some(layer) = holder.layer() else {
+        return;
+    };
+    let shape = CAShapeLayer::new();
+    shape.setFrame(CGRect::new(
+        CGPoint::new(0.0, 0.0),
+        CGSize::new(CARD_W, CARD_H + ARROW_H),
+    ));
+    shape.setPath(Some(&shape_path(anchor)));
+    // SAFETY: 只在主线程、holder 已挂进 contentView 之后调用；shape 由本层持有。
+    unsafe { layer.setMask(Some(&shape)) };
+}
+
+/// 定位后把尖挪到图标正下方（CSS 三角与玻璃蒙版共用同一个 x）。
+///
+/// 卡片会被夹在显示器安全边内，图标不会——贴边时两者错位，所以每次定位都要重算。
+/// 必须在主线程调用；没铺玻璃 / 找不到 holder 时静默跳过（尖退回中间）。
+pub fn set_arrow_anchor<R: Runtime>(window: &WebviewWindow<R>, anchor: f64) {
+    if !INSTALLED.load(Ordering::Relaxed) || MainThreadMarker::new().is_none() {
+        return;
+    }
+    let Ok(view_ptr) = window.ns_view() else {
+        return;
+    };
+    if view_ptr.is_null() {
+        return;
+    }
+    // SAFETY: 主线程 + 窗口存活；contentView 指针在窗口生命周期内有效。
+    let content: &NSView = unsafe { &*(view_ptr as *const NSView) };
+    for subview in content.subviews().iter() {
+        let ours = subview
+            .layer()
+            .and_then(|layer| layer.name())
+            .is_some_and(|name| name.to_string() == GLASS_LAYER);
+        if ours {
+            apply_mask(&subview, anchor);
+        }
+    }
+}
+
+/// 铺一块只在 macOS 上有意义的磨砂底衬（material 是已选好的档位）。
+fn add_frosted(
+    mtm: MainThreadMarker,
+    holder: &NSView,
+    glass_frame: NSRect,
+    material: NSVisualEffectMaterial,
+) {
+    let glass = NSVisualEffectView::initWithFrame(mtm.alloc(), glass_frame);
+    // Popover = Apple 官方语义「popover 窗口的背景」，正是菜单栏小看板的形态。
+    glass.setMaterial(material);
+    // BehindWindow 才会采样窗口背后的桌面；WithinWindow 只糊本 App 自己的内容。
+    glass.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+    // Active：面板是 show() 之后才 set_focus()，FollowsWindowActiveState 会先渲染
+    // 一帧「未激活」灰再跳成激活态，肉眼能看见闪一下。
+    glass.setState(NSVisualEffectState::Active);
+    // 窗口 resizable(false)、尺寸固定，frame 不跟随父视图缩放。
+    glass.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
+    // 圆角：材质画在 view 自己的 layer 里，蒙版之外的圆角由 holder 的蒙版负责；
+    // 这里保留圆角作为蒙版失效时的兜底。
+    glass.setWantsLayer(true);
+    if let Some(layer) = glass.layer() {
+        layer.setCornerRadius(CARD_RADIUS);
+        layer.setMasksToBounds(true);
+    }
+    holder.addSubview(&glass);
+}
+
+/// 把玻璃垫到 WebView 下面，形状 = 卡片圆角矩形 + 顶部指引尖。
 ///
 /// 只能在主线程、窗口 build 完成之后调用（`ensure_window` 里正好满足）。
 fn install<R: Runtime>(window: &WebviewWindow<R>) -> Result<&'static str, String> {
@@ -124,87 +244,60 @@ fn install<R: Runtime>(window: &WebviewWindow<R>) -> Result<&'static str, String
     let content: &NSView = unsafe { &*(view_ptr as *const NSView) };
 
     let bounds = content.bounds();
-    // contentView 默认是非翻转坐标系（原点左下），卡片距顶 `TOP_PAD`。
-    let card_y = if content.isFlipped() {
-        TOP_PAD
+    // holder 的包围盒 = 卡片 + 顶部尖；形状由蒙版裁，矩形本身不出现在画面上。
+    let holder_h = CARD_H + ARROW_H;
+    let holder_y = if content.isFlipped() {
+        PAD_TOP - ARROW_H
     } else {
-        bounds.size.height - TOP_PAD - CARD_H
+        bounds.size.height - PAD_TOP - CARD_H
     };
-    let frame = NSRect {
-        origin: NSPoint::new(SIDE_PAD, card_y),
-        size: NSSize::new(CARD_W, CARD_H),
+    let holder = NSView::initWithFrame(
+        mtm.alloc(),
+        NSRect {
+            origin: NSPoint::new(SIDE_PAD, holder_y),
+            size: NSSize::new(CARD_W, holder_h),
+        },
+    );
+    holder.setWantsLayer(true);
+    if let Some(layer) = holder.layer() {
+        // 蒙版万一没生效，至少保住圆角与裁剪，不会露出直角玻璃。
+        layer.setCornerRadius(CARD_RADIUS);
+        layer.setMasksToBounds(true);
+        layer.setName(Some(&NSString::from_str(GLASS_LAYER)));
+    }
+    holder.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
+
+    // 玻璃要盖住尖所在的那 8pt，否则尖那一块没有采样、只有 CSS 的薄 tint。
+    let glass_frame = NSRect {
+        origin: NSPoint::new(0.0, 0.0),
+        size: NSSize::new(CARD_W, holder_h),
     };
 
-    match kind() {
+    let label = match kind() {
         Kind::LiquidGlass(style) if liquid_glass_available() => {
-            // Liquid Glass 会往自己 frame 外面蹭一圈很淡的柔光（实测卡片外侧留白里
-            // 有约 5% 的暗晕、扩散 20pt）——用户看到的就是「卡片周围一圈阴影」。
-            // 套一个和卡片同尺寸、masksToBounds 的容器把它裁掉。
-            let holder = NSView::initWithFrame(mtm.alloc(), frame);
-            holder.setWantsLayer(true);
-            if let Some(layer) = holder.layer() {
-                layer.setCornerRadius(CARD_RADIUS);
-                layer.setMasksToBounds(true);
-            }
-            holder.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
-
-            let glass = NSGlassEffectView::initWithFrame(
-                mtm.alloc(),
-                NSRect {
-                    origin: NSPoint::new(0.0, 0.0),
-                    size: NSSize::new(CARD_W, CARD_H),
-                },
-            );
+            let glass = NSGlassEffectView::initWithFrame(mtm.alloc(), glass_frame);
             glass.setStyle(style);
             glass.setCornerRadius(CARD_RADIUS);
             glass.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
             holder.addSubview(&glass);
-            content.addSubview_positioned_relativeTo(&holder, NSWindowOrderingMode::Below, None);
-            return Ok(if style == NSGlassEffectViewStyle::Clear {
+            if style == NSGlassEffectViewStyle::Clear {
                 "liquidGlassClear"
             } else {
                 "liquidGlassRegular"
-            });
-        }
-        // macOS 26 以下没有 NSGlassEffectView：退回经典磨砂，不报错。
-        Kind::LiquidGlass(_) => {}
-        Kind::Frosted(material) => {
-            let glass = NSVisualEffectView::initWithFrame(mtm.alloc(), frame);
-            // Popover = Apple 官方语义「popover 窗口的背景」，正是菜单栏小看板的形态。
-            glass.setMaterial(material);
-            // BehindWindow 才会采样窗口背后的桌面；WithinWindow 只糊本 App 自己的内容。
-            glass.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-            // Active：面板是 show() 之后才 set_focus()，FollowsWindowActiveState 会先渲染
-            // 一帧「未激活」灰再跳成激活态，肉眼能看见闪一下。
-            glass.setState(NSVisualEffectState::Active);
-            // 窗口 resizable(false)、尺寸固定，frame 不跟随父视图缩放。
-            glass.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
-
-            // 圆角：材质画在 view 自己的 layer 里，圆角必须落在 layer 上并裁剪子层，
-            // 否则卡片 18px 圆角下面会露出直角玻璃。
-            glass.setWantsLayer(true);
-            if let Some(layer) = glass.layer() {
-                layer.setCornerRadius(CARD_RADIUS);
-                layer.setMasksToBounds(true);
             }
-
-            content.addSubview_positioned_relativeTo(&glass, NSWindowOrderingMode::Below, None);
-            return Ok(frosted_label(material));
         }
-    }
+        Kind::Frosted(material) => {
+            add_frosted(mtm, &holder, glass_frame, material);
+            frosted_label(material)
+        }
+        // 只有「要 Liquid Glass 但系统不支持」会走到这里。
+        Kind::LiquidGlass(_) => {
+            add_frosted(mtm, &holder, glass_frame, NSVisualEffectMaterial::Popover);
+            "popover"
+        }
+    };
 
-    // 只有「要 Liquid Glass 但系统不支持」会走到这里。
-    let glass = NSVisualEffectView::initWithFrame(mtm.alloc(), frame);
-    glass.setMaterial(NSVisualEffectMaterial::Popover);
-    glass.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-    glass.setState(NSVisualEffectState::Active);
-    glass.setAutoresizingMask(NSAutoresizingMaskOptions::empty());
-    glass.setWantsLayer(true);
-    if let Some(layer) = glass.layer() {
-        layer.setCornerRadius(CARD_RADIUS);
-        layer.setMasksToBounds(true);
-    }
-    content.addSubview_positioned_relativeTo(&glass, NSWindowOrderingMode::Below, None);
-
-    Ok("popover")
+    apply_mask(&holder, arrow_x());
+    content.addSubview_positioned_relativeTo(&holder, NSWindowOrderingMode::Below, None);
+    Ok(label)
 }

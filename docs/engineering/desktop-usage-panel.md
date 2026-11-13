@@ -24,7 +24,8 @@ related:
 | --- | --- |
 | 左键点菜单栏图标 | 面板可见则收起；不可见则定位到图标下方并显示（`show` + `set_focus`） |
 | 再点一次图标 | 收起（`hide`，窗口不销毁，下次秒开） |
-| 点其它 App / 桌面 | 面板失焦 → `Focused(false)` → 收起 |
+| 点其它 App / 桌面 | 面板失焦 → `Focused(false)` → 收起；**钉住时豁免**（D135） |
+| 点 header 的 pin | `set_usage_panel_pinned` 写 Rust 的 `PANEL_PINNED`；钉住后只有 Esc / 再点图标 / Cmd+W 能收，收起不取消钉住，重启重置 |
 | Esc | 前端调 `hide_usage_panel` 收起 |
 | Cmd+W / 其它关闭请求 | 拦截 `CloseRequested` → `prevent_close` + `hide`，不销毁 |
 | 底部「打开用量页」 | 显示并激活主窗口，再发 `sidekick-navigate`，主窗口切到「用量」页 |
@@ -38,17 +39,17 @@ related:
 | 项 | 值 |
 | --- | --- |
 | label | `usage-panel`（`capabilities/panel.json` 的 windows 必须与它一致） |
-| 窗口 | 360×468 逻辑像素；`decorations(false)`、`transparent(true)`、`shadow(false)`、`resizable(false)`、`always_on_top(true)`、`skip_taskbar(true)`、`accept_first_mouse(true)` |
-| 可见卡片 | 320×432，透明留白非对称（左右 20 / 上 8 / 下 28），只用来放向外延伸的 CSS 阴影 |
-| 阴影 | 卡片自身 `0 8px 18px` + `0 2px 6px` 柔和阴影；窗口层不铺任何底色/阴影，阴影随留白自然淡出，不再被 14px 窄边裁成灰框 |
-| 位置 | 卡片顶边 = 图标事件矩形底边（GAP 0，视觉约在菜单栏下 8pt）；水平居中对齐图标；再夹到图标所在显示器的左右 8pt 安全边 |
+| 窗口 | 360×470 逻辑像素（D138）；`decorations(false)`、`transparent(true)`、`shadow(false)`、`resizable(false)`、`always_on_top(true)`、`skip_taskbar(true)`、`accept_first_mouse(true)` |
+| 可见卡片 | 320×432，透明留白非对称（左右 20 / 上 10 / 下 28），只用来放向外延伸的投影；上 10 = 指引尖 8 + 尖顶留白 2 |
+| 阴影 | 外壳 `.dsl-panel-shell` 的 `filter: drop-shadow(0 8px 18px …) drop-shadow(0 2px 6px …)`（D138 从 `box-shadow` 改过来，否则尖的斜边没有影子）；窗口层不铺任何底色/阴影，阴影随留白自然淡出 |
+| 位置 | 窗口顶边 = 图标事件矩形底边 − `WINDOW_LIFT`(8)（位置公式自 D116 起没变，托盘图标点击区不受影响）；卡片在窗口内再下移 `PAD_TOP`(10) = 尖 8 + 留白 2 → 尖顶离菜单栏 2pt；水平居中对齐图标；再夹到图标所在显示器的左右 8pt 安全边；尖的横向位置按「图标中心 − 卡片左边」重算（夹在 28–292） |
 | 创建时机 | 启动 setup 时预创建并隐藏（第一次点按也秒开）；失败时首次点按再试 |
 | URL | `index.html?window=panel`（`main.tsx` 按查询参数挂 `entries/panel.tsx`，不再走 `app_role` 分支） |
 | 内容层 | 默认不透明卡片（D86：内容层不透明）；**卡片区单独铺一块原生玻璃层**（D120）：macOS 26+ 用 `NSGlassEffectView`（`liquidGlassRegular`），低版本退回 `NSVisualEffectView`（popover/BehindWindow/Active）；圆角 18、垫在 WebView 之下；前端拿到 `panel_glass_ready=true` 后才把底色换成薄 tint |
 | 材质档位 | `SIDEKICK_GLASS_MATERIAL=liquidGlass`（默认）`|liquidGlassClear|popover|underWindowBackground|sidebar|menu|contentBackground`；`liquidGlassClear` 在数据卡上小字对比不足，不建议 |
-| 玻璃只铺卡片 | 原生材质铺的是 `contentView.bounds()`，整窗铺会让 20/8/28 的透明留白也变成磨砂、阴影叠在模糊壁纸上发脏；所以 view 的 frame 就是卡片矩形，留白/阴影/圆角仍归 CSS（D116） |
+| 玻璃只铺卡片 | 原生材质只铺「卡片 + 尖」的包围盒（320×440），形状由 `CAShapeLayer` 蒙版裁出来（D138：圆角矩形 + 三角 → 同一块材质，尖端不会变成薄 tint）；整窗铺会让留白也变成磨砂、阴影叠在模糊壁纸上发脏（D116） |
 | QA 预览 | `SIDEKICK_PANEL_PREVIEW=1` 启动即弹面板并收起主窗口；`SIDEKICK_PANEL_PREVIEW="x,y"`（逻辑像素）可指定位置，便于对着深色/彩色背景截图；预览期间不因失焦收起 |
-| 玻璃边缘 | 玻璃态**不加描边、不加投影**（`--panel-border: transparent` / `--panel-shadow: none`）；`NSGlassEffectView` 必须套同尺寸 `masksToBounds` 容器，否则它自己的柔光会漏到透明留白里，看起来像「卡片外一圈阴影」 |
+| 玻璃边缘 | 玻璃态**不加描边、不加投影**（`--panel-border: transparent` / 外壳 `filter: none`）；`NSGlassEffectView` 套 `masksToBounds` 的 holder，再叠一层 path 蒙版，柔光与三角一起被裁掉 |
 | 玻璃回退 | `SIDEKICK_UI_VIBRANCY=off` 不铺 view（等价 D116 实色卡）；AppKit 失败只打日志静默降级。回退必须在 Rust 侧——原生 view 插进去以后 CSS 关不掉 |
 | 为什么不用 CSS backdrop-filter | 采样上界是文档根元素，透明窗口背后没有像素可采样（见 D120）；`prefers-reduced-transparency` 在 WKWebView 上不匹配，不能当降级手段 |
 | 页面透明 | 面板入口把 `.desktop-ios` 挂在 `<html>`，ios.css 会因此给 html 铺页面底色；`panel.css` 必须用 `html.desktop-ios { background: transparent }` 压过它，否则整窗（含透明留白）是一圈灰/黑，和壁纸冲突 |
@@ -69,19 +70,19 @@ related:
 
 | 文件 | 职责 |
 | --- | --- |
-| `app/src-tauri/src/usage_panel.rs` | 窗口预创建/定位/toggle/收起、三个命令（`hide_usage_panel` / `open_usage_page` / `panel_glass_ready`）、导航事件、`CARD_RADIUS` 常量、定位单测 |
-| `app/src-tauri/src/panel_glass.rs` | 卡片区原生磨砂底衬（D120）：`NSVisualEffectView` 只铺 320×432、圆角 18、垫在 WebView 下；失败静默降级 |
+| `app/src-tauri/src/usage_panel.rs` | 窗口预创建/定位/toggle/收起、七个命令（`hide_usage_panel` / `open_usage_page` / `panel_glass_ready` / `usage_panel_pinned` / `set_usage_panel_pinned` / `usage_panel_arrow_x` / `usage_panel_arrow_enabled`）、钉住状态与失焦闸门、尖的锚点计算与 CSS 变量写入、导航事件、`CARD_RADIUS` / `ARROW_W` / `ARROW_H` / `PAD_TOP` / `WINDOW_LIFT` 常量、定位/锚点/钉住单测 |
+| `app/src-tauri/src/panel_glass.rs` | 卡片区原生磨砂底衬（D120）：只铺「卡片 + 尖」，`CAShapeLayer` 蒙版 = 圆角 18 矩形 + 16×8 三角（D138），每次定位按锚点重建；失败静默降级 |
 | `app/src-tauri/src/tray.rs` | 左键改调 `usage_panel::toggle`；tooltip 文案；右键菜单不变 |
 | `app/src-tauri/src/lib.rs` | setup 预创建、`CloseRequested`/`Focused(false)` 拦截、注册命令 |
 | `app/src-tauri/capabilities/panel.json` | 给 `usage-panel` 窗口 `core:default` |
 | `app/src/main.tsx` | `?window=panel` 分支（先于 `app_role`） |
 | `app/src/entries/panel.tsx` | 挂 `.desktop-ios` 令牌、引入 `ios.css` + `panel.css`、mount 面板 |
-| `app/src/desktop/panel/usage-panel.tsx` | 紧凑卡片（hero / 三读数 / 7 天迷你柱 / 客户端/会话/模型 Top 3 分组 + 占比条 / 打开用量页 / 状态） |
-| `app/src/desktop/styles/panel.css` | 卡片令牌与布局（深浅两套）；`html[data-panel-glass="on"]` 下切半透明 tint，否则实色 |
-| `app/src/shared/lib/tauri.ts` | `hideUsagePanel` / `openUsagePage` / `panelGlassReady` 命令、`subscribeNavigate` |
+| `app/src/desktop/panel/usage-panel.tsx` | 紧凑卡片（hero / 三读数 / 7 天迷你柱 / 客户端/会话/模型 Top 3 分组 + 占比条 / 打开用量页 / 状态 / 钉住按钮） |
+| `app/src/desktop/styles/panel.css` | 卡片令牌与布局（深浅两套）；外壳 `drop-shadow` 与顶部三角；`html[data-panel-glass="on"]` 下切半透明 tint，否则实色 |
+| `app/src/shared/lib/tauri.ts` | `hideUsagePanel` / `openUsagePage` / `panelGlassReady` / 钉住与尖的命令、`subscribeNavigate` |
 | `app/src/desktop/app.tsx` | 订阅 `sidekick-navigate`，收到 `usage` 切页 |
-| `app/src/dev/tauri-mock.ts` | 浏览器 QA 的两个命令空实现；`token_usage_stats` 的 180 天历史 |
-| `scripts/qa-desktop-ios.mjs` | 360×468 × 浅/深 + 空态 + 悬停截图，校验卡片 320×432、内部不裁切、无溢出/控制台错误 |
+| `app/src/dev/tauri-mock.ts` | 浏览器 QA 的窗口命令空实现（钉住状态、尖固定在 160、尖开关恒开）；`token_usage_stats` 的 180 天历史 |
+| `scripts/qa-desktop-ios.mjs` | 360×470 × 浅/深 + 空态 + 悬停截图，校验卡片 320×432、内部不裁切、无溢出/控制台错误 |
 
 ## 5. 已知代价 / 风险
 
@@ -102,7 +103,7 @@ related:
 
 **人工（菜单栏只能目检）**
 
-1. `pnpm tauri dev` → 终端出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）` 与 `[panel] 已创建隐藏窗口 360×468`。
+1. `pnpm tauri dev` → 终端出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）` 与 `[panel] 已创建隐藏窗口 360×464`。
 2. 左键图标 → 卡片出现在图标正下方，宽 320、高 432，圆角/阴影正常（浅/深主题各看一次）；日志出现 `[panel] 显示`，再点图标/点其它 App 后出现 `[panel] 收起`。
 3. 鼠标在近 7 天柱上横向移动 → 命中柱加亮、顶部浮出「日期 · 金额」气泡（今天显示「今天」），移出消失；分组行 hover 有淡底。
 4. 再点图标收起；点桌面/其它 App 收起；Esc 收起；Cmd+W 后隐藏但下次仍能开。

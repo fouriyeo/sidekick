@@ -1,8 +1,16 @@
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight, Pin, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type UsageGroupMode, useUsageStore } from "@/desktop/features/usage/usage-store";
 import type { TokenUsageDay, TokenUsageStats, UsageRange } from "@/protocol/messages";
-import { hideUsagePanel, openUsagePage, panelGlassReady } from "@/shared/lib/tauri";
+import {
+  hideUsagePanel,
+  openUsagePage,
+  panelGlassReady,
+  setUsagePanelPinned,
+  usagePanelArrowEnabled,
+  usagePanelArrowX,
+  usagePanelPinned,
+} from "@/shared/lib/tauri";
 import {
   formatCny,
   formatCount,
@@ -50,6 +58,13 @@ const RELOAD_THROTTLE_MS = 700;
  * 底部一个「打开用量页」。窗口的显示/收起/定位都在 Rust（`usage_panel.rs`）。
  *
  * 刷新时机：挂载、窗口重新获得焦点、页面重新可见；旧快照保留，避免打开瞬间闪空。
+ *
+ * 钉住（D135）：header 右侧的 pin 只是遥控器，真值在 Rust（`Focused(false)` 是否收起）；
+ * 挂载时读一次校准，避免 WebView 重载后按钮态与 Rust 不一致。
+ *
+ * 顶部尖（D138）：卡片上方 16×8 的三角指向菜单栏图标，位置由 Rust 在定位时算好
+ * （卡片被夹取时图标会偏），这里只负责把值落成 CSS 变量；玻璃态下三角的磨砂由
+ * `panel_glass.rs` 的蒙版提供，形状与这里必须一致。
  */
 export function UsagePanel() {
   const range = useUsageStore((state) => state.range);
@@ -92,6 +107,57 @@ export function UsagePanel() {
     };
   }, []);
 
+  // 钉住（D135）：真值在 Rust 的 `Focused(false)` 判断里，这里只负责按钮。
+  // 挂载时读一次校准（WebView 重载后 JS 状态会清零），失败按未钉住处理。
+  const [pinned, setPinned] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void usagePanelPinned()
+      .then((value) => {
+        if (!cancelled) setPinned(value);
+      })
+      .catch(() => {
+        /* 命令缺失（旧内核/浏览器 QA）就按未钉住处理 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const togglePinned = () => {
+    const next = !pinned;
+    setPinned(next);
+    void setUsagePanelPinned(next)
+      .then((value) => setPinned(value))
+      .catch(() => setPinned(!next));
+  };
+
+  // 尖的位置/开关（D138）：Rust 在 show 之前已经写过一次 CSS 变量，
+  // 这里在挂载与每次获得焦点时再校准（窗口被夹取时图标会偏，尖得跟着挪）。
+  useEffect(() => {
+    let cancelled = false;
+    const applyAnchor = () => {
+      void usagePanelArrowX()
+        .then((x) => {
+          if (cancelled) return;
+          document.documentElement.style.setProperty("--panel-arrow-x", `${x}px`);
+        })
+        .catch(() => undefined);
+    };
+    applyAnchor();
+    void usagePanelArrowEnabled()
+      .then((on) => {
+        if (!cancelled) document.documentElement.dataset.panelArrow = on ? "on" : "off";
+      })
+      .catch(() => undefined);
+    window.addEventListener("focus", applyAnchor);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", applyAnchor);
+    };
+  }, []);
+
   useEffect(() => {
     loadNow();
     const onFocus = () => loadIfStale();
@@ -122,52 +188,65 @@ export function UsagePanel() {
 
   return (
     <main className="dsl-panel" aria-busy={loading}>
-      <div className="dsl-panel-card">
-        <header className="dsl-panel-head">
-          <span className="dsl-panel-title">用量</span>
-          <fieldset className="dsl-panel-tabs" aria-label="统计区间">
-            {RANGE_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className="dsl-panel-tab"
-                aria-pressed={range === tab.value}
-                onClick={() => setRange(tab.value)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </fieldset>
-          <button
-            type="button"
-            className="dsl-panel-refresh"
-            aria-label="刷新"
-            aria-busy={loading}
-            disabled={loading}
-            onClick={loadNow}
-          >
-            <RefreshCw aria-hidden="true" size={13} strokeWidth={2.2} />
-          </button>
-        </header>
+      <div className="dsl-panel-shell">
+        <i aria-hidden="true" className="dsl-panel-arrow" />
+        <div className="dsl-panel-card">
+          <header className="dsl-panel-head">
+            <span className="dsl-panel-title">用量</span>
+            <fieldset className="dsl-panel-tabs" aria-label="统计区间">
+              {RANGE_TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  className="dsl-panel-tab"
+                  aria-pressed={range === tab.value}
+                  onClick={() => setRange(tab.value)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </fieldset>
+            <button
+              type="button"
+              className="dsl-panel-refresh"
+              aria-label="刷新"
+              aria-busy={loading}
+              disabled={loading}
+              onClick={loadNow}
+            >
+              <RefreshCw aria-hidden="true" size={13} strokeWidth={2.2} />
+            </button>
+            <button
+              type="button"
+              className="dsl-panel-pin"
+              aria-label={pinned ? "取消钉住面板" : "钉住面板"}
+              aria-pressed={pinned}
+              title={pinned ? "取消钉住" : "钉住：点其它 App 也不收起"}
+              onClick={togglePinned}
+            >
+              <Pin aria-hidden="true" size={13} strokeWidth={2.2} />
+            </button>
+          </header>
 
-        <div className="dsl-panel-body">
-          {error && !stats ? (
-            <PanelState label="读取用量失败" onRetry={loadNow} />
-          ) : ledgerUnavailable ? (
-            <PanelState label={ledgerTitle} onRetry={loadNow} />
-          ) : !stats ? (
-            <PanelState label="正在读取本机账本…" />
-          ) : (
-            <PanelContent stats={stats} group={group} onGroupChange={setGroup} />
-          )}
+          <div className="dsl-panel-body">
+            {error && !stats ? (
+              <PanelState label="读取用量失败" onRetry={loadNow} />
+            ) : ledgerUnavailable ? (
+              <PanelState label={ledgerTitle} onRetry={loadNow} />
+            ) : !stats ? (
+              <PanelState label="正在读取本机账本…" />
+            ) : (
+              <PanelContent stats={stats} group={group} onGroupChange={setGroup} />
+            )}
+          </div>
+
+          <footer className="dsl-panel-foot">
+            <button type="button" className="dsl-panel-open" onClick={() => void openUsagePage()}>
+              打开用量页
+              <ChevronRight aria-hidden="true" size={13} strokeWidth={2.4} />
+            </button>
+          </footer>
         </div>
-
-        <footer className="dsl-panel-foot">
-          <button type="button" className="dsl-panel-open" onClick={() => void openUsagePage()}>
-            打开用量页
-            <ChevronRight aria-hidden="true" size={13} strokeWidth={2.4} />
-          </button>
-        </footer>
       </div>
     </main>
   );
