@@ -71,7 +71,7 @@ related:
 
 **已在本机验证（2026-11-06，dev 二进制无头冒烟）**：
 
-- 启动日志出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）`、`[panel] 已创建隐藏窗口 360×468`，`[server] listening on …:47810`、`[discovery] UDP 响应器已启动`、`[dsh-hook] listening on 127.0.0.1:47815/hook/dsh` 同时在线；
+- 启动日志出现 `[tray] 菜单栏图标已就绪（左键用量看板 / 右键菜单：主窗口·退出）`、`[panel] 已创建隐藏窗口 360×470`，`[server] listening on …:47810`、`[discovery] UDP 响应器已启动`、`[dsh-hook] listening on 127.0.0.1:47815/hook/dsh` 同时在线；
 - `lsappinfo info -only ApplicationType` 返回 `"UIElement"` → Accessory 生效（Dock 隐藏、无 App 菜单）；
 - 单实例二次启动：第二个进程 exit 0、只剩一个进程；杀进程后 47810/47820 端口释放；
 - `cargo check` / `cargo fmt --check` / `cargo tree --target aarch64-linux-android -i tray-icon`（无输出=Android 不带托盘依赖）均通过。
