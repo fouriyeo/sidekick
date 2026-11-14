@@ -256,5 +256,6 @@ idle
 - `mic.remote` **只能由桌面后端产生**（快捷键 → `mic_remote`），`desktop_server` 不把任何 WS 输入映射成这条命令。
 - 手机不在宠物页 / 不在前台 / 关掉开关 / 没给权限时，必须回 ack 错误码，**不允许静默**；桌面 2s 无 ack 按超时提示。
 - 安卓 WebView 的自动播放策略可能让 `AudioContext` 起不来：`voice-recorder.ts` 检测到 `state !== "running"` 时抛 `AudioBlockedError`，手机回 `audio_blocked`。
+- 电平：手机在每帧音频之后附带一条 `mic.level {session, level: 0-100}`（约 8Hz），桌面只把它转给顶部状态条画波形；不进广播、不落库、不参与转写。
 - 只有 `mic.stop(reason=release)` 进入转写；Esc 取消走 `mic.stop(reason=cancel)`，不转写、不插入、不记账。
 - 单手机假设：桌面只在恰好 1 台可遥控手机时下发命令；多台要等 P1 角色握手。

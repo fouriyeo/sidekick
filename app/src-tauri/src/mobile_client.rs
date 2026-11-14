@@ -373,12 +373,29 @@ pub fn mic_frame(
     session: String,
     sequence: u32,
     pcm: String,
+    level: Option<f32>,
 ) -> Result<(), String> {
     let bytes = STANDARD
         .decode(pcm)
         .map_err(|_| "音频数据无效".to_string())?;
     let frame = mic_protocol::build_audio_frame(&session, sequence, &bytes)?;
-    send_binary(&app, frame)
+    send_binary(&app, frame)?;
+
+    // 电平跟着每帧一起送（约 8Hz）：桌面用它把顶部状态条的波形画成真的。
+    if let Some(level) = level {
+        let percent = (level.clamp(0.0, 1.0) * 100.0).round() as u32;
+        send_payload(
+            &app,
+            serde_json::json!({
+                "v": 1,
+                "type": "mic.level",
+                "session": session,
+                "level": percent,
+                "ts": now_ms(),
+            }),
+        )?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

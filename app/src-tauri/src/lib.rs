@@ -149,6 +149,13 @@ pub fn run() {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(3));
                     mic_panel::show_recording(&preview_handle);
+                    // 自检：喂一串假电平，确认波形由电平驱动（真机由手机每帧上报）。
+                    let level_handle = preview_handle.clone();
+                    for step in 0..80 {
+                        std::thread::sleep(std::time::Duration::from_millis(120));
+                        let wave = ((step as f32) * 0.55).sin().abs() * 0.85 + 0.1;
+                        mic_panel::set_level(&level_handle, wave);
+                    }
                 });
             }
 

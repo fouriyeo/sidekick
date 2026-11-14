@@ -360,10 +360,10 @@ export function MicButton({
       try {
         const session = await startVoiceRecording({
           sessionId,
-          onFrame: (pcm) => {
+          onFrame: (pcm, level) => {
             const sequence = sequenceRef.current;
             sequenceRef.current += 1;
-            void sendMicFrame(sessionId, sequence, pcm).catch(() => {
+            void sendMicFrame(sessionId, sequence, pcm, level).catch(() => {
               if (heldRef.current) {
                 void cancelRecording("disconnect", MIC_COPY.disconnected);
               }

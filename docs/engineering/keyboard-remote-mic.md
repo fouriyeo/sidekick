@@ -62,7 +62,14 @@ owner: engineering
 - `voice-recorder.ts`：`AudioContext.state !== "running"` 时抛 `AudioBlockedError`，上层回 `audio_blocked`（安卓自动播放策略，要求先有用户手势）。
 - 设置：`更多 › 麦克风 › 电脑遥控录音`（`settings.remoteMic`，默认开）；连上电脑与开关变化时各发一次 `mic.remote.status`。
 
-## 5. HUD 状态与文案
+## 5. 真实波形
+
+- 手机 `voice-recorder.ts` 本来就按 chunk 算 RMS（`computeLevel`），现在随 `sendMicFrame` 一起把 0–1 电平传给 Rust；
+- 手机 Rust 在发完二进制帧后附带 `mic.level {session, level: 0-100}`（约 8Hz）；
+- 桌面 `desktop_server` 路由给 `mic_remote.on_level`（只在录音态生效），再 `evaluateJavaScript` 注入 HTML；
+- HTML 里没有数据 >800ms 时退回轻微呼吸动画，保证「没录到声音」时波形也不会僵死。
+
+## 6. HUD 状态与文案
 
 | 状态 | 文案（`shared/lib/mic-status-copy.ts › REMOTE_HUD_COPY`） |
 | --- | --- |
@@ -74,7 +81,7 @@ owner: engineering
 | `delivered` / `copied` / `failed` | 已输入 / 已复制原因 / 失败原因（复用 `micReasonText`） |
 | `cancelled` | 已取消（不转写） |
 
-## 6. 坑
+## 7. 坑
 
 - 全局监听依赖「辅助功能」；没授权时监听器装上但收不到事件，设置卡必须显示授权状态。
 - 监听器 token 生命周期 = App，故意不释放；重复安装会双触发。

@@ -189,6 +189,14 @@ impl RemoteMic {
         mic_hud::hide_later(&self.app, HUD_LINGER);
     }
 
+    /// 手机每帧上报的录音电平（0–100）。只在录音态生效，避免收尾后还残留波形。
+    pub fn on_level(&self, level8: u8) {
+        if self.phase() != Phase::Listening {
+            return;
+        }
+        crate::mic_panel::set_level(&self.app, f32::from(level8) / 100.0);
+    }
+
     pub fn on_ack(&self, value: &Value) {
         let Some(request_id) = value.get("requestId").and_then(Value::as_str) else {
             return;

@@ -35,14 +35,8 @@ mod imp {
       box-shadow:0 0 10px rgba(110,231,183,.9);flex:none}
     .t{font-weight:500;white-space:nowrap}
     .wave{display:flex;align-items:flex-end;gap:2px;height:16px;margin:0 2px;flex:none}
-    .wave i{width:3px;border-radius:2px;background:#6ee7b7;animation:pump .9s ease-in-out infinite}
-    .wave i:nth-child(1){height:40%;animation-delay:-.10s}
-    .wave i:nth-child(2){height:70%;animation-delay:-.25s}
-    .wave i:nth-child(3){height:100%;animation-delay:-.40s}
-    .wave i:nth-child(4){height:55%;animation-delay:-.55s}
-    .wave i:nth-child(5){height:80%;animation-delay:-.70s}
-    .wave i:nth-child(6){height:45%;animation-delay:-.85s}
-    @keyframes pump{0%,100%{transform:scaleY(.45)}50%{transform:scaleY(1)}}
+    .wave i{width:3px;height:100%;border-radius:2px;background:#6ee7b7;
+      transform-origin:bottom;transform:scaleY(.2)}
     .time{font:600 12px/1 ui-monospace,monospace;color:#9fb3c8;min-width:42px;text-align:right}
     .hint{color:#8b97a8;font-size:11.5px;margin-left:auto;white-space:nowrap}
     .pill[data-state="listening"] .t{color:#e9eef5}
@@ -57,12 +51,27 @@ mod imp {
     </div>
     <script>
       let started = Date.now();
+      // 真实电平：手机每帧上报，这里做平滑；没有数据时退回轻微呼吸动画。
+      let target = 0, current = 0, lastAt = 0;
+      const SHAPE = [0.55, 0.85, 1, 0.72, 0.9, 0.6];
+      (function tick() {
+        const idle = Date.now() - lastAt > 800;
+        const value = idle ? 0.18 + Math.abs(Math.sin(Date.now() / 520)) * 0.22 : target;
+        current += (value - current) * 0.35;
+        const bars = document.querySelectorAll('.wave i');
+        bars.forEach((el, i) => {
+          const h = Math.min(1, 0.18 + current * SHAPE[i]);
+          el.style.transform = 'scaleY(' + h.toFixed(3) + ')';
+        });
+        requestAnimationFrame(tick);
+      })();
       setInterval(() => {
         const s = Math.floor((Date.now() - started) / 1000);
         const el = document.getElementById('time');
         if (el) el.textContent = String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
       }, 250);
       window.hud = {
+        level(v) { target = Math.max(0, Math.min(1, v)); lastAt = Date.now(); },
         state(name, text, hint) {
           const pill = document.getElementById('pill');
           pill.dataset.state = name;
@@ -178,6 +187,12 @@ mod imp {
         );
     }
 
+    /// 把真实电平（0–1）推给 HTML 里的波形。
+    pub fn set_level(app: &AppHandle, level: f32) {
+        let level = level.clamp(0.0, 1.0);
+        run(app, format!("window.hud && window.hud.level({level:.3})"));
+    }
+
     pub fn hide(app: &AppHandle) {
         let app = app.clone();
         let _ = app.clone().run_on_main_thread(move || {
@@ -191,11 +206,13 @@ mod imp {
 }
 
 #[cfg(target_os = "macos")]
-pub use imp::{hide, show, show_recording};
+pub use imp::{hide, set_level, show, show_recording};
 
 #[cfg(not(target_os = "macos"))]
 pub fn show(_app: &tauri::AppHandle, _text: &str) {}
 #[cfg(not(target_os = "macos"))]
 pub fn show_recording(_app: &tauri::AppHandle) {}
+#[cfg(not(target_os = "macos"))]
+pub fn set_level(_app: &tauri::AppHandle, _level: f32) {}
 #[cfg(not(target_os = "macos"))]
 pub fn hide(_app: &tauri::AppHandle) {}

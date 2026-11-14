@@ -405,8 +405,13 @@ export function sendMicStart(session: string, sampleRate: number, frameMs: numbe
   return invoke<void>(COMMANDS.micStart, { session, sampleRate, frameMs });
 }
 
-export function sendMicFrame(session: string, sequence: number, pcm: string): Promise<void> {
-  return invoke<void>(COMMANDS.micFrame, { session, sequence, pcm });
+export function sendMicFrame(
+  session: string,
+  sequence: number,
+  pcm: string,
+  level?: number,
+): Promise<void> {
+  return invoke<void>(COMMANDS.micFrame, { session, sequence, pcm, level: level ?? null });
 }
 
 export function sendMicStop(session: string, reason: MicStopReason): Promise<void> {

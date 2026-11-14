@@ -1050,6 +1050,12 @@ fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
             state.remote.status(client_id, enabled);
         }
         "mic.remote.ack" => state.remote.on_ack(&value),
+        // 录音电平：只用于顶部状态条的波形，不进广播、不落库。
+        "mic.level" => {
+            if let Some(level) = value.get("level").and_then(Value::as_u64) {
+                state.remote.on_level(level.min(100) as u8);
+            }
+        }
         _ => {}
     }
 }

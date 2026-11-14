@@ -11,7 +11,7 @@ export type VoiceSession = {
 
 export type StartVoiceOptions = {
   sessionId: string;
-  onFrame: (pcmBase64: string) => void;
+  onFrame: (pcmBase64: string, level: number) => void;
   onLost?: () => void;
 };
 
@@ -156,7 +156,7 @@ export async function startVoiceRecording(options: StartVoiceOptions): Promise<V
 
     samplesSent += resampled.length;
     try {
-      options.onFrame(pcmToBase64(floatToPcm16(resampled)));
+      options.onFrame(pcmToBase64(floatToPcm16(resampled)), level);
     } catch {
       // 发送失败由上层取消会话，避免在音频回调里抛错。
     }
