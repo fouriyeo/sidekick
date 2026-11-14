@@ -50,6 +50,7 @@ owner: engineering
 
 - `hotkey.rs`：`NSEvent::addGlobalMonitorForEventsMatchingMask` + `addLocalMonitor`（`FlagsChanged|KeyDown|KeyUp`），**本地 monitor 原样返回事件**；`Detector` 是纯逻辑（可单测）。绑定分两类：`Bare`（单键修饰键，按一下切换）、`Single`（任意普通键单键，需无修饰键）、`Combo`（修饰键 + 键，可按住）。配置 `~/.sidekick/hotkey.json`（0600，原子写）。
 - `mic_remote.rs`：capable 注册表、单手机路由、ack 超时、phase（Idle/Connecting/Listening/Processing）、HUD 事件。
+- 应用内的 `MicStatusOverlay` 已停用：录音状态统一走顶部 NSPanel（全屏可见），取消走 Esc / 再按一次快捷键。
 - `mic_hud.rs`：`mic-hud` 窗口（460×116，always-on-top、`focused(false)`、`accept_first_mouse(false)`、透明、主屏顶部居中），惰性创建、长期复用；`hide_later` 用 generation 防「新状态被旧的收起定时器关掉」。
 - 命令：`hotkey_status` / `hotkey_save`（设置卡），事件：`hotkey-changed`、`mic-hud`。
 - capability：`capabilities/mic-hud.json`（`core:default`），HUD 只 `listen`，不连 WS。

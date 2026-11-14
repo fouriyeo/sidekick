@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHookStore } from "@/desktop/features/hook/hook-store";
-import { MicStatusOverlay } from "@/desktop/features/mic-receiver/mic-status-overlay";
 import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import {
   type DesktopNav,
@@ -121,7 +120,7 @@ export function DesktopApp() {
         )}
       </main>
 
-      <MicStatusOverlay onCancel={connection.cancelMic} />
+      {/* 录音状态统一走屏幕顶部的 NSPanel（全屏可见）；应用内不再重复提示。 */}
       <Toaster position="bottom-right" />
     </div>
   );
