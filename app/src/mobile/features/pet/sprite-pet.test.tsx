@@ -26,6 +26,17 @@ function rootOf(container: HTMLElement): HTMLElement {
   return root;
 }
 
+/** 等图集就绪**并且**等尺寸/位置落到 DOM。
+ *  `data-sprite-status` 在 commit 时就有了，而背景尺寸/位置写在 ready 之后的被动 effect 里；
+ *  只等属性会在 CI 慢机上抢跑（曾把 `4096px 1024px` 读成空串）。 */
+async function readySprite(container: HTMLElement): Promise<HTMLElement> {
+  const root = rootOf(container);
+  await waitFor(() => expect(root).toHaveAttribute("data-sprite-status", "ready"));
+  const sprite = spriteOf(container);
+  await waitFor(() => expect(sprite.style.backgroundSize).not.toBe(""));
+  return sprite;
+}
+
 function spriteOf(container: HTMLElement): HTMLElement {
   const sprite = container.querySelector('div[style*="background-image"]');
   if (!(sprite instanceof HTMLElement)) throw new Error("sprite 层未渲染");
@@ -48,12 +59,11 @@ describe("SpritePet", () => {
     const { container } = renderPet({ ai: "working" });
     const root = rootOf(container);
 
-    await waitFor(() => expect(root).toHaveAttribute("data-sprite-status", "ready"));
+    const sprite = await readySprite(container);
 
     expect(root).toHaveAttribute("data-ai-state", "working");
     expect(root).toHaveAttribute("data-sprite-state", "working");
 
-    const sprite = spriteOf(container);
     expect(sprite.style.backgroundSize).toBe("4096px 1024px");
     expect(sprite.style.backgroundPosition).toBe("0px -256px");
     // 容器尺寸未知时用 cell 兜底，方形裁切，不会露出下一行
@@ -64,19 +74,19 @@ describe("SpritePet", () => {
   it("状态切换后从新状态第 0 帧开始", async () => {
     const { container, rerender } = renderPet({ ai: "working" });
     const root = rootOf(container);
-    await waitFor(() => expect(root).toHaveAttribute("data-sprite-status", "ready"));
+    await readySprite(container);
 
     rerender(<SpritePet ai="completed" phase="idle" night={false} active reducedMotion={false} />);
 
     await waitFor(() => expect(root).toHaveAttribute("data-sprite-state", "done"));
-    expect(spriteOf(container).style.backgroundPosition).toBe("0px -768px");
+    await waitFor(() => expect(spriteOf(container).style.backgroundPosition).toBe("0px -768px"));
   });
 
   it("预留状态没有对应行时回落到 idle", async () => {
     const { container } = renderPet({ ai: "idle", phase: "sleeping" });
     const root = rootOf(container);
 
-    await waitFor(() => expect(root).toHaveAttribute("data-sprite-status", "ready"));
+    await readySprite(container);
     expect(root).toHaveAttribute("data-sprite-state", "idle");
     expect(spriteOf(container).style.backgroundPosition).toBe("0px 0px");
   });
@@ -85,7 +95,7 @@ describe("SpritePet", () => {
     const { container } = renderPet({ ai: "working", reducedMotion: true });
     const root = rootOf(container);
 
-    await waitFor(() => expect(root).toHaveAttribute("data-sprite-status", "ready"));
+    await readySprite(container);
     expect(root).toHaveAttribute("data-reduced-motion", "true");
     expect(spriteOf(container).style.backgroundPosition).toBe("0px -256px");
   });

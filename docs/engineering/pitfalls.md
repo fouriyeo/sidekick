@@ -130,6 +130,8 @@ owner: engineering
 - **全局快捷键（D133）**：裸修饰键在系统级热键注册里不可靠，只能靠 `NSEvent` monitor 旁听；**本地 monitor 必须原样返回事件**，否则本 App 前台时按键被吞。监听器 token 生命周期 = App，故意不释放，重复安装会双触发。全局监听依赖「辅助功能」；没授权时监听器「装上了但收不到事件」，设置卡必须显式显示授权状态。单键「按一下」要剔除「按住修饰键再按别的键」（记 dirty），普通单键带修饰键时不触发，并过滤 `isARepeat`。
 - **顶部 HUD（D133）**：`mic-hud` 窗口**不许自己开 WS**（会让 `system.clients - 1` 多算一台手机），只吃 Rust 的 `mic-hud` 事件；窗口必须非激活（`focused(false)` + `accept_first_mouse(false)`），一抢焦点插入链路就退化成「只复制」。测 HUD 记得看「其它 App 前台」与「全屏 Space」两种情况。
 
+- **Vitest + jsdom 的断言抢跑**：`data-*` 属性在 React commit 时就写进 DOM，而 `element.style.*` 写在 ready 之后的被动 effect 里；`waitFor(() => expect(root).toHaveAttribute("data-sprite-status", "ready"))` 一过就断言样式，会读到空串（CI 慢机上偶发：期望 `4096px 1024px` 实得 `''`，本地重现不了）。做法：等**要断言的那个事实**——`await waitFor(() => expect(sprite.style.backgroundSize).not.toBe(""))`；同一 effect 里写的 width/height/backgroundPosition 在其后同步断言即可，别把 `waitFor` 只挂在相邻属性上。
+
 ## 10. 构建、打包与发布
 
 - **`gen/` 不入库**：`app/src-tauri/gen/` 已 gitignore，克隆后先 `pnpm tauri android init`；补丁脚本（manifest 权限/竖屏）每次 init 后必须重跑。
