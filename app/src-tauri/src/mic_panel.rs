@@ -19,14 +19,15 @@ mod imp {
     use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
     use tauri::AppHandle;
 
-    const W: f64 = 320.0;
+    const W: f64 = 300.0;
     const H: f64 = 40.0;
 
-    /// 设计稿 A（胶囊）：与 `docs/design/hud-mock.html` 同一套配色与动效。
+    /// 设计稿 A（胶囊）：与手机端 `voice-waveform.tsx` 同一套逻辑——
+    /// 24 根柱子、历史向右滚动、居中伸缩、50ms 采样。
     const HTML: &str = r#"<!doctype html><html><head><meta charset="utf-8"><style>
     html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0e131b;
       -webkit-user-select:none;user-select:none}
-    .pill{height:100%;display:flex;align-items:center;gap:10px;padding:0 16px;
+    .pill{height:100%;display:flex;align-items:center;gap:9px;padding:0 14px;
       box-sizing:border-box;border-radius:20px;
       background:linear-gradient(180deg,#1a2230 0%,#10161f 100%);
       border:.5px solid rgba(110,231,183,.22);
@@ -34,49 +35,66 @@ mod imp {
     .dot{width:8px;height:8px;border-radius:50%;background:#6ee7b7;
       box-shadow:0 0 10px rgba(110,231,183,.9);flex:none}
     .t{font-weight:500;white-space:nowrap}
-    .wave{display:flex;align-items:flex-end;gap:2px;height:16px;margin:0 2px;flex:none}
-    .wave i{width:3px;height:100%;border-radius:2px;background:#6ee7b7;
-      transform-origin:bottom;transform:scaleY(.2)}
-    .time{font:600 12px/1 ui-monospace,monospace;color:#9fb3c8;min-width:42px;text-align:right}
-    .hint{color:#8b97a8;font-size:11.5px;margin-left:auto;white-space:nowrap}
-    .pill[data-state="listening"] .t{color:#e9eef5}
+    .wave{display:flex;align-items:center;gap:2px;height:24px;flex:none}
+    .wave i{width:3px;height:24px;border-radius:2px;background:#6ee7b7;
+      transform-origin:center;transform:scaleY(.12);transition:transform 75ms linear}
+    .time{font:600 12px/1 ui-monospace,monospace;color:#9fb3c8;min-width:40px;
+      text-align:right;margin-left:auto}
     .pill[data-state="error"] .dot{background:#ff5a5f;box-shadow:0 0 10px rgba(255,90,95,.9)}
     .pill[data-state="wait"] .dot{background:#fbbf24;box-shadow:0 0 10px rgba(251,191,36,.9)}
     .wave{display:none}.pill[data-state="listening"] .wave{display:flex}
     </style></head><body>
     <div class="pill" id="pill" data-state="listening">
       <span class="dot"></span><span class="t" id="t">正在听</span>
-      <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      <span class="time" id="time">00:0</span><span class="hint" id="hint">再按一下结束</span>
+      <span class="wave" id="wave"></span>
+      <span class="time" id="time">00:00</span>
     </div>
     <script>
+      const BARS = 24;
+      const wave = document.getElementById('wave');
+      for (let i = 0; i < BARS; i++) wave.appendChild(document.createElement('i'));
+      const bars = Array.from(wave.children);
+
       let started = Date.now();
-      // 真实电平：手机每帧上报，这里做平滑；没有数据时退回轻微呼吸动画。
-      let target = 0, current = 0, lastAt = 0;
-      const SHAPE = [0.55, 0.85, 1, 0.72, 0.9, 0.6];
-      (function tick() {
-        const idle = Date.now() - lastAt > 800;
-        const value = idle ? 0.18 + Math.abs(Math.sin(Date.now() / 520)) * 0.22 : target;
-        current += (value - current) * 0.35;
-        const bars = document.querySelectorAll('.wave i');
+      let latest = 0.08;
+      let lastAt = 0;
+      const history = new Array(BARS).fill(0.08);
+      let lastSample = 0;
+
+      function paint() {
         bars.forEach((el, i) => {
-          const h = Math.min(1, 0.18 + current * SHAPE[i]);
-          el.style.transform = 'scaleY(' + h.toFixed(3) + ')';
+          const value = history[i] || 0;
+          // 与手机端同款：每根柱子有一点固定的形状差异，不会整块一起跳。
+          const variation = 0.62 + ((i * 7) % 10) / 24;
+          el.style.transform = 'scaleY(' + Math.max(0.08, Math.min(1, value * variation)).toFixed(3) + ')';
         });
+      }
+
+      function tick(now) {
+        if (now - lastSample >= 50) {
+          lastSample = now;
+          const idle = Date.now() - lastAt > 700;
+          const value = idle ? 0.08 : latest;
+          history.push(value);
+          history.shift();
+          paint();
+        }
         requestAnimationFrame(tick);
-      })();
+      }
+      requestAnimationFrame(tick);
+
       setInterval(() => {
         const s = Math.floor((Date.now() - started) / 1000);
-        const el = document.getElementById('time');
-        if (el) el.textContent = String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+        document.getElementById('time').textContent =
+          String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
       }, 250);
+
       window.hud = {
-        level(v) { target = Math.max(0, Math.min(1, v)); lastAt = Date.now(); },
-        state(name, text, hint) {
+        level(v) { latest = Math.max(0, Math.min(1, v)); lastAt = Date.now(); },
+        state(name, text) {
           const pill = document.getElementById('pill');
           pill.dataset.state = name;
           if (text) document.getElementById('t').textContent = text;
-          document.getElementById('hint').textContent = hint || '';
           if (name === 'listening') started = Date.now();
         }
       };
@@ -173,18 +191,12 @@ mod imp {
     }
 
     pub fn show_recording(app: &AppHandle) {
-        run(
-            app,
-            "window.hud.state('listening','正在听','再按一下结束')".to_string(),
-        );
+        run(app, "window.hud.state('listening','正在听')".to_string());
     }
 
     pub fn show(app: &AppHandle, text: &str) {
         let text = text.replace('\'', " ");
-        run(
-            app,
-            format!("window.hud.state('wait','{text}','')"),
-        );
+        run(app, format!("window.hud.state('wait','{text}')"));
     }
 
     /// 把真实电平（0–1）推给 HTML 里的波形。

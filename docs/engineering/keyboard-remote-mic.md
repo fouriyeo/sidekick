@@ -67,7 +67,7 @@ owner: engineering
 - 手机 `voice-recorder.ts` 本来就按 chunk 算 RMS（`computeLevel`），现在随 `sendMicFrame` 一起把 0–1 电平传给 Rust；
 - 手机 Rust 在发完二进制帧后附带 `mic.level {session, level: 0-100}`（约 8Hz）；
 - 桌面 `desktop_server` 路由给 `mic_remote.on_level`（只在录音态生效），再 `evaluateJavaScript` 注入 HTML；
-- HTML 里没有数据 >800ms 时退回轻微呼吸动画，保证「没录到声音」时波形也不会僵死。
+- HTML 用与手机端 `voice-waveform.tsx` 相同的画法：24 根柱子、历史右移、居中伸缩、50ms 采样，每根柱子带固定形状差异；没有数据 >700ms 时回落到静态底噪（不会僵死也不会假跳）。胶囊宽度 300×40。
 
 ## 6. HUD 状态与文案
 

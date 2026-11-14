@@ -19,6 +19,6 @@ sleep 4
 
 # 主屏逻辑宽度 → 状态条 380×40 居中在距顶 44pt 处；多留 40pt 边看阴影。
 W=$(osascript -e 'tell application "Finder" to get bounds of window of desktop' | awk -F', ' '{print $3}')
-X=$(( (W - 320) / 2 - 40 ))
-screencapture -x -R "${X},24,400,110" "$OUT"
+X=$(( (W - 300) / 2 - 40 ))
+screencapture -x -R "${X},24,380,110" "$OUT"
 echo "$OUT"
