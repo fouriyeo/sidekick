@@ -442,3 +442,18 @@ describe("UsagePanel 顶部指引尖（D138）", () => {
     await waitFor(() => expect(document.documentElement.dataset.panelArrow).toBe("off"));
   });
 });
+
+describe("UsagePanel 焦点残留（窗口只 hide 不销毁）", () => {
+  it("窗口失焦时清掉 DOM 焦点，下次打开不会带着焦点环", async () => {
+    render(<UsagePanel />);
+    await screen.findByText("今天花费");
+
+    const tab = screen.getByRole("button", { name: "7 天" });
+    tab.focus();
+    expect(document.activeElement).toBe(tab);
+
+    window.dispatchEvent(new Event("blur"));
+
+    expect(document.activeElement).not.toBe(tab);
+  });
+});

@@ -93,6 +93,8 @@
 
 74. **2026-11-14 · 排查日志 + 启动即解锁 Web Audio（D140）** — 手机端加 `[pet-hook]`（收到 status）、`[pet-ai]`（状态/门禁/补音）、`[pet-sound]`（开始/结束）与 Rust `[mobile] status recv` 日志；真机日志抓到 `[pet-sound] complete blocked: not unlocked`：App 重启后未触摸手机，`AudioContext` 未解锁，完成事件与四道门都正常但音效静默。`PetStage` 挂载时主动 `unlock()` 并保留 pointerdown/试听兜底；Wry 在 Android WebView 已关闭 `mediaPlaybackRequiresUserGesture`，真机重启后不触摸即可 `unlocked ctx=running`。证据：`pet-store.test.ts` 29 tests、mobile 515 tests、`pnpm typecheck/lint/build`、`check-docs`；真机（RMX3370 / Android 13）验证：不触摸启动后注入 completed → `complete start/done` 3 个振荡器；录音中注入 → `completed muted by mic` / `defer armed` / 释放 3 秒后 `defer fire` 响一声；真实 DSH 完成链路由用户测试。
 
+75. **2026-11-14 · 菜单栏看板：收起时清掉 DOM 焦点（D138 补）** — 窗口只 hide 不销毁，页面 `activeElement` 留在上次点过的「今天 / 7 天」上；再打开时 WebKit 把焦点还给按钮、按键盘焦点重算 `:focus-visible`，顶部 tab 带一圈薄荷焦点环，看着像被选中。改为 `blur` / `visibilitychange(hidden)` 时 blur 掉活动元素，重新获得焦点后再兜一刀（键盘用户按过 Tab 的不动）。证据：`usage-panel.test.tsx` 15 例（新增 1 例）、`pnpm typecheck/lint` 通过。
+
 ## 验证记录（原「已验证」小节，未进时间线的项）
 - **2026-10-31 · 早期 MVP 端到端** — 手机浏览器扫码打开桌面 `http://<IP>:<端口>/`；桌面窗口显示地址/二维码、展开出现 160px 二维码；`/download/apk` 返回带正确 content-type 与文件名的 APK；安卓 App 安装启动、双向消息与气泡方向通过（Realme RMX3370 / Android 13）。
 - **2026-11-06 · 电脑端「简约 iOS」重做（D85，结构/导航已被 D104/D119/D123 迭代）** — 4 个一级页 + 216 侧栏 + iOS 分组列表 + 设置 push；证据：588 tests / 71 files、`scripts/qa-desktop-ios.mjs` 36 张截图无溢出/无 console error；真实窗口交通灯/拖动区待人工目检。

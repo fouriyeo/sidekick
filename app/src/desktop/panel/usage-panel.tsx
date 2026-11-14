@@ -133,6 +133,44 @@ export function UsagePanel() {
       .catch(() => setPinned(!next));
   };
 
+  // 失焦时清掉 DOM 焦点：面板窗口只 hide 不销毁，页面里的 activeElement 会一直留着；
+  // 下次 show 时 WebKit 把焦点还给上次点过的按钮，并按键盘焦点重算 :focus-visible，
+  // 于是「今天 / 7 天」会带着一圈薄荷色焦点环出现，看着像被选中了。
+  useEffect(() => {
+    const dropFocus = () => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body) active.blur();
+    };
+    const onVisibility = () => {
+      if (document.hidden) dropFocus();
+    };
+    // 收起时清一次；万一某些系统版本 hide 不派发 blur，重新获得焦点后再兜一刀
+    // （键盘用户 Tab 过的不动，保住他们的焦点位置）。
+    let lastInputWasKeyboard = false;
+    const onKeyDown = () => {
+      lastInputWasKeyboard = true;
+    };
+    const onPointerDown = () => {
+      lastInputWasKeyboard = false;
+    };
+    const onWindowFocus = () => {
+      if (lastInputWasKeyboard) return;
+      window.setTimeout(dropFocus, 0);
+    };
+    window.addEventListener("blur", dropFocus);
+    window.addEventListener("focus", onWindowFocus);
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", dropFocus);
+      window.removeEventListener("focus", onWindowFocus);
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
   // 尖的位置/开关（D138）：Rust 在 show 之前已经写过一次 CSS 变量，
   // 这里在挂载与每次获得焦点时再校准（窗口被夹取时图标会偏，尖得跟着挪）。
   useEffect(() => {
