@@ -33,6 +33,7 @@ export type PetStoreSounds = {
   unlock: () => void;
   playWork: () => boolean;
   playComplete: () => boolean;
+  playCompleteSoft: () => boolean;
   startAsking: () => void;
   stopAsking: () => void;
 };
@@ -54,6 +55,12 @@ const SAVE_DEBOUNCE_MS = 500;
 const WORK_START_MIN_GAP_MS = 5_000;
 /** 录音中漏掉的完成音：麦克风释放后再等 3 秒补一声（只补最近一次）。 */
 const DEFERRED_COMPLETE_DELAY_MS = 3_000;
+/** asking 下的完成轻提示：只对最近 15 秒内的新 completedAt 响，避免重连/旧快照补播。 */
+const SOFT_COMPLETE_MAX_AGE_MS = 15_000;
+/** asking 下的完成轻提示 5 秒最多一次。 */
+const SOFT_COMPLETE_MIN_GAP_MS = 5_000;
+/** 超过这个间隔没有状态，按新基线处理（断线/后台恢复不补）。 */
+const STATUS_GAP_BASELINE_MS = 30_000;
 
 function defaultAppVisible(): boolean {
   if (typeof document === "undefined") return true;
@@ -98,6 +105,12 @@ export function createPetStore(deps: PetStoreDeps) {
   let workingSessionIds: Set<string> | null = null;
   /** 开工音上次播放时间；跨会话共享的 5 秒限流。 */
   let lastWorkStartAt = 0;
+  /** 会话 id → 已见过的 completedAt；null = 还没收到过带列表的状态。 */
+  let seenCompletedAt: Map<string, number> | null = null;
+  /** asking 下完成轻提示上次实际播放时间；跨完成共享 5 秒限流。 */
+  let lastSoftCompleteAt = 0;
+  /** 上一份状态到达时间，用于识别断线/后台恢复后的首份快照。 */
+  let lastStatusAt = 0;
   /** 录音期间收到的完成音；等麦克风释放后补播一次，多次完成只补一声。 */
   let deferredCompletePending = false;
   let deferredCompleteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -253,6 +266,46 @@ export function createPetStore(deps: PetStoreDeps) {
     function playWorkStart(now: number) {
       if (lastWorkStartAt > 0 && now - lastWorkStartAt < WORK_START_MIN_GAP_MS) return;
       if (deps.sounds?.playWork()) lastWorkStartAt = now;
+    }
+
+    /**
+     * asking 下的完成音：视觉上 asking 不变，只在 sessionList 里检测到「新的 completedAt」
+     * 时补一个轻提示。插件在 asking 时不会发 completed 脉冲，但会把 completedAt 带下来。
+     * 首份/断线后的快照只建基线；只对 15 秒内的新完成响，避免补播旧完成。
+     */
+    function maybePlaySoftComplete(message: StatusMessage, now: number) {
+      const gapBaseline = lastStatusAt > 0 && now - lastStatusAt > STATUS_GAP_BASELINE_MS;
+      lastStatusAt = now;
+      const sessionList = message.sessionList;
+      if (!Array.isArray(sessionList)) return;
+
+      const baseline = seenCompletedAt === null || gapBaseline;
+      const seen = seenCompletedAt ?? new Map<string, number>();
+      seenCompletedAt = seen;
+      let freshId: string | null = null;
+      let freshCompletedAt = 0;
+
+      for (const session of sessionList) {
+        const completedAt = session.completedAt;
+        if (!completedAt) continue;
+        const previous = seen.get(session.id);
+        if (previous !== undefined && completedAt <= previous) continue;
+        seen.set(session.id, completedAt);
+        if (baseline) continue;
+        if (Math.abs(now - completedAt) > SOFT_COMPLETE_MAX_AGE_MS) continue;
+        freshId = session.id;
+        freshCompletedAt = completedAt;
+      }
+
+      if (!freshId) return;
+      if (message.state !== "asking") return;
+      if (lastSoftCompleteAt > 0 && now - lastSoftCompleteAt < SOFT_COMPLETE_MIN_GAP_MS) {
+        log(`soft complete skipped: throttle id=${freshId}`);
+        return;
+      }
+
+      log(`soft complete: asking 下补一声 id=${freshId} age=${now - freshCompletedAt}ms`);
+      if (deps.sounds?.playCompleteSoft()) lastSoftCompleteAt = now;
     }
 
     function applyAiSignals(
@@ -445,10 +498,11 @@ export function createPetStore(deps: PetStoreDeps) {
         set({ ai: status });
         scheduleCompletedTimer(status);
 
-        if (!transition) return;
-
-        updateAiCaption(status, now, true);
-        applyAiSignals(transition, visible, micListening, now);
+        if (transition) {
+          updateAiCaption(status, now, true);
+          applyAiSignals(transition, visible, micListening, now);
+        }
+        maybePlaySoftComplete(message, now);
       },
 
       setMicListening: (listening: boolean) => {

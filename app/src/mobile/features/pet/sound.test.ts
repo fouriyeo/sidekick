@@ -133,6 +133,7 @@ describe("createPetSounds 门禁", () => {
 
       expect(sounds.canPlay()).toBe(false);
       expect(sounds.play("complete")).toBe(false);
+      expect(sounds.playCompleteSoft()).toBe(false);
       expect(FakeAudioContext.instances[0]?.oscillators.length ?? 0).toBe(0);
     }
   });
@@ -163,6 +164,19 @@ describe("createPetSounds 门禁", () => {
         (osc) => osc.frequency.setValueAtTime.mock.calls[0]?.[0],
       ),
     ).toEqual([523.25, 659.25, 783.99]);
+  });
+
+  it("asking 下的完成轻提示：单音 E6，比完整完成音更轻更短", () => {
+    const { sounds } = createSounds();
+    sounds.unlock();
+
+    expect(sounds.playCompleteSoft()).toBe(true);
+    const context = FakeAudioContext.context();
+    expect(context.oscillators).toHaveLength(1);
+    expect(context.oscillators[0]?.frequency.setValueAtTime.mock.calls[0]?.[0]).toBe(1318.51);
+    expect(context.gains.map((gain) => gain.linearRampToValueAtTime.mock.calls[0]?.[0])).toEqual([
+      0.39,
+    ]);
   });
 
   it("播放音量是设计值的 3.9 倍（MASTER_GAIN = 3.9，+30%）", () => {

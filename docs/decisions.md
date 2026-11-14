@@ -747,3 +747,11 @@
 - 原因：真机排查（2026-11-14）抓到一个从 2026-11-08 起卡在 asking 的旧会话「备忘录录音与日记方案」（`askKind=null`、无 pending、最后事件 11-08 14:09 UTC）。插件用全部 36 个会话的原始聚合判断 `asking`，于是所有 completed 脉冲都被 `pulseForCompletedTurn()` 吞掉；桌面桥按 `workspace.json` 归档过滤后手机只看到 4 个会话、显示 working，手机音效和桥本身都正常（手动向桥 POST completed 能响）。日志旁路确认插件持续上报 `state=asking`、`sessions=2`，而手机收到的是 `working`。
 - 代价：blocked asking 10 分钟后按 idle，不再长期显示「等你决定」；真实 ask 不受影响。旧 idle 会话 24 小时后从插件列表移除；手机本来就只关心最近会话。
 - 不做：不改变真实 asking 的优先级；不改变 completed 5s 节流；不在录音中直接响（D139 不变）；不改桌面桥的归档过滤。
+
+## D142 · asking 与完成音并行：视觉 asking 优先，声音降为轻提示（2026-11-14）｜生效
+
+- 决策：视觉优先级不变（后台/away > asking > completed > working > idle）；声音上取消「asking 一定压掉完成音」。插件在 asking 时仍不发 completed 脉冲，但 `state` 快照会带 `sessionList.completedAt`；手机端检测到 asking 下新的 `completedAt` 时，播一个单音 E6、约 120ms、`gain 0.1`（峰值约 0.39）的轻提示，5 秒最多一次。无 asking 时仍播完整 C5–E5–G5 完成音。视觉/宠物姿态/文案保持 asking，不闪 completed。
+- 基线：首份带列表快照只建 `completedAt` 基线；超过 30 秒没有状态的下一份（断线/后台恢复）也按基线处理；只对 15 秒内的新完成提示，避免补播旧完成。
+- 原因：asking 是「要你处理」，completed 是「事情结束了」；严格互斥会在 asking 长期挂着时永久吞掉完成音（D141 同类问题的真 asking 版本）。用户明确表示 asking 时有一点提示音问题不大。
+- 代价：asking 与轻提示可能叠加；用单音/低音量与 5 秒限流收敛，不打断提问音。录音/后台/非宠物页仍静音。
+- 不做：不做 10 分钟升级正常音（C2）；不改插件/桥协议；不让轻提示改变视觉状态；不做用户设置开关（后续需要再加）。

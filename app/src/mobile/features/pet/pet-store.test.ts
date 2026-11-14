@@ -187,6 +187,7 @@ function createFakeSounds() {
     unlock: vi.fn(),
     playWork: vi.fn(() => true),
     playComplete: vi.fn(() => true),
+    playCompleteSoft: vi.fn(() => true),
     startAsking: vi.fn(),
     stopAsking: vi.fn(),
   };
@@ -582,6 +583,163 @@ describe("pet store AI 联动", () => {
 
       // 只有聚合 idle→working 的那一次，不因两条会话重复计数。
       expect(sounds.playWork).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("asking 下完成轻提示", () => {
+    function session(
+      id: string,
+      state: "working" | "idle" | "asking" = "idle",
+      completedAt: number | null = null,
+    ): SessionSummary {
+      return {
+        id,
+        title: id,
+        source: "dsh",
+        state,
+        askKind: null,
+        lastEventAt: NOW,
+        completedAt,
+      };
+    }
+
+    it("首份快照里的 completedAt 只建基线，不补轻提示", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("asking", { sessionList: [session("a", "idle", clock.now - 500)] }),
+          { now: clock.now },
+        );
+
+      expect(store.getState().ai.state).toBe("asking");
+      expect(sounds.playCompleteSoft).not.toHaveBeenCalled();
+    });
+
+    it("asking 下出现新的 completedAt：轻提示一次，视觉仍是 asking", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(aiMessage("asking", { sessionList: [session("a", "idle", null)] }), {
+          now: clock.now,
+        });
+      sounds.playCompleteSoft.mockClear();
+
+      clock.now += 2_000;
+      store.getState().applyAiStatus(
+        aiMessage("asking", {
+          sessionList: [session("a", "idle", clock.now - 500), session("b", "asking")],
+        }),
+        { now: clock.now },
+      );
+
+      expect(store.getState().ai.state).toBe("asking");
+      expect(store.getState().aiCaption?.copyId).toBe("ai_asking");
+      expect(sounds.playCompleteSoft).toHaveBeenCalledTimes(1);
+      expect(sounds.playComplete).not.toHaveBeenCalled();
+    });
+
+    it("非 asking 状态不补轻提示", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(aiMessage("working", { sessionList: [session("a", "working", null)] }), {
+          now: clock.now,
+        });
+      sounds.playCompleteSoft.mockClear();
+
+      clock.now += 2_000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("working", { sessionList: [session("a", "idle", clock.now - 500)] }),
+          { now: clock.now },
+        );
+
+      expect(sounds.playCompleteSoft).not.toHaveBeenCalled();
+    });
+
+    it("asking 下轻提示 5 秒最多一次", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(aiMessage("asking", { sessionList: [session("a", "idle", null)] }), {
+          now: clock.now,
+        });
+      sounds.playCompleteSoft.mockClear();
+
+      clock.now += 1_000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("asking", { sessionList: [session("a", "idle", clock.now - 100)] }),
+          { now: clock.now },
+        );
+      expect(sounds.playCompleteSoft).toHaveBeenCalledTimes(1);
+
+      clock.now += 1_000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("asking", { sessionList: [session("b", "idle", clock.now - 100)] }),
+          { now: clock.now },
+        );
+      expect(sounds.playCompleteSoft).toHaveBeenCalledTimes(1);
+
+      clock.now += 4_000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("asking", { sessionList: [session("c", "idle", clock.now - 100)] }),
+          { now: clock.now },
+        );
+      expect(sounds.playCompleteSoft).toHaveBeenCalledTimes(2);
+    });
+
+    it("新会话首次出现但 completedAt 太旧：不补轻提示", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(aiMessage("asking", { sessionList: [session("a", "idle", null)] }), {
+          now: clock.now,
+        });
+      sounds.playCompleteSoft.mockClear();
+
+      clock.now += 1_000;
+      store.getState().applyAiStatus(
+        aiMessage("asking", {
+          sessionList: [session("a", "idle", null), session("old", "idle", clock.now - 60_000)],
+        }),
+        { now: clock.now },
+      );
+
+      expect(sounds.playCompleteSoft).not.toHaveBeenCalled();
+    });
+
+    it("断线/长时间没有状态后的快照不补轻提示", async () => {
+      const { store, sounds, clock } = await createAiStore();
+
+      store
+        .getState()
+        .applyAiStatus(aiMessage("asking", { sessionList: [session("a", "idle", null)] }), {
+          now: clock.now,
+        });
+      sounds.playCompleteSoft.mockClear();
+
+      clock.now += 31_000;
+      store
+        .getState()
+        .applyAiStatus(
+          aiMessage("asking", { sessionList: [session("a", "idle", clock.now - 500)] }),
+          { now: clock.now },
+        );
+
+      expect(sounds.playCompleteSoft).not.toHaveBeenCalled();
     });
   });
 

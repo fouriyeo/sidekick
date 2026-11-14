@@ -25,6 +25,8 @@ export type PetSounds = {
   playWork: () => boolean;
   playAsk: () => boolean;
   playComplete: () => boolean;
+  /** asking 下的完成轻提示：单音、短、低音量；不改变视觉状态。 */
+  playCompleteSoft: () => boolean;
   /** 进入「等你决定」：立刻播一次，12 秒后仍 asking 最多再提醒一次。 */
   startAsking: () => void;
   /** 离开 asking / 后台 / 录音时停掉 pending 的提醒。 */
@@ -48,13 +50,19 @@ const B5 = 987.77;
 const A5 = 880;
 const C5 = 523.25;
 const G5 = 783.99;
+const E6 = 1318.51;
 
 /**
  * 音色设计（总时长按听觉尾巴算，约等于 pattern 里最后一个 tone 的结束点）：
  * - 开工：E5 + B5 轻柔木琴/叮，约 220ms；
  * - 提问：E5 → A5 两个上行音，约 350ms；
- * - 完成：C5-E5-G5 琶音，约 420ms。
+ * - 完成：C5-E5-G5 琶音，约 420ms；
+ * - asking 下的完成轻提示：单音 E6，约 120ms，音量更低。
  */
+const SOFT_COMPLETE_PATTERN: Tone[] = [
+  { frequency: E6, delay: 0, duration: 0.12, gain: 0.1, type: "sine" },
+];
+
 const PATTERNS: Record<PetSoundKind, Tone[]> = {
   "work-start": [
     { frequency: E5, delay: 0, duration: 0.18, gain: 0.16, type: "sine" },
@@ -162,14 +170,18 @@ export function createPetSounds(
     }
   }
 
-  function emit(kind: PetSoundKind): boolean {
+  function emit(
+    kind: PetSoundKind,
+    pattern: Tone[] = PATTERNS[kind],
+    label: string = kind,
+  ): boolean {
     if (!unlocked) {
-      log(`${kind} emit skipped: locked`);
+      log(`${label} emit skipped: locked`);
       return false;
     }
     const current = ensureContext();
     if (!current) {
-      log(`${kind} emit skipped: no audio context`);
+      log(`${label} emit skipped: no audio context`);
       return false;
     }
 
@@ -178,13 +190,13 @@ export function createPetSounds(
     resumeIfSuspended(current);
 
     const start = current.currentTime || 0;
-    const lastTone = PATTERNS[kind].reduce((left, right) =>
+    const lastTone = pattern.reduce((left, right) =>
       left.delay + left.duration >= right.delay + right.duration ? left : right,
     );
     let lastOscillator: OscillatorNode | null = null;
-    log(`${kind} start ctx=${current.state} at=${start.toFixed(3)}`);
+    log(`${label} start ctx=${current.state} at=${start.toFixed(3)}`);
     try {
-      for (const tone of PATTERNS[kind]) {
+      for (const tone of pattern) {
         const oscillator = current.createOscillator();
         const gain = current.createGain();
         const toneStart = start + tone.delay;
@@ -204,12 +216,12 @@ export function createPetSounds(
         oscillator.stop(toneStart + tone.duration + 0.03);
       }
       if (lastOscillator) {
-        lastOscillator.onended = () => log(`${kind} done`);
+        lastOscillator.onended = () => log(`${label} done`);
       }
       return true;
     } catch (error) {
       // 音频节点在部分 WebView 上可能被限制，静默降级为无声音。
-      log(`${kind} failed: ${String(error)}`);
+      log(`${label} failed: ${String(error)}`);
       return false;
     }
   }
@@ -259,6 +271,19 @@ export function createPetSounds(
     return emit(kind);
   }
 
+  function playCompleteSoft(): boolean {
+    const label = "complete-soft";
+    if (!unlocked) {
+      log(`${label} blocked: not unlocked`);
+      return false;
+    }
+    if (!canPlay()) {
+      log(`${label} blocked: ${gatesForLog()}`);
+      return false;
+    }
+    return emit("complete", SOFT_COMPLETE_PATTERN, label);
+  }
+
   return {
     unlock,
     canPlay,
@@ -266,6 +291,7 @@ export function createPetSounds(
     playWork: () => playKind("work-start"),
     playAsk: () => playKind("ask"),
     playComplete: () => playKind("complete"),
+    playCompleteSoft,
     startAsking,
     stopAsking,
     preview,

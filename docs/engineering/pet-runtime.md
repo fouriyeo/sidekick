@@ -204,6 +204,7 @@ BOOT / TICK / VISIBILITY / OVERLAY / RESET
 
 - 宠物舞台不挂 pointer 处理器；点击、长按、来回抚摸不产生 `PetEvent`（D69），BoopFace 的手势也显式关闭。
 - 麦克风只影响**动作**（D133），不产生 `PetEvent`、不写存档；录音时 AI 音效/触感仍由 `micListening` 门禁静音；录音中漏掉的完成音在麦克风释放 3 秒后补一声（D139）。
+- asking 与完成音并行（D142）：`pet-store` 比较 `status.sessionList` 的 `completedAt`；首份/断线（>30s 无状态）快照只建基线，只对 15 秒内新完成、在聚合 `asking` 时调 `playCompleteSoft()`（单音 E6 约 120ms、gain 0.1，5 秒限流）。视觉/文案/宠物姿态保持 asking，不闪 completed；无 asking 时仍走完整 `playComplete()`。
 - 震动/声音通过 adapter；测试时 mock。
 - 气泡受频率限制，`copy_id` + 触发原因，方便统计关闭率。
 - 屏幕常亮：`mobile/app.tsx` 读 `pet.settings.keepAwake`，`useKeepAwake(keepAwake && view === "pet")` 调 `shared/lib/tauri.ts` 的 `setKeepScreenOn` → Rust 命令 `set_keep_screen_on`（`app/src-tauri/src/keep_awake.rs`）→ Android `Window.addFlags/clearFlags(FLAG_KEEP_SCREEN_ON)`；非宠物页/后台/卸载时释放（D79）。原生不支持或 JNI 失败时静默降级。

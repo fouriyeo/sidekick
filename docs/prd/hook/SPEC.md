@@ -201,7 +201,7 @@ related:
 4. 工作中。
 5. 静态/睡眠。
 
-回前台/重连只恢复稳定态；完成态不补播。录音中只静音 AI 音效与触感（`micListening` 门禁），宠物动作由 D137 单独驱动；录音中收到的 completed 不立即响，麦克风释放后 3 秒补一声（只补最近一次，D139）；麦克风 UI 自身的 arming/listening/processing 等状态保留。 「等你决定」优先只针对仍在等回答的 asking；`turn/end blocked` 留下、10 分钟没有 pending 的陈旧 asking 按 idle 处理，不再永久阻塞完成音（D141）。
+回前台/重连只恢复稳定态；完成态不补播。录音中只静音 AI 音效与触感（`micListening` 门禁），宠物动作由 D137 单独驱动；录音中收到的 completed 不立即响，麦克风释放后 3 秒补一声（只补最近一次，D139）；麦克风 UI 自身的 arming/listening/processing 等状态保留。 「等你决定」优先只针对仍在等回答的 asking；`turn/end blocked` 留下、10 分钟没有 pending 的陈旧 asking 按 idle 处理，不再永久阻塞完成音（D141）。**视觉 asking 优先，但声音不互斥**：聚合仍为 asking 时收到另一会话的新完成，手机从 `sessionList.completedAt` 检测并播一声轻提示，视觉/文案保持 asking，不闪 completed（D142）。
 
 ### 3.5 声效
 
@@ -209,11 +209,13 @@ related:
 | --- | --- | --- | --- |
 | 开工 | 柔和木琴/小铃铛「叮」，E5+B5 | ~220ms | 任一会话从非 working 变为 working；5 秒内最多一次；首份快照不补响 |
 | 提问 | 两下上扬「叮叮」，E5→A5 | ~350ms | 进入 asking；12s 未解决再响一次，最多 2 次 |
-| 完成 | 三音上行 C5–E5–G5 | ~420ms | 每次完成脉冲一次；不连播；录音中则麦克风释放 3 秒后补一次 |
+| 完成 | 三音上行 C5–E5–G5 | ~420ms | 无 asking 时每次完成脉冲一次；不连播；录音中则麦克风释放 3 秒后补一次 |
+| asking 下的完成 | 单音 E6 轻叮 | ~120ms | 检测 `sessionList.completedAt` 新完成；5s 最多一次；视觉保持 asking；录音/后台静音 |
 | 静态 | 无 | — | — |
 
 - 只在 `sound=true`、App 前台、宠物页可见、麦克风未录音时响；录音中收到的完成音在麦克风释放 3 秒后补一声（只补最近一次；等待中又开录则顺延，asking 到来则取消）。
 - 开工音按会话判定：比对 `status.sessionList` 里的 working 会话 id，任一会话新开工就响；多会话并行、聚合状态长期 working 时也能听到（5 秒限流）。
+- asking 下的完成轻提示：首份带列表快照只建 completedAt 基线；断线/后台恢复（>30s 无状态）也按基线处理；只对 15 秒内的新完成提示，避免补播旧完成；5 秒最多一次。轻提示不改变视觉，录音/后台/不在宠物页仍静音。
 - 回前台仍在 asking：补一次提问音；完成态不补播。
 - 完成态按 `remainingMs` 展示，并容忍桌面/手机时钟 ≤5 秒偏差；只有明显迟到的补发快照才丢弃。
 - Wry 在 Android WebView 关闭了 `mediaPlaybackRequiresUserGesture`：启动即自动解锁 `AudioContext`（实测无手势为 running），首次指针点击/试听继续兜底；未解锁时静默跳过。
