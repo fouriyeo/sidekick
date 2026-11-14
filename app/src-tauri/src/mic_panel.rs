@@ -27,19 +27,19 @@ mod imp {
     const HTML: &str = r#"<!doctype html><html><head><meta charset="utf-8"><style>
     html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0e131b;
       -webkit-user-select:none;user-select:none}
-    .pill{height:100%;display:flex;align-items:center;gap:9px;padding:0 14px;
+    .pill{height:100%;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 14px;
       box-sizing:border-box;border-radius:20px;
-      background:linear-gradient(180deg,#1a2230 0%,#10161f 100%);
-      border:.5px solid rgba(110,231,183,.22);
+      background:linear-gradient(180deg,rgba(38,45,58,.92) 0%,rgba(27,33,43,.94) 100%);
+      border:.5px solid rgba(255,255,255,.07);
       font:12.5px/1 -apple-system,"PingFang SC",sans-serif;color:#e9eef5}
-    .dot{width:8px;height:8px;border-radius:50%;background:#6ee7b7;
-      box-shadow:0 0 10px rgba(110,231,183,.9);flex:none}
+    .dot{width:7px;height:7px;border-radius:50%;background:#5fd6a4;
+      box-shadow:0 0 8px rgba(95,214,164,.7);flex:none}
     .t{font-weight:500;white-space:nowrap}
     .wave{display:flex;align-items:center;gap:2px;height:24px;flex:none}
-    .wave i{width:3px;height:24px;border-radius:2px;background:#6ee7b7;
+    .wave i{width:3px;height:24px;border-radius:2px;background:#5fd6a4;
       transform-origin:center;transform:scaleY(.12);transition:transform 75ms linear}
-    .time{font:600 12px/1 ui-monospace,monospace;color:#9fb3c8;min-width:40px;
-      text-align:right;margin-left:auto}
+    .time{font:600 12px/1 ui-monospace,monospace;color:#8b99ab;min-width:38px;text-align:right}
+    .pill[data-state="wait"] .time,.pill[data-state="error"] .time{display:none}
     .pill[data-state="error"] .dot{background:#ff5a5f;box-shadow:0 0 10px rgba(255,90,95,.9)}
     .pill[data-state="wait"] .dot{background:#fbbf24;box-shadow:0 0 10px rgba(251,191,36,.9)}
     .wave{display:none}.pill[data-state="listening"] .wave{display:flex}
