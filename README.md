@@ -20,13 +20,13 @@
 
 ## 截图
 
-| 电脑端 · 概览 | 手机 · 宠物页 |
+| 电脑端 · 用量（默认页） | 手机 · 宠物页 |
 | --- | --- |
-| ![电脑端概览](screenshots/desktop-overview.png) | ![手机宠物页](screenshots/mobile-pet.png) |
+| ![电脑端用量](screenshots/desktop-usage.png) | ![手机宠物页](screenshots/mobile-pet.png) |
 
-| 电脑端 · 用量（深潜仪表） | 手机 · 语音备忘录 |
+| 电脑端 · 剪贴板 | 手机 · 语音备忘录 |
 | --- | --- |
-| ![电脑端用量](screenshots/desktop-usage.png) | ![手机备忘录](screenshots/mobile-memo.png) |
+| ![电脑端剪贴板](screenshots/desktop-clipboard.png) | ![手机备忘录](screenshots/mobile-memo.png) |
 
 > 截图由 dev mock 生成（`node scripts/qa-shots.mjs`），不是真机投屏。
 
@@ -35,7 +35,7 @@
 | 能力 | 说明 |
 | --- | --- |
 | 手机 ↔ 电脑 | 同 Wi-Fi 自动发现（UDP 47820 + 端口回退）、断线自动重连、扫码/手动地址兜底 |
-| 电脑端 7 个一级页 | 概览 ⌘1 · 剪贴板 ⌘2 · 备忘录 ⌘3 · 用量 ⌘4 · 语音 ⌘5 · 设置 ⌘6 · 英语角 ⌘7（Liquid Glass 壳） |
+| 电脑端 6 个一级页 | 剪贴板 ⌘1 · 备忘录 ⌘2 · 用量 ⌘3 · 语音 ⌘4 · 英语角 ⌘5 · 设置 ⌘6（Liquid Glass 壳；默认页是「用量」看板） |
 | 手机 | 宠物页 + 设置二级页 + 聊天/连接/回答页 + 语音备忘录/英语角全屏页 |
 | 语音输入 | 按住手机说话 → 百炼云端流式识别 → 写剪贴板并合成 Cmd+V；结果卡可手动「回车 / 清空」 |
 | 剪贴板 | 历史 / 搜索 / 置顶 / 隐私过滤，最多保留 100（可配 10–200） |

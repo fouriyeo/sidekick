@@ -64,7 +64,7 @@ owner: engineering
 - **rustls 必须显式 ring provider**：`tokio-tungstenite` 用 rustls 0.23，进程必须先 `rustls::crypto::ring::default_provider().install_default()`；`Cargo.toml` 保留 `rustls`（`default-features=false`，features `ring`/`std`/`tls12`）。删 `reqwest` 后曾因缺 CryptoProvider 在 TLS 握手 panic 并被误报成 `cloud_network`（D59）；改 TLS/依赖后跑 `cargo tree -e features -i rustls` 确认 `ring` 还在。
 - **本机数据目录**：`~/.sidekick/`（`asr.json`/`asr_usage.json`/`clipboard.json` 均 0600，另有 `sidekick.db` 备忘录镜像、`android-release.jks`）+ 迁移标记 `.migrated-from-app-support`；首次启动从旧 `~/Library/Application Support/Sidekick/` 复制一次（不覆盖、只一次）。`SIDEKICK_DATA_DIR` 可覆盖给测试。
 - **旧 models 目录**：`~/Library/Application Support/Sidekick/models/` 可能还在磁盘，但不迁移、不运行，可手删。
-- **自动粘贴 TCC（D75）**：合成 Cmd+V 需要辅助功能勾选；未勾选时 `outcome=copied`、结果卡片不出现按键。桌面「概览」顶部有 `AccessibilityHint`，授权后/`window.focus` 回来自动收起；「去开启」走 `accessibility_request()` 弹原生提示，**不要自己拼 `x-apple.systempreferences:` URL**；TCC 不可编程授权。App 是自签名，TCC 按 CDHash 记账，**每次重新打包旧授权失效**（开关看着开着但无效），`codesign -dvv` 对比 CDHash，`tccutil reset Accessibility dev.sidekick.app` 后重新授权可恢复；根治要固定签名。
+- **自动粘贴 TCC（D75）**：合成 Cmd+V 需要辅助功能勾选；未勾选时 `outcome=copied`、结果卡片不出现按键。桌面自 D143 起只在侧栏「设置」项挂 6px 琥珀点（`useAccessibilityStore`，授权后/`window.focus` 回来重判），内容区不再有提示条；「去开启」走 `accessibility_request()` 弹原生提示，**不要自己拼 `x-apple.systempreferences:` URL**；TCC 不可编程授权。App 是自签名，TCC 按 CDHash 记账，**每次重新打包旧授权失效**（开关看着开着但无效），`codesign -dvv` 对比 CDHash，`tccutil reset Accessibility dev.sidekick.app` 后重新授权可恢复；根治要固定签名。
 - **剪贴板**：`NSPasteboard` 每 500ms 查 changeCount；`ConcealedType`/`TransientType`/`GeneratedType` 与密码管理器类型不记录；自身写入用 `skip_next` 防重复；语音转写经 `write_text_and_record` 以 `kind="voice"` 入库（暂停记录时仍写系统剪贴板但不入历史）；上限默认 100、可配 10–200（D121），置顶优先淘汰。
 - **语音用量统计**：`asr_usage.json`（0600，原子写，≤400 天）只存每日汇总；按本机时区切天；每次 `task-finished` 有 usage 就记账（插入失败/空结果也计费）；`asr_usage_stats()` 返回今天/7/30/365 + 最近 365 天 `days`；金额人民币微元，北京 ¥6/¥4.5、新加坡 ¥6.781/¥5.104 每百万 Token，自定义地址按北京估算，`priceNote` 明示估算。清空只重置每日汇总。
 
@@ -89,7 +89,7 @@ owner: engineering
 
 ## 7. 桌面壳与看板
 
-- **壳体结构（D85+D86+D104/D119/D123）**：视图切换是组件状态（桌面 `route.view`、手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框/下拉/contentEditable 里不劫持。一级 = 概览/剪贴板/备忘录/用量/语音/设置/英语角（语音第 4 个一级页单页三段、内部不 push；备忘录 ⌘3 独立只读页；剪贴板 ⌘2，历史与设置都在该页，设置里没有剪贴板行与二级页；英语角 ⌘7 是独立页，快捷键按 `item.shortcut` 反查，别再按下标算）。**会话列表页、系统页、48 状态条、72 图标 rail 已删除，不要恢复**；AI 在做什么只在「概览 › 当前会话」。
+- **壳体结构（D85+D86+D104/D119/D123）**：视图切换是组件状态（桌面 `route.view`、手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框/下拉/contentEditable 里不劫持。一级 = 剪贴板/备忘录/用量/语音/英语角/设置（D143：剪贴板 ⌘1 兼默认页与兜底、语音 ⌘4 单页三段、英语角 ⌘5；快捷键按 `item.shortcut` 反查，别再按下标算）。**会话列表页、系统页、48 状态条、72 图标 rail、「概览」页都已删除，不要恢复**；桌面不再展示 AI 工作态与会话标题，只有 asking 时侧栏出现一行「AI 等你决定」。
 - **玻璃只做控件层**（HIG 红线）：侧栏、sticky 工具栏、`dsl-action-group`、`dsl-glass` 提示卡/聊天输入栏可用玻璃；**列表卡/内容区/表单卡一律不透明**，不叠玻璃、不玻璃套玻璃，同屏别超过 3–4 块。
 - **桌面列表/分段基元**：列表用 `desktop/shell/list.tsx`（ListGroup/ListRow/ListActionRow/ListEmpty，`iconTone` 出彩色图标块），分段用 `shell/segmented-control.tsx`；旧 `Card`/`MetaRow`/`CardHint` 是无人使用的兼容导出，下一轮删。
 - **宽幅数据页（用量，D97）**：用量页是「730 单列」唯一例外——`PageShell size="wide"`（max-w 956）、`tone="usage"`、`bottomGap="compact"`；`PageHeader compact` 不画 34/600 大标题，只留工具栏 17/600 + `sr-only h1`。样式在 `desktop/styles/usage.css`，不要塞回 `ios.css`/`tokens.css`；图表是手写 SVG，不要引图表库。

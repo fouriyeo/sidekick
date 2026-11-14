@@ -130,7 +130,7 @@ UI 事件
 - 连接状态收敛为一个状态机：`disconnected → connecting → connected → error`；所有界面读同一个 store，不各自维护 `online` 布尔值。
 - 事件订阅在 entry 挂载时注册一次，卸载时取消；不要在每次渲染里 `listen`。
 - 协议增量（D79）：`system` 消息增加可选 `clients`（当前在线客户端数，含桌面本机窗口与网页预览），桌面 `desktop-clients-store` 展示 `max(0, clients - 1)` 台设备；旧服务端不发送、旧客户端忽略。`status.sessionList` 的 `tool` 仍按 D78 双端白名单，展示文案集中在 `shared/lib/sessions.ts`。
-- 桌面本地动作：概览「当前会话」卡尾的「在 DSH 打开」走本地 WS 发 `focus.request` 并读 `focus.result`，不新增协议、不接受手机传来的应用路径。
+- 桌面本地动作：侧栏「AI 等你决定」行走本地 WS 发 `focus.request` 并读 `focus.result`（D143 前在概览卡尾），不新增协议、不接受手机传来的应用路径。
 - 数据 store 只存协议真实字段：AI 状态 / 会话列表 / 在线数 / 最近发生都来自事件；「最近发生」仅内存（cap 20），重启清空，不落盘。
 - **浏览器 dev mock 没有本地 WS**：`?role=desktop` 下「在 DSH 打开」（本地 WS 发 `focus.request`）不会生效，必须在 `pnpm tauri dev` / 真机验证；dev mock 已补 `__TAURI_EVENT_PLUGIN_INTERNALS__` 供新增订阅使用。
 
