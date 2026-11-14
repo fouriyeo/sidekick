@@ -74,13 +74,14 @@ describe("MorePage 二级页结构", () => {
     expect(sub.className).not.toContain("uppercase");
   });
 
-  it("分组卡顺序：连接/外观/反馈/显示/备忘录/数据与关于/消息通道（用量不在这里）", () => {
+  it("分组卡顺序：连接/外观/反馈/麦克风/显示/备忘录/数据与关于/消息通道（用量不在这里）", () => {
     const { container } = render(<MorePage />);
 
     expect(groupLabels(container)).toEqual([
       "连接",
       "外观",
       "反馈",
+      "麦克风",
       "显示",
       "备忘录",
       "百炼 Key",

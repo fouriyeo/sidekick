@@ -19,6 +19,8 @@ export type PetSettings = {
   dimMinutes: number;
   /** 屏幕常亮最多保持多少小时，到点释放让系统熄屏；0 表示不限；默认 2 小时。 */
   keepAwakeHours: number;
+  /** 是否允许电脑用全局快捷键遥控这台手机开始/结束录音；默认开启。 */
+  remoteMic: boolean;
 };
 
 export type PetState = {

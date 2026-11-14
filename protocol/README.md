@@ -190,6 +190,19 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 
 **字段、帧布局、状态机、测试要点以 [docs/engineering/protocol-audio.md](../docs/engineering/protocol-audio.md) 为唯一事实源，本文不再复制。**
 
+## 麦克风遥控（mic.remote*，v1 追加）
+
+桌面全局快捷键（手机当麦克风）用的三条消息，**会话本身仍是 `mic.start`/`mic.stop`**，音频、转写、插入链路不变：
+
+| 方向 | 类型 | 字段 | 说明 |
+| --- | --- | --- | --- |
+| 桌面 → 手机 | `mic.remote` | `requestId`（≤64）、`action`: `start`\|`stop`\|`cancel`、`ts` | **只允许桌面后端（快捷键）发起**，绝不接受 WS 客户端触发：当前无鉴权，否则同网段任何人可开麦 |
+| 手机 → 桌面 | `mic.remote.ack` | `requestId`、`action`、`ok`、`code`、`ts` | 命令回执；`code` ∈ `remote_disabled` / `not_pet_page` / `busy` / `permission_denied` / `audio_blocked` / `not_recording` / `disconnected` / `cancelled` / `mic_start` / `bad_request` |
+| 手机 → 桌面 | `mic.remote.status` | `enabled`、`ts` | 手机连上电脑、开关变化时各发一次；桌面按 `client_id` 记住可遥控手机，断连即清 |
+
+- 桌面只在**恰好 1 台**可遥控手机时下发；0 台提示「未连接手机麦克风」，多台拒绝（不广播双开）。
+- 手机回执只带稳定错误码，不带任何内容；桌面 2s 等不到 ack 就按「手机没有响应」提示。
+
 ## 规划中的事件（均未实现）
 
 以下类型只是名称与用途预留，当前**任何一端都不发送**；实现时先补本文与 `protocol-audio.md` 的字段表，再改两端解析：

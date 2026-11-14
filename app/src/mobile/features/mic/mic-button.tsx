@@ -25,6 +25,7 @@ import { LoadingOrbit } from "@/shared/ui/motion";
 import { formatDuration, MIC_COPY, micLocalErrorText } from "./mic-copy";
 import { useMicStore } from "./mic-store";
 import { PermissionPrimer } from "./permission-primer";
+import { type MicRemoteResult, registerRemoteMicController } from "./remote-mic";
 import {
   createSessionId,
   primeMicrophone,
@@ -96,6 +97,8 @@ export function MicButton({
   const pointerIdRef = useRef<number | null>(null);
   const startYRef = useRef(0);
   const heldRef = useRef(false);
+  /** 电脑快捷键遥控也算「这次会话仍被要求录音」，与手指按住互不影响。 */
+  const remoteRef = useRef(false);
   const startSentRef = useRef(false);
   const startedAtRef = useRef(0);
   const cancelZoneRef = useRef(false);
@@ -111,6 +114,9 @@ export function MicButton({
   const seenCancelNonceRef = useRef(cancelNonce);
 
   const connected = connectionStatus === "connected";
+
+  /** 会话是否仍被要求录音：手机按住或电脑遥控，任一成立即可。 */
+  const isCapturing = useCallback(() => heldRef.current || remoteRef.current, []);
 
   const showHint = useCallback((text: string) => {
     if (hintTimerRef.current !== null) window.clearTimeout(hintTimerRef.current);
@@ -139,6 +145,7 @@ export function MicButton({
   const cancelRecording = useCallback(
     async (reason: MicStopReason, hint = "") => {
       heldRef.current = false;
+      remoteRef.current = false;
       lifecycleRef.current += 1;
       clearTick();
       releasePointer();
@@ -170,6 +177,7 @@ export function MicButton({
   const abortLocalCapture = useCallback(
     async (notifyServer: boolean) => {
       heldRef.current = false;
+      remoteRef.current = false;
       lifecycleRef.current += 1;
       clearTick();
       releasePointer();
@@ -196,6 +204,7 @@ export function MicButton({
       if (finishingRef.current) return;
       finishingRef.current = true;
       heldRef.current = false;
+      remoteRef.current = false;
       lifecycleRef.current += 1;
       const token = lifecycleRef.current;
       clearTick();
@@ -257,10 +266,11 @@ export function MicButton({
   );
 
   const startRecording = useCallback(
-    async (event: ReactPointerEvent<HTMLButtonElement>) => {
+    async (event?: ReactPointerEvent<HTMLButtonElement>): Promise<MicRemoteResult> => {
+      // 没有 event = 电脑快捷键遥控；有 event = 手机按住。
+      const remote = event === undefined;
       const livePhase = useMicStore.getState().phase;
       if (
-        !active ||
         startingRef.current ||
         finishingRef.current ||
         pointerIdRef.current !== null ||
@@ -269,20 +279,25 @@ export function MicButton({
         livePhase === "listening" ||
         livePhase === "processing"
       ) {
-        return;
+        return { ok: false, code: "busy" };
+      }
+      if (!active) {
+        return { ok: false, code: remote ? "not_pet_page" : "busy" };
       }
       if (!connected) {
-        showHint("先连接电脑，再按住说话。");
-        onOpenConnection?.();
-        return;
+        if (!remote) {
+          showHint("先连接电脑，再按住说话。");
+          onOpenConnection?.();
+        }
+        return { ok: false, code: "disconnected" };
       }
       if (!primerDone) {
-        setPrimerOpen(true);
-        return;
+        if (!remote) setPrimerOpen(true);
+        return { ok: false, code: "permission_denied" };
       }
       if (permissionDenied) {
-        setGuideOpen(true);
-        return;
+        if (!remote) setGuideOpen(true);
+        return { ok: false, code: "permission_denied" };
       }
 
       // 按下即开始录音：中震一下，给「现在在录」的即时确认（UX 规范 §7）。
@@ -292,10 +307,14 @@ export function MicButton({
       const token = lifecycleRef.current + 1;
       lifecycleRef.current = token;
 
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      pointerIdRef.current = event.pointerId;
-      startYRef.current = event.clientY;
-      heldRef.current = true;
+      if (remote) {
+        remoteRef.current = true;
+      } else if (event) {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        pointerIdRef.current = event.pointerId;
+        startYRef.current = event.clientY;
+        heldRef.current = true;
+      }
       cancelZoneRef.current = false;
       setCancelZone(false);
       warnedRef.current = false;
@@ -314,17 +333,18 @@ export function MicButton({
       } catch {
         startingRef.current = false;
         heldRef.current = false;
+        remoteRef.current = false;
         sessionIdRef.current = null;
         releasePointer();
         if (useMicStore.getState().session === sessionId) {
           useMicStore.getState().fail(MIC_COPY.disconnected, "disconnect");
         }
-        return;
+        return { ok: false, code: "disconnected" };
       }
       startSentRef.current = true;
 
       // 启动期间手指已抬起 / 被后台、断连、电脑端取消接管：不进入录音。
-      if (lifecycleRef.current !== token || !heldRef.current) {
+      if (lifecycleRef.current !== token || !isCapturing()) {
         startingRef.current = false;
         sessionIdRef.current = null;
         startSentRef.current = false;
@@ -334,7 +354,7 @@ export function MicButton({
           const current = useMicStore.getState().phase;
           if (current === "arming" || current === "listening") useMicStore.getState().cancel();
         }
-        return;
+        return { ok: false, code: "cancelled" };
       }
 
       try {
@@ -357,7 +377,7 @@ export function MicButton({
         });
 
         // getUserMedia 期间松手/取消：本地会话直接丢掉，不提交、不录音。
-        if (lifecycleRef.current !== token || !heldRef.current) {
+        if (lifecycleRef.current !== token || !isCapturing()) {
           startingRef.current = false;
           sessionIdRef.current = null;
           startSentRef.current = false;
@@ -368,7 +388,7 @@ export function MicButton({
             const current = useMicStore.getState().phase;
             if (current === "arming" || current === "listening") useMicStore.getState().cancel();
           }
-          return;
+          return { ok: false, code: "cancelled" };
         }
 
         startingRef.current = false;
@@ -382,13 +402,15 @@ export function MicButton({
             setWarning(true);
             haptics.medium();
           }
-          if (elapsed >= MAX_RECORDING_MS && heldRef.current) {
+          if (elapsed >= MAX_RECORDING_MS && isCapturing()) {
             void finishRecording("timeout");
           }
         }, 250);
+        return { ok: true };
       } catch (cause) {
         startingRef.current = false;
         heldRef.current = false;
+        remoteRef.current = false;
         sessionRef.current = null;
         sessionIdRef.current = null;
         startSentRef.current = false;
@@ -398,7 +420,7 @@ export function MicButton({
         // 松手/取消已经接管了这次启动：不再弹权限/失败，只保证 store 回到 idle。
         if (lifecycleRef.current !== token) {
           if (useMicStore.getState().session === sessionId) useMicStore.getState().cancel();
-          return;
+          return { ok: false, code: "cancelled" };
         }
 
         useMicStore.getState().cancel();
@@ -417,12 +439,25 @@ export function MicButton({
         } else {
           useMicStore.getState().fail(micLocalErrorText(cause), "mic_start");
         }
+        if (remote) {
+          const blocked =
+            typeof cause === "object" &&
+            cause !== null &&
+            "name" in cause &&
+            (cause as { name?: unknown }).name === "AudioBlockedError";
+          return {
+            ok: false,
+            code: blocked ? "audio_blocked" : denied ? "permission_denied" : "mic_start",
+          };
+        }
+        return { ok: false, code: "mic_start" };
       }
     },
     [
       active,
       connected,
       haptics,
+      isCapturing,
       onOpenConnection,
       permissionDenied,
       primerDone,
@@ -520,6 +555,37 @@ export function MicButton({
       window.removeEventListener("pointercancel", onWindowPointerCancel);
     };
   }, [cancelRecording, endPointer]);
+
+  // 电脑快捷键遥控：只在宠物页挂载期间注册控制器；离开页面后 remote-mic 会回
+  // not_pet_page，桌面弹「手机不在小跟班页面」而不是假装在录。
+  const handleRemoteStart = useCallback(async (): Promise<MicRemoteResult> => {
+    return startRecording();
+  }, [startRecording]);
+
+  const handleRemoteStop = useCallback(async (): Promise<MicRemoteResult> => {
+    if (useMicStore.getState().phase !== "listening") {
+      return { ok: false, code: "not_recording" };
+    }
+    void finishRecording("release");
+    return { ok: true };
+  }, [finishRecording]);
+
+  const handleRemoteCancel = useCallback(async (): Promise<MicRemoteResult> => {
+    if (!remoteRef.current) {
+      return { ok: false, code: "not_recording" };
+    }
+    void cancelRecording("cancel", MIC_COPY.cancelled);
+    return { ok: true };
+  }, [cancelRecording]);
+
+  useEffect(() => {
+    registerRemoteMicController({
+      start: handleRemoteStart,
+      stop: handleRemoteStop,
+      cancel: handleRemoteCancel,
+    });
+    return () => registerRemoteMicController(null);
+  }, [handleRemoteStart, handleRemoteStop, handleRemoteCancel]);
 
   // 电脑端权威取消（人工/看门狗）：不校验 session，直接停本地采集并提示。
   useEffect(() => {

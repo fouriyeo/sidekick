@@ -5,6 +5,7 @@ import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
 import { KeywordsPanel } from "@/desktop/features/models/keywords-panel";
 import { UsageStatsPanel } from "@/desktop/features/models/usage-stats";
 import { useUsageStore } from "@/desktop/features/models/usage-store";
+import { HotkeyCard } from "@/desktop/features/settings/hotkey-card";
 
 /**
  * 语音页（一级页，D104）的三段内容：百炼配置 / 关键词 / 语音用量，纵向排列，
@@ -31,6 +32,7 @@ export function VoiceSettings() {
 
   return (
     <>
+      <HotkeyCard />
       <CloudAsrForm />
       <MemoPairPanel />
       <KeywordsPanel />

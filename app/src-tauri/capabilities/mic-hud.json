@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mic-hud",
+  "description": "Capability for the mic status HUD window (top-center, always-on-top, no focus steal)",
+  "windows": ["mic-hud"],
+  "permissions": ["core:default"]
+}

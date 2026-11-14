@@ -240,3 +240,21 @@ idle
 
 - 实现映射（`mic_protocol.rs` / `desktop_server.rs` / `desktop_keys.rs` / `mobile_client.rs` / 前端类型）见 [asr-cloud-bailian.md](./asr-cloud-bailian.md) §15；链路视角见 [audio-pipeline.md](./audio-pipeline.md)。
 - 协议级要点：正常 `start`→3 帧→`stop(release)` 出 `ready`→`partial`→`result`；未配置/Key 不可用只回 `mic.error`、不建会话；未知 session 帧丢弃不崩溃；payload >64KB 丢弃；partial `rev` 回退被客户端丢弃；旧客户端只发 `chat` 行为不变。完整用例见 [mic ACCEPTANCE](../prd/mic/ACCEPTANCE.md) §2.1 与 §9（云端识别）。
+
+## 11. 遥控录音（v1 追加，2026-11-13）
+
+桌面快捷键把「手机当麦克风」的触发端从手机搬到键盘（单键按一下 / 组合键按住）。**会话模型不变**：session 仍由手机生成、`mic.start` 仍由手机发起，桌面只是多了一个「请开始/结束」的下行命令。
+
+| 方向 | 类型 | 用途 |
+| --- | --- | --- |
+| 桌面 → 手机 | `mic.remote` | 按下/双击快捷键后请求开始；再按请求结束；录音中 Esc 请求取消 |
+| 手机 → 桌面 | `mic.remote.ack` | 回执（ok / 稳定错误码），桌面据此在 HUD 显示「手机在后台」「没给麦克风权限」等 |
+| 手机 → 桌面 | `mic.remote.status` | 手机是否响应电脑遥控；连上电脑 + 开关变化时各一次，断连由桌面清理 |
+
+约束：
+
+- `mic.remote` **只能由桌面后端产生**（快捷键 → `mic_remote`），`desktop_server` 不把任何 WS 输入映射成这条命令。
+- 手机不在宠物页 / 不在前台 / 关掉开关 / 没给权限时，必须回 ack 错误码，**不允许静默**；桌面 2s 无 ack 按超时提示。
+- 安卓 WebView 的自动播放策略可能让 `AudioContext` 起不来：`voice-recorder.ts` 检测到 `state !== "running"` 时抛 `AudioBlockedError`，手机回 `audio_blocked`。
+- 只有 `mic.stop(reason=release)` 进入转写；Esc 取消走 `mic.stop(reason=cancel)`，不转写、不插入、不记账。
+- 单手机假设：桌面只在恰好 1 台可遥控手机时下发命令；多台要等 P1 角色握手。

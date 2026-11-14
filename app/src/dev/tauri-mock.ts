@@ -899,9 +899,46 @@ export function installTauriMock(): void {
     priceNote: "qwen3.8-flash · 估算（浏览器 mock）",
   });
 
+  const mockHotkeyStatus = (overrides: Record<string, unknown> = {}) => ({
+    enabled: false,
+    mode: "toggle",
+    label: "按一下 右 Command",
+    binding: { kind: "bare", key: "rightCommand" },
+    trusted: true,
+    listening: true,
+    platform: "macos",
+    hint: null,
+    ...overrides,
+  });
+  const bareKeyLabel = (key: string) =>
+    ({
+      rightControl: "右 Control",
+      rightShift: "右 Shift",
+      rightOption: "右 Option",
+      rightCommand: "右 Command",
+    })[key] ?? key;
+
   const internals: MockInternals = {
     async invoke(command, args) {
       if (command === "app_role") return role;
+      // 快捷键与顶部 HUD 在浏览器里没有原生键盘监听：返回一份可交互的假状态。
+      if (command === "hotkey_status") return mockHotkeyStatus();
+      if (command === "hotkey_save") {
+        const config = (args?.config ?? {}) as Record<string, unknown>;
+        const binding = (config.binding ?? {}) as Record<string, unknown>;
+        return mockHotkeyStatus({
+          enabled: Boolean(config.enabled),
+          mode: (config.mode as string) === "hold" ? "hold" : "toggle",
+          binding,
+          label:
+            binding.kind === "combo"
+              ? `${config.mode === "hold" ? "按住" : "按一下"} ${String(binding.label ?? "组合键")}`
+              : binding.kind === "single"
+                ? `按一下 ${String(binding.label ?? "单键")}`
+                : `按一下 ${bareKeyLabel(String(binding.key ?? "rightCommand"))}`,
+        });
+      }
+      if (command === "send_remote_mic_ack" || command === "send_remote_mic_status") return null;
       // 浏览器没有窗口常亮能力：静默成功，方便验证宠物页逻辑。
       if (command === "set_keep_screen_on") return null;
       // 浏览器没有原生触感：静默成功（真机由 Android performHapticFeedback 执行）。
@@ -987,14 +1024,14 @@ export function installTauriMock(): void {
       }
       // 菜单栏用量小看板（D108）：浏览器里没有真实窗口，两个窗口操作用空实现占位。
       if (command === "hide_usage_panel" || command === "open_usage_page") return null;
-      // 浏览器里没有原生材质（D120）：看板保持不透明实色卡，与真机回退态一致。
-      if (command === "panel_glass_ready") return false;
       // 钉住（D135）：浏览器里没有失焦收起，只要记住状态，方便 QA 看到按下态。
       if (command === "usage_panel_pinned") return mockPanelPinned;
       if (command === "set_usage_panel_pinned") {
         mockPanelPinned = args?.pinned === true;
         return mockPanelPinned;
       }
+      // 浏览器里没有原生材质（D120）：看板保持不透明实色卡，与真机回退态一致。
+      if (command === "panel_glass_ready") return false;
       // 尖（D138）：浏览器里没有原生窗口定位，固定在卡片中间，开关默认开。
       if (command === "usage_panel_arrow_x") return 160;
       if (command === "usage_panel_arrow_enabled") return true;

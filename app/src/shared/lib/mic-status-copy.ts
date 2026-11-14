@@ -129,3 +129,99 @@ export function micErrorText(code: string): string {
       return MIC_STATUS_COPY.empty;
   }
 }
+
+/**
+ * 桌面顶部 HUD（快捷键流程）的文案。
+ *
+ * 与手机侧 `MIC_COPY` 分开：那边是「手机上操作」，这边是「人看着电脑、不看手机」，
+ * 所以每句话都要回答「现在到底在不在录 / 为什么没反应」。
+ */
+export const REMOTE_HUD_COPY = {
+  noPhone: "未连接手机麦克风",
+  noPhoneHint: "让手机留在小跟班页面并保持亮屏，再按一次",
+  multiPhone: "检测到多台手机",
+  multiPhoneHint: "只保留一台手机在待命",
+  connecting: "正在连接手机…",
+  connectingHint: "第一次连接会慢半拍",
+  listening: "正在听",
+  listeningHint: "再按一次结束 · Esc 取消",
+  processing: "识别中…",
+  processingHint: "说完的文字马上进当前窗口",
+  delivered: "已输入到当前窗口",
+  copied: "已复制到剪贴板",
+  cancelled: "已取消",
+  cancelledHint: "这段录音不会转写",
+  ackTimeout: "手机没有响应",
+  ackTimeoutHint: "确认手机还在小跟班页面、和电脑在同一网络",
+  disconnected: "连接断了",
+  remoteDisabled: "手机没开「电脑遥控录音」",
+  remoteDisabledHint: "手机上 更多 › 麦克风 打开即可",
+  notPetPage: "手机不在小跟班页面",
+  notPetPageHint: "解锁手机、回到宠物页再试",
+  busy: "手机正在处理上一段语音",
+  permissionDenied: "手机没给麦克风权限",
+  permissionDeniedHint: "在手机上点一次麦克风，允许录音",
+  audioBlocked: "手机需要先点一下屏幕",
+  audioBlockedHint: "安卓要求先有触摸才能开麦",
+  hintFallback: "再按一次快捷键重试",
+} as const;
+
+/** HUD 状态 → 标题 + 提示；`reason` 用协议里的稳定错误码。 */
+export function remoteHudText(payload: { state: string; reason?: string | null }): {
+  title: string;
+  hint?: string;
+} {
+  const reason = payload.reason ?? null;
+
+  switch (payload.state) {
+    case "unavailable":
+      if (reason === "multi_phone") {
+        return { title: REMOTE_HUD_COPY.multiPhone, hint: REMOTE_HUD_COPY.multiPhoneHint };
+      }
+      if (reason === "remote_disabled") {
+        return {
+          title: REMOTE_HUD_COPY.remoteDisabled,
+          hint: REMOTE_HUD_COPY.remoteDisabledHint,
+        };
+      }
+      if (reason === "not_pet_page") {
+        return { title: REMOTE_HUD_COPY.notPetPage, hint: REMOTE_HUD_COPY.notPetPageHint };
+      }
+      if (reason === "busy") {
+        return { title: REMOTE_HUD_COPY.busy, hint: REMOTE_HUD_COPY.hintFallback };
+      }
+      if (reason === "permission_denied") {
+        return {
+          title: REMOTE_HUD_COPY.permissionDenied,
+          hint: REMOTE_HUD_COPY.permissionDeniedHint,
+        };
+      }
+      if (reason === "audio_blocked") {
+        return { title: REMOTE_HUD_COPY.audioBlocked, hint: REMOTE_HUD_COPY.audioBlockedHint };
+      }
+      return { title: REMOTE_HUD_COPY.noPhone, hint: REMOTE_HUD_COPY.noPhoneHint };
+    case "connecting":
+      return { title: REMOTE_HUD_COPY.connecting, hint: REMOTE_HUD_COPY.connectingHint };
+    case "listening":
+      // 计时由 HUD 自己拼在标题后面，这里只给「正在听」。
+      return { title: REMOTE_HUD_COPY.listening, hint: REMOTE_HUD_COPY.listeningHint };
+    case "processing":
+      return { title: REMOTE_HUD_COPY.processing, hint: REMOTE_HUD_COPY.processingHint };
+    case "delivered":
+      return { title: REMOTE_HUD_COPY.delivered };
+    case "copied":
+      return { title: micReasonText("copied", reason) };
+    case "failed":
+      if (reason === "ack_timeout") {
+        return { title: REMOTE_HUD_COPY.ackTimeout, hint: REMOTE_HUD_COPY.ackTimeoutHint };
+      }
+      if (reason === "disconnected") {
+        return { title: REMOTE_HUD_COPY.disconnected, hint: REMOTE_HUD_COPY.noPhoneHint };
+      }
+      return { title: micReasonText("failed", reason), hint: REMOTE_HUD_COPY.hintFallback };
+    case "cancelled":
+      return { title: REMOTE_HUD_COPY.cancelled, hint: REMOTE_HUD_COPY.cancelledHint };
+    default:
+      return { title: REMOTE_HUD_COPY.noPhone, hint: REMOTE_HUD_COPY.noPhoneHint };
+  }
+}

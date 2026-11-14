@@ -397,3 +397,52 @@ pub fn mic_stop(app: tauri::AppHandle, session: String, reason: String) -> Resul
         }),
     )
 }
+
+/// 手机 → 桌面：上报本机是否响应「电脑遥控录音」。
+///
+/// 桌面靠这条消息决定快捷键按下去时是「发命令」还是「弹未连接提示」；
+/// 断连时桌面侧会清掉登记，不需要额外的停机消息。
+#[tauri::command]
+pub fn send_remote_mic_status(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    send_payload(
+        &app,
+        serde_json::json!({
+            "v": 1,
+            "type": "mic.remote.status",
+            "enabled": enabled,
+            "ts": now_ms(),
+        }),
+    )
+}
+
+/// 手机 → 桌面：回执 `mic.remote` 命令（只带稳定错误码，不带任何内容）。
+#[tauri::command]
+pub fn send_remote_mic_ack(
+    app: tauri::AppHandle,
+    request_id: String,
+    action: String,
+    ok: bool,
+    code: Option<String>,
+) -> Result<(), String> {
+    let request_id = request_id.trim();
+    let action = action.trim();
+    if request_id.is_empty()
+        || request_id.chars().count() > 64
+        || !matches!(action, "start" | "stop" | "cancel")
+    {
+        return Err("遥控参数无效".to_string());
+    }
+    let code = code.filter(|value| !value.trim().is_empty());
+    send_payload(
+        &app,
+        serde_json::json!({
+            "v": 1,
+            "type": "mic.remote.ack",
+            "requestId": request_id,
+            "action": action,
+            "ok": ok,
+            "code": code,
+            "ts": now_ms(),
+        }),
+    )
+}

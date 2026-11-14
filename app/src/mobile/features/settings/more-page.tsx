@@ -526,6 +526,28 @@ export function MorePage() {
             只在宠物页前台播放；录音时不响，结束后 3 秒补一声。系统静音或勿扰下可能无法完全遵守。
           </p>
 
+          <section aria-label="麦克风" className={CARD_CLASS}>
+            <div className="flex min-h-[60px] items-center gap-4 px-4">
+              <span className="min-w-0 flex-1">
+                <Label
+                  htmlFor="pet-remote-mic"
+                  className="block text-[15px] leading-[21px] font-normal text-foreground"
+                >
+                  电脑遥控录音
+                </Label>
+                <span className="mt-1 block truncate text-[13px] leading-[19px] text-muted-foreground">
+                  电脑上按快捷键，就能让这台手机开始录音
+                </span>
+              </span>
+              <Toggle
+                id="pet-remote-mic"
+                label="电脑遥控录音"
+                checked={pet.settings.remoteMic}
+                onCheckedChange={(checked) => void update({ remoteMic: checked })}
+              />
+            </div>
+          </section>
+
           <section aria-label="显示" className={CARD_CLASS}>
             <div className="flex min-h-[60px] items-center gap-4 px-4">
               <span className="min-w-0 flex-1">

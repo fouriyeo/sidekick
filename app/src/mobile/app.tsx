@@ -10,6 +10,7 @@ import { useFirstUseStore } from "@/mobile/features/first-use/store";
 import { MemoPage } from "@/mobile/features/memo/memo-page";
 import { useMemoStore } from "@/mobile/features/memo/memo-store";
 import { micBusyNow, useMicStore } from "@/mobile/features/mic/mic-store";
+import { handleRemoteMicCommand } from "@/mobile/features/mic/remote-mic";
 import { PetPage } from "@/mobile/features/pet/pet-page";
 import { usePetStore } from "@/mobile/features/pet/pet-store";
 import { useKeepAwake } from "@/mobile/features/pet/use-keep-awake";
@@ -29,11 +30,13 @@ import {
   parseStatusMessage,
   parseUsageMessage,
 } from "@/protocol/messages";
+import { parseRemoteMicMessage } from "@/protocol/remote-mic";
 import { useMotionPause } from "@/shared/hooks/use-motion-pause";
 import {
   disableWebviewHaptics,
   exitApp,
   memoSyncNow,
+  sendRemoteMicStatus,
   sendStatusRequest,
   subscribeBackButton,
   subscribeChat,
@@ -80,6 +83,14 @@ export function MobileApp() {
   useEffect(() => {
     void disableWebviewHaptics().catch(() => undefined);
   }, []);
+
+  // 电脑遥控开关：连上电脑时上报一次，用户改开关时再上报（桌面据此决定快捷键是否可用）。
+  const remoteMicEnabled = usePetStore((state) => state.pet.settings.remoteMic);
+  const connectionStatus = useConnectionStore((state) => state.status);
+  useEffect(() => {
+    if (connectionStatus !== "connected") return;
+    void sendRemoteMicStatus(remoteMicEnabled).catch(() => undefined);
+  }, [remoteMicEnabled, connectionStatus]);
 
   // 宠物页之外的页面把 overlayOpen 置 true：AI 音效/触感只在宠物页前台响。
   useEffect(() => {
@@ -266,6 +277,15 @@ export function MobileApp() {
       }
       if (raw.includes('"type":"status"')) {
         console.warn(`[pet-hook] status parse failed len=${raw.length}`);
+      }
+
+      // 电脑快捷键遥控（命令不进聊天记录；手机侧回执/上报都由 remote-mic 统一处理）。
+      const remoteMessage = parseRemoteMicMessage(raw);
+      if (remoteMessage) {
+        if (remoteMessage.type === "mic.remote") {
+          void handleRemoteMicCommand(remoteMessage).catch(() => undefined);
+        }
+        return;
       }
 
       const micMessage = parseMicMessage(raw);

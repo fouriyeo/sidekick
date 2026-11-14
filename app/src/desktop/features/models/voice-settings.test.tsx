@@ -17,6 +17,20 @@ const tauri = vi.hoisted(() => ({
   saveCloudKeywords: vi.fn(),
   getUsageStats: vi.fn(),
   clearUsageStats: vi.fn(),
+  hotkeyStatus: vi.fn(async () => ({
+    enabled: false,
+    mode: "toggle",
+    label: "双击 右 Control",
+    binding: { kind: "bare", key: "rightControl" },
+    trusted: true,
+    listening: true,
+    platform: "macos",
+    hint: null,
+  })),
+  hotkeySave: vi.fn(),
+  subscribeHotkeyChanged: () => () => {},
+  requestAccessibility: vi.fn(async () => ({ trusted: true })),
+  openAccessibilitySettings: vi.fn(async () => undefined),
   normalizeError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 

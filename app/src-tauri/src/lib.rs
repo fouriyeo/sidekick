@@ -31,6 +31,18 @@ mod discovery;
 mod dsh_hook;
 #[cfg(desktop)]
 mod dsh_hook_install;
+/// 全局快捷键（桌面）：裸修饰键双击 / 组合键按住。
+#[cfg(desktop)]
+mod hotkey;
+/// 桌面顶部麦克风状态 HUD：always-on-top、非激活、不抢焦点。
+#[cfg(desktop)]
+mod mic_hud;
+/// 全屏也能看见的状态条：原生 NSPanel（非激活 + fullScreenAuxiliary）。
+#[cfg(desktop)]
+mod mic_panel;
+/// 快捷键 → 手机录音的遥控层（只允许后端发起命令）。
+#[cfg(desktop)]
+mod mic_remote;
 #[cfg(mobile)]
 mod haptics;
 #[cfg(mobile)]
@@ -125,7 +137,23 @@ pub fn run() {
             app.manage(hook.clone());
             hook.start();
 
+            // 桌面快捷键遥控手机录音：命令只由桌面后端发起，绝不接受 WS 输入。
+            let remote = mic_remote::RemoteMic::new(handle.clone());
+            app.manage(remote.clone());
+            // 全局键盘监听：macOS 用 NSEvent 旁听（不吞键），其它平台是空实现。
+            hotkey::init(&handle);
+
+            // 自检：SIDEKICK_HUD_PREVIEW=1 启动 3 秒后直接把状态条亮出来，便于截图检查排版。
+            if std::env::var_os("SIDEKICK_HUD_PREVIEW").is_some() {
+                let preview_handle = handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    mic_panel::show_recording(&preview_handle);
+                });
+            }
+
             tauri::async_runtime::spawn(desktop_server::start(
+                handle.clone(),
                 clipboard,
                 hook,
                 asr_cloud,
@@ -133,6 +161,7 @@ pub fn run() {
                 token_usage,
                 memo,
                 word,
+                remote,
             ));
 
             // 菜单栏常驻（D88）：隐藏 Dock 图标，入口只在菜单栏。
@@ -230,6 +259,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_role,
             server_info,
+            hotkey::hotkey_status,
+            hotkey::hotkey_save,
             desktop_mic::accessibility_info,
             desktop_mic::accessibility_open_settings,
             desktop_mic::accessibility_request,
@@ -332,6 +363,8 @@ pub fn run() {
             mobile_client::send_usage_request,
             mobile_client::send_focus_request,
             mobile_client::send_key_request,
+            mobile_client::send_remote_mic_status,
+            mobile_client::send_remote_mic_ack,
             memo::mobile::memo_list,
             memo::mobile::memo_get,
             memo::mobile::memo_update,

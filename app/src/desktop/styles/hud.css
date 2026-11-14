@@ -1,0 +1,32 @@
+/* ============================================================================
+   桌面顶部麦克风 HUD（第三窗口，460×116）
+   ----------------------------------------------------------------------------
+   只由 entries/mic-hud.tsx 引入。窗口 transparent(true) + always_on_top，
+   因此 html/body/#root 必须透明，只留一点内边距给卡片阴影；
+   卡片本身用深海配色（.deep-sea-scope + bg-abyss），与主窗口浮层一致。
+   ========================================================================== */
+
+html.desktop-ios,
+html.desktop-ios body,
+html.desktop-ios #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+body {
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dsl-hud {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}

@@ -28,6 +28,12 @@ import {
   type UsageRange,
 } from "@/protocol/messages";
 import {
+  isRemoteHudPayload,
+  type RemoteHudPayload,
+  type RemoteMicAckCode,
+  type RemoteMicAction,
+} from "@/protocol/remote-mic";
+import {
   isWordChangedEvent,
   type WordDetail,
   type WordGenerateResult,
@@ -199,6 +205,10 @@ const COMMANDS = {
   dshHookSetEnabled: "dsh_hook_set_enabled",
   dshHookRemove: "dsh_hook_remove",
   dshHookTest: "dsh_hook_test",
+  hotkeyStatus: "hotkey_status",
+  hotkeySave: "hotkey_save",
+  sendRemoteMicAck: "send_remote_mic_ack",
+  sendRemoteMicStatus: "send_remote_mic_status",
   sendUsageRequest: "send_usage_request",
   tokenUsageStats: "token_usage_stats",
   tokenPricingStatus: "token_pricing_status",
@@ -257,6 +267,8 @@ const EVENTS = {
   memo: "memo",
   memoChanged: "memo-changed",
   wordChanged: "word-changed",
+  hotkeyChanged: "hotkey-changed",
+  micHud: "mic-hud",
 } as const;
 
 type Listener<T> = (payload: T) => void;
@@ -324,6 +336,8 @@ const navigateChannel = createEventChannel(EVENTS.navigate);
 const memoChannel = createEventChannel(EVENTS.memo);
 const memoChangedChannel = createEventChannel(EVENTS.memoChanged);
 const wordChangedChannel = createEventChannel(EVENTS.wordChanged);
+const hotkeyChangedChannel = createEventChannel(EVENTS.hotkeyChanged);
+const micHudChannel = createEventChannel(EVENTS.micHud);
 
 export async function getAppRole(): Promise<AppRole> {
   const role = await invoke<string>(COMMANDS.appRole);
@@ -898,5 +912,106 @@ export function wordSyncNow(): Promise<void> {
 export function subscribeWordChanged(handler: () => void): Unsubscribe {
   return wordChangedChannel((payload) => {
     if (isWordChangedEvent(payload)) handler();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 桌面快捷键（全局录音开关）
+// ---------------------------------------------------------------------------
+
+export type HotkeyBareKey =
+  | "leftControl"
+  | "rightControl"
+  | "leftShift"
+  | "rightShift"
+  | "leftOption"
+  | "rightOption"
+  | "leftCommand"
+  | "rightCommand";
+
+export type HotkeyBinding =
+  | { kind: "bare"; key: HotkeyBareKey }
+  | { kind: "single"; keyCode: number; label: string }
+  | {
+      kind: "combo";
+      keyCode: number;
+      label: string;
+      control: boolean;
+      shift: boolean;
+      option: boolean;
+      command: boolean;
+    };
+
+export type HotkeyMode = "toggle" | "hold";
+
+export type HotkeyConfig = {
+  enabled: boolean;
+  binding: HotkeyBinding;
+  mode: HotkeyMode;
+};
+
+export type HotkeyStatus = HotkeyConfig & {
+  /** 触发方式的显示名（如「双击 右 Control」）。 */
+  label: string;
+  /** 辅助功能是否已授权（全局键盘监听的硬前提）。 */
+  trusted: boolean;
+  /** 监听器是否装好；非 macOS 恒为 false。 */
+  listening: boolean;
+  platform: string;
+  hint: string | null;
+};
+
+export function hotkeyStatus(): Promise<HotkeyStatus> {
+  return invoke<HotkeyStatus>(COMMANDS.hotkeyStatus);
+}
+
+export function hotkeySave(config: HotkeyConfig): Promise<HotkeyStatus> {
+  return invoke<HotkeyStatus>(COMMANDS.hotkeySave, { config });
+}
+
+/** 快捷键配置变化（设置页保存、或辅助功能授权变化后重读）。 */
+export function subscribeHotkeyChanged(handler: (status: HotkeyStatus) => void): Unsubscribe {
+  return hotkeyChangedChannel((payload) => {
+    if (isHotkeyStatus(payload)) handler(payload);
+  });
+}
+
+function isHotkeyStatus(value: unknown): value is HotkeyStatus {
+  if (typeof value !== "object" || value === null) return false;
+  const status = value as Record<string, unknown>;
+  return (
+    typeof status.enabled === "boolean" &&
+    typeof status.mode === "string" &&
+    typeof status.label === "string" &&
+    typeof status.trusted === "boolean" &&
+    typeof status.binding === "object" &&
+    status.binding !== null
+  );
+}
+
+/** 顶部麦克风 HUD（独立窗口，Rust 推状态，不走 WS）。 */
+export function subscribeMicHud(handler: (payload: RemoteHudPayload) => void): Unsubscribe {
+  return micHudChannel((payload) => {
+    if (isRemoteHudPayload(payload)) handler(payload);
+  });
+}
+
+/** 手机：上报本机是否响应电脑遥控（连上电脑 / 开关变化时）。 */
+export function sendRemoteMicStatus(enabled: boolean): Promise<void> {
+  return invoke<void>(COMMANDS.sendRemoteMicStatus, { enabled });
+}
+
+/** 手机：回执 `mic.remote` 命令。 */
+export function sendRemoteMicAck(input: {
+  requestId: string;
+  action: RemoteMicAction;
+  ok: boolean;
+  code?: RemoteMicAckCode | null;
+}): Promise<void> {
+  return invoke<void>(COMMANDS.sendRemoteMicAck, {
+    requestId: input.requestId,
+    action: input.action,
+    ok: input.ok,
+    code: input.code ?? null,
   });
 }

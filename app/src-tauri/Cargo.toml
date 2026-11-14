@@ -86,11 +86,18 @@ objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = [
   "NSGlassEffectView",
   "NSGraphics",
+  # NSEvent：全局快捷键靠它旁听键盘（裸修饰键双击），必须是运行时依赖。
+  "NSEvent",
   "NSResponder",
+  "NSWindow",
   "NSView",
   "NSVisualEffectView",
   "objc2-quartz-core",
 ] }
+# NSEvent 的监听回调是 Objective-C block；版本与 tauri 的传递依赖一致，不新增 crate。
+block2 = "0.6"
+# 顶部状态条用 WKWebView 渲染 HTML（与设计稿 1:1）；版本与 wry 的传递依赖一致。
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKWebViewConfiguration"] }
 objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSThread"] }
 # D138：尖角要跟卡片一起被玻璃蒙版裁出来，蒙版用 CAShapeLayer + CGPath。
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "CAShapeLayer", "objc2-core-graphics"] }

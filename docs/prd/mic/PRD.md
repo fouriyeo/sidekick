@@ -350,6 +350,8 @@ owner: product
 | 9 | 优先级明确 | ✅ P0/P1/P2 |
 | 10 | 排期有依据 | ✅ 含 spike/开发/测试；标估算 |
 
+## 12. 键盘遥控录音（2026-11-13 追加）
+桌面全局快捷键（默认关闭、默认单键「按一下右 Command」，可自由改左/右 Command、Control、Shift、Option 或任意单键，也可录组合键）遥控手机开始/结束录音，结果走同一条插入链路；手机不在待命、失败原因、HUD、Esc 取消、安全铁律与不做范围见 [SPEC.md](./SPEC.md) 第 12 节。
 ## 附录
 
 - 体验与文案：[SPEC.md](./SPEC.md) · 完整用例：[ACCEPTANCE.md](./ACCEPTANCE.md)

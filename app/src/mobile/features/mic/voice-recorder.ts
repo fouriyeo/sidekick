@@ -129,6 +129,15 @@ export async function startVoiceRecording(options: StartVoiceOptions): Promise<V
   })();
 
   if (context.state === "suspended") await context.resume();
+  // 安卓 WebView 的自动播放策略：没有过用户手势时 AudioContext 起不来。
+  // 这里必须显式失败（而不是静默无帧），桌面才能告诉用户「先在手机上点一下」。
+  if (context.state !== "running") {
+    for (const mediaTrack of stream.getTracks()) mediaTrack.stop();
+    await context.close().catch(() => undefined);
+    const blocked = new Error("audio context suspended");
+    blocked.name = "AudioBlockedError";
+    throw blocked;
+  }
 
   const source = context.createMediaStreamSource(stream);
   const processor = context.createScriptProcessor(CHUNK_SIZE, 1, 1);

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Sidekick 顶部录音提示 · 样式候选</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 48px 24px 80px;
+    font: 14px/1.6 -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+    color: #e9eef5;
+    background:
+      radial-gradient(900px 500px at 15% 0%, #26324a 0%, transparent 60%),
+      radial-gradient(700px 420px at 90% 20%, #3a2b3f 0%, transparent 55%),
+      linear-gradient(160deg, #10141c 0%, #1b2130 55%, #0d1017 100%);
+  }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: .02em; margin: 0 0 4px; }
+  .sub { color: #8b97a8; font-size: 12px; margin: 0 0 28px; }
+  .row { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 26px; flex-wrap: wrap; }
+  .meta { width: 190px; flex: none; }
+  .meta b { display: block; font-size: 13px; font-weight: 600; }
+  .meta span { color: #8b97a8; font-size: 12px; }
+  .stage { flex: 1; min-width: 320px; display: flex; justify-content: center; }
+
+  /* 公共：柱状波形动画 */
+  .wave { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+  .wave i { display: block; width: 3px; border-radius: 2px; background: currentColor; opacity: .9; animation: pump .9s ease-in-out infinite; }
+  .wave i:nth-child(1) { height: 40%; animation-delay: -.10s; }
+  .wave i:nth-child(2) { height: 70%; animation-delay: -.25s; }
+  .wave i:nth-child(3) { height: 100%; animation-delay: -.40s; }
+  .wave i:nth-child(4) { height: 55%; animation-delay: -.55s; }
+  .wave i:nth-child(5) { height: 80%; animation-delay: -.70s; }
+  .wave i:nth-child(6) { height: 45%; animation-delay: -.85s; }
+  @keyframes pump { 0%,100% { transform: scaleY(.45); } 50% { transform: scaleY(1); } }
+
+  /* A · 胶囊极简 */
+  .a {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 9px 16px; border-radius: 999px;
+    background: rgba(18, 22, 30, .72);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+    border: .5px solid rgba(255,255,255,.10);
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    font-size: 13px; letter-spacing: .01em;
+  }
+  .a .dot { width: 7px; height: 7px; border-radius: 50%; background: #6ee7b7; box-shadow: 0 0 12px #6ee7b7; }
+  .a .t { color: #e9eef5; }
+  .a .h { color: #8b97a8; font-size: 12px; }
+  .a .wave { color: #6ee7b7; }
+
+  /* B · 卡片（深海） */
+  .b {
+    width: 340px; padding: 14px 18px 15px; border-radius: 18px;
+    background: linear-gradient(180deg, rgba(16, 26, 38, .82), rgba(10, 16, 24, .86));
+    -webkit-backdrop-filter: blur(26px) saturate(140%);
+    backdrop-filter: blur(26px) saturate(140%);
+    border: .5px solid rgba(110, 231, 183, .28);
+    box-shadow: 0 18px 48px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .b .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .b .tag { font: 600 9px/1 ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; color: #6ee7b7; }
+  .b .live { font: 600 9px/1 ui-monospace, monospace; letter-spacing: .14em; padding: 3px 7px; border-radius: 999px; border: .5px solid rgba(110,231,183,.45); color: #6ee7b7; }
+  .b .main { display: flex; align-items: center; gap: 10px; }
+  .b .wave { color: #6ee7b7; height: 18px; }
+  .b .t { font-size: 14px; font-weight: 500; }
+  .b .time { margin-left: auto; font: 600 12px/1 ui-monospace, monospace; color: #9fb3c8; }
+  .b .hint { margin: 8px 0 0; font-size: 11px; color: #7b8b9e; }
+
+  /* C · 顶栏细条 */
+  .c {
+    width: 520px; height: 46px; border-radius: 12px;
+    display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    background: linear-gradient(90deg, rgba(12,17,24,.80), rgba(20,28,40,.72));
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+    border: .5px solid rgba(255,255,255,.08);
+    box-shadow: 0 8px 24px rgba(0,0,0,.32);
+  }
+  .c .bar { width: 3px; align-self: stretch; margin: 9px 0; border-radius: 2px; background: #6ee7b7; box-shadow: 0 0 10px rgba(110,231,183,.6); }
+  .c .t { font-size: 13px; }
+  .c .wave { color: #6ee7b7; margin-left: auto; }
+  .c .time { font: 600 12px/1 ui-monospace, monospace; color: #9fb3c8; min-width: 42px; text-align: right; }
+
+  /* D · 极简一行（无底色） */
+  .d {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 6px 2px; font-size: 13px;
+    text-shadow: 0 1px 8px rgba(0,0,0,.9);
+  }
+  .d .rec { width: 8px; height: 8px; border-radius: 50%; background: #ff5a5f; animation: blink 1.2s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  .d .wave { color: #ff8b8f; }
+  .d .t { color: #fff; font-weight: 500; }
+  .d .time { font: 600 12px/1 ui-monospace, monospace; color: #c9d3df; }
+</style>
+</head>
+<body>
+  <h1>顶部录音提示 · 4 个候选</h1>
+  <p class="sub">都是全屏 App 上也能显示的候选观感（真机最终由 NSPanel + WebView 渲染，看到的即所得）。挑一个或组合，我再落实。</p>
+
+  <div class="row">
+    <div class="meta"><b>A · 胶囊极简</b><span>最小打扰，只有状态灯 + 波形 + 计时</span></div>
+    <div class="stage">
+      <div class="a">
+        <span class="dot"></span>
+        <span class="t">正在听</span>
+        <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="h">00:07 · 再按一下结束</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="meta"><b>B · 卡片（深海）</b><span>和 Sidekick 现有深海配色一致，信息最全</span></div>
+    <div class="stage">
+      <div class="b">
+        <div class="top"><span class="tag">Mic · 百炼云端</span><span class="live">Live</span></div>
+        <div class="main">
+          <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="t">正在听</span>
+          <span class="time">00:07</span>
+        </div>
+        <p class="hint">再按一下结束 · Esc 取消</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="meta"><b>C · 顶栏细条</b><span>横向细长，贴屏幕上沿，遮挡最少</span></div>
+    <div class="stage">
+      <div class="c">
+        <span class="bar"></span>
+        <span class="t">正在听</span>
+        <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="time">00:07</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="meta"><b>D · 无底色一行</b><span>最轻，只有文字与红点，靠阴影保证可读</span></div>
+    <div class="stage">
+      <div class="d">
+        <span class="rec"></span>
+        <span class="t">正在录音</span>
+        <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="time">00:07</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:34px">
+    <div class="meta"><b>非录音态</b><span>这几个状态也要在同一载体上显示</span></div>
+    <div class="stage" style="flex-direction:column;gap:10px;align-items:center">
+      <div class="a" style="opacity:.92"><span class="dot" style="background:#fbbf24;box-shadow:0 0 12px#fbbf24"></span><span class="t">识别中…</span><span class="h" style="margin-left:4px">大概 1 秒</span></div>
+      <div class="a" style="opacity:.92"><span class="dot"></span><span class="t">已输入到当前窗口</span></div>
+      <div class="a" style="opacity:.92"><span class="dot" style="background:#ff5a5f;box-shadow:0 0 12px#ff5a5f"></span><span class="t">手机不在小跟班页面</span><span class="h" style="margin-left:4px">解锁手机回到宠物页</span></div>
+    </div>
+  </div>
+</body>
+</html>

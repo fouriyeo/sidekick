@@ -49,6 +49,8 @@ vi.mock("@/shared/lib/tauri", () => ({
   sendChat: tauri.sendChat,
   sendFocusRequest: tauri.sendFocusRequest,
   sendKeyRequest: tauri.sendKeyRequest,
+  sendRemoteMicAck: vi.fn(async () => undefined),
+  sendRemoteMicStatus: vi.fn(async () => undefined),
   sendMicFrame: tauri.sendMicFrame,
   sendMicStart: tauri.sendMicStart,
   sendMicStop: tauri.sendMicStop,

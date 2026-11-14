@@ -15,6 +15,7 @@ use axum::routing::get;
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
 use serde_json::{Value, json};
+use tauri::AppHandle;
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::io::ReaderStream;
@@ -31,6 +32,7 @@ use crate::discovery;
 use crate::dsh_hook::HookBridge;
 use crate::memo::desktop::MemoHub;
 use crate::mic_protocol::{self, MicStartMessage, MicStopReason};
+use crate::mic_remote::RemoteMic;
 use crate::token_usage::TokenUsageStore;
 
 static MOBILE_PAGE: &str = include_str!("../mobile/index.html");
@@ -72,6 +74,8 @@ struct AppState {
     word: Arc<crate::word::desktop::WordHub>,
     /// WS 定向发送：Key / token / 音频 ack 只回给发起请求的那台设备。
     senders: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>,
+    /// 桌面快捷键遥控手机录音（命令只由后端发起，绝不接受 WS 输入）。
+    remote: Arc<RemoteMic>,
 }
 
 struct ActiveMic {
@@ -1040,6 +1044,12 @@ fn handle_mic_text(state: &AppState, client_id: u64, text: &str) {
         "mic.start" => handle_mic_start(state, client_id, &value),
         "mic.stop" => handle_mic_stop(state, client_id, &value),
         "mic.cancel" => handle_mic_cancel(state, &value),
+        // 手机上报「是否允许电脑遥控」与远程命令回执；桌面→手机方向由远端模块发起。
+        "mic.remote.status" => {
+            let enabled = value.get("enabled").and_then(Value::as_bool).unwrap_or(false);
+            state.remote.status(client_id, enabled);
+        }
+        "mic.remote.ack" => state.remote.on_ack(&value),
         _ => {}
     }
 }
@@ -1145,6 +1155,7 @@ fn handle_mic_start(state: &AppState, client_id: u64, value: &Value) {
         }),
     );
     send_json(state, mic_state(&message.session, "listening"));
+    state.remote.notify_listening();
 }
 
 fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
@@ -1191,6 +1202,7 @@ fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
 
     if reason.should_transcribe() {
         send_json(state, mic_state(&active.session, "processing"));
+        state.remote.notify_processing();
         let state = state.clone();
         tokio::spawn(async move {
             finish_session(state, active).await;
@@ -1198,6 +1210,19 @@ fn handle_mic_stop(state: &AppState, client_id: u64, value: &Value) {
     } else {
         active.cloud.abort();
         send_json(state, mic_state(&active.session, "cancelled"));
+        state.remote.notify_cancelled(Some(stop_reason_code(reason)));
+    }
+}
+
+/// 手机停止原因 → HUD 用的稳定错误码（只给前端做文案映射，不含内容）。
+fn stop_reason_code(reason: MicStopReason) -> &'static str {
+    match reason {
+        MicStopReason::Cancel => "user_cancel",
+        MicStopReason::Timeout => "timeout",
+        MicStopReason::Background => "background",
+        MicStopReason::Disconnect => "disconnect",
+        MicStopReason::MicLost => "mic_lost",
+        MicStopReason::Release => "release",
     }
 }
 
@@ -1214,6 +1239,7 @@ fn handle_mic_cancel(state: &AppState, value: &Value) {
         active.cloud.abort();
         send_json(state, mic_state(&active.session, "cancelled"));
         send_json(state, mic_cancel(&active.session, "desktop"));
+        state.remote.notify_cancelled(Some("desktop_cancel"));
         return;
     }
 
@@ -1252,6 +1278,7 @@ fn spawn_mic_watchdog(state: &AppState, session: String, max_ms: u32) {
         active.cloud.abort();
         send_json(&state, mic_state(&active.session, "cancelled"));
         send_json(&state, mic_cancel(&active.session, "timeout"));
+        state.remote.notify_cancelled(Some("timeout"));
     });
 }
 
@@ -1370,6 +1397,7 @@ async fn finish_session(state: AppState, active: ActiveMic) {
             },
         ),
     );
+    state.remote.notify_result(outcome.outcome, outcome.reason);
 }
 
 fn handle_audio_frame(state: &AppState, client_id: u64, data: &[u8]) {
@@ -1408,6 +1436,8 @@ fn handle_audio_frame(state: &AppState, client_id: u64, data: &[u8]) {
 fn cleanup_session(state: &AppState, client_id: u64) {
     // 断开后不再允许该连接触发按键，避免目标记录过期后仍被复用。
     state.keys.clear_owner(client_id);
+    // 手机断连后不再是「遥控目标」，否则快捷键会对着已断开的连接空发。
+    state.remote.disconnect(client_id);
 
     let active = {
         let mut mic = state.mic.lock().unwrap();
@@ -1503,6 +1533,7 @@ fn now_ms() -> u64 {
 }
 
 pub async fn start(
+    app: AppHandle,
     clipboard: Arc<ClipboardManager>,
     hook: Arc<HookBridge>,
     asr_cloud: Arc<AsrCloudState>,
@@ -1510,7 +1541,12 @@ pub async fn start(
     token_usage: Arc<TokenUsageStore>,
     memo: Arc<MemoHub>,
     word: Arc<crate::word::desktop::WordHub>,
+    remote: Arc<RemoteMic>,
 ) {
+    let senders: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    remote.attach_senders(senders.clone());
+    let _ = &app;
     let state = AppState {
         tx: hook.sender(),
         clients: Arc::new(AtomicUsize::new(0)),
@@ -1528,7 +1564,8 @@ pub async fn start(
         )),
         memo,
         word,
-        senders: Arc::new(Mutex::new(HashMap::new())),
+        senders,
+        remote,
     };
     // 英语角的本地/对端变更要广播给其他已连接客户端。
     state.word.set_broadcaster(state.tx.clone());
