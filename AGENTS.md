@@ -1,7 +1,7 @@
 # AGENTS.md — Sidekick 项目上下文
 
 > 面向 AI 编码代理：读完这份就能接手。细节在 `docs/`（入口 `docs/INDEX.md`），协议在 `protocol/`。
-> 最后更新：2026-11-09 ｜ 本文只放「必须一直知道」的事；状态、历史、踩坑各有唯一归属（见 §2.5）。
+> 最后更新：2026-11-14 ｜ 本文只放「必须一直知道」的事；状态、历史、踩坑各有唯一归属（见 §2.5）。
 
 ## 1. 项目是什么
 
@@ -105,6 +105,7 @@ node scripts/qa-memo.mjs          # 备忘录两端截图 + CDP 走查
 - Git：提交信息中文（`type(scope): 中文摘要`）；push 前跑完 quality 命令；`force push`/改可见性先确认；规则见 `docs/standards/git.md`。
 - 平台边界：`mobile` 不 import `desktop`，反之亦然，`shared` 不 import 两者；前端规范 `docs/frontend-architecture.md`，依赖准入 `docs/dependency-policy.md`。
 - 重大取舍追加到 `docs/decisions.md`；新踩的坑写进 `docs/engineering/pitfalls.md`；不要往 AGENTS.md 里堆流水账。
+- **踩坑与经验沉淀（默认动作）**：每做完一个场景/功能（接入第三方组件、真机装包与性能测量、桌面常驻窗口、协议改动、跨端同步…），收尾前先问一句「这次有什么只有做过才知道的」，写进 [docs/engineering/pitfalls.md](./docs/engineering/pitfalls.md)：**症状 → 原因 → 正确做法**，不要只写「注意 X」；可复用的做法补进对应 `docs/engineering/*.md` 的场景小节。新坑在提交前落盘，别留在聊天里。
 - 不提交构建产物（`app/dist`、`node_modules`、`target`、`gen/`、APK/DMG）；`release/` 也不再入库。
 
 ## 9. 下一步

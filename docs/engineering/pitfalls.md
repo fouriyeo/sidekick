@@ -2,7 +2,7 @@
 doc: engineering/pitfalls
 title: 已知坑与硬约束
 status: active
-updated: 2026-11-08
+updated: 2026-11-14
 load: on-demand
 owner: engineering
 ---
@@ -113,6 +113,10 @@ owner: engineering
 
 - **宠物渲染器（BoopFace，D136）**：一行 `<boop-face skin="201" color="#d5e4f5" …>` 在 `boop-pet.tsx`；皮肤 painter 是懒加载 chunk，**兜底色 `color` 不能删**（删了会在浅色页面闪一下默认近黑脸），`loadSkins()` 在模块加载时预热。尺寸用 `.face { --face-size: 100% }` 跟随 `.petSlot`（230 / 62vw），不要再传 `size`。
 - **动作总线（D137）**：优先级、最小时长、去抖在 `pet-action.ts` / `pet-reaction*.ts`；首帧与重连整表快照不触发（wiring 里的 `hasBaseline`/`everOnline` 判定）。别改成「状态有变化就放动作」——重连会把整表刷成满屏 `surprise`/`failure`。
+- **等待动作只有 `waiting-wave` 能用（D136）**：`waiting-spin` 的两只眼睛会在画面中间相遇、重叠成一个「独眼」帧；`waiting-wrap` 会让眼睛滑出画布、出现整张空白脸；`waiting-wave`（左右眼轮流上下浮动）全程可读。常驻工作态别用 spin。
+- **换皮肤 / 升级组件后必须重看 8 个姿态**：材质皮肤会把眼睑移进 SVG mask，而表情是眼睑几何决定的——坏掉时 `data-pet-action` 仍是对的、画面却是错的。回归要看 happy / sad / angry / sleepy / surprise / sleep / input / idle，不能只看 DOM 标记。201 实测正常，但这是每次换皮肤或升级版本的必跑项。
+- **`play('idle')` 不会把睡着的宠物叫醒**：组件对非 idle 动作会自动 `leaveSleepForAction`，idle 是例外；从睡眠回落到待机要先 `wake()`。`auto-sleep` 与「无操作变暗」共用 `dimMinutes`，`wake-on="activity"` 负责触摸唤醒，`beginAction` 会清 auto-sleep，所以工作态不会被睡掉。
+- **组件手势默认值与产品红线不一致**：`press-squeeze` 只在鼠标/笔上触发（触摸本来就不走），`antenna-drag` 在触摸上会触发——守 D77 必须两个属性都显式写 `false`，不要依赖默认值。
 - **宠物资产红线（D69/D77/D132）**：不重绘角色、不改皮肤素材、不加第二套动画方案；BoopFace 的按压/拖天线/视线跟随保持关闭；手机舞台背景声呐环不要加回来；麦克风只驱动动作，不产生 `PetEvent`、不放音效。
 - **宠物背景不要加光晕**：OLED 像素自发光，光晕/大面积亮色渐变直接耗电；舞台只用 `--pet-bg` 单一纯色底，装饰只做小面积低亮度（D58）。
 - **宠物触摸互动已下线（D69）**：点击/长按/抚摸无任何反应，不再有 `POKE`/`PET_*`/`interacting`/亲密度/触摸爱心；不要再加 pointer 手势。**麦克风反应已下线（D77）**：录音时宠物姿态/气泡/触感不变，只保留 `micListening` 门禁静音 AI 音效/触感。变暗遮罩点击唤醒是屏幕行为，不是宠物互动。
@@ -134,4 +138,20 @@ owner: engineering
 - **release/ 不入库（D125，撤销 D63）**：`release/` 只放本地构建产物（gitignore），分发走 `scripts/publish-release.sh` → GitHub Releases。debug APK 约 120–314MB，任何时候都不要入库。
 - **直接跑 debug 二进制会白屏**：`cargo build`（不加 `tauri/custom-protocol`）是 dev 模式，启动加载 `http://localhost:1420`，没有 Vite dev server 就白屏。要独立运行用 `scripts/run-desktop.sh`（先 `pnpm build` 再 `cargo build --features tauri/custom-protocol`）；日常改前端用 `pnpm tauri dev`，两者不要混。
 - **图标管线（D99）**：App 图标母版是位图 `brand/appicon.png`，小尺寸（favicon/侧栏 22/托盘 36 单色/Android 自适应前景）由 `scripts/gen-brand-mark.py` 的矢量几何派生；改形状改脚本常量，不要手改 SVG。`pnpm tauri icon` 会把 `ic_launcher_background` 写成 `#FFFFFF`，必须在**之后**跑 `python3 scripts/gen-brand-mark.py` 重写背景色与五档前景层，否则自适应图标外圈露白边。玻璃/内部细节不能当图标（40px 只吃轮廓与明度差）。
+- **提交前用独立 worktree 验证「提交本身」**：工作区常混着并行任务的未完成改动，`pnpm build` 过不代表你的提交过。`git worktree add /tmp/verify <commit>` + `ln -s app/node_modules`，在 worktree 里跑 `tsc` / `vitest run` / `vite build` / `check-docs`，过了再 push。共享文档里混着别人的改动时只提交自己那一块：`git show HEAD^:file` 取基线、拼上自己的段落、`git hash-object -w` + `git update-index --cacheinfo` 写进索引，不碰工作区。
 - **验证顺序**：改前端 → `pnpm typecheck / lint / test / build`；改桌面 UI → `node scripts/qa-desktop-ios.mjs` 再 `pnpm tauri dev` 目检；改手机 UI → `node scripts/qa-memo.mjs` / 浏览器 320·390 浅深 + 真机；改协议 → `protocol/README.md` + Rust + 双端解析三处同步。
+
+## 11. 第三方 Web Component 接入（以 BoopFace 为例）
+
+- **React 19 不认识第三方自定义元素的 JSX 类型**：React 19 把 JSX 命名空间挪进了 `react` 模块，组件库自带的 `declare global { namespace JSX … }` 不生效。要在自己的 `*.d.ts` 里 `declare module "react" { namespace JSX { interface IntrinsicElements { "boop-face": … } } }`，ref 用 `useRef<HTMLElement & Api>` 取命令式方法。报错是「Property 'boop-face' does not exist」，很容易误判成组件没装上。
+- **模块入口必须在渲染前求值**：`import "boopface"` 放组件模块顶部，`customElements.define` 在模块求值时完成，ref 才拿得到已升级的元素；改成异步/按需 import 会出现「ref 有了、方法没有」。兜底用 `customElements.whenDefined()` 补一次动作同步。
+- **jsdom 缺 SVG 几何 API，症状是「tests passed + Uncaught Exception」**：`getTotalLength` / `getPointAtLength` / `getBBox` 都没实现，皮肤 painter 一跑就抛 `getTotalLength is not a function`；Vitest 仍报全绿，只在 Errors 行堆几十条（我们这次 36 条）。在 `src/test/setup.ts` 补最小 stub（固定长度 / 包围盒），并养成看 Errors 行、`grep Uncaught` 的习惯。
+- **懒加载视觉资源要有首帧兜底**：「底色兜底 + 模块加载时预热」是一对：只预热会在慢盘上闪，只兜底会多闪一下默认样式。兜底色随皮肤走，别删。
+- **StrictMode 会让效果跑两次**：动作 effect 用 ref 去重，store 订阅用引用计数（`installPetReactions` 的 `activeInstalls`），否则连接恢复时会连点两次头。
+
+## 12. 真机验收：装包签名与性能测量
+
+- **debug 包和 release 包签名不同**：机器上装的是 `~/.sidekick/android-release.jks` 签的包时，`adb install -r` 直接报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。别急着重装（会丢存档/配对）：把 debug APK 用同一把 key 重签——`zip -d META-INF/*` → `zipalign -p -f 4` → `apksigner sign --ks ~/.sidekick/android-release.jks`（密码在 `~/.sidekick/android-signing.properties`）。重签顺带把 305MB 的 debug 包压回 ~187MB（原包大半是重复签名块/padding），装包更快。
+- **release 包没有 WebView devtools**：要 CDP 量化性能就得装 debug 包。`Playwright.connect_over_cdp()` 对 Android WebView 不可用（不支持 Browser domain），要直连 `/json` 里的 `webSocketDebuggerUrl` 发裸 CDP：`Runtime.evaluate` 测 rAF 频率、`Performance.getMetrics` 取 `TaskDuration` 差值。
+- **基线三件套：包类型 + 动作状态 + WebView 版本**，缺一个数字就没法比。基线必须在改代码前采；同一动作状态下比较才有意义（本次 idle 与 working 的 `TaskDuration` 差 7 个百分点）。
+- **结论写回文档**：测量值、对比基线、判定写进 `engineering/pet-runtime.md` §8 或对应 `engineering/*.md`，不要只留在聊天记录里。
