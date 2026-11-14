@@ -696,3 +696,17 @@
 - 原因：用户希望顶部有个指向菜单栏图标的尖，「看起来更和谐」。直接加 CSS 三角有三个坑：① `box-shadow` 只沿圆角矩形画，尖的斜边没有影子、尖根横着一条线（像贴纸）；② 原生玻璃是 320×432 的矩形，三角在矩形外没有磨砂，只剩一层薄 tint（尖是透的、卡是磨砂的）；③ 卡片会被夹在屏幕安全边内、图标不会，固定居中的尖在贴边时会指空。
 - 代价：窗口 464→470；卡身比 D135 的 4pt 再远 6pt（视觉上由尖接住）；原生侧新增 `objc2-core-graphics`（CGPath）与 `objc2-quartz-core` 的 `CAShapeLayer` feature——版本与 tauri 传递依赖一致，不新增 crate；`NSGlassEffectView` 蒙版后的观感需要真机目检（截图脚本看不到真窗口）。
 - 不做：不做多方向/动画尖；不做尖跟随系统菜单栏折叠状态；不做尖的无障碍语义（纯装饰，`aria-hidden`）。
+
+## D139 · 录音中漏掉的完成音改为麦克风释放 3 秒后补一声（2026-11-14）｜生效
+
+- 决策：`completed` 到达时若 `micListening` 为 true，仍保持录音中静音，只记一个 `deferredCompletePending`；`setMicListening(false)` 后 3 秒补一声 `playComplete`，只补最近一次。补音等待中又开录则暂停计时，下次释放重新等 3 秒；等待中进入 asking 则取消（提问优先）；后台/重连仍不补播。
+- 原因：真机排查（2026-11-14，RMX3370 / Android 13）发现用户常在语音输入时完成任务，完成音被 `micListening` 门禁完全吞掉，听觉上像「从来没响过」；视觉会话卡虽然显示「已完成」，但用户在看电脑时容易漏掉。录音中直接响会把提示音录进麦克风、影响转写，所以选择「结束后补一声」而不是「录音中也响」。
+- 代价：completed 的音画不再同一时刻；补音可能与录音结束提示/后续状态重叠，用「只补一次、asking 取消、再次录音顺延」收敛。PRD/SPEC/AC、设置页说明与工程文档同步更新。
+- 不做：不在录音中直接响；不补后台/重连的 completed；不改开工音与提问音规则；不新增原生提示音（仍为 P1）。
+
+## D140 · AI 音效启动即解锁 Web Audio（2026-11-14）｜生效
+
+- 决策：`PetStage` 挂载时先调一次 `unlockSound()`，不再只依赖首次 pointerdown；pointerdown/试听继续作为兜底。Wry 的 Android WebView 已设 `mediaPlaybackRequiresUserGesture = false`，真机实测无手势创建 `AudioContext` 状态为 `running`。
+- 原因：加排查日志后真机抓到 `[pet-sound] complete blocked: not unlocked`——完成事件到了、四道门也全开，但 App 重启后没人碰手机，Web Audio 一直没解锁，所有 AI 音效静默；这是「一次也没听到」的直接原因。
+- 代价：App 启动即创建一个常驻 `AudioContext`（48k，静音时基本不耗电）；个别 WebView 若仍要求手势，首次 pointerdown 会再 `resume`。
+- 不做：不改三音效的合成/音量；不新增原生提示音（P1）；不改变录音/后台静音规则。

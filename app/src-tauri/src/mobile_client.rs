@@ -158,6 +158,23 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
                     if crate::memo::mobile::sync::handle_server_message(&read_app, &text) {
                         continue;
                     }
+                    if text.contains("\"type\":\"status\"") {
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                            println!(
+                                "[mobile] status recv state={} sessions={} list={}",
+                                value.get("state").and_then(|item| item.as_str()).unwrap_or("-"),
+                                value
+                                    .get("sessions")
+                                    .and_then(|item| item.as_u64())
+                                    .unwrap_or(0),
+                                value
+                                    .get("sessionList")
+                                    .and_then(|item| item.as_array())
+                                    .map(|list| list.len())
+                                    .unwrap_or(0),
+                            );
+                        }
+                    }
                     let _ = read_app.emit("chat", text);
                 }
                 Message::Close(_) => break,

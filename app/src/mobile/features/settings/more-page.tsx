@@ -523,7 +523,7 @@ export function MorePage() {
           </section>
 
           <p className="mx-4 text-[13px] leading-[20px] text-muted-foreground">
-            录音时不响 · 系统静音或勿扰下可能无法完全遵守。
+            只在宠物页前台播放；录音时不响，结束后 3 秒补一声。系统静音或勿扰下可能无法完全遵守。
           </p>
 
           <section aria-label="显示" className={CARD_CLASS}>

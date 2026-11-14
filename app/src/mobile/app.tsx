@@ -53,6 +53,7 @@ function micListeningNow(): boolean {
 /** 连接中/重连成功、回前台时向电脑要一次当前 AI 状态快照。 */
 function requestStatusIfConnected(): void {
   if (useConnectionStore.getState().status === "connected") {
+    console.info("[pet-hook] request status snapshot");
     void sendStatusRequest().catch(() => undefined);
   }
 }
@@ -253,12 +254,18 @@ export function MobileApp() {
       // AI 状态要先于聊天解析：它不进入聊天记录，只驱动宠物四态与会话列表。
       const status = parseStatusMessage(raw);
       if (status) {
+        console.info(
+          `[pet-hook] recv state=${status.state} sessions=${status.sessions} list=${status.sessionList?.length ?? 0} resume=${status.resume ?? "-"}`,
+        );
         useSessionStore.getState().apply(status.sessionList ?? []);
         usePetStore.getState().applyAiStatus(status, {
           now: Date.now(),
           micListening: micListeningNow(),
         });
         return;
+      }
+      if (raw.includes('"type":"status"')) {
+        console.warn(`[pet-hook] status parse failed len=${raw.length}`);
       }
 
       const micMessage = parseMicMessage(raw);

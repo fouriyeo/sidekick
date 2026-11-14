@@ -92,8 +92,11 @@ export function PetStage({ className, reserveTop = 0 }: PetStageProps) {
     setMicListening(micBusy);
   }, [micBusy, setMicListening]);
 
-  // 首次用户手势解锁 Web Audio（浏览器/WebView 的自动播放策略）。
+  // Wry 在 Android WebView 关闭了 mediaPlaybackRequiresUserGesture：启动时
+  // AudioContext 可以直接 running，主动解锁一次，手机放支架上没人碰也能响。
+  // 保留首次 pointerdown 兜底，避免个别 WebView 仍要求手势。
   useEffect(() => {
+    unlockSound();
     const unlock = () => unlockSound();
     document.addEventListener("pointerdown", unlock, { once: true, capture: true });
     return () => document.removeEventListener("pointerdown", unlock, { capture: true });

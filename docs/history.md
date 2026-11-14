@@ -88,8 +88,12 @@
 
 72. **2026-11-13 · 菜单栏看板顶部指引尖（D138）** — 卡片顶部加 16×8 三角指向托盘图标：窗口位置公式不动，顶部留白 4→10（尖 8 + 顶缝 2），尖顶离菜单栏 2pt；尖的横向位置每次定位按「图标中心 − 卡片左边」重算（夹 28–292），写进 CSS 变量并同步重建原生蒙版；玻璃态把圆角裁剪换成「圆角矩形 + 三角」的 `CAShapeLayer` 蒙版（尖与卡片同一块材质），实色态阴影从 `box-shadow` 换成外壳 `filter: drop-shadow()`（投影跟着轮廓走）；新增 `SIDEKICK_PANEL_ARROW=off` 应急开关。证据：Rust 252 tests（`usage_panel` 10 例含尖锚点夹取）、前端 113 files / 939 tests（面板 14 例）、`pnpm typecheck/lint/build`、QA 72 张截图（360×470，卡片 320×432 不裁切）；真窗口用 `SIDEKICK_PANEL_PREVIEW` 截图验证：尖端与卡片是同一块玻璃、贴边夹取时尖跟着图标走、`SIDEKICK_PANEL_ARROW=off` 时玻璃被蒙版裁回卡片矩形（卡上方无磨砂带）。
 
-## 验证记录（原「已验证」小节，未进时间线的项）
 
+73. **2026-11-14 · 录音中完成音改为释放后 3 秒补一声（D139）** — `pet-store` 在 `completed` 遇到 `micListening` 时只记一个 pending，麦克风释放 `setMicListening(false)` 后 3 秒补一次完成音；只补最近一次，等待中又开录则顺延，进入 asking 取消；设置页说明补全「只在宠物页前台播放；录音时不响，结束后 3 秒补一声」。原因：真机调试发现用户常在语音输入时完成任务，完成音被录音门禁完全吞掉，视觉会话卡容易被漏看。证据：`pet-store.test.ts` 29 tests（新增 6 个延迟/顺延/去重/asking/离页/后台用例）、mobile 515 tests、`pnpm typecheck/lint/build`、`check-docs`；真机（RMX3370 / Android 13）注入 completed 验证：录音中 0 个振荡器、麦克风释放后 3 秒 3 个振荡器（响一声），真实 DSH 完成链路待回归。
+
+74. **2026-11-14 · 排查日志 + 启动即解锁 Web Audio（D140）** — 手机端加 `[pet-hook]`（收到 status）、`[pet-ai]`（状态/门禁/补音）、`[pet-sound]`（开始/结束）与 Rust `[mobile] status recv` 日志；真机日志抓到 `[pet-sound] complete blocked: not unlocked`：App 重启后未触摸手机，`AudioContext` 未解锁，完成事件与四道门都正常但音效静默。`PetStage` 挂载时主动 `unlock()` 并保留 pointerdown/试听兜底；Wry 在 Android WebView 已关闭 `mediaPlaybackRequiresUserGesture`，真机重启后不触摸即可 `unlocked ctx=running`。证据：`pet-store.test.ts` 29 tests、mobile 515 tests、`pnpm typecheck/lint/build`、`check-docs`；真机（RMX3370 / Android 13）验证：不触摸启动后注入 completed → `complete start/done` 3 个振荡器；录音中注入 → `completed muted by mic` / `defer armed` / 释放 3 秒后 `defer fire` 响一声；真实 DSH 完成链路由用户测试。
+
+## 验证记录（原「已验证」小节，未进时间线的项）
 - **2026-10-31 · 早期 MVP 端到端** — 手机浏览器扫码打开桌面 `http://<IP>:<端口>/`；桌面窗口显示地址/二维码、展开出现 160px 二维码；`/download/apk` 返回带正确 content-type 与文件名的 APK；安卓 App 安装启动、双向消息与气泡方向通过（Realme RMX3370 / Android 13）。
 - **2026-11-06 · 电脑端「简约 iOS」重做（D85，结构/导航已被 D104/D119/D123 迭代）** — 4 个一级页 + 216 侧栏 + iOS 分组列表 + 设置 push；证据：588 tests / 71 files、`scripts/qa-desktop-ios.mjs` 36 张截图无溢出/无 console error；真实窗口交通灯/拖动区待人工目检。
 - **2026-11-06 · Liquid Glass 质感层（D86）** — 224 玻璃侧栏 / sticky 玻璃工具栏 / 胶囊控件 / spring / grain，玻璃只做控件层，`prefers-reduced-motion` 与 `prefers-reduced-transparency` 双退化；证据：592 tests / 72 files、44 张截图 + CDP 实测（数字补间、按压缩放、弹层 token）。

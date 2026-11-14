@@ -52,10 +52,17 @@ const BUBBLE_DURATION_MS = 4000;
 const SAVE_DEBOUNCE_MS = 500;
 /** 开工音限流：任一会话新开工，最多每 5 秒响一次（多会话并行时避免连响）。 */
 const WORK_START_MIN_GAP_MS = 5_000;
+/** 录音中漏掉的完成音：麦克风释放后再等 3 秒补一声（只补最近一次）。 */
+const DEFERRED_COMPLETE_DELAY_MS = 3_000;
 
 function defaultAppVisible(): boolean {
   if (typeof document === "undefined") return true;
   return document.visibilityState !== "hidden";
+}
+
+/** 手机端排查用：日志走 WebView console → adb logcat 的 Tauri/Console。 */
+function log(message: string): void {
+  console.info(`[pet-ai] ${message}`);
 }
 
 /**
@@ -91,6 +98,9 @@ export function createPetStore(deps: PetStoreDeps) {
   let workingSessionIds: Set<string> | null = null;
   /** 开工音上次播放时间；跨会话共享的 5 秒限流。 */
   let lastWorkStartAt = 0;
+  /** 录音期间收到的完成音；等麦克风释放后补播一次，多次完成只补一声。 */
+  let deferredCompletePending = false;
+  let deferredCompleteTimer: ReturnType<typeof setTimeout> | null = null;
 
   return create<PetStoreState>((set, get) => {
     function scheduleSave() {
@@ -111,6 +121,40 @@ export function createPetStore(deps: PetStoreDeps) {
       if (captionTimer === null) return;
       clearTimeout(captionTimer);
       captionTimer = null;
+    }
+
+    function clearDeferredCompleteTimer() {
+      if (deferredCompleteTimer === null) return;
+      clearTimeout(deferredCompleteTimer);
+      deferredCompleteTimer = null;
+    }
+
+    function clearDeferredComplete(reason: string) {
+      const hadPending = deferredCompletePending || deferredCompleteTimer !== null;
+      clearDeferredCompleteTimer();
+      deferredCompletePending = false;
+      if (hadPending) log(`defer canceled: ${reason}`);
+    }
+
+    /**
+     * 录音中收到完成：先静音，等麦克风释放 3 秒后补一声。
+     * 补音期间又开录时只暂停计时，pending 保留；下次释放再重新等 3 秒。
+     */
+    function scheduleDeferredComplete() {
+      clearDeferredCompleteTimer();
+      deferredCompletePending = true;
+      log("defer armed: 3000ms after mic release");
+      deferredCompleteTimer = setTimeout(() => {
+        deferredCompleteTimer = null;
+        if (!deferredCompletePending) return;
+        if (get().micListening) {
+          log("defer skipped: mic started again");
+          return;
+        }
+        deferredCompletePending = false;
+        log("defer fire: play complete");
+        deps.sounds?.playComplete();
+      }, DEFERRED_COMPLETE_DELAY_MS);
     }
 
     function appVisible(): boolean {
@@ -217,7 +261,13 @@ export function createPetStore(deps: PetStoreDeps) {
       mic: boolean,
       now: number,
     ) {
+      log(
+        `signal ${transition.from}->${transition.to} visible=${visible} petPage=${get().pet.visible && !get().pet.overlayOpen} mic=${mic} sound=${get().pet.settings.sound ? "on" : "off"}`,
+      );
       if (transition.to === "asking") {
+        // 提问优先于完成：取消还没补的完成音，避免几声叠在一起。
+        log("asking priority: cancel deferred complete");
+        clearDeferredComplete("asking");
         if (get().pet.settings.haptics && visible && !mic) {
           // 进入「等你决定」：两次短促轻震，只响一次。
           deps.haptics.light();
@@ -232,7 +282,16 @@ export function createPetStore(deps: PetStoreDeps) {
           deps.haptics.success();
         }
         deps.sounds?.stopAsking();
-        deps.sounds?.playComplete();
+        if (mic) {
+          // 录音中保持静音；只记下这次完成，等麦克风释放 3 秒后补一声。
+          log("completed muted by mic: defer 3s after release");
+          clearDeferredCompleteTimer();
+          deferredCompletePending = true;
+        } else {
+          log("completed: play now");
+          clearDeferredComplete("new completed");
+          deps.sounds?.playComplete();
+        }
         return;
       }
 
@@ -310,10 +369,18 @@ export function createPetStore(deps: PetStoreDeps) {
         set({ pet: state });
         processEffects(effects, state);
 
+        if (event.type === "OVERLAY" && event.open) {
+          // 离开宠物页后不再补音；回宠物页也不重播。
+          log("overlay opened: cancel deferred complete");
+          clearDeferredComplete("leave pet page");
+        }
+
         if (event.type === "VISIBILITY" && !event.visible) {
           // 切后台时立刻结束 completed 姿态：回前台/重连不重播完成动画。
           clearCompletedTimer();
           clearCaptionTimer();
+          log("visibility hidden: cancel deferred complete");
+          clearDeferredComplete("background");
           deps.sounds?.stopAsking();
 
           set({ ai: finishCompleted(get().ai, event.now), aiCaption: null });
@@ -334,6 +401,10 @@ export function createPetStore(deps: PetStoreDeps) {
         const now = options.now ?? deps.now();
         const micListening = options.micListening ?? get().micListening;
         const visible = options.visible ?? appVisible();
+        const listCount = Array.isArray(message.sessionList) ? message.sessionList.length : -1;
+        log(
+          `recv state=${message.state} sessions=${message.sessions} resume=${message.resume ?? "-"} remainingMs=${message.remainingMs ?? "-"} list=${listCount} tsLag=${now - message.ts}ms mic=${micListening} visible=${visible}`,
+        );
 
         // 开工音按会话判定：任一会话从非 working 变为 working 就触发一次，
         // 由 playWorkStart 做 5 秒限流。首份带列表的快照只建基线，不重复补响。
@@ -361,7 +432,15 @@ export function createPetStore(deps: PetStoreDeps) {
         }
 
         const { status, transition, stale } = reduceAiStatus(get().ai, message, { now });
-        if (stale) return;
+        if (stale) {
+          log(`stale: ${message.state} tsLag=${now - message.ts}ms`);
+          return;
+        }
+        if (transition) {
+          log(
+            `transition ${transition.from}->${transition.to} completedMs=${transition.completedMs ?? "-"}`,
+          );
+        }
 
         set({ ai: status });
         scheduleCompletedTimer(status);
@@ -375,8 +454,18 @@ export function createPetStore(deps: PetStoreDeps) {
       setMicListening: (listening: boolean) => {
         if (get().micListening === listening) return;
         set({ micListening: listening });
-        // 录音时不播放提醒，并把排队中的第二次提醒停掉。
-        if (listening) deps.sounds?.stopAsking();
+        log(`micListening=${listening} pending=${deferredCompletePending}`);
+        if (listening) {
+          // 录音时不播放提醒，并把排队中的第二次提醒停掉；补音计时也暂停。
+          deps.sounds?.stopAsking();
+          clearDeferredCompleteTimer();
+          return;
+        }
+        // 麦克风释放：录音中漏掉的完成音在 3 秒后补一声。
+        if (deferredCompletePending) {
+          log("mic released: re-arm deferred complete");
+          scheduleDeferredComplete();
+        }
       },
 
       unlockSound: () => {

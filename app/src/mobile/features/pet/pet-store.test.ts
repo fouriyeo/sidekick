@@ -287,6 +287,121 @@ describe("pet store AI 联动", () => {
     expect(store.getState().aiCaption).toBeNull();
   });
 
+  it("录音中收到 completed：麦克风释放 3 秒后补一次完成音", async () => {
+    const { store, sounds, clock } = await createAiStore();
+
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+
+    // 录音持续 10 秒，完成态早已收回；补音仍要在麦克风释放后才发生。
+    clock.now += 10_000;
+    vi.advanceTimersByTime(10_000);
+    store.getState().setMicListening(false);
+
+    vi.advanceTimersByTime(2_999);
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(sounds.playComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("补音等待中又开录：等这次录音结束再重新等 3 秒", async () => {
+    const { store, sounds, clock } = await createAiStore();
+
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+    store.getState().setMicListening(false);
+
+    vi.advanceTimersByTime(2_000);
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+
+    store.getState().setMicListening(true);
+    vi.advanceTimersByTime(5_000);
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+
+    store.getState().setMicListening(false);
+    vi.advanceTimersByTime(2_999);
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(sounds.playComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("一次录音里多次完成：结束后只补一声", async () => {
+    const { store, sounds, clock } = await createAiStore();
+
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+    clock.now += 1_000;
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+
+    store.getState().setMicListening(false);
+    vi.advanceTimersByTime(3_000);
+
+    expect(sounds.playComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("补音等待中进入 asking：取消完成音，由提问音接管", async () => {
+    const { store, sounds, clock } = await createAiStore();
+
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+    store.getState().setMicListening(false);
+    clock.now += 1_000;
+    store.getState().applyAiStatus(aiMessage("asking"), { now: clock.now });
+
+    vi.advanceTimersByTime(3_000);
+
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+    expect(sounds.startAsking).toHaveBeenCalledTimes(1);
+  });
+
+  it("离开宠物页会取消待补的完成音", async () => {
+    const { store, sounds, clock } = await createAiStore();
+
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+    store.getState().dispatch({ type: "OVERLAY", now: clock.now, open: true });
+    store.getState().setMicListening(false);
+    vi.advanceTimersByTime(3_000);
+
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+  });
+
+  it("切后台会取消待补的完成音", async () => {
+    const { store, sounds, clock } = await createAiStore();
+
+    store.getState().applyAiStatus(aiMessage("working"), { now: clock.now });
+    store.getState().applyAiStatus(aiMessage("completed", { resume: "working" }), {
+      now: clock.now,
+      micListening: true,
+    });
+    store.getState().dispatch({ type: "VISIBILITY", now: clock.now, visible: false });
+    store.getState().setMicListening(false);
+    vi.advanceTimersByTime(3_000);
+
+    expect(sounds.playComplete).not.toHaveBeenCalled();
+  });
+
   it("过期的 completed 不重播触感/音效", async () => {
     const { store, haptics, sounds, clock } = await createAiStore();
 

@@ -17,7 +17,7 @@ export type PetSoundEnvironment = {
 };
 
 export type PetSounds = {
-  /** 首次用户手势时调用；成功拿到 AudioContext 返回 true。 */
+  /** 启动/首次用户手势时调用；成功拿到 AudioContext 返回 true。 */
   unlock: () => boolean;
   /** 所有自动播放门都打开时返回 true。 */
   canPlay: () => boolean;
@@ -82,6 +82,11 @@ export const ASK_REPEAT_MS = 12_000;
  */
 const MASTER_GAIN = 3.9;
 
+/** 手机端排查用：统一前缀，日志走 WebView console → adb logcat 的 Tauri/Console。 */
+function log(message: string): void {
+  console.info(`[pet-sound] ${message}`);
+}
+
 function defaultContextFactory(): AudioContext | null {
   if (typeof AudioContext === "undefined") return null;
   try {
@@ -127,9 +132,13 @@ export function createPetSounds(
 
   function unlock(): boolean {
     const current = ensureContext();
-    if (!current) return false;
+    if (!current) {
+      log("unlock failed: no audio context");
+      return false;
+    }
 
     unlocked = true;
+    log(`unlocked ctx=${current.state}`);
     resumeIfSuspended(current);
     return true;
   }
@@ -143,21 +152,44 @@ export function createPetSounds(
     }
   }
 
+  /** 门禁失败时打一行原因；只在 playKind 被挡时调用。 */
+  function gatesForLog(): string {
+    try {
+      const gates = getGates();
+      return `sound=${gates.enabled() ? "on" : "off"} visible=${gates.visible()} petPage=${gates.petVisible()} mic=${gates.micListening()}`;
+    } catch {
+      return "gates=error";
+    }
+  }
+
   function emit(kind: PetSoundKind): boolean {
-    if (!unlocked) return false;
+    if (!unlocked) {
+      log(`${kind} emit skipped: locked`);
+      return false;
+    }
     const current = ensureContext();
-    if (!current) return false;
+    if (!current) {
+      log(`${kind} emit skipped: no audio context`);
+      return false;
+    }
 
     // 切后台/音频焦点丢失后 WebView 可能把 AudioContext 挂起；
     // 首次解锁只发生一次，这里再补一次 resume，避免之后永久静音。
     resumeIfSuspended(current);
 
     const start = current.currentTime || 0;
+    const lastTone = PATTERNS[kind].reduce((left, right) =>
+      left.delay + left.duration >= right.delay + right.duration ? left : right,
+    );
+    let lastOscillator: OscillatorNode | null = null;
+    log(`${kind} start ctx=${current.state} at=${start.toFixed(3)}`);
     try {
       for (const tone of PATTERNS[kind]) {
         const oscillator = current.createOscillator();
         const gain = current.createGain();
         const toneStart = start + tone.delay;
+
+        if (tone === lastTone) lastOscillator = oscillator;
 
         oscillator.type = tone.type;
         oscillator.frequency.setValueAtTime(tone.frequency, toneStart);
@@ -171,9 +203,13 @@ export function createPetSounds(
         oscillator.start(toneStart);
         oscillator.stop(toneStart + tone.duration + 0.03);
       }
+      if (lastOscillator) {
+        lastOscillator.onended = () => log(`${kind} done`);
+      }
       return true;
-    } catch {
+    } catch (error) {
       // 音频节点在部分 WebView 上可能被限制，静默降级为无声音。
+      log(`${kind} failed: ${String(error)}`);
       return false;
     }
   }
@@ -190,24 +226,36 @@ export function createPetSounds(
     stopAsking();
     askActive = true;
 
-    if (canPlay()) emit("ask");
+    const allowed = canPlay();
+    log(`ask start canPlay=${allowed}`);
+    if (allowed) emit("ask");
 
     askTimer = setTimeout(() => {
       askTimer = null;
       if (!askActive || disposed) return;
       // 12 秒后如果还在 asking 且门仍开着，才补最后一次；不再排下一次。
-      if (canPlay()) emit("ask");
+      const repeatAllowed = canPlay();
+      log(`ask repeat canPlay=${repeatAllowed}`);
+      if (repeatAllowed) emit("ask");
     }, ASK_REPEAT_MS);
   }
 
   function preview(kind: PetSoundKind): void {
     // 用户点击预览本身就是手势，顺手解锁；预览不受「声音开关」限制。
+    log(`preview ${kind}`);
     unlock();
     emit(kind);
   }
 
   function playKind(kind: PetSoundKind): boolean {
-    if (!canPlay()) return false;
+    if (!unlocked) {
+      log(`${kind} blocked: not unlocked`);
+      return false;
+    }
+    if (!canPlay()) {
+      log(`${kind} blocked: ${gatesForLog()}`);
+      return false;
+    }
     return emit(kind);
   }
 

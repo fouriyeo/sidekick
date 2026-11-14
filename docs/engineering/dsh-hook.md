@@ -192,9 +192,10 @@ DSH session/event
 - 协议解析：`parseStatusMessage(raw)`；在 `subscribeChat` 中先于 `parseMessage`，避免进入聊天。
 - `ai-status.ts`：`AiState`、`AiStatus`、`reduceAiStatus`、`displayStateOf`。
   - completed：`remainingMs ?? 3000`；到点回 `resume ?? idle`；新状态取消旧定时器；超过 `remainingMs` 的旧 completed 忽略。
-  - asking 持久；working 覆盖 sleep；away 优先；宠物不再响应麦克风（D77），录音只静音 AI 音效/触感。
-- `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。
-- `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音；总音量 `MASTER_GAIN = 3.9`（在 3 倍基础上再 +30%，约 +2.3 dB；单音峰值最高 0.702，不削波）。
+  - asking 持久；working 覆盖 sleep；away 优先；宠物动作由 D137 单独驱动，录音只静音 AI 音效/触感。
+- `pet-store.ts`：`ai` 内存状态；不落盘；进入 asking 两下轻震、completed 成功震；设置/前后台/麦克风门控。录音中收到 completed 只记 `deferredCompletePending`，`setMicListening(false)` 后 3 秒补一次 `playComplete`；等待中又开录顺延，asking 到达取消（D139）。
+- `sound.ts`：Web Audio 合成三音效；unlock；`playWork/playAsk/playComplete`；ask 12s 最多再响 1 次；录音/后台静音；总音量 `MASTER_GAIN = 3.9`（在 3 倍基础上再 +30%，约 +2.3 dB；单音峰值最高 0.702，不削波）。`PetStage` 挂载时先 `unlock()` 一次（Wry 已关闭 `mediaPlaybackRequiresUserGesture`，真机无手势为 running），pointerdown/试听兜底；未解锁打 `[pet-sound] blocked: not unlocked` 并静默跳过。
+- 排查日志（2026-11-14 临时保留）：WebView console 打 `[pet-hook]`（收到 status）、`[pet-ai]`（状态/门禁/补音）、`[pet-sound]`（开始/结束）；Rust 打 `[mobile] status recv`。手机上用 `adb logcat` 过滤 `Tauri/Console` 与 `RustStdoutStderr` 查看。
 - `pet-stage.tsx` / `boop-pet.tsx`：`data-ai-state` + `data-pet-action`；动作由 `pet-action.ts` 优先级决定；只 transform/opacity。
 - `pet-page.tsx`：宠物页组装（顶部条 → 会话卡 → 宠物 → 麦克风）。
 - `app.tsx`：上线/回前台 `sendStatusRequest()`；状态不追加到聊天。
@@ -225,7 +226,7 @@ DSH session/event
 | 双 profile | 只选一个；脚本按 profile 自检 |
 | 手机离线 | 桌面继续记录；重连快照；不补播完成 |
 | 手机后台 | 静音；回前台请求快照；过期完成忽略 |
-| 录音 | 录音静音；完成不补播 |
+| 录音 | 录音中静音；麦克风释放 3 秒后补一声完成音（只补最近一次）；补音等待中又开录则顺延 |
 | 音效被系统静音/音乐焦点 | P0 不保证；文档提示；P1 原生提示音 |
 | 会话列表过长 | 插件/桥截断 50 条；手机内部滚动，超出的不展示 |
 | 旧插件/旧桥无 `tool` | 手机工作行显示「正在思考」；不报错、不丢整条会话 |
@@ -241,7 +242,7 @@ DSH session/event
 - Rust：`cargo test --lib`（status 解析/token/body/timer/patch/端口/profile/工具白名单折叠）。
 - 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流、工具类别归一）。
 - 协议：`pnpm exec vitest run src/protocol`。
-- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/会话 store/会话卡/工作行工具动作）。
+- 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/录音结束后补完成音/会话 store/会话卡/工作行工具动作）。
 - 桌面：`pnpm exec vitest run src/desktop/features/hook`。
 - 全量：`pnpm typecheck && pnpm lint && pnpm test && pnpm build`；`cargo test`；`node scripts/check-docs.mjs`；`node scripts/check-boundaries.mjs`。
 - 真机：安装/重启/四态/声音/杀 DSH/重连/录音/夜间/减少动效。
