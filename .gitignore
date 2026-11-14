@@ -1,10 +1,16 @@
 .DS_Store
 *.log
 
+# 依赖与工具缓存（仓库根目录没有 package.json，node_modules/ 只是 vitest 缓存落点；
+# app/ 的 node_modules 由 app/.gitignore 管，这里统一兜底）
+node_modules/
+.pnpm-shim/
+
 # Tauri Android generated project (regenerate: pnpm tauri android init)
 app/src-tauri/gen/
-artifacts
-.pnpm-shim/
+
+# QA/走查过程产物（落点与清理见 docs/engineering/quality.md §5.1；随时可整目录删除）
+/artifacts/
 
 # 图标/视觉过程稿与评审截图（约 16MB，本地评审用，不入库；定稿资产是 brand/appicon.png 与 brand/logo-mark*.svg）
 brand/icon-drafts/

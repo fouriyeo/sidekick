@@ -54,6 +54,7 @@ sidekick/
 │  ├─ src-tauri/src/            # lib.rs 分流 + tray/panel_glass/discovery/desktop_keys/asr_*/keep_awake…
 │  └─ src-tauri/{capabilities,icons,mobile/}/
 ├─ brand/                       # appicon.png 母版 + 矢量标记（+ gen-brand-mark.py 派生）
+├─ artifacts/                   # 测试/走查过程产物（不入库；落点见 docs/engineering/quality.md §5.1）
 ├─ release/                     # 本地构建产物（不入库，D125）
 ├─ screenshots/                 # README 截图（scripts/qa-shots.mjs 生成）
 ├─ protocol/README.md           # 事件协议
@@ -74,6 +75,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 node scripts/check-docs.mjs && node scripts/check-boundaries.mjs
 node scripts/qa-desktop-ios.mjs   # 桌面全页截图（需先 pnpm dev）
 node scripts/qa-memo.mjs          # 备忘录两端截图 + CDP 走查
+scripts/device-shot.sh [名字]     # 真机截图 → artifacts/device-qa/
 ```
 
 环境（macOS arm64）：Rust 1.93、Node 24 + pnpm 11、JDK 21、Android SDK 37 / NDK 27.2，详见 `docs/setup.md`。
@@ -83,7 +85,7 @@ node scripts/qa-memo.mjs          # 备忘录两端截图 + CDP 走查
 1. 前端：`pnpm typecheck / lint / test / build`（Biome + Vitest）。
 2. 桌面 UI：`node scripts/qa-desktop-ios.mjs` 看溢出/console error，再 `pnpm tauri dev` 目检窗口（交通灯、拖动区、滚动玻璃、深浅主题、菜单栏看板）。
 3. 手机：`scripts/build-android.sh && scripts/install-android.sh`，真机确认自动发现→连接→收发；UI 用 `scripts/qa-memo.mjs` 与浏览器 `?role=mobile`（320/390 × 浅深）。
-4. 无头验证：`docs/setup.md`「WebView 远程调试」用 CDP 调命令 + `adb exec-out screencap -p` 截图。
+4. 无头验证：`docs/setup.md`「WebView 远程调试」用 CDP 调命令 + `scripts/device-shot.sh` 截图（落 `artifacts/device-qa/`）。
 5. 改协议：`protocol/README.md`、Rust、两端解析三处同步；改完跑文档与边界检查。
 
 ## 7. 最常踩的 10 个坑（详情见 `docs/engineering/pitfalls.md`）

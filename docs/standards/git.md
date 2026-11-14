@@ -2,7 +2,7 @@
 doc: standards/git
 title: Git 提交与推送规范
 status: active
-updated: 2026-11-08
+updated: 2026-11-14
 load: on-demand
 owner: engineering
 ---
@@ -59,7 +59,7 @@ feat(pet): 宠物改用 BoopFace 渲染与皮肤 201（D136）
 3. 不提交构建产物：`app/dist`、`node_modules`、`src-tauri/target`、`gen/`、APK、DMG、`.venv`。
    - **安装包不再入库（D125，撤销 D63）**：`release/` 只是本地构建目录（`/release/*.dmg`、`/release/*.apk` 已 gitignore），分发走 `scripts/publish-release.sh` → GitHub Releases。debug APK 120–314MB，任何情况下都不要入库。
    - 历史原因：旧规则把两个包提交进 `main`，Git 为每份二进制保留副本，仓库历史膨胀到 285MB；2026-11-08 用 `git filter-repo` 重写历史抹除。
-4. 设计过程素材（截图/GIF/预览页）默认不入库；需要归档时先问，放 `brand/` 下并控制体积。
+4. 设计过程素材（截图/GIF/预览页）默认不入库；需要归档时先问，放 `brand/` 下并控制体积。测试/走查过程产物（`artifacts/`）同理，落点与清理见 [quality.md §5.1](../engineering/quality.md)。
 
 ## 4. 不可逆操作
 

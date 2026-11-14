@@ -2,7 +2,7 @@
 doc: engineering/quality
 title: 测试与发布质量
 status: active
-updated: 2026-11-08
+updated: 2026-11-14
 load: on-demand
 owner: qa
 ---
@@ -77,6 +77,22 @@ owner: qa
 - 宠物：首启见面、idle、点击/长按/抚摸无反应、竖屏 16:9/20:9 安全区、重启恢复、减少动效、60fps。
 - 麦克风：按住/取消/60 秒/后台/断网/权限拒绝/自动粘贴/密码框/目标切换/结果卡片回车与清空。
 - 桌面：浮窗不抢焦点、⌘Z 撤销、剪贴板降级。
+
+### 5.1 测试产物与截图落点
+
+过程产物按固定落点存放，脚本自动建目录，不要另找地方：
+
+| 产物 | 落点 | 入库 | 怎么生成 |
+| --- | --- | --- | --- |
+| README 展示图（只有 4 张） | `screenshots/` | ✅ | `node scripts/qa-shots.mjs`（先 `pnpm dev --host 127.0.0.1`） |
+| 桌面 / 手机浏览器 QA | `artifacts/desktop-ios-qa/`、`artifacts/memo-qa/` | ❌ | `node scripts/qa-desktop-ios.mjs`、`node scripts/qa-memo.mjs`（各带 `qa.json`） |
+| 真机截图 | `artifacts/device-qa/` | ❌ | `scripts/device-shot.sh [名字]`（`YYYYMMDD-HHmmss-名字.png`） |
+| 一次性试验 | `/tmp/` | ❌ | 随手，用完即弃 |
+
+- `artifacts/` 整个目录已 gitignore（`/artifacts/`），随时 `rm -rf artifacts/*` 清空，下次跑 QA 自动重建；不要往里提交任何文件。
+- 过程截图不要落在仓库根、`docs/`、`app/`、`release/`；`screenshots/` 只放 README 那 4 张，改 UI 后重生成并随该次提交入库。
+- 真机截图别再写 `/tmp/screen.png`（互相覆盖）：统一 `scripts/device-shot.sh memo-c-gesture`，跑完会打印 PNG 路径。
+- 走查结论写进 [status.md](../status.md) 的待验收项或对应 `ACCEPTANCE.md`；截图只是本地证据，不进仓库。
 
 ## 6. 测试数据
 

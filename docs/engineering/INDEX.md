@@ -2,7 +2,7 @@
 doc: engineering/INDEX
 title: 工程方案分支索引
 status: active
-updated: 2026-11-08
+updated: 2026-11-14
 load: on-demand
 children:
   - pitfalls.md
@@ -47,7 +47,7 @@ children:
 | 做菜单栏常驻 / 关窗隐藏 / Dock 图标 / 退出入口 | [desktop-tray.md](./desktop-tray.md) | S |
 | 做菜单栏 Token 小看板 / 第二窗口 / 图标下方定位 | [desktop-usage-panel.md](./desktop-usage-panel.md) | M |
 | 做宠物：BoopFace 渲染、动作总线、状态机、持久化 | [pet-runtime.md](./pet-runtime.md) | M |
-| 写测试、真机验收、发布门 | [quality.md](./quality.md) | M |
+| 写测试、真机验收、发布门、截图落点 | [quality.md](./quality.md) | M |
 | 发版：打包 / 签名 / 传 GitHub Releases / 回滚补发 | [release.md](./release.md) | M |
 
 ## 方案原则

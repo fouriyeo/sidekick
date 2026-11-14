@@ -95,7 +95,7 @@ window.__TAURI_INTERNALS__.invoke("discover_servers")  // 无参，返回发现�
 window.__TAURI_INTERNALS__.invoke("send_chat", { text: "hello" })
 ```
 
-- 截图确认界面：`adb exec-out screencap -p > /tmp/screen.png`
+- 截图确认界面：`scripts/device-shot.sh 名字`（固定落 `artifacts/device-qa/`，见 [quality.md §5.1](./engineering/quality.md)；不要再写 `/tmp/screen.png`，会互相覆盖）
 - 适合验证：连接状态、消息气泡方向、DOM 是否真的渲染（排查黑屏/白屏）。
 
 ## 重新生成安卓工程
