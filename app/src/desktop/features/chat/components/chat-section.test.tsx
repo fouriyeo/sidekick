@@ -16,7 +16,6 @@ function renderSection(overrides: Partial<Parameters<typeof ChatSection>[0]> = {
       onSend={vi.fn(() => true)}
       info={INFO}
       status="connected"
-      onOpenOverview={vi.fn()}
       onOpenConnection={vi.fn()}
       {...overrides}
     />,

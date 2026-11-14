@@ -2,10 +2,7 @@ import { cn } from "cn";
 import { motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
 import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
-import {
-  deviceCountFromClients,
-  useDesktopClientsStore,
-} from "@/desktop/lib/desktop-clients-store";
+import { useAccessibilityStore } from "@/desktop/features/settings/accessibility-store";
 import {
   DESKTOP_NAV,
   DESKTOP_PRIMARY_NAV,
@@ -15,7 +12,7 @@ import {
 import { useDesktopStatusStore } from "@/desktop/lib/desktop-status-store";
 import { SPRING_SLIDE } from "@/desktop/lib/motion";
 import type { DesktopConnection } from "@/desktop/use-desktop-connection";
-import { AI_STATE_LABEL } from "@/shared/lib/status";
+import { visibleSessions } from "@/shared/lib/sessions";
 import { SignalDot, type SignalStatus } from "@/shared/ui/signal-dot";
 
 type SidebarProps = {
@@ -28,19 +25,23 @@ type SidebarProps = {
 
 /**
  * 侧栏（224）：Liquid Glass 导航层 —— 顶部 38 留给 mac 交通灯，
- * 下面 logo + 5 个一级入口（概览/剪贴板/备忘录/用量/语音，白色滑块用 spring 在入口之间 morph），
- * 底部设置 + 三行状态摘要。内容层不进入玻璃。
+ * 下面 logo + 5 个一级入口（剪贴板/备忘录/用量/语音/英语角，白色滑块用 spring
+ * 在入口之间 morph），底部设置 + **只在需要出手时出现**的状态行。
+ *
+ * D143：状态区「沉默即正常」。服务端口、手机台数、AI 正在工作都不是用户要读的
+ * 信息（看一眼不会改变动作），所以常态整块不显示；只有两种真正需要出手的情况
+ * 才出现一行：服务没起来（要排查）、AI 停下等你决定（要去 DSH）。
+ * 配置没完成的（语音未配置、自动输入未授权）用导航项上的琥珀点，不占正文。
  */
 export function Sidebar({ view, section, onSelect, onOpenSettings, connection }: SidebarProps) {
-  const clients = useDesktopClientsStore((state) => state.clients);
-  const status = useDesktopStatusStore((state) => state.status);
+  const sessionList = useDesktopStatusStore((state) => state.sessionList);
   const cloudStatus = useCloudAsrStore((state) => state.status);
-  const devices = deviceCountFromClients(clients);
-  const connected = connection.status === "connected";
-  const port = connection.info?.port;
-  const serviceLevel: SignalStatus = connected ? "connected" : "error";
-  const aiLevel: SignalStatus =
-    status?.state === "asking" ? "waiting" : status?.state === "working" ? "connected" : "idle";
+  const autoInput = useAccessibilityStore((state) => state.info);
+
+  const asking = visibleSessions(sessionList, {}).find((row) => row.display === "asking") ?? null;
+  const serviceDown = connection.status === "error";
+  const autoInputOff = autoInput !== null && !autoInput.trusted;
+  const showStatus = serviceDown || asking !== null;
 
   return (
     <aside className="dsl-sidebar relative flex w-[224px] shrink-0 flex-col">
@@ -60,6 +61,7 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
             icon={<item.icon aria-hidden="true" className="size-[17px]" strokeWidth={2.1} />}
             active={view === item.id}
             badge={item.id === "voice" && cloudStatus !== null && !cloudStatus.configured}
+            badgeHint="未配置"
             onClick={() => onSelect(item.id)}
           />
         ))}
@@ -71,29 +73,31 @@ export function Sidebar({ view, section, onSelect, onOpenSettings, connection }:
           shortcut={DESKTOP_NAV.find((nav) => nav.id === "settings")?.shortcut}
           icon={<SettingsIcon />}
           active={view === "settings"}
+          badge={autoInputOff}
+          badgeHint="自动输入未开启"
           onClick={() => onOpenSettings("root")}
         />
 
-        <div className="mt-2 flex flex-col gap-0.5 border-t border-border/70 pt-2">
-          <StatusLine
-            level={serviceLevel}
-            label="服务"
-            value={connected ? `${port ?? "…"}` : "未启动"}
-            onClick={() => onOpenSettings("connection")}
-          />
-          <StatusLine
-            level={devices > 0 ? "connected" : "idle"}
-            label="手机"
-            value={devices > 0 ? `${devices} 台` : "未连接"}
-            onClick={() => onOpenSettings("connection")}
-          />
-          <StatusLine
-            level={aiLevel}
-            label="AI"
-            value={status ? AI_STATE_LABEL[status.state] : "未联动"}
-            onClick={() => onOpenSettings("hook")}
-          />
-        </div>
+        {showStatus && (
+          <div className="mt-2 flex flex-col gap-0.5 border-t border-border/70 pt-2">
+            {serviceDown && (
+              <StatusLine
+                level="error"
+                label="服务"
+                value="未启动"
+                onClick={() => onOpenSettings("connection")}
+              />
+            )}
+            {asking && (
+              <StatusLine
+                level="waiting"
+                label="AI"
+                value="等你决定"
+                onClick={() => connection.requestFocus(asking.id)}
+              />
+            )}
+          </div>
+        )}
       </div>
       <span className="sr-only">当前页：{view === "settings" ? `设置/${section}` : view}</span>
     </aside>
@@ -112,14 +116,17 @@ function NavItem({
   icon,
   active,
   badge = false,
+  badgeHint,
   onClick,
 }: {
   label: string;
   shortcut?: string;
   icon: ReactNode;
   active: boolean;
-  /** 未配置提示：只在「语音」未配置时显示 6px 琥珀点。 */
+  /** 配置未完成时的 6px 琥珀点（语音未配置 / 自动输入未开启）。 */
   badge?: boolean;
+  /** 琥珀点的补充说明，只进 title 与读屏，不占版面。 */
+  badgeHint?: string;
   onClick: () => void;
 }) {
   const reduced = useReducedMotion();
@@ -128,7 +135,7 @@ function NavItem({
     <button
       type="button"
       aria-current={active ? "page" : undefined}
-      title={`${shortcut ? `${label} · ${shortcut}` : label}${badge ? " · 未配置" : ""}`}
+      title={`${shortcut ? `${label} · ${shortcut}` : label}${badge && badgeHint ? ` · ${badgeHint}` : ""}`}
       onClick={onClick}
       data-active={active ? "true" : "false"}
       className="dsl-nav-item"

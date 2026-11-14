@@ -24,7 +24,6 @@ type ChatSectionProps = {
   onSend: (text: string) => boolean;
   info: ServerInfo | null;
   status: DesktopConnectionStatus;
-  onOpenOverview: () => void;
   onOpenConnection: () => void;
 };
 
@@ -34,16 +33,9 @@ type ChatSectionProps = {
  * 发送后由服务端广播回显，不在本地追加；系统事件退成居中小字；
  * 新气泡用 Motion 入场（reduce-motion 时直接出现），列表保持跟手滚动。
  */
-export function ChatSection({
-  onSend,
-  info,
-  status,
-  onOpenOverview,
-  onOpenConnection,
-}: ChatSectionProps) {
-  // info / onOpenOverview 仅为保持 settings-page 的 props 签名；新界面不再需要。
+export function ChatSection({ onSend, info, status, onOpenConnection }: ChatSectionProps) {
+  // info 仅为保持 settings-page 的 props 签名；新界面不再需要。
   void info;
-  void onOpenOverview;
 
   const messages = useChatStore((state) => state.messages);
   const [draft, setDraft] = useState("");

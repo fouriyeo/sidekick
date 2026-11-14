@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHookStore } from "@/desktop/features/hook/hook-store";
 import { useCloudAsrStore } from "@/desktop/features/models/cloud-asr-store";
+import { useAccessibilityStore } from "@/desktop/features/settings/accessibility-store";
 import {
   type DesktopNav,
   type DesktopView,
@@ -10,7 +11,6 @@ import {
 } from "@/desktop/lib/desktop-nav";
 import { ContentPage } from "@/desktop/pages/content-page";
 import { MemoPage } from "@/desktop/pages/memo-page";
-import { OverviewPage } from "@/desktop/pages/overview-page";
 import { SettingsPage } from "@/desktop/pages/settings-page";
 import { UsagePage } from "@/desktop/pages/usage-page";
 import { VoicePage } from "@/desktop/pages/voice-page";
@@ -23,7 +23,7 @@ import "@/desktop/styles/ios.css";
 import "@/desktop/styles/usage.css";
 import { useDesktopConnection } from "./use-desktop-connection";
 
-/** 输入框 / 下拉里不劫持 ⌘1–⌘7（浏览器默认的标签切换也不抢）。 */
+/** 输入框 / 下拉里不劫持 ⌘1–⌘6（浏览器默认的标签切换也不抢）。 */
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -31,11 +31,11 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * 电脑端「简约 iOS」外壳（2026-11-07，D104 语音升为第 4 个一级入口）。
+ * 电脑端「简约 iOS」外壳（2026-11-14，D143 删「概览」）。
  *
- * 结构固定：左侧 224 玻璃侧栏（6 个一级入口 + 设置 + 三行状态摘要）→ 右侧内容页
- * （大标题 + iOS 分组列表）。⌘1–⌘7 切换一级页；默认概览。
- * 麦克风浮层、辅助功能提示与 toast 是全局层。
+ * 结构固定：左侧 224 玻璃侧栏（5 个一级入口 + 设置 + 只在需要出手时出现的一行状态）
+ * → 右侧内容页（大标题 + iOS 分组列表）。⌘1–⌘6 切换一级页；默认用量（D143）。
+ * 麦克风浮层与 toast 是全局层。
  */
 export function DesktopApp() {
   const connection = useDesktopConnection();
@@ -59,7 +59,7 @@ export function DesktopApp() {
     return () => document.documentElement.classList.remove("desktop-ios");
   }, []);
 
-  // 联动状态是全局信息（侧栏 / 概览 / 设置 › AI 联动共用），在外壳初始化一次。
+  // 联动状态是全局信息（侧栏 / 设置 › AI 联动共用），在外壳初始化一次。
   useEffect(() => {
     useHookStore.getState().init();
     void useHookStore.getState().refresh();
@@ -68,6 +68,15 @@ export function DesktopApp() {
   // 侧栏「语音」未配置时需要琥珀点，所以在壳层先读一次本地 asr.json。
   useEffect(() => {
     void useCloudAsrStore.getState().load();
+  }, []);
+
+  // 侧栏「设置」的琥珀点（自动输入未开启）：读一次，从系统设置切回来时重判。
+  useEffect(() => {
+    const refresh = useAccessibilityStore.getState().refresh;
+    void refresh();
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   // 菜单栏用量小看板的「打开用量页」（D106）：Rust 先把主窗口叫回来，再发导航事件。
@@ -104,7 +113,6 @@ export function DesktopApp() {
       />
 
       <main className="dsl-main flex min-h-0 min-w-0 flex-1 flex-col">
-        {route.view === "overview" && <OverviewPage connection={connection} nav={nav} />}
         {route.view === "content" && <ContentPage />}
         {route.view === "memo" && <MemoPage />}
         {route.view === "usage" && <UsagePage />}
@@ -115,7 +123,6 @@ export function DesktopApp() {
             connection={connection}
             section={route.section}
             onSectionChange={goSettings}
-            nav={nav}
           />
         )}
       </main>

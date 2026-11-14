@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock("@/shared/lib/tauri", () => api);
 
-import { type DesktopNav, initialRoute } from "@/desktop/lib/desktop-nav";
+import { initialRoute } from "@/desktop/lib/desktop-nav";
 import type { DesktopConnection } from "@/desktop/use-desktop-connection";
 import { SettingsPage } from "./settings-page";
 
@@ -34,18 +34,9 @@ function makeConnection(): DesktopConnection {
   };
 }
 
-function makeNav(): DesktopNav {
-  return { go: vi.fn(), goSettings: vi.fn() };
-}
-
 async function renderRoot(onSectionChange = vi.fn()) {
   render(
-    <SettingsPage
-      connection={makeConnection()}
-      section="root"
-      onSectionChange={onSectionChange}
-      nav={makeNav()}
-    />,
+    <SettingsPage connection={makeConnection()} section="root" onSectionChange={onSectionChange} />,
   );
   await waitFor(() => expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument());
   return onSectionChange;
@@ -66,7 +57,7 @@ describe("SettingsPage 设置", () => {
     for (const label of ["外观", "自动输入", "手机连接", "AI 联动", "关于本机", "消息通道"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    // 语音是第 4 个一级页（D104），剪贴板是 ⌘2 一级页（D119）：设置里都没有入口。
+    // 语音是第 4 个一级页（D104），剪贴板是 ⌘1 一级页（D119）：设置里都没有入口。
     expect(screen.queryByText("语音输入")).toBeNull();
     expect(screen.queryByText("剪贴板")).toBeNull();
     expect(screen.getByText("192.168.1.23:47810")).toBeInTheDocument();
@@ -97,7 +88,6 @@ describe("SettingsPage 设置", () => {
         connection={makeConnection()}
         section="about"
         onSectionChange={onSectionChange}
-        nav={makeNav()}
       />,
     );
 

@@ -23,9 +23,8 @@ const BASE = process.env.SIDEKICK_QA_BASE ?? "http://127.0.0.1:1420";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const noShots = process.argv.includes("--no-shots");
 
-/** 一级页（显式列出；侧栏上半 概览/剪贴板/备忘录/用量/语音/英语角，设置固定在底部）。 */
+/** 一级页（显式列出；侧栏上半 剪贴板/备忘录/用量/语音/英语角，设置固定在底部；D129 删概览）。 */
 const PRIMARY_PAGES = [
-  { name: "overview", view: "", label: "概览", query: "&ai=asking" },
   { name: "clipboard", view: "content", label: "剪贴板" },
   { name: "memo", view: "memo", label: "备忘录" },
   { name: "usage", view: "usage", label: "用量" },
@@ -379,7 +378,7 @@ async function main() {
         );
         await sleep(450);
         report.desktop.push(
-          await snapshot(cdp, `1180-scrolled-${view || "overview"}`, { view: `scrolled:${view}` }, theme),
+          await snapshot(cdp, `1180-scrolled-${view || "clipboard"}`, { view: `scrolled:${view}` }, theme),
         );
       }
     }
@@ -438,7 +437,7 @@ async function main() {
         })()`,
       );
       report.desktop.push(
-        await snapshot(cdp, "1180-vibrancy-overview", { view: "vibrancy", styles }, theme),
+        await snapshot(cdp, "1180-vibrancy-clipboard", { view: "vibrancy", styles }, theme),
       );
     }
 

@@ -7,7 +7,6 @@ import { describeHookStatus, useHookStore } from "@/desktop/features/hook/hook-s
 import { AccessibilityCard } from "@/desktop/features/settings/components/accessibility-card";
 import {
   DESKTOP_NAV,
-  type DesktopNav,
   SETTINGS_SECTION_TITLE,
   type SettingsSection,
 } from "@/desktop/lib/desktop-nav";
@@ -30,7 +29,6 @@ type SettingsPageProps = {
   connection: DesktopConnection;
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
-  nav: DesktopNav;
 };
 
 /**
@@ -41,7 +39,7 @@ type SettingsPageProps = {
  * 语音是独立一级页（D104）；剪贴板也是独立一级页，历史与设置都在那一页（D119），
  * 设置里不再有剪贴板行与二级页。
  */
-export function SettingsPage({ connection, section, onSectionChange, nav }: SettingsPageProps) {
+export function SettingsPage({ connection, section, onSectionChange }: SettingsPageProps) {
   if (section === "root") {
     return <SettingsRoot connection={connection} onSectionChange={onSectionChange} />;
   }
@@ -61,7 +59,6 @@ export function SettingsPage({ connection, section, onSectionChange, nav }: Sett
               onSend={connection.sendText}
               info={connection.info}
               status={connection.status}
-              onOpenOverview={() => nav.go("overview")}
               onOpenConnection={() => onSectionChange("connection")}
             />
           )}

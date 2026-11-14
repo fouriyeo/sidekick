@@ -1,9 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/desktop/pages/overview-page", () => ({
-  OverviewPage: () => <div>overview-page</div>,
-}));
 vi.mock("@/desktop/pages/content-page", () => ({
   ContentPage: () => <div>content-page</div>,
 }));
@@ -22,9 +19,6 @@ vi.mock("@/desktop/pages/words-page", () => ({
 vi.mock("@/desktop/pages/settings-page", () => ({
   SettingsPage: ({ section }: { section: string }) => <div>settings-page:{section}</div>,
 }));
-vi.mock("@/desktop/features/settings/components/accessibility-hint", () => ({
-  AccessibilityHint: () => null,
-}));
 vi.mock("@/desktop/features/mic-receiver/mic-status-overlay", () => ({
   MicStatusOverlay: () => null,
 }));
@@ -40,9 +34,21 @@ vi.mock("@/desktop/features/models/cloud-asr-store", () => ({
     getState: () => ({ load: vi.fn() }),
   }),
 }));
+// 侧栏「设置」琥珀点读的是自动输入授权；测试里恒为未知（不显示点）。
+vi.mock("@/desktop/features/settings/accessibility-store", () => ({
+  useAccessibilityStore: Object.assign(() => null, {
+    getState: () => ({ refresh: vi.fn() }),
+  }),
+}));
+
+const connectionMock = vi.hoisted(() => ({
+  status: "connected" as "connected" | "error",
+  requestFocus: vi.fn(() => true),
+}));
+
 vi.mock("./use-desktop-connection", () => ({
   useDesktopConnection: () => ({
-    status: "connected",
+    status: connectionMock.status,
     info: {
       ip: "192.168.1.23",
       port: 47810,
@@ -53,18 +59,28 @@ vi.mock("./use-desktop-connection", () => ({
     sendText: vi.fn(),
     cancelMic: vi.fn(),
     requestStatus: vi.fn(),
-    requestFocus: vi.fn(),
+    requestFocus: connectionMock.requestFocus,
     retry: vi.fn(),
   }),
 }));
 
-import { useDesktopClientsStore } from "@/desktop/lib/desktop-clients-store";
 import { useDesktopStatusStore } from "@/desktop/lib/desktop-status-store";
 import { DesktopApp } from "./app";
 
+const ASKING_SESSION = {
+  id: "s-1",
+  title: "检查 Git 忽略配置遗漏",
+  source: "dsh" as const,
+  state: "asking" as const,
+  askKind: "approval" as const,
+  lastEventAt: 1_700_000_000_000,
+  completedAt: null,
+};
+
 beforeEach(() => {
   window.history.pushState({}, "", "/");
-  useDesktopClientsStore.getState().reset();
+  connectionMock.status = "connected";
+  connectionMock.requestFocus.mockClear();
   useDesktopStatusStore.getState().reset();
 });
 
@@ -77,34 +93,28 @@ function pressShortcut(key: string) {
   fireEvent.keyDown(window, { key, metaKey: true });
 }
 
-describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
-  it("默认概览，侧栏 6 个入口 + 底部设置 + 三行状态摘要", () => {
-    useDesktopClientsStore.setState({ clients: 2 });
-
+describe("DesktopApp 简约 iOS 外壳（D143 删概览）", () => {
+  it("默认用量（看板块），侧栏 5 个入口 + 底部设置，正常运行时不显示状态行", () => {
     render(<DesktopApp />);
 
-    expect(screen.getByText("overview-page")).toBeInTheDocument();
-    // 侧栏上半顺序：概览 / 剪贴板 / 备忘录 / 用量 / 语音 / 英语角；设置固定底部。
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "主导航" });
     expect(
       within(nav)
         .getAllByRole("button")
         .map((node) => node.textContent?.trim()),
-    ).toEqual(["概览", "剪贴板", "备忘录", "用量", "语音", "英语角"]);
-    for (const label of ["概览", "剪贴板", "备忘录", "用量", "语音", "英语角", "设置"]) {
+    ).toEqual(["剪贴板", "备忘录", "用量", "语音", "英语角"]);
+    for (const label of ["剪贴板", "备忘录", "用量", "语音", "英语角", "设置"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
-    expect(screen.getByText("服务")).toBeInTheDocument();
-    expect(screen.getByText("手机")).toBeInTheDocument();
-    expect(screen.getByText("AI")).toBeInTheDocument();
-    expect(screen.getByText("1 台")).toBeInTheDocument();
+    // 服务端口 / 手机台数 / AI 工作态都不再常驻（沉默即正常）。
+    expect(screen.queryByRole("button", { name: /^服务/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^手机/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^AI/ })).toBeNull();
   });
 
-  it("点击侧栏切换 7 个一级页", () => {
+  it("点击侧栏切换 6 个一级页", () => {
     render(<DesktopApp />);
-
-    fireEvent.click(screen.getByRole("button", { name: "剪贴板" }));
-    expect(screen.getByText("content-page")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "备忘录" }));
     expect(screen.getByText("memo-page")).toBeInTheDocument();
@@ -121,37 +131,34 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "概览" }));
-    expect(screen.getByText("overview-page")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "剪贴板" }));
+    expect(screen.getByText("content-page")).toBeInTheDocument();
   });
 
-  it("⌘1–⌘7 切换一级页，⌘8 无动作", () => {
+  it("⌘1–⌘6 切换一级页，⌘7 无动作", () => {
     render(<DesktopApp />);
 
     pressShortcut("2");
-    expect(screen.getByText("content-page")).toBeInTheDocument();
-
-    pressShortcut("3");
     expect(screen.getByText("memo-page")).toBeInTheDocument();
 
-    pressShortcut("4");
+    pressShortcut("3");
     expect(screen.getByText("usage-page")).toBeInTheDocument();
 
-    pressShortcut("5");
+    pressShortcut("4");
     expect(screen.getByText("voice-page")).toBeInTheDocument();
+
+    pressShortcut("5");
+    expect(screen.getByText("words-page")).toBeInTheDocument();
 
     pressShortcut("6");
     expect(screen.getByText("settings-page:root")).toBeInTheDocument();
 
-    pressShortcut("7");
-    expect(screen.getByText("words-page")).toBeInTheDocument();
-
     pressShortcut("1");
-    expect(screen.getByText("overview-page")).toBeInTheDocument();
+    expect(screen.getByText("content-page")).toBeInTheDocument();
 
-    // 一级只有 7 个视图，⌘8 不改变当前页。
-    pressShortcut("8");
-    expect(screen.getByText("overview-page")).toBeInTheDocument();
+    // 一级只有 6 个视图，⌘7 不改变当前页。
+    pressShortcut("7");
+    expect(screen.getByText("content-page")).toBeInTheDocument();
   });
 
   it("输入框里不劫持 ⌘数字", () => {
@@ -159,20 +166,63 @@ describe("DesktopApp 简约 iOS 外壳（备忘录独立一级页）", () => {
     const input = document.createElement("input");
     document.body.appendChild(input);
 
-    fireEvent.keyDown(input, { key: "3", metaKey: true });
+    fireEvent.keyDown(input, { key: "2", metaKey: true });
 
-    expect(screen.getByText("overview-page")).toBeInTheDocument();
+    // 停在默认页（用量），没有跳到 ⌘2 的备忘录。
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
     input.remove();
   });
 
-  it("侧栏状态行进入设置的对应二级页", () => {
+  it("服务连不上时才出现「服务未启动」一行，点进手机连接", () => {
+    connectionMock.status = "error";
     render(<DesktopApp />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^服务/ }));
+    fireEvent.click(screen.getByRole("button", { name: "服务：未启动" }));
     expect(screen.getByText("settings-page:connection")).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /^AI/ }));
-    expect(screen.getByText("settings-page:hook")).toBeInTheDocument();
+  it("AI 停下等你决定时出现一行，点它直接唤起 DSH 会话", () => {
+    useDesktopStatusStore.getState().apply({
+      type: "status",
+      v: 1,
+      source: "dsh",
+      state: "asking",
+      sessions: 1,
+      ts: 1,
+      sessionList: [ASKING_SESSION],
+    });
+
+    render(<DesktopApp />);
+
+    fireEvent.click(screen.getByRole("button", { name: "AI：等你决定" }));
+    expect(connectionMock.requestFocus).toHaveBeenCalledWith("s-1");
+  });
+
+  it("AI 在工作中不占状态行（不需要用户出手）", () => {
+    useDesktopStatusStore.getState().apply({
+      type: "status",
+      v: 1,
+      source: "dsh",
+      state: "working",
+      sessions: 1,
+      ts: 1,
+      sessionList: [{ ...ASKING_SESSION, id: "s-2", state: "working", askKind: null }],
+    });
+
+    render(<DesktopApp />);
+
+    expect(screen.queryByRole("button", { name: /^AI/ })).toBeNull();
+  });
+
+  it("旧 ?view=overview 与 ?view=sessions 都回默认页用量", () => {
+    window.history.pushState({}, "", "/?view=overview");
+    render(<DesktopApp />);
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
+
+    cleanup();
+    window.history.pushState({}, "", "/?view=sessions");
+    render(<DesktopApp />);
+    expect(screen.getByText("usage-page")).toBeInTheDocument();
   });
 
   it("开发环境 ?view=memo 落到备忘录一级页", () => {

@@ -4,7 +4,7 @@
  *
  * 前置：cd app && pnpm dev --host 127.0.0.1
  * 用法：node scripts/qa-shots.mjs
- * 输出：screenshots/{desktop-overview,desktop-usage,mobile-pet,mobile-memo}.png
+ * 输出：screenshots/{desktop-clipboard,desktop-usage,mobile-pet,mobile-memo}.png
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ const BASE = process.env.SIDEKICK_QA_BASE ?? "http://127.0.0.1:1420";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const SHOTS = [
-  { name: "desktop-overview", width: 1180, height: 760, url: "/?ai=asking", theme: "light" },
+  { name: "desktop-clipboard", width: 1180, height: 760, url: "/?view=content", theme: "light" },
   { name: "desktop-usage", width: 1180, height: 760, url: "/?view=usage", theme: "light" },
   { name: "mobile-pet", width: 390, height: 844, url: "/?role=mobile&sessions=2&ai=working", theme: "light" },
   { name: "mobile-memo", width: 390, height: 844, url: "/?role=mobile&view=memo", theme: "light" },

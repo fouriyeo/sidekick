@@ -15,7 +15,7 @@ import { subscribeWordChanged } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 
 /**
- * 英语角（一级页 ⌘7）：添加卡 → 词库列表 → 造句卡 → 页内 AI 用量。
+ * 英语角（一级页 ⌘5）：添加卡 → 词库列表 → 造句卡 → 页内 AI 用量。
  *
  * 未同意时只展示隐私说明与同意按钮（词库仍可看）；没有百炼 Key 时提示去
  * 「语音」页配置。点词条行在页内 push 到详情，返回回到列表。
