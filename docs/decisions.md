@@ -740,3 +740,10 @@
 - 原因：加排查日志后真机抓到 `[pet-sound] complete blocked: not unlocked`——完成事件到了、四道门也全开，但 App 重启后没人碰手机，Web Audio 一直没解锁，所有 AI 音效静默；这是「一次也没听到」的直接原因。
 - 代价：App 启动即创建一个常驻 `AudioContext`（48k，静音时基本不耗电）；个别 WebView 若仍要求手势，首次 pointerdown 会再 `resume`。
 - 不做：不改三音效的合成/音量；不新增原生提示音（P1）；不改变录音/后台静音规则。
+
+## D141 · 清理陈旧 blocked asking，修复完成音被永久吞掉（2026-11-14）｜生效
+
+- 决策：插件 reducer 在 `snapshot()`/心跳时执行 `pruneStale()`：`turn/end blocked` 留下、`askKind=null`、pending ask/approval 为空且超过 10 分钟未更新的 asking 按 idle 处理；超过 24 小时没有事件的 idle 会话从 reducer 移除。真实 asking（有 pending/askKind）不受 10 分钟规则影响，working 长任务也不清。
+- 原因：真机排查（2026-11-14）抓到一个从 2026-11-08 起卡在 asking 的旧会话「备忘录录音与日记方案」（`askKind=null`、无 pending、最后事件 11-08 14:09 UTC）。插件用全部 36 个会话的原始聚合判断 `asking`，于是所有 completed 脉冲都被 `pulseForCompletedTurn()` 吞掉；桌面桥按 `workspace.json` 归档过滤后手机只看到 4 个会话、显示 working，手机音效和桥本身都正常（手动向桥 POST completed 能响）。日志旁路确认插件持续上报 `state=asking`、`sessions=2`，而手机收到的是 `working`。
+- 代价：blocked asking 10 分钟后按 idle，不再长期显示「等你决定」；真实 ask 不受影响。旧 idle 会话 24 小时后从插件列表移除；手机本来就只关心最近会话。
+- 不做：不改变真实 asking 的优先级；不改变 completed 5s 节流；不在录音中直接响（D139 不变）；不改桌面桥的归档过滤。

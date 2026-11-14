@@ -66,6 +66,7 @@ related:
 | HOOK-AC-36 | App 后台 | 收到任何状态 | 静音；回前台不补播 completed（录音补音也只在宠物页前台发生） |
 | HOOK-AC-37 | 声音设置页 | 点开工/提问/完成试听 | 分别播放正确音效；开关持久化 |
 | HOOK-AC-38 | 录音中 | 收到 asking/working | 宠物姿态/气泡/触感不因录音改变（D77）；AI 音效/触感在录音期间静音；麦克风 UI 自身状态正常 |
+| HOOK-AC-50 | 陈旧 blocked asking | 一个 >10 分钟无 pending 的 blocked asking 会话 + 另一个会话完成 | 完成音正常响；陈旧会话按 idle 处理（D141） |
 
 ## 4. 隐私与回归
 

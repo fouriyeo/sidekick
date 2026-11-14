@@ -116,8 +116,8 @@ DSH session/event
 | `approval/asked` | 会话 asking；记录 approval id；清空工具动作 |
 | `approval/decided` | 清 approval；回 working/idle |
 | `user/message` | 清该会话所有 ask/approval 与工具；按 turnActive 回 working/idle |
-| `turn/end` reason completed | 完成脉冲（无 asking 时）；清空工具动作 |
-| `turn/end` reason blocked | asking；清空工具动作 |
+| `turn/end` reason completed | 完成脉冲（无新鲜 asking 时）；清空工具动作 |
+| `turn/end` reason blocked | asking；清空工具动作；10 分钟内没有 pending 且无事件则按 idle（D141） |
 | `turn/end` 其他 reason | idle；清空工具动作 |
 | `session/title` | 更新会话标题（单行 ≤80 字符） |
 | `session/disposed` | 移除会话 |
@@ -126,13 +126,15 @@ DSH session/event
 
 子代理过滤：`session.header.origin === "subagent"` 或 `delegationDepth > 0` 不参与状态/计数（P0）。
 
+陈旧清理（D141）：`turn/end blocked` 产生的 asking 没有 pending 可回答；`askKind=null`、pending ask/approval 为空且超过 `DEFAULT_STALE_ASKING_MS = 10min` 未更新时按 idle 处理；超过 `DEFAULT_STALE_SESSION_MS = 24h` 没有事件的 idle 会话从 reducer 移除。真实 asking（有 pending/askKind）不受 10 分钟规则影响，working 长任务不清。
+
 聚合：
 
 - 任一顶层会话 asking → `asking`。
 - 否则任一 working → `working`。
 - 否则最近 completed 脉冲未过期（3s）→ `completed`。
 - 否则 `idle`。
-- completed 脉冲 5s 内最多一次；有 asking 时不发 completed。
+- completed 脉冲 5s 内最多一次；有**新鲜** asking 时不发 completed（陈旧 blocked asking 已按 idle 清理，D141）。
 - `sessions` = 进行中的顶层会话数。
 - completed 的 `resume` = 有其它 working 则 `working`，否则 `idle`。
 
@@ -227,6 +229,7 @@ DSH session/event
 | 手机离线 | 桌面继续记录；重连快照；不补播完成 |
 | 手机后台 | 静音；回前台请求快照；过期完成忽略 |
 | 录音 | 录音中静音；麦克风释放 3 秒后补一声完成音（只补最近一次）；补音等待中又开录则顺延 |
+| 陈旧 blocked asking | >10min 无 pending 按 idle，不再阻塞完成音；>24h 无事件的 idle 会话移除（D141） |
 | 音效被系统静音/音乐焦点 | P0 不保证；文档提示；P1 原生提示音 |
 | 会话列表过长 | 插件/桥截断 50 条；手机内部滚动，超出的不展示 |
 | 旧插件/旧桥无 `tool` | 手机工作行显示「正在思考」；不报错、不丢整条会话 |
@@ -240,7 +243,7 @@ DSH session/event
 ## 10. 测试
 
 - Rust：`cargo test --lib`（status 解析/token/body/timer/patch/端口/profile/工具白名单折叠）。
-- 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流、工具类别归一）。
+- 脚本：`node --check app/src/dsh-hook/sidekick-hook.mjs`；`cd app && pnpm exec vitest run src/dsh-hook`（事件矩阵、子代理、ask 命名、completed 节流、陈旧 asking/会话清理、工具类别归一）。
 - 协议：`pnpm exec vitest run src/protocol`。
 - 手机：`pnpm exec vitest run src/mobile`（ai-status/声音/四态/优先级/录音结束后补完成音/会话 store/会话卡/工作行工具动作）。
 - 桌面：`pnpm exec vitest run src/desktop/features/hook`。

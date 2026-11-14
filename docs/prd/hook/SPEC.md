@@ -201,7 +201,7 @@ related:
 4. 工作中。
 5. 静态/睡眠。
 
-回前台/重连只恢复稳定态；完成态不补播。录音中只静音 AI 音效与触感（`micListening` 门禁），宠物动作由 D137 单独驱动；录音中收到的 completed 不立即响，麦克风释放后 3 秒补一声（只补最近一次，D139）；麦克风 UI 自身的 arming/listening/processing 等状态保留。
+回前台/重连只恢复稳定态；完成态不补播。录音中只静音 AI 音效与触感（`micListening` 门禁），宠物动作由 D137 单独驱动；录音中收到的 completed 不立即响，麦克风释放后 3 秒补一声（只补最近一次，D139）；麦克风 UI 自身的 arming/listening/processing 等状态保留。 「等你决定」优先只针对仍在等回答的 asking；`turn/end blocked` 留下、10 分钟没有 pending 的陈旧 asking 按 idle 处理，不再永久阻塞完成音（D141）。
 
 ### 3.5 声效
 

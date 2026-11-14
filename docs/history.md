@@ -95,6 +95,8 @@
 
 75. **2026-11-14 · 菜单栏看板：收起时清掉 DOM 焦点（D138 补）** — 窗口只 hide 不销毁，页面 `activeElement` 留在上次点过的「今天 / 7 天」上；再打开时 WebKit 把焦点还给按钮、按键盘焦点重算 `:focus-visible`，顶部 tab 带一圈薄荷焦点环，看着像被选中。改为 `blur` / `visibilitychange(hidden)` 时 blur 掉活动元素，重新获得焦点后再兜一刀（键盘用户按过 Tab 的不动）。证据：`usage-panel.test.tsx` 15 例（新增 1 例）、`pnpm typecheck/lint` 通过。
 
+76. **2026-11-14 · 清理陈旧 blocked asking，修复完成音永久静音（D141）** — 真机日志旁路抓到插件聚合 `state=asking`、`sessions=2`、`list=36`：2026-11-08 的旧会话「备忘录录音与日记方案」由 `turn/end blocked` 留下 `askKind=null`、无 pending 的 asking，插件用全部 36 个原始会话判断，导致所有 completed 脉冲被 `pulseForCompletedTurn()` 吞掉；桌面桥按归档过滤后手机只看到 4 个会话/working，手机音效与桥本身正常（手动向桥 POST completed → `[pet-sound] complete start/done`）。插件新增 `pruneStale()`：陈旧 blocked asking 10 分钟按 idle、24h 无事件的 idle 会话移除；真实 asking/working 不清。证据：`dsh-hook` 57 tests（新增 fresh blocked / stale blocked / 24h GC 3 例）、`node --check`、`pnpm typecheck/lint`；需要 DSH 重启加载新插件，真机回归待补。
+
 ## 验证记录（原「已验证」小节，未进时间线的项）
 - **2026-10-31 · 早期 MVP 端到端** — 手机浏览器扫码打开桌面 `http://<IP>:<端口>/`；桌面窗口显示地址/二维码、展开出现 160px 二维码；`/download/apk` 返回带正确 content-type 与文件名的 APK；安卓 App 安装启动、双向消息与气泡方向通过（Realme RMX3370 / Android 13）。
 - **2026-11-06 · 电脑端「简约 iOS」重做（D85，结构/导航已被 D104/D119/D123 迭代）** — 4 个一级页 + 216 侧栏 + iOS 分组列表 + 设置 push；证据：588 tests / 71 files、`scripts/qa-desktop-ios.mjs` 36 张截图无溢出/无 console error；真实窗口交通灯/拖动区待人工目检。

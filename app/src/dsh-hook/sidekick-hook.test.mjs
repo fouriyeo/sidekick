@@ -750,6 +750,54 @@ describe("createDshHookReducer", () => {
     expect(result.pulse).toBeNull();
   });
 
+  it("keeps suppression for a fresh blocked asking", () => {
+    const { clock, reducer } = createReducerHarness();
+    const blocked = makeSession("blocked");
+    const active = makeSession("active");
+
+    reducer.handle(blocked, makeEvent("turn/start"));
+    reducer.handle(blocked, makeEvent("turn/end", { reason: { kind: "blocked" } }));
+    reducer.handle(active, makeEvent("turn/start"));
+    clock.value += 9 * 60_000;
+    const result = reducer.handle(
+      active,
+      makeEvent("turn/end", { reason: { kind: "completed" } }),
+    );
+    expect(result.state).toBe("asking");
+    expect(result.pulse).toBeNull();
+  });
+
+  it("clears stale blocked asking so completed pulses are not swallowed", () => {
+    const { clock, reducer } = createReducerHarness();
+    const stale = makeSession("stale");
+    const active = makeSession("active");
+
+    reducer.handle(stale, makeEvent("turn/start"));
+    reducer.handle(stale, makeEvent("turn/end", { reason: { kind: "blocked" } }));
+    reducer.handle(active, makeEvent("turn/start"));
+    expect(reducer.snapshot().state).toBe("asking");
+
+    clock.value += 11 * 60_000;
+    const result = reducer.handle(
+      active,
+      makeEvent("turn/end", { reason: { kind: "completed" } }),
+    );
+    expect(result.state).toBe("idle");
+    expect(result.pulse).toEqual({ resume: "idle" });
+  });
+
+  it("drops idle sessions that have been silent for 24h", () => {
+    const { clock, reducer } = createReducerHarness();
+    const old = makeSession("old");
+
+    reducer.handle(old, makeEvent("turn/start"));
+    reducer.handle(old, makeEvent("turn/end", { reason: { kind: "completed" } }));
+    clock.value += 25 * 60 * 60_000;
+    const result = reducer.handle(makeSession("new"), makeEvent("turn/start"));
+    expect(result.list.some((entry) => entry.id === "old")).toBe(false);
+    expect(result.list.some((entry) => entry.id === "new")).toBe(true);
+  });
+
   it("ignores subagent sessions for both state and session count", () => {
     const { reducer } = createReducerHarness();
     const parent = makeSession("parent");

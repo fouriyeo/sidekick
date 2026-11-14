@@ -28,6 +28,10 @@ export const DEFAULT_CONFIG_POLL_MS = 1000;
 export const DEFAULT_HEARTBEAT_MS = 5000;
 export const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
 export const DEFAULT_COMPLETED_THROTTLE_MS = 5000;
+/** 阻塞型 turn/end 留下的 asking 没有 pending 可回答，超过这个时间按 idle 处理。 */
+export const DEFAULT_STALE_ASKING_MS = 10 * 60_000;
+/** 会话超过这个时间没有任何事件就从 reducer 清掉，避免旧会话长期影响聚合。 */
+export const DEFAULT_STALE_SESSION_MS = 24 * 60 * 60_000;
 export const DEFAULT_MAX_SESSIONS = 256;
 export const DEFAULT_MAX_QUEUE = 32;
 /** 协议层会话列表上限（与 TS MAX_SESSION_LIST / Rust MAX_SESSION_LIST 一致）。 */
@@ -615,6 +619,8 @@ export function createDshHookReducer(options = {}) {
     options.completedThrottleMs,
     DEFAULT_COMPLETED_THROTTLE_MS,
   );
+  const staleAskingMs = toPositiveNumber(options.staleAskingMs, DEFAULT_STALE_ASKING_MS);
+  const staleSessionMs = toPositiveNumber(options.staleSessionMs, DEFAULT_STALE_SESSION_MS);
   const maxSessions = toPositiveNumber(options.maxSessions, DEFAULT_MAX_SESSIONS);
   const maxSessionList = Math.max(
     1,
@@ -648,7 +654,35 @@ export function createDshHookReducer(options = {}) {
     return entries.slice(0, maxSessionList).map(({ entry }) => entry);
   }
 
+  /**
+   * 清理失效记录：
+   * - `turn/end blocked` 留下的 asking 没有 pending 可回答，超过 10 分钟按 idle；
+   * - 超过 24 小时没有任何事件的 idle 会话从 reducer 清掉，避免旧会话长期占列表/影响聚合。
+   * 真实 asking（有 pending/askKind）不受 10 分钟规则影响；working 长任务也不清。
+   */
+  function pruneStale() {
+    const timestamp = now();
+    for (const [id, record] of [...sessions]) {
+      const lastAt = Number.isFinite(record.lastEventAt) ? record.lastEventAt : 0;
+      const age = timestamp - lastAt;
+      const blockedAsking =
+        record.state === "asking" &&
+        record.askKind === null &&
+        record.pendingAsks.size === 0 &&
+        record.pendingApprovals.size === 0;
+      if (blockedAsking && age >= staleAskingMs) {
+        record.state = "idle";
+        record.completedAt = null;
+        record.tool = null;
+      }
+      if (age >= staleSessionMs && record.state !== "asking" && record.state !== "working") {
+        sessions.delete(id);
+      }
+    }
+  }
+
   function snapshot() {
+    pruneStale();
     const state = aggregateDshState(sessions.values());
     const count = activeSessionCount();
     const list = buildSessionList();
@@ -824,6 +858,7 @@ export function createDshHookReducer(options = {}) {
         }
         record.completedAt = null;
         record.state = kind === "blocked" ? "asking" : "idle";
+        record.lastEventAt = now();
         return snapshot();
       }
       default:
