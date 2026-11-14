@@ -160,6 +160,6 @@ owner: engineering
 
 ## 13. 文档校验与 CI 通知
 
-- **check-docs 扫磁盘，CI 只认提交**：`scripts/check-docs.mjs` 用 `readdirSync` 遍历工作区，链接校验只看文件在不在磁盘上；新建/改名的文档没 `git add` 时本地全绿，CI 只 checkout 已提交内容，直接报 `链接不存在` 并 exit 1。本次「文档与平台边界」自 `b96c6d6` 起连红 10 次，就是 `docs/prd/playground/` 一直躺在工作区没入库。做法：改完文档先看 `git status` 有没有 `??` 的新文档，**判据用「暂存树也能过」**——`tmp=$(mktemp -d) && git checkout-index -a --prefix="$tmp/" && (cd "$tmp" && node scripts/check-docs.mjs)`，别只看工作区。
+- **check-docs 扫磁盘，CI 只认提交**：`scripts/check-docs.mjs` 用 `readdirSync` 遍历工作区，链接校验只看文件在不在磁盘上；新建/改名的文档没 `git add` 时本地全绿，CI 只 checkout 已提交内容，直接报 `链接不存在` 并 exit 1。本次「文档与平台边界」自 `b96c6d6` 起连红 10 次，就是 `docs/prd/playground/` 一直躺在工作区没入库。做法：改完文档先看 `git status` 有没有 `??` 的新文档，**判据用「暂存树也能过」**——`tmp=$(mktemp -d) && git checkout-index -a --prefix="$tmp/" && (cd "$tmp" && node scripts/check-docs.mjs)`，别只看工作区。脚本已内置这道检查：目标在磁盘上但不在 `git ls-files` 里直接报「链接指向未入库的文件」，git 不可用（如导出树）时退化为 warning。
 - **CI 邮件的 annotation 条数不等于错误数**：Actions 通知会把 Node 20 弃用警告、runner 镜像迁移 notice、步骤 exit code 一起算进 annotation。别把「3 annotations」当三个 bug，排查直接 `gh run view <run-id> --job <job-id> --log-failed` 看真实报错。
 

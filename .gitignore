@@ -12,6 +12,9 @@ app/src-tauri/gen/
 # QA/走查过程产物（落点与清理见 docs/engineering/quality.md §5.1；随时可整目录删除）
 /artifacts/
 
+# DSH 聊天附件缓存：用户发的图片原文件落在这里，不入库（要引用的截图放 artifacts/ 或 screenshots/）
+/.dsh-im/
+
 # 图标/视觉过程稿与评审截图（约 16MB，本地评审用，不入库；定稿资产是 brand/appicon.png 与 brand/logo-mark*.svg）
 brand/icon-drafts/
 

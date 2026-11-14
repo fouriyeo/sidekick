@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -11,6 +12,25 @@ const requiredFields = ["doc", "status", "updated", "load"];
 
 const errors = [];
 const warnings = [];
+
+/** 已入库文件集合（仓库根为基准，正斜杠）。git 不可用时返回 null，退化为只查磁盘。 */
+function trackedPaths() {
+  try {
+    const out = execFileSync("git", ["ls-files", "-z"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return new Set(out.split("\0").filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
+const tracked = trackedPaths();
+if (!tracked) {
+  warnings.push("git 不可用，跳过「链接目标是否已入库」检查（该检查防的是本地绿、CI 红）");
+}
 
 function parseFrontmatter(text) {
   const normalized = text.replace(/\r\n/g, "\n");
@@ -118,8 +138,26 @@ function checkLinks(text, file, rel) {
     const resolved = resolve(dirname(file), target);
     if (!existsSync(resolved)) {
       errors.push(`链接不存在：${rel} -> ${match[1]}`);
+      continue;
+    }
+    // 目标在磁盘上但没入库：本地跑得过、CI（只 checkout 已提交内容）必红。
+    if (tracked && !isTracked(resolved)) {
+      const targetRel = relative(repoRoot, resolved).split(sep).join("/");
+      errors.push(
+        `链接指向未入库的文件（本地绿、CI 红）：${rel} -> ${match[1]}（先 git add ${targetRel}）`,
+      );
     }
   }
+}
+
+function isTracked(resolved) {
+  const targetRel = relative(repoRoot, resolved).split(sep).join("/");
+  if (!statSync(resolved).isDirectory()) return tracked.has(targetRel);
+  const prefix = `${targetRel}/`;
+  for (const path of tracked) {
+    if (path.startsWith(prefix)) return true;
+  }
+  return false;
 }
 
 function printTree(dir, prefix = "") {
