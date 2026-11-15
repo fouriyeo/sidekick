@@ -47,6 +47,9 @@ mod mic_remote;
 mod haptics;
 #[cfg(mobile)]
 mod keep_awake;
+/// 手机端麦克风选择 spike（仅 Android；桌面不注册）。
+#[cfg(mobile)]
+mod mic_probe;
 #[cfg(target_os = "macos")]
 mod menu;
 mod memo;
@@ -361,6 +364,8 @@ pub fn run() {
             haptics::haptic,
             haptics::disable_webview_haptics,
             keep_awake::set_keep_screen_on,
+            mic_probe::mic_probe_devices,
+            mic_probe::mic_probe_record,
             mobile_client::connect_server,
             mobile_client::send_chat,
             mobile_client::mic_start,
@@ -406,6 +411,9 @@ pub fn run() {
             word::mobile::word_tts,
             word::mobile::word_export_markdown
         ]);
+
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(mic_probe::init());
 
     builder
         .run(tauri::generate_context!())

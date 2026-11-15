@@ -15,6 +15,7 @@ import { useUiStore } from "@/mobile/ui-store";
 import { sendStatusRequest } from "@/shared/lib/tauri";
 import { setThemePreference, type ThemePreference, useTheme } from "@/shared/lib/theme";
 import { Label } from "@/shared/ui/label";
+import { MicProbeCard } from "./mic-probe-card";
 import { Toggle } from "./toggle";
 
 const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
@@ -547,6 +548,8 @@ export function MorePage() {
               />
             </div>
           </section>
+
+          <MicProbeCard />
 
           <section aria-label="显示" className={CARD_CLASS}>
             <div className="flex min-h-[60px] items-center gap-4 px-4">

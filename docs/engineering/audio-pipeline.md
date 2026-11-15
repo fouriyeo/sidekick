@@ -62,6 +62,8 @@ owner: engineering
 
 不采用 Kotlin `AudioRecord` 插件：当前采集稳定性、格式与 60 秒录音已满足 P0；若出现爆音/延迟问题再切换。
 
+> 2026-11-14 增补：为了验证「手动选麦」，另加了设置页实验卡片（Kotlin `AudioRecord` + `setPreferredDevice`）；按住说话仍走上面的 WebView 链路。结论与边界见 [mic-selection.md](./mic-selection.md)。
+
 ## 4. 音频格式
 
 - 16kHz / 单声道 / 16bit / 小端。

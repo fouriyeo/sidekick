@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 修补 `pnpm tauri android init` 生成的 Android 工程：manifest 权限与竖屏方向、
 // MainActivity 的局域网运行时授权。`gen/` 不入库，每次初始化都需重新执行本脚本。
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +11,14 @@ const manifestPath = resolve(androidRoot, "AndroidManifest.xml");
 const mainActivityPath = resolve(
   androidRoot,
   "java/dev/sidekick/app/MainActivity.kt",
+);
+const micPluginSource = resolve(
+  repoRoot,
+  "app/src-tauri/mobile/android/MicProbePlugin.kt",
+);
+const micPluginTarget = resolve(
+  androidRoot,
+  "java/dev/sidekick/app/MicProbePlugin.kt",
 );
 
 if (!existsSync(manifestPath)) {
@@ -116,4 +124,26 @@ function patchMainActivity() {
   console.log("已写入 MainActivity 局域网授权请求。");
 }
 
+/**
+ * 麦克风选择 spike 的 Kotlin 插件源码在 `app/src-tauri/mobile/android/` 入库；
+ * `gen/` 不入库、每次 init 都会重建，所以构建前同步过去。
+ */
+function syncMicProbePlugin() {
+  if (!existsSync(micPluginSource)) {
+    console.warn("MicProbePlugin.kt 源文件不存在，跳过同步。");
+    return;
+  }
+
+  const source = readFileSync(micPluginSource, "utf8");
+  if (existsSync(micPluginTarget) && readFileSync(micPluginTarget, "utf8") === source) {
+    console.log("MicProbePlugin.kt 已是最新。");
+    return;
+  }
+
+  mkdirSync(dirname(micPluginTarget), { recursive: true });
+  writeFileSync(micPluginTarget, source);
+  console.log("已同步 MicProbePlugin.kt。");
+}
+
+syncMicProbePlugin();
 patchMainActivity();

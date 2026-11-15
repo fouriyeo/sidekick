@@ -17,6 +17,10 @@ vi.mock("@/mobile/features/pet/tauri-pet-storage", () => ({
   }),
 }));
 
+vi.mock("./mic-probe-card", () => ({
+  MicProbeCard: () => <section aria-label="麦克风选择（实验）" />,
+}));
+
 beforeEach(() => {
   clearBackHandlers();
   localStorage.clear();
@@ -82,6 +86,7 @@ describe("MorePage 二级页结构", () => {
       "外观",
       "反馈",
       "麦克风",
+      "麦克风选择（实验）",
       "显示",
       "备忘录",
       "百炼 Key",

@@ -49,6 +49,28 @@ export type Unsubscribe = () => void;
 /** App 主动触感的语义；具体映射到哪个 Android HapticFeedbackConstants 由原生层决定。 */
 export type HapticStyle = "light" | "medium" | "success" | "error";
 
+/** 手机端麦克风选择 spike：Android 暴露的内置输入设备。 */
+export type MicProbeDevice = {
+  id: number;
+  address: string;
+  productName: string;
+  channelCounts: number[];
+  sampleRates: number[];
+};
+
+/** 手机端麦克风选择 spike：一段 16k 单声道 PCM16 试录。 */
+export type MicProbeClip = {
+  pcmBase64: string;
+  sampleRate: number;
+  samples: number;
+  sourceUsed: number;
+  routedAddress: string;
+  preferredApplied: boolean;
+  rms: number;
+  peak: number;
+  elapsedMs: number;
+};
+
 export type CloudAsrConfig = {
   endpoint: string;
   model: string;
@@ -178,6 +200,8 @@ const COMMANDS = {
   micStart: "mic_start",
   micFrame: "mic_frame",
   micStop: "mic_stop",
+  micProbeDevices: "mic_probe_devices",
+  micProbeRecord: "mic_probe_record",
   sendKeyRequest: "send_key_request",
   accessibilityInfo: "accessibility_info",
   accessibilityOpenSettings: "accessibility_open_settings",
@@ -416,6 +440,16 @@ export function sendMicFrame(
 
 export function sendMicStop(session: string, reason: MicStopReason): Promise<void> {
   return invoke<void>(COMMANDS.micStop, { session, reason });
+}
+
+/** 手机：列出 Android 暴露的内置麦克风（仅 Android 实验版）。 */
+export function micProbeDevices(): Promise<MicProbeDevice[]> {
+  return invoke<MicProbeDevice[]>(COMMANDS.micProbeDevices);
+}
+
+/** 手机：用指定设备试录一段 16k 单声道 PCM16（仅 Android 实验版）。 */
+export function micProbeRecord(deviceId: number, seconds = 3): Promise<MicProbeClip> {
+  return invoke<MicProbeClip>(COMMANDS.micProbeRecord, { deviceId, seconds });
 }
 
 export function getAccessibilityInfo(): Promise<AccessibilityInfo> {

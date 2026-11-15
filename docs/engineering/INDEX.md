@@ -7,6 +7,7 @@ load: on-demand
 children:
   - pitfalls.md
   - audio-pipeline.md
+  - mic-selection.md
   - protocol-audio.md
   - asr-cloud-bailian.md
   - clipboard-manager.md
@@ -34,6 +35,7 @@ children:
 | --- | --- | --- |
 | 改代码前先看已知坑与硬约束 | [pitfalls.md](./pitfalls.md) | L |
 | 改麦克风端到端链路（采集 → 输入） | [audio-pipeline.md](./audio-pipeline.md) | M |
+| 做麦克风选择 / 原生采集（顶部/底部麦） | [mic-selection.md](./mic-selection.md) | S |
 | 改音频消息/二进制帧协议 | [protocol-audio.md](./protocol-audio.md) | L |
 | 改键盘遥控录音（全局快捷键 / HUD） | [keyboard-remote-mic.md](./keyboard-remote-mic.md) | M |
 | 接百炼云端识别（地址/Key/流式/错误码） | [asr-cloud-bailian.md](./asr-cloud-bailian.md) | L |

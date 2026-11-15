@@ -46,6 +46,8 @@ vi.mock("@/shared/lib/tauri", () => ({
   exitApp: tauri.exitApp,
   haptic: tauri.haptic,
   memoSyncNow: tauri.memoSyncNow,
+  micProbeDevices: vi.fn(async () => []),
+  micProbeRecord: vi.fn(),
   sendChat: tauri.sendChat,
   sendFocusRequest: tauri.sendFocusRequest,
   sendKeyRequest: tauri.sendKeyRequest,
