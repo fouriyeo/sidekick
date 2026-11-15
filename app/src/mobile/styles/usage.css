@@ -731,3 +731,21 @@ html[data-theme="dark"] .mobile-usage {
     opacity: 0.9;
   }
 }
+
+/* 共享下划线：跟着选中项滑过去 */
+.mobile-usage .mu-tab-bar {
+  position: absolute;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: var(--primary);
+  transition:
+    left 380ms cubic-bezier(0.34, 1.62, 0.64, 1),
+    width 380ms cubic-bezier(0.34, 1.62, 0.64, 1);
+}
+
+/* 伪元素那条不再承担选中指示，避免出现两条线 */
+.mobile-usage .mu-underline-tab::after {
+  display: none;
+}

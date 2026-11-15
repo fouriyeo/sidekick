@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { SpendProfile } from "@/mobile/features/usage/spend-profile";
 import { useMobileUsageStore } from "@/mobile/features/usage/usage-store";
@@ -140,9 +140,29 @@ function RangeTabs({
   range: TokenUsageStats["range"];
   onChange: (range: TokenUsageStats["range"]) => void;
 }) {
+  // 共享下划线：位置由选中项实测，切换时滑过去而不是原地闪现。
+  const rootRef = useRef<HTMLFieldSetElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 只在区间切换时重测下划线位置，effect 内只读 DOM。
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const el = root.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!el) return;
+    setBar({ left: el.offsetLeft + el.offsetWidth / 2 - 12, width: 24 });
+  }, [range]);
+
   return (
-    <fieldset className="mu-range">
+    <fieldset ref={rootRef} className="mu-range">
       <legend className="sr-only">统计区间</legend>
+      {bar ? (
+        <span
+          aria-hidden="true"
+          className="mu-tab-bar"
+          style={{ left: bar.left, width: bar.width }}
+        />
+      ) : null}
       {USAGE_RANGES.map((item) => (
         <button
           key={item.value}

@@ -384,3 +384,114 @@ html[data-theme="dark"] .mobile-clean .ms-feed {
     transition-duration: 1ms;
   }
 }
+
+/* ----------------------------------------------------------------------------
+   弹簧动效（D144 统一手感）
+   ----------------------------------------------------------------------------
+   电脑端的分段控件用 Motion 的 layoutId 做滑块；手机端不引入 Motion（包体积 +
+   WebView 性能），改用「实测位置 + CSS 弹簧曲线」。曲线与桌面同源：
+   松开 800ms 过冲 2.4，但控件滑块用更短的 380ms 过冲 1.62 —— 位移距离短，
+   时间再长就拖沓。
+   -------------------------------------------------------------------------- */
+
+/* 分段控件的共享滑块：白片从旧位置滑到新位置 */
+.mobile-clean .seg-thumb {
+  position: absolute;
+  top: 3px;
+  height: calc(100% - 6px);
+  border-radius: 9px;
+  pointer-events: none;
+  background: var(--card);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 0 0 0.5px rgba(0, 0, 0, 0.04),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.9);
+  will-change: left, width;
+}
+
+/* 只有测量稳定后才允许过渡，否则首帧会从 left:0 滑进来 */
+.mobile-clean .seg-thumb-anim {
+  transition:
+    left 380ms cubic-bezier(0.34, 1.62, 0.64, 1),
+    width 380ms cubic-bezier(0.34, 1.62, 0.64, 1);
+}
+
+/* 用量页的下划线 tab：下划线两边滑动 */
+.mobile-usage .mu-underline-tab {
+  transition: color 200ms ease-out;
+}
+
+.mobile-usage .mu-underline-tab::after {
+  transition:
+    left 380ms cubic-bezier(0.34, 1.62, 0.64, 1),
+    width 380ms cubic-bezier(0.34, 1.62, 0.64, 1),
+    opacity 200ms ease-out;
+}
+
+/* ---- 统一按压手感：所有可点元素都该有 ---- */
+.mobile-clean button:not(:disabled),
+.mobile-clean [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 行 / 卡片：按下轻微下沉，不是原地不动 */
+.mobile-clean .mu-row,
+.mobile-clean .pet-row {
+  transition: background-color 140ms ease-out, transform 220ms cubic-bezier(0.34, 2.4, 0.64, 1);
+}
+
+.mobile-clean .mu-row:active,
+.mobile-clean .pet-row:active {
+  transform: scale(0.985);
+  transition: transform 90ms cubic-bezier(0.32, 0, 0.67, 0);
+}
+
+/* 开关钮：拨过去弹一下 */
+.mobile-clean [data-slot="switch-thumb"],
+.mobile-clean .pet-switch-thumb {
+  transition: transform 260ms cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+/* 列表项进出：淡入 + 轻微上浮 */
+@keyframes mob-item-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mobile-clean .mu-list-item,
+.mobile-clean .session-row {
+  animation: mob-item-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-clean .seg-thumb,
+  .mobile-usage .mu-underline-tab::after,
+  .mobile-clean .mu-row,
+  .mobile-clean .pet-row,
+  .mobile-clean [data-slot="switch-thumb"],
+  .mobile-clean .pet-switch-thumb {
+    transition-duration: 1ms !important;
+  }
+  .mobile-clean .mu-list-item,
+  .mobile-clean .session-row {
+    animation: none;
+  }
+}
+
+/* 开关滑钮的 transition 已有（--spring-back），这里只补两样：
+   钮自身的高光，以及按住时横向拉伸（和桌面 .sw 同一套手感）。 */
+.mobile-clean .toggle-knob {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.18),
+    0 0 0 0.5px rgba(0, 0, 0, 0.04),
+    inset 0 0.5px 0 #ffffff;
+}
+
+.mobile-clean button[role="switch"]:active .toggle-knob {
+  width: 31px;
+}
+
+/* 卡片的展开/收起（会话卡等）：max-height 之外再加一层缓动，避免到底时硬停 */
+.mobile-clean .ms-feed {
+  transition: max-height 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}

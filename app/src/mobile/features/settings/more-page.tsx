@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
 import { useFirstUseStore } from "@/mobile/features/first-use/store";
@@ -68,16 +68,42 @@ function Segmented<T extends string | number>({
   fit?: boolean;
   className?: string;
 }) {
+  // 独立滑块：位置和宽度由选中项实测，切换时弹簧滑过去。
+  // 没有它的话白底是「旧位置消失 + 新位置出现」，中间没有过程。
+  const rootRef = useRef<HTMLFieldSetElement>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  const [settled, setSettled] = useState(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 只在选中值变化时重测滑块位置，effect 内只读 DOM。
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const el = root.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!el) return;
+    setThumb({ left: el.offsetLeft, width: el.offsetWidth });
+    // 第二次测量起才允许过渡，避免首帧从 left:0 滑进来
+    const id = requestAnimationFrame(() => setSettled(true));
+    return () => cancelAnimationFrame(id);
+  }, [value, options]);
+
   return (
     <fieldset
+      ref={rootRef}
       aria-label={label}
       className={cn(
-        "m-0 grid shrink-0 gap-1 rounded-[11px] bg-muted p-[3px]",
+        "relative m-0 grid shrink-0 gap-1 rounded-[11px] bg-muted p-[3px]",
         fit ? "w-fit grid-flow-col auto-cols-max" : "grid-cols-3",
         className,
       )}
     >
       <legend className="sr-only">{label}</legend>
+      {thumb ? (
+        <span
+          aria-hidden="true"
+          className={cn("seg-thumb", settled && "seg-thumb-anim")}
+          style={{ left: thumb.left, width: thumb.width }}
+        />
+      ) : null}
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -86,8 +112,8 @@ function Segmented<T extends string | number>({
             type="button"
             aria-pressed={active}
             className={cn(
-              "flex min-h-9 min-w-0 items-center justify-center rounded-[9px] px-2.5 text-[13px] leading-[18px] font-normal whitespace-nowrap transition-colors",
-              active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
+              "relative z-[1] flex min-h-9 min-w-0 items-center justify-center rounded-[9px] px-2.5 text-[13px] leading-[18px] font-normal whitespace-nowrap transition-colors duration-200",
+              active ? "text-foreground" : "text-muted-foreground",
             )}
             onClick={() => onChange(option.value)}
           >
