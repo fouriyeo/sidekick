@@ -287,6 +287,8 @@ pub fn run() {
             pairing::pairing_revoke,
             hotkey::hotkey_status,
             hotkey::hotkey_save,
+            hotkey::hotkey_test_arm,
+            hotkey::hotkey_test_disarm,
             desktop_mic::accessibility_info,
             desktop_mic::accessibility_open_settings,
             desktop_mic::accessibility_request,

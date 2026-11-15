@@ -196,3 +196,10 @@ owner: engineering
 - **配对码和 token 不要混**：6 位码只用于首次换 token（一次性、5 分钟、错 3 次作废）；长期 token 用 `sha256(token+nonce)` 证明，token 不上线。token 文件 0600；不要把 token 写日志。
 - **旧客户端会静默失败**：桌面升级后旧 APK 不会回 `auth.pair`，首包 `auth.required` 会让它当成 chat/未知消息；必须两端同时升级并重扫一次。文档/发布说明要写清楚。
 - **验证要连 LAN 地址**：本机连 `ws://127.0.0.1` 会命中 loopback 直通，测不到鉴权。联调用 `ws://<LAN IP>:47810/ws` 才走 `auth.required`。
+
+## 16. 快捷键反馈与键位诊断（2026-11-15）
+
+- **HUD 迁移只迁一半 = 失败全静默**：`mic_hud::show` 被改成 no-op 后，`mic_remote` 里 `no_phone` / `ack_timeout` / `start_timeout` / 手机拒绝等早失败分支仍然只调它，于是「手机断开时按快捷键」日志有 `[hotkey]` 事件、桌面却完全没反应。正确做法：HUD 迁移时把所有 `mic_hud::show` 调用方列出来，用「手机断开 + 按快捷键」逐条验收；文案只写在 `mic_hud::feedback()`，渲染只放在 `mic_panel`，不要再养第二套 WebView HUD。
+- **`Connecting`/`Processing` 不能静默忽略按键**：为了避免抖动建第二个会话可以不下发命令，但必须显示「正在连接/识别中」；否则用户看到的就是「时灵时不灵」。
+- **测试键位必须只检测、不录音**：测试模式用截止时间（不是裸 bool）抑制下一次 Trigger，并只发 `hotkey-tested`；否则前端崩溃/关闭后测试标记会吞掉真实快捷键，或者用户点「测试」却意外开麦。测试提示不要写「录音测试」。
+- **安全输入会吞全局按键**：macOS 密码框/部分密码管理器开启 Secure Input 时，NSEvent 全局 monitor 收不到事件；设置卡必须显示该提示。只能用「测试键位」区分「电脑没收到」与「手机没响应」，不能靠猜。

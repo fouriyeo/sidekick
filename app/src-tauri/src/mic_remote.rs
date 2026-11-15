@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use tokio::sync::mpsc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tauri::AppHandle;
 
 use crate::hotkey;
@@ -27,8 +27,10 @@ use crate::mic_hud;
 
 /// 等手机 ack 的上限；超时按「手机没有响应」提示，不建会话。
 pub const ACK_TIMEOUT: Duration = Duration::from_millis(2000);
-/// 终态提示停留时长。
+/// 成功/取消提示停留时长。
 pub const HUD_LINGER: Duration = Duration::from_millis(2500);
+/// 失败提示要让人看清「为什么」，比成功态多停一会儿。
+pub const HUD_ERROR_LINGER: Duration = Duration::from_millis(4500);
 
 type SenderMap = Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>;
 
@@ -121,12 +123,24 @@ impl RemoteMic {
 
     /// 双击/按下：空闲则开始，正在听则结束。
     pub fn on_trigger(&self) {
-        let phase = self.phase();
         match self.phase() {
             Phase::Idle => self.start(),
             Phase::Listening => self.send_action("stop"),
-            // 连接中/识别中：忽略，避免抖动产生第二个会话。
-            Phase::Connecting | Phase::Processing => {}
+            // 连接中/识别中：不建第二个会话，但必须给可见反馈，不能静默。
+            Phase::Connecting => {
+                mic_hud::show(
+                    &self.app,
+                    json!({ "v": 1, "state": "connecting", "ts": now_ms() }),
+                );
+                mic_hud::hide_later(&self.app, Duration::from_millis(4000));
+            }
+            Phase::Processing => {
+                mic_hud::show(
+                    &self.app,
+                    json!({ "v": 1, "state": "processing", "ts": now_ms() }),
+                );
+                mic_hud::hide_later(&self.app, Duration::from_millis(4000));
+            }
         }
     }
 
@@ -151,7 +165,6 @@ impl RemoteMic {
         self.set_phase(Phase::Listening);
         *self.pending.lock().unwrap() = None;
         hotkey::set_recording(&self.app, true);
-        crate::mic_panel::show_recording(&self.app);
         // startedAt 由 HUD 用来算计时。
         mic_hud::show(
             &self.app,
@@ -160,7 +173,6 @@ impl RemoteMic {
     }
 
     pub fn notify_processing(&self) {
-        crate::mic_panel::show(&self.app, "识别中…");
         self.set_phase(Phase::Processing);
         *self.pending.lock().unwrap() = None;
         mic_hud::show(
@@ -169,7 +181,7 @@ impl RemoteMic {
         );
     }
 
-    /// `outcome`/`reason` 直接用协议里的值；HUD 只在终态停留 2.5 秒。
+    /// `outcome`/`reason` 直接用协议里的值；失败态停留更久，方便读原因。
     pub fn notify_result(&self, outcome: &str, reason: Option<&str>) {
         self.set_phase(Phase::Idle);
         *self.pending.lock().unwrap() = None;
@@ -183,20 +195,12 @@ impl RemoteMic {
             &self.app,
             json!({ "v": 1, "state": state, "reason": reason, "ts": now_ms() }),
         );
-        crate::mic_panel::show(
-            &self.app,
-            if state == "failed" {
-                "识别/输入失败，看顶部提示"
-            } else {
-                "已输入到当前窗口"
-            },
-        );
-        let app = self.app.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(HUD_LINGER).await;
-            crate::mic_panel::hide(&app);
-        });
-        mic_hud::hide_later(&self.app, HUD_LINGER);
+        let linger = if state == "failed" {
+            HUD_ERROR_LINGER
+        } else {
+            HUD_LINGER
+        };
+        mic_hud::hide_later(&self.app, linger);
     }
 
     pub fn notify_cancelled(&self, reason: Option<&str>) {
@@ -253,7 +257,7 @@ impl RemoteMic {
             &self.app,
             json!({ "v": 1, "state": "unavailable", "reason": code, "ts": now_ms() }),
         );
-        mic_hud::hide_later(&self.app, HUD_LINGER);
+        mic_hud::hide_later(&self.app, HUD_ERROR_LINGER);
     }
 
     /// ack 成功但 3 秒内没有 mic.start/mic.ready：状态机不能一直卡在 Connecting。
@@ -287,7 +291,7 @@ impl RemoteMic {
                 &this.app,
                 json!({ "v": 1, "state": "failed", "reason": "start_timeout", "ts": now_ms() }),
             );
-            mic_hud::hide_later(&this.app, HUD_LINGER);
+            mic_hud::hide_later(&this.app, HUD_ERROR_LINGER);
         });
     }
 
@@ -316,7 +320,7 @@ impl RemoteMic {
                     &self.app,
                     json!({ "v": 1, "state": "unavailable", "reason": "no_phone", "ts": now_ms() }),
                 );
-                mic_hud::hide_later(&self.app, Duration::from_millis(2200));
+                mic_hud::hide_later(&self.app, Duration::from_millis(4000));
             }
             1 => {
                 let request_id = self.next_request_id();
@@ -325,7 +329,7 @@ impl RemoteMic {
                         &self.app,
                         json!({ "v": 1, "state": "failed", "reason": "disconnected", "ts": now_ms() }),
                     );
-                    mic_hud::hide_later(&self.app, HUD_LINGER);
+                    mic_hud::hide_later(&self.app, HUD_ERROR_LINGER);
                     return;
                 }
                 *self.pending.lock().unwrap() = Some(Pending {
@@ -343,7 +347,7 @@ impl RemoteMic {
                     &self.app,
                     json!({ "v": 1, "state": "unavailable", "reason": "multi_phone", "ts": now_ms() }),
                 );
-                mic_hud::hide_later(&self.app, HUD_LINGER);
+                mic_hud::hide_later(&self.app, HUD_ERROR_LINGER);
             }
         }
     }
@@ -360,7 +364,7 @@ impl RemoteMic {
                     "ts": now_ms(),
                 }),
             );
-            mic_hud::hide_later(&self.app, HUD_LINGER);
+            mic_hud::hide_later(&self.app, HUD_ERROR_LINGER);
             return;
         }
         let request_id = self.next_request_id();
@@ -369,10 +373,17 @@ impl RemoteMic {
                 &self.app,
                 json!({ "v": 1, "state": "failed", "reason": "disconnected", "ts": now_ms() }),
             );
-            mic_hud::hide_later(&self.app, HUD_LINGER);
+            mic_hud::hide_later(&self.app, HUD_ERROR_LINGER);
             return;
         }
         if action == "stop" || action == "cancel" {
+            let state = if action == "cancel" {
+                "cancelling"
+            } else {
+                "stopping"
+            };
+            mic_hud::show(&self.app, json!({ "v": 1, "state": state, "ts": now_ms() }));
+            mic_hud::hide_later(&self.app, HUD_ERROR_LINGER);
             *self.pending.lock().unwrap() = Some(Pending {
                 request_id: request_id.clone(),
             });
@@ -436,7 +447,7 @@ impl RemoteMic {
                 &this.app,
                 json!({ "v": 1, "state": "failed", "reason": "ack_timeout", "ts": now_ms() }),
             );
-            mic_hud::hide_later(&this.app, HUD_LINGER);
+            mic_hud::hide_later(&this.app, HUD_ERROR_LINGER);
         });
     }
 }

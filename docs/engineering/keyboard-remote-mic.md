@@ -54,11 +54,12 @@ owner: engineering
 ## 3. 桌面实现
 
 - `hotkey.rs`：`NSEvent::addGlobalMonitorForEventsMatchingMask` + `addLocalMonitor`（`FlagsChanged|KeyDown|KeyUp`），**本地 monitor 原样返回事件**；`Detector` 是纯逻辑（可单测）。绑定分两类：`Bare`（单键修饰键，按一下切换）、`Single`（任意普通键单键，需无修饰键）、`Combo`（修饰键 + 键，可按住）。配置 `~/.sidekick/hotkey.json`（0600，原子写）。
-- `mic_remote.rs`：capable 注册表、单手机路由、ack 超时、phase（Idle/Connecting/Listening/Processing）、HUD 事件。
-- 应用内的 `MicStatusOverlay` 已停用：录音状态统一走顶部 NSPanel（全屏可见），取消走 Esc / 再按一次快捷键。
-- `mic_hud.rs`：`mic-hud` 窗口（460×116，always-on-top、`focused(false)`、`accept_first_mouse(false)`、透明、主屏顶部居中），惰性创建、长期复用；`hide_later` 用 generation 防「新状态被旧的收起定时器关掉」。
-- 命令：`hotkey_status` / `hotkey_save`（设置卡），事件：`hotkey-changed`、`mic-hud`。
-- capability：`capabilities/mic-hud.json`（`core:default`），HUD 只 `listen`，不连 WS。
+- `mic_remote.rs`：capable 注册表、单手机路由、ack 超时、phase（Idle/Connecting/Listening/Processing）、HUD 事件。`on_trigger` 在 Connecting/Processing 不再静默忽略，而是显示「正在连接/识别中」。
+- `mic_hud.rs`：**HUD 语义层**。吃 `{state, reason}`，把协议错误码翻译成标题 + 第二行解释，再交给 `mic_panel`。所有失败分支（没手机、多手机、ack 超时、start 超时、手机拒绝、断线、识别失败）都必须在这里有文案。
+- `mic_panel.rs`：真正的顶部 NSPanel（520×60，`NSScreenSaverWindowLevel` + `CanJoinAllSpaces`/`FullScreenAuxiliary`，非激活、不接鼠标）。WKWebView 渲染胶囊；`generation` 防旧定时器收起新状态；录音态显示波形与计时，失败态显示原因和下一步。
+- 命令：`hotkey_status` / `hotkey_save` / `hotkey_test_arm` / `hotkey_test_disarm`（设置卡），事件：`hotkey-changed`、`hotkey-tested`。
+- `hotkey-tested` 是**测试键位专属**：10 秒窗口内下一次 Trigger 只回报，不启动手机录音；用截止时间而不是 bool，避免前端关闭后吞掉真实快捷键。
+- 旧 `mic-hud` WebView 窗口/capability 保留但不再创建；不要再往 `mic_hud::show` 里加「只 eprintln」的分支。
 
 ## 4. 手机实现
 
@@ -75,38 +76,46 @@ owner: engineering
 - 手机 `voice-recorder.ts` 本来就按 chunk 算 RMS（`computeLevel`），现在随 `sendMicFrame` 一起把 0–1 电平传给 Rust；
 - 手机 Rust 在发完二进制帧后附带 `mic.level {session, level: 0-100}`（约 8Hz）；
 - 桌面 `desktop_server` 路由给 `mic_remote.on_level`（只在录音态生效），再 `evaluateJavaScript` 注入 HTML；
-- HTML 用与手机端 `voice-waveform.tsx` 相同的画法：24 根柱子、历史右移、居中伸缩、50ms 采样，每根柱子带固定形状差异；没有数据 >700ms 时回落到静态底噪（不会僵死也不会假跳）。胶囊宽度 300×40；配色走「低对比深灰 + 淡绿」并整组居中，非录音态隐藏计时、只留居中的一句状态。
+- HTML 用与手机端 `voice-waveform.tsx` 相同的画法：24 根柱子、历史右移、居中伸缩、50ms 采样，每根柱子带固定形状差异；没有数据 >700ms 时回落到静态底噪（不会僵死也不会假跳）。胶囊宽度 **520×60**，两行：第一行状态/计时，第二行原因或下一步；配色走「低对比深灰 + 淡绿」，失败态点变红/琥珀。
 
 ## 6. HUD 状态与文案
 
-| 状态 | 文案（`shared/lib/mic-status-copy.ts › REMOTE_HUD_COPY`） |
+文案的**唯一来源**是 `mic_hud.rs › feedback()`（Rust 侧，原生 NSPanel 直接渲染）；旧 `shared/lib/mic-status-copy.ts` 只保留手机端/历史测试引用，不要把它当桌面 HUD 的事实来源。
+
+| 状态 | 文案（标题 · 第二行） |
 | --- | --- |
-| `unavailable` + `no_phone` | 未连接手机麦克风 · 让手机留在小跟班页面并保持亮屏 |
-| `unavailable` + `standby_off` | 手机没有开后台待命 · 去手机「更多 › 麦克风」打开 |
-| `unavailable` + `notification_denied` | 手机没有通知权限 · 没有常驻通知，系统不允许后台开麦 |
-| `unavailable` + `service_failed` | 手机待命服务启动失败 · 重开 Sidekick / 重启手机 |
-| `unavailable` + `multi_phone` | 检测到多台手机 · 只保留一台 |
-| `connecting` | 正在连接手机… |
-| `listening` | 正在听 · 计时（50 秒变黄） |
-| `processing` | 识别中… |
-| `failed` + `start_timeout` | 手机没有开始录音 · 再按一次；仍无反应就打开手机看「后台待命」是否还在 |
-| `delivered` / `copied` / `failed` | 已输入 / 已复制原因 / 失败原因（复用 `micReasonText`） |
-| `cancelled` | 已取消（不转写） |
+| `unavailable` + `no_phone` | 未连接手机麦克风 · 打开手机小跟班并保持连接；锁屏可开「后台待命」 |
+| `unavailable` + `standby_off` | 手机没有开后台待命 · 手机上打开「后台待命」，或让手机留在小跟班页面 |
+| `unavailable` + `notification_denied` | 手机没有通知权限 · 去系统设置允许通知 |
+| `unavailable` + `service_failed` | 手机待命服务启动失败 · 重新打开 Sidekick 或重启手机 |
+| `unavailable` + `multi_phone` | 检测到多台手机 · 只保留一台手机在待命 |
+| `connecting` | 正在连接手机… · 快捷键已触发，等手机响应 |
+| `stopping` / `cancelling` | 正在结束… / 正在取消… |
+| `listening` | 正在听 · 再按一次结束 · Esc 取消 + 计时/波形 |
+| `processing` | 识别中… · 说完的文字马上进当前窗口 |
+| `failed` + `ack_timeout` | 手机没有响应 · 确认后台待命，或回小跟班页面再试 |
+| `failed` + `start_timeout` | 手机没有开始录音 · 再按一次；仍无反应就看「后台待命」 |
+| `failed` + `disconnected` | 连接断了 · Rust 会自动重连，稍后再按 |
+| `delivered` / `copied` / `failed` | 已输入 / 已复制原因 / 具体失败原因 + 下一步 |
+| `cancelled` | 已取消 · 这段录音不会转写 |
 
 ## 6.1 快捷键“时灵时不灵”的排查
 
 - **先看手机通知还在不在**：如果「电脑遥控待命」消失，说明待命 FGS 被停了（旧实现一断 WS 就停；现在会保留并自动重连 3 分钟）。仍消失就重新打开 Sidekick，确认待命开关。
-- **看桌面 HUD**：`ack_timeout` = 手机没回；`start_timeout` = 手机答应了但没发 `mic.start`；`no_phone` = 没收到手机的 `mic.remote.status`（可能 WS 断了或 App 没连上）。
+- **先看桌面 HUD**：`no_phone` = 没收到手机的 `mic.remote.status`（WS 断了/App 没连上）；`ack_timeout` = 手机没回；`start_timeout` = 手机答应了但没发 `mic.start`。这三类以前只写日志、界面完全没提示，现在都会停留 4.5 秒并给出下一步。
+- **用「语音 › 键盘快捷键 › 测试键位」区分两件事**：点「开始测试」后按当前键位。10 秒内显示「电脑已收到按键」= 全局监听/键位没问题，问题在手机侧或连接；一直不出现 = 电脑没收到按键，按检查清单看「启用 / 辅助功能 / 安全输入 / 键位」。
+- **安全输入**：密码框、部分密码管理器会打开 macOS Secure Input，全局监听收不到任何按键；设置卡会显示提示，关掉密码框再试。
 - **简单切 App 不断 WS**，所以通常没问题；电脑重启、路由器切换、手机久置省电、OEM 杀进程才会断。
 - **点一下手机录音又好了**：这会把 App 拉到前台，既触发待命重启，也可能把卡在 `connecting/listening` 的桌面状态机拉到 `idle`；不是玄学，是两个状态共同复位。
 - 修复后：断线由 Rust 每 2s 重连并补发 status；后台不调用 WebView `emit`（避免冻结卡死重连任务），回前台补一条权威 `conn`；桌面 3s 没等到 `mic.start` 会回 idle，不会吞掉下一次快捷键。
 
 ## 7. 坑
 
-- 全局监听依赖「辅助功能」；没授权时监听器装上但收不到事件，设置卡必须显示授权状态。
+- 全局监听依赖「辅助功能」；没授权时监听器装上但收不到事件，设置卡必须显示授权状态。「测试键位」只检测、不录音，是区分「快捷键没收到」与「手机没响应」的最短路径。
 - 监听器 token 生命周期 = App，故意不释放；重复安装会双触发。
 - 单键判定：同一次按住只算一次；按住期间按了别的键 → 这次不算点按（否则 ⌘C 会误触发）；普通单键带修饰键时不触发；过滤 `isARepeat`。
 - HUD 不抢焦点、不自开 WS；否则插入退化成「只复制」或 `system.clients - 1` 多算一台手机。
+- **HUD 迁移要迁移全部调用方**：D133 的 WebView HUD 后来被原生 NSPanel 取代时，`mic_hud::show` 被留成 no-op，但 `mic_remote` 的失败分支仍在调它——表现就是「按快捷键完全没反应」。改 HUD 后必须用「手机断开 + 按快捷键」走一遍所有错误分支，不能只看成功录音。
 - 全屏 Space 下 always-on-top 窗口可能不显示（已知限制，待验收）。
 - **待命 FGS 必须在前台启动**：不能在后台「即用即开」；`RemoteMicService` 只能由 App 前台时的 `remote_mic_standby_start` 拉起。后台收到 `mic.remote` 但待命没开时直接回 `standby_off`，不要让它等 2 秒 ack 超时。
 - **通知权限是硬前提**：Android 13+ 拒绝通知时 FGS 通知不可见，等于偷偷开麦；`prepare` 必须拦住。通知 channel 用低重要度、`setOngoing(true)`、带「停止」动作（Android 12+ 有 action 会立即显示）。

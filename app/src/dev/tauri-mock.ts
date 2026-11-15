@@ -1,6 +1,13 @@
 type MockRole = "desktop" | "mobile";
 
-const MOCK_EVENTS = ["chat", "conn", "clipboard-changed", "dsh-hook-status", "memo"] as const;
+const MOCK_EVENTS = [
+  "chat",
+  "conn",
+  "clipboard-changed",
+  "dsh-hook-status",
+  "memo",
+  "hotkey-tested",
+] as const;
 type MockEvent = (typeof MOCK_EVENTS)[number];
 
 type MockHookState = "idle" | "working" | "asking" | "completed";
@@ -938,6 +945,12 @@ export function installTauriMock(): void {
                 : `按一下 ${bareKeyLabel(String(binding.key ?? "rightCommand"))}`,
         });
       }
+      if (command === "hotkey_test_arm") {
+        // 浏览器没有全局键盘监听：自动回报一次，方便走查测试态 UI。
+        window.setTimeout(() => emit("hotkey-tested", { at: Date.now() }), 700);
+        return null;
+      }
+      if (command === "hotkey_test_disarm") return null;
       if (command === "send_remote_mic_ack" || command === "send_remote_mic_status") return null;
       // 浏览器没有窗口常亮能力：静默成功，方便验证宠物页逻辑。
       if (command === "set_keep_screen_on") return null;

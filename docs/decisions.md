@@ -794,3 +794,11 @@
 - 边界：身份鉴权，不是加密；局域网仍明文 WS；不做公网/云账号；手机当前只保留最近一台电脑 token；配对码 5 分钟、错 3 次作废、成功即作废。
 - 代价：旧手机/旧桌面首次升级需要重扫一次；桌面 UI 的已配对设备撤销入口暂未做（命令已具备）；QR 码被截图后 5 分钟内仍可被配对。
 - 证据：`cargo test --lib pairing` 3 项通过；LAN 假手机探针首包 `auth.required` → `auth.pair` → `auth.ok` → 断开重连 `auth.token` 挑战成功；手机 CDP 实际 `connect_server` 配对后 token 写入 `pairing.json`，桌面唯一设备表落盘；杀桌面后台重连后右 Command 正常；前端 114 files/968 tests、`check-docs`（暂含未入库新文档提示）通过。QR 真机扫码、撤销设备 UI、TLS 待补验。
+
+## D148 · 快捷键每次触发都必须有桌面反馈；测试键位只检测不录音（2026-11-15）｜生效
+
+- 决策：把 `mic_hud` 改成真正的 HUD 语义层，所有 `mic_remote` 分支（未连接/多手机/ack 超时/start 超时/手机拒绝/断线/识别失败/取消）统一翻译成一句标题 + 一句下一步，交给原生 `mic_panel` 显示；失败态停留 4.5 秒。`on_trigger` 在 `Connecting`/`Processing` 不再静默忽略，改为显示「正在连接/识别中」。设置页新增「测试键位」：10 秒内下一次 Trigger 只回报 `hotkey-tested`，不启动手机录音；另在状态 hint 里提示 macOS「安全输入」会拦截全局按键。
+- 原因：旧 WebView HUD 改为 NSPanel 后，`mic_hud::show` 被留成 no-op，但所有早失败分支还在调它——手机断开时按右 Command 桌面完全没反应，用户无法区分「快捷键没收到」和「手机没响应」。2026-11-15 用手机断开 + 合成 flagsChanged 复现：日志只到 `[hotkey] ev`，没有任何 UI。
+- 边界：不改 NSEvent 监听与键位判定；不把测试键位当作录音测试（测试期间抑制 Trigger，避免误开麦）；不做快捷键冲突矩阵的自动检测；安全输入只能提示，不能绕过系统。
+- 代价：HUD 从 300×40 单行变 520×60 两行；短状态也会闪一下；`mic_hud`/`mic_panel` 的职责要分清（文案只写在 `mic_hud`，渲染只在 `mic_panel`）。
+- 证据：`mic_hud::tests` 6 项（no_phone/ack_timeout/start_timeout/connecting/secure_input/未知原因）通过；`pnpm typecheck` / `lint` / `test`（115 files / 970 tests）通过；多手机、未连接、识别失败等分支待真机/真窗口回归。

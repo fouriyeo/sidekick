@@ -1,13 +1,16 @@
-import { Command, Keyboard, KeyRound, Radio, TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Activity, Command, Keyboard, KeyRound, Radio, TriangleAlert } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ListActionRow, ListGroup, ListRow } from "@/desktop/shell/list";
 import {
   type HotkeyBareKey,
   type HotkeyBinding,
   type HotkeyConfig,
+  hotkeyTestArm,
+  hotkeyTestDisarm,
   openAccessibilitySettings,
   requestAccessibility,
   subscribeHotkeyChanged,
+  subscribeHotkeyTested,
 } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 import {
@@ -46,6 +49,10 @@ const MODIFIER_KEY_CODES: Record<number, { key: HotkeyBareKey; label: string }> 
 
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "Fn"]);
 
+/** 「测试键位」的本地状态；只是检测全局监听，不会触发手机录音。 */
+type TestState = "idle" | "waiting" | "detected" | "timeout";
+const TEST_TIMEOUT_MS = 10_000;
+
 /**
  * 语音页 › 键盘快捷键。
  *
@@ -62,6 +69,8 @@ export function HotkeyCard() {
   const [capturing, setCapturing] = useState<"single" | "combo" | null>(null);
   const [captureHint, setCaptureHint] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
+  const [testState, setTestState] = useState<TestState>("idle");
+  const testTimer = useRef<number | null>(null);
 
   useEffect(() => {
     void load();
@@ -73,6 +82,41 @@ export function HotkeyCard() {
       unsubscribe();
     };
   }, [load]);
+
+  useEffect(() => {
+    const clearTimer = () => {
+      if (testTimer.current !== null) {
+        window.clearTimeout(testTimer.current);
+        testTimer.current = null;
+      }
+    };
+    const unsubscribe = subscribeHotkeyTested(() => {
+      clearTimer();
+      setTestState("detected");
+    });
+    return () => {
+      clearTimer();
+      unsubscribe();
+      void hotkeyTestDisarm().catch(() => undefined);
+    };
+  }, []);
+
+  const startTest = useCallback(async () => {
+    if (testState === "waiting") return;
+    if (testTimer.current !== null) window.clearTimeout(testTimer.current);
+    setTestState("waiting");
+    try {
+      await hotkeyTestArm();
+    } catch {
+      setTestState("timeout");
+      return;
+    }
+    testTimer.current = window.setTimeout(() => {
+      testTimer.current = null;
+      setTestState("timeout");
+      void hotkeyTestDisarm().catch(() => undefined);
+    }, TEST_TIMEOUT_MS);
+  }, [testState]);
 
   const persist = useCallback(
     (patch: Partial<HotkeyConfig>) => {
@@ -190,6 +234,37 @@ export function HotkeyCard() {
             setCaptureHint(null);
           }}
         />
+        <ListRow
+          icon={<Activity aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
+          iconTone={
+            testState === "detected" ? "green" : testState === "timeout" ? "orange" : "gray"
+          }
+          title="测试键位"
+          detail={
+            testState === "waiting"
+              ? `现在按一下 ${shortBinding(status?.label)}（只检测，不会录音）`
+              : testState === "detected"
+                ? "电脑已收到按键；再按一次真实快捷键，看顶部提示"
+                : testState === "timeout"
+                  ? "10 秒内没收到按键：确认开关、键位和辅助功能授权"
+                  : "只检测电脑是否收到按键，不会启动手机录音"
+          }
+          control={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!enabled || testState === "waiting"}
+              onClick={() => void startTest()}
+            >
+              {testState === "waiting"
+                ? "等待按键…"
+                : testState === "detected"
+                  ? "再测一次"
+                  : "开始测试"}
+            </Button>
+          }
+        />
         {status?.binding.kind === "combo" && (
           <ListRow
             icon={<Radio aria-hidden="true" className="size-[16px]" strokeWidth={2.2} />}
@@ -219,8 +294,9 @@ export function HotkeyCard() {
         </p>
       )}
       <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-        单键按一下就切换；组合键可以改成按住说话。手机要留在「小跟班」宠物页并保持亮屏，
-        未连接时会在屏幕顶部提示而不是假装在录。录音中按 Esc 取消。
+        单键按一下就切换；组合键可以改成按住说话。手机连着就能用，锁屏可开「后台待命」。
+        每次按键都会先在屏幕顶部给出反馈：连上了、手机没响应、手机拒了都会说明原因。
+        测试键位只检测电脑是否收到按键，不会录音；录音中按 Esc 取消。
       </p>
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -303,6 +379,11 @@ export function HotkeyCard() {
       </Dialog>
     </div>
   );
+}
+
+/** 状态里的 label 自带「按一下 / 按住」，测试提示里不要再重复前缀。 */
+function shortBinding(label?: string): string {
+  return label?.replace(/^(按一下|按住|双击)\s*/, "") || "当前快捷键";
 }
 
 function comboLabel(event: KeyboardEvent): string {

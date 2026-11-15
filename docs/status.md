@@ -14,7 +14,7 @@
 | 桌面壳：6 个一级页 剪贴板 ⌘1 / 备忘录 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 英语角 ⌘5 / 设置 ⌘6 + 224 玻璃侧栏 + sticky 玻璃工具栏 + push 式设置（D143 删概览、状态沉默即正常） | ✅ 代码完成、浏览器 QA 通过（真窗口目检待） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [engineering/desktop-ios-ui.md](./engineering/desktop-ios-ui.md) |
 | 手机壳：宠物页（顶栏 / 会话卡浮层 / 宠物 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局 | ✅ 代码完成（真机走查待补） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [frontend-architecture.md](./frontend-architecture.md) |
 | 语音输入：百炼云端流式 ASR（唯一）→ 写剪贴板 + 合成 Cmd+V；结果卡手动「回车 / 清空」 | ✅ 真机验证（完整矩阵待补） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
-| 键盘遥控录音：桌面全局快捷键（双击右 Control 等）→ 手机开始/结束 → 结果插入前台应用；未连接弹顶部提示、Esc 取消 | 🚧 代码完成（真机/真窗口/冲突矩阵待验收） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
+| 键盘遥控录音：桌面全局快捷键（默认按一下右 Command）→ 手机开始/结束 → 结果插入前台应用；**每次触发都有顶部反馈**（未连接/超时/手机拒绝/识别失败），设置页可测试键位（只检测不录音）、Esc 取消 | 🚧 代码完成；失败反馈 + 测试键位已补（D148），真机/真窗口/冲突矩阵待验收 | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
 | 键盘遥控「后台待命」：手机切到别的 App/锁屏后，Mac 快捷键仍能开麦；microphone FGS + 常驻通知 + 原生 PCM 回传 | ✅ 代码完成 + 真机通过：切后台+锁屏、模拟桌面 `mic.remote`、音频非静音、60s timeout、通知停止 marker、F8 热键触发、桌面转写/插入（5s/84 tokens）；断线保活/自动重连与 `start_timeout` 复位已补（D146）；右 Command（合成 flagsChanged）已验；通知按钮实点、OEM 待验 | [engineering/keyboard-remote-mic.md](./engineering/keyboard-remote-mic.md) · [engineering/background-recording.md](./engineering/background-recording.md) |
 | 语音备忘录：手机前台录音 → 分段转写 → LLM 归类 → 本地 rusqlite；电脑只读镜像 + 6 位码配对 | ✅ 代码完成（真机验收待） |
 | 英语角（生词本）：记录 → 百炼 qwen3.8-flash 解释 → 词库造句；桌面 ⌘5 + 手机全屏页 + 局域网双向同步 | ✅ 代码完成（浏览器 QA 通过；真机双向同步已验证；账单对账待补） |
@@ -32,7 +32,7 @@
 - **桌面真窗口目检**：交通灯位置、拖动区、滚动玻璃与紧凑标题过渡、窗口级 vibrancy、深浅主题、1180/960 两档；D143 后确认默认页是用量看板、正常运行时侧栏没有状态字、asking 时「AI 等你决定」一行可点唤起 DSH、自动输入未授权只出琥珀点。
 - **菜单栏与看板**：左键弹出位置（顶部 16×8 指引尖、尖顶距菜单栏 2pt，D138）与收起（点外部 / Esc / Cmd+W）、钉住后失焦不收起（D135）、尖在贴边时是否指回图标、玻璃态尖端磨砂与卡片是否同一块材质、多屏不越界、D120 玻璃深色观感与 `SIDEKICK_UI_VIBRANCY=off` 回退。
 - **扫码配对 / WS 鉴权（D147）**：真机扫电脑二维码 → 手机 token → 杀桌面重连；错误码/过期码/未授权拒绝/撤销设备/本机回环直通。
-- **键盘遥控录音**：真机端到端（开始/结束/6 类失败/Esc 取消/多手机拒绝）、HUD 在其它 App 前台与全屏 Space 的可见性、不抢焦点（插入仍 same_app）、快捷键与 IDE/输入法冲突、现有手机按住流程回归。
+- **键盘遥控录音**：真机端到端（开始/结束/6 类失败/Esc 取消/多手机拒绝）、HUD 在其它 App 前台与全屏 Space 的可见性、不抢焦点（插入仍 same_app）、快捷键与 IDE/输入法冲突、现有手机按住流程回归。D148 新增：手机断开/未连接、手机拒 ack、ack 超时、识别失败四条路径的顶部提示；设置页「测试键位」按当前键位 10 秒内出「电脑已收到按键」，且不触发录音。
 - **键盘遥控后台待命（D145/D146）**：右 Command 已用合成 `flagsChanged` 验证（物理键盘可再按一次确认）、通知「停止」按钮实点（marker 路径已验）、来电停止、OEM 白名单与划掉任务存活；断线保活/自动重连已验证；假手机 ack 探针验证 3s `start_timeout` 后第二次按键仍能发起。
 - **语音**：真实百炼账号下 60 秒 / 断连 / 密码框矩阵、辅助功能实测、2000 词首包延迟；回车/清空在终端等非标准输入框与焦点切换矩阵。
 - **AI 联动**：真实 DSH 重启与插件加载、四态动作与三音效、杀 DSH 15s 内静态、隐私抓包审计（无工具名原文/参数/路径）。

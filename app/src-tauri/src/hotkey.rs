@@ -13,14 +13,19 @@
 //! 纯判定逻辑（`Detector`）与 AppKit 解耦，单测不碰 UI。
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
 /// 设置卡与 HUD 的「配置变更」事件。
 pub const EVENT_CHANGED: &str = "hotkey-changed";
+/// 「测试键位」只检测电脑是否收到按键，不触发手机录音。
+pub const EVENT_TESTED: &str = "hotkey-tested";
+/// 测试窗口时长；前端也会在同时间后提示失败。
+const TEST_WINDOW: Duration = Duration::from_secs(10);
 /// Esc 的硬件 keyCode（macOS）。
 const CANCEL_KEY_CODE: u16 = 53;
 
@@ -386,14 +391,43 @@ pub struct HotkeyStatus {
 
 pub struct HotkeyState {
     detector: Mutex<Detector>,
+    /// 测试键位的截止时间（毫秒）；0 = 未测试。用截止时间而不是 bool，
+    /// 避免前端崩溃/关闭后测试模式把下一次真实快捷键吞掉。
+    test_armed_until: AtomicU64,
 }
 
 impl HotkeyState {
     fn new(config: HotkeyConfig) -> Self {
         Self {
             detector: Mutex::new(Detector::new(config)),
+            test_armed_until: AtomicU64::new(0),
         }
     }
+
+    fn arm_test(&self) {
+        self.test_armed_until
+            .store(now_ms() + TEST_WINDOW.as_millis() as u64, Ordering::SeqCst);
+    }
+
+    fn disarm_test(&self) {
+        self.test_armed_until.store(0, Ordering::SeqCst);
+    }
+
+    fn take_test(&self) -> bool {
+        let until = self.test_armed_until.load(Ordering::SeqCst);
+        if until == 0 || now_ms() > until {
+            return false;
+        }
+        self.disarm_test();
+        true
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 pub fn config_path() -> PathBuf {
@@ -451,6 +485,19 @@ pub fn hotkey_status(app: AppHandle, state: tauri::State<'_, HotkeyState>) -> Ho
     build_status(&config)
 }
 
+/// 进入「测试键位」：10 秒内下一次 Trigger 只回报，不触发手机录音。
+#[tauri::command]
+pub fn hotkey_test_arm(state: tauri::State<'_, HotkeyState>) -> Result<(), String> {
+    state.arm_test();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn hotkey_test_disarm(state: tauri::State<'_, HotkeyState>) -> Result<(), String> {
+    state.disarm_test();
+    Ok(())
+}
+
 #[tauri::command]
 pub fn hotkey_save(
     app: AppHandle,
@@ -475,11 +522,19 @@ pub fn hotkey_save(
 fn build_status(config: &HotkeyConfig) -> HotkeyStatus {
     let trusted = crate::desktop_mic::accessibility_trusted();
     let platform = std::env::consts::OS.to_string();
-    let listening = cfg!(target_os = "macos") && MONITORS_INSTALLED.load(std::sync::atomic::Ordering::SeqCst);
+    let listening = cfg!(target_os = "macos") && MONITORS_INSTALLED.load(Ordering::SeqCst);
     let hint = if !cfg!(target_os = "macos") {
         Some("快捷键目前只在 macOS 桌面端可用。".to_string())
     } else if config.enabled && !trusted {
         Some("需要「辅助功能」授权才能监听键盘；去系统设置打开后即可生效。".to_string())
+    } else if config.enabled && !listening {
+        Some("键盘监听没有装上；重启 Sidekick 后再试。".to_string())
+    } else if config.enabled && crate::desktop_mic::secure_input_enabled() {
+        // 安全输入会让系统拦截全局按键；密码框、部分密码管理器都会触发。
+        Some(
+            "检测到「安全输入」开启：系统会拦截全局按键。先关掉密码框/安全键盘，再试一次。"
+                .to_string(),
+        )
     } else {
         None
     };
@@ -587,6 +642,16 @@ fn forward(app: &AppHandle, event: &objc2_app_kit::NSEvent) {
 }
 
 fn dispatch(app: &AppHandle, action: Action) {
+    // 测试模式只验证「全局监听是否收到按键」，绝不启动手机录音。
+    if action == Action::Trigger {
+        if let Some(state) = app.try_state::<HotkeyState>() {
+            if state.take_test() {
+                let _ = app.emit(EVENT_TESTED, serde_json::json!({ "at": now_ms() }));
+                return;
+            }
+        }
+    }
+
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let Some(remote) = app.try_state::<Arc<crate::mic_remote::RemoteMic>>() else {

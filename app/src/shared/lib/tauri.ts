@@ -236,6 +236,8 @@ const COMMANDS = {
   dshHookTest: "dsh_hook_test",
   hotkeyStatus: "hotkey_status",
   hotkeySave: "hotkey_save",
+  hotkeyTestArm: "hotkey_test_arm",
+  hotkeyTestDisarm: "hotkey_test_disarm",
   sendRemoteMicAck: "send_remote_mic_ack",
   sendRemoteMicStatus: "send_remote_mic_status",
   remoteMicPrepare: "remote_mic_prepare",
@@ -302,6 +304,7 @@ const EVENTS = {
   memoChanged: "memo-changed",
   wordChanged: "word-changed",
   hotkeyChanged: "hotkey-changed",
+  hotkeyTested: "hotkey-tested",
   micHud: "mic-hud",
 } as const;
 
@@ -371,6 +374,7 @@ const memoChannel = createEventChannel(EVENTS.memo);
 const memoChangedChannel = createEventChannel(EVENTS.memoChanged);
 const wordChangedChannel = createEventChannel(EVENTS.wordChanged);
 const hotkeyChangedChannel = createEventChannel(EVENTS.hotkeyChanged);
+const hotkeyTestedChannel = createEventChannel(EVENTS.hotkeyTested);
 const micHudChannel = createEventChannel(EVENTS.micHud);
 
 export async function getAppRole(): Promise<AppRole> {
@@ -1031,6 +1035,28 @@ export function hotkeyStatus(): Promise<HotkeyStatus> {
 
 export function hotkeySave(config: HotkeyConfig): Promise<HotkeyStatus> {
   return invoke<HotkeyStatus>(COMMANDS.hotkeySave, { config });
+}
+
+/** 「测试键位」：10 秒内下一次按键只回报，不会启动手机录音。 */
+export function hotkeyTestArm(): Promise<void> {
+  return invoke<void>(COMMANDS.hotkeyTestArm);
+}
+
+export function hotkeyTestDisarm(): Promise<void> {
+  return invoke<void>(COMMANDS.hotkeyTestDisarm);
+}
+
+/** 测试键位收到按键；这是真全局监听，不是前端 keydown。 */
+export function subscribeHotkeyTested(handler: (at: number) => void): Unsubscribe {
+  return hotkeyTestedChannel((payload) => {
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      typeof (payload as { at?: unknown }).at === "number"
+    ) {
+      handler((payload as { at: number }).at);
+    }
+  });
 }
 
 /** 快捷键配置变化（设置页保存、或辅助功能授权变化后重读）。 */

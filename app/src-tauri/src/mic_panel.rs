@@ -5,47 +5,68 @@
 //!   （`.nonactivatingPanel` + `fullScreenAuxiliary`），所以窗口只能自己建；
 //! - 原生控件做不出设计稿的观感（毛玻璃跟随背景、没有平滑波形、圆角/阴影要手搓），
 //!   所以内容交给 `WKWebView` 渲染和 `docs/design/hud-mock.html` 同一套 HTML/CSS。
+//!
+//! 这一层只负责「怎么画」；「画什么」由 `mic_hud` 根据 `mic-hud` 事件翻译，
+//! 避免提示文案散落在状态机里。
 
 #[cfg(target_os = "macos")]
 mod imp {
     use std::cell::RefCell;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
 
     use objc2::rc::Retained;
     use objc2::{MainThreadMarker, MainThreadOnly};
-    use objc2_app_kit::{
-        NSColor, NSPanel, NSView, NSWindowCollectionBehavior, NSWindowStyleMask,
-    };
+    use objc2_app_kit::{NSColor, NSPanel, NSView, NSWindowCollectionBehavior, NSWindowStyleMask};
     use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
     use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
+    use serde_json::json;
     use tauri::AppHandle;
 
-    const W: f64 = 300.0;
-    const H: f64 = 40.0;
+    const W: f64 = 520.0;
+    const H: f64 = 60.0;
+    /// 距屏幕上沿的逻辑像素（让开 macOS 菜单栏）。
+    const TOP: f64 = 44.0;
 
-    /// 设计稿 A（胶囊）：与手机端 `voice-waveform.tsx` 同一套逻辑——
-    /// 24 根柱子、历史向右滚动、居中伸缩、50ms 采样。
+    /// 每次状态变化自增；延迟收起只收自己那一代，避免新状态被旧定时器收走。
+    static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+    /// 设计稿 C（顶栏细条）+ 第二行提示：录音时显示波形/计时，失败时能说清楚原因。
     const HTML: &str = r#"<!doctype html><html><head><meta charset="utf-8"><style>
-    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0e131b;
+    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#1b212b;
       -webkit-user-select:none;user-select:none}
-    .pill{height:100%;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 14px;
-      box-sizing:border-box;border-radius:20px;
-      background:linear-gradient(180deg,rgba(38,45,58,.92) 0%,rgba(27,33,43,.94) 100%);
-      border:.5px solid rgba(255,255,255,.07);
-      font:12.5px/1 -apple-system,"PingFang SC",sans-serif;color:#e9eef5}
+    .pill{height:100%;display:flex;align-items:center;gap:11px;padding:0 17px;
+      box-sizing:border-box;border-radius:18px;
+      background:linear-gradient(180deg,rgba(38,45,58,.94) 0%,rgba(27,33,43,.96) 100%);
+      border:.5px solid rgba(255,255,255,.09);
+      box-shadow:0 8px 24px rgba(0,0,0,.32);
+      font:12.5px/1.25 -apple-system,"PingFang SC",sans-serif;color:#e9eef5}
     .dot{width:7px;height:7px;border-radius:50%;background:#5fd6a4;
-      box-shadow:0 0 8px rgba(95,214,164,.7);flex:none}
-    .t{font-weight:500;white-space:nowrap}
-    .wave{display:flex;align-items:center;gap:2px;height:24px;flex:none}
+      box-shadow:0 0 9px rgba(95,214,164,.7);flex:none}
+    .body{display:flex;flex-direction:column;justify-content:center;gap:3px;
+      min-width:0;flex:1}
+    .title-row{display:flex;align-items:center;gap:8px;min-width:0}
+    .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .d{font-size:11px;line-height:1.25;color:#94a2b4;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis}
+    .pill[data-detail="0"] .d{display:none}
+    .wave{display:none;align-items:center;gap:2px;height:24px;flex:none}
+    .pill[data-state="listening"] .wave{display:flex}
     .wave i{width:3px;height:24px;border-radius:2px;background:#5fd6a4;
       transform-origin:center;transform:scaleY(.12);transition:transform 75ms linear}
-    .time{font:600 12px/1 ui-monospace,monospace;color:#8b99ab;min-width:38px;text-align:right}
-    .pill[data-state="wait"] .time,.pill[data-state="error"] .time{display:none}
-    .pill[data-state="error"] .dot{background:#ff5a5f;box-shadow:0 0 10px rgba(255,90,95,.9)}
+    .time{display:none;font:600 12px/1 ui-monospace,monospace;color:#8b99ab;
+      min-width:40px;text-align:right;flex:none}
+    .pill[data-state="listening"] .time{display:block}
     .pill[data-state="wait"] .dot{background:#fbbf24;box-shadow:0 0 10px rgba(251,191,36,.9)}
-    .wave{display:none}.pill[data-state="listening"] .wave{display:flex}
+    .pill[data-state="error"] .dot{background:#ff5a5f;box-shadow:0 0 10px rgba(255,90,95,.9)}
+    .pill[data-state="success"] .dot{background:#5fd6a4;box-shadow:0 0 10px rgba(95,214,164,.9)}
     </style></head><body>
-    <div class="pill" id="pill" data-state="listening">
-      <span class="dot"></span><span class="t" id="t">正在听</span>
+    <div class="pill" id="pill" data-state="listening" data-detail="0">
+      <span class="dot"></span>
+      <div class="body">
+        <div class="title-row"><span class="t" id="t">正在听</span></div>
+        <div class="d" id="d"></div>
+      </div>
       <span class="wave" id="wave"></span>
       <span class="time" id="time">00:00</span>
     </div>
@@ -91,11 +112,13 @@ mod imp {
 
       window.hud = {
         level(v) { latest = Math.max(0, Math.min(1, v)); lastAt = Date.now(); },
-        state(name, text) {
+        status(state, title, detail) {
           const pill = document.getElementById('pill');
-          pill.dataset.state = name;
-          if (text) document.getElementById('t').textContent = text;
-          if (name === 'listening') started = Date.now();
+          pill.dataset.state = state;
+          pill.dataset.detail = detail ? '1' : '0';
+          document.getElementById('t').textContent = title || '';
+          document.getElementById('d').textContent = detail || '';
+          if (state === 'listening') started = Date.now();
         }
       };
     </script></body></html>"#;
@@ -130,14 +153,13 @@ mod imp {
         container.setFrame(rect);
         container.setWantsLayer(true);
         if let Some(layer) = container.layer() {
-            layer.setCornerRadius(H / 2.0);
+            layer.setCornerRadius(18.0);
             layer.setMasksToBounds(true);
         }
 
         let config = unsafe { WKWebViewConfiguration::new(mtm) };
-        let webview = unsafe {
-            WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), rect, &config)
-        };
+        let webview =
+            unsafe { WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), rect, &config) };
         unsafe {
             webview.loadHTMLString_baseURL(&NSString::from_str(HTML), None);
         }
@@ -153,7 +175,7 @@ mod imp {
                 let frame = screen.frame();
                 NSPoint::new(
                     frame.origin.x + (frame.size.width - W) / 2.0,
-                    frame.origin.y + frame.size.height - H - 44.0,
+                    frame.origin.y + frame.size.height - H - TOP,
                 )
             });
         panel.setFrame_display(NSRect::new(origin, NSSize::new(W, H)), true);
@@ -190,13 +212,20 @@ mod imp {
         });
     }
 
-    pub fn show_recording(app: &AppHandle) {
-        run(app, "window.hud.state('listening','正在听')".to_string());
+    /// 显示一条状态。`state`: `listening` / `wait` / `error` / `success`。
+    pub fn show_status(app: &AppHandle, state: &str, title: &str, detail: &str) {
+        GENERATION.fetch_add(1, Ordering::SeqCst);
+        let js = format!(
+            "window.hud && window.hud.status({}, {}, {})",
+            json!(state),
+            json!(title),
+            json!(detail)
+        );
+        run(app, js);
     }
 
-    pub fn show(app: &AppHandle, text: &str) {
-        let text = text.replace('\'', " ");
-        run(app, format!("window.hud.state('wait','{text}')"));
+    pub fn show_recording(app: &AppHandle) {
+        show_status(app, "listening", "正在听", "再按一次结束 · Esc 取消");
     }
 
     /// 把真实电平（0–1）推给 HTML 里的波形。
@@ -205,7 +234,7 @@ mod imp {
         run(app, format!("window.hud && window.hud.level({level:.3})"));
     }
 
-    pub fn hide(app: &AppHandle) {
+    fn hide_now(app: &AppHandle) {
         let app = app.clone();
         let _ = app.clone().run_on_main_thread(move || {
             PANEL.with(|slot| {
@@ -215,16 +244,29 @@ mod imp {
             });
         });
     }
+
+    /// 延迟收起；期间若有新状态（generation 变化）就不收。
+    pub fn hide_later(app: &AppHandle, delay: Duration) {
+        let generation = GENERATION.load(Ordering::SeqCst);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(delay).await;
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            hide_now(&app);
+        });
+    }
 }
 
 #[cfg(target_os = "macos")]
-pub use imp::{hide, set_level, show, show_recording};
+pub use imp::{hide_later, set_level, show_recording, show_status};
 
-#[cfg(not(target_os = "macos"))]
-pub fn show(_app: &tauri::AppHandle, _text: &str) {}
 #[cfg(not(target_os = "macos"))]
 pub fn show_recording(_app: &tauri::AppHandle) {}
 #[cfg(not(target_os = "macos"))]
+pub fn show_status(_app: &tauri::AppHandle, _state: &str, _title: &str, _detail: &str) {}
+#[cfg(not(target_os = "macos"))]
 pub fn set_level(_app: &tauri::AppHandle, _level: f32) {}
 #[cfg(not(target_os = "macos"))]
-pub fn hide(_app: &tauri::AppHandle) {}
+pub fn hide_later(_app: &tauri::AppHandle, _delay: std::time::Duration) {}
