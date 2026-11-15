@@ -253,7 +253,14 @@ html[data-theme="dark"] .desktop-ios,
 
 /* 画布底色：html/body 必须显式给背景。
    不写的话浏览器默认是白的，侧栏半透明会透出那层白 ——
-   浅色主题下白正好和画布一致看不出来，深色主题下就变成一块中灰。 */
+   浅色主题下白正好和画布一致看不出来，深色主题下就变成一块中灰。
+
+   ⚠️ 这条会命中**所有**挂着 `.desktop-ios` 的窗口，不只是主窗口：`usage-panel`
+   与 `mic-hud` 是 transparent(true) 的透明小窗，0,2,0 的权重会盖掉它们自己的
+   `html.desktop-ios`（0,1,1），整窗被刷成 #f2f2f7 / #000，卡片与状态条外就多出
+   一圈实心底（2026-11-15 回归）。透明窗口的入口必须挂 `.dsl-transparent-window`，
+   并在自己的 CSS 里用 `html.desktop-ios.dsl-transparent-window`（0,2,1）刷透明；
+   动这条之前先读 docs/engineering/pitfalls.md §7。 */
 :root.desktop-ios,
 :root.desktop-ios body {
   background-color: var(--background);
