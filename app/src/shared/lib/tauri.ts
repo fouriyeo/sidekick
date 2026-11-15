@@ -20,6 +20,8 @@ import {
   isStatusState,
   type KeyAction,
   type MicStopReason,
+  type PairedDevice,
+  type PairingCode,
   type PricingStatus,
   type ServerInfo,
   type SessionSource,
@@ -194,6 +196,9 @@ const COMMANDS = {
   haptic: "haptic",
   disableWebviewHaptics: "disable_webview_haptics",
   serverInfo: "server_info",
+  pairingCodeCreate: "pairing_code_create",
+  pairingDevices: "pairing_devices",
+  pairingRevoke: "pairing_revoke",
   discoverServers: "discover_servers",
   connectServer: "connect_server",
   sendChat: "send_chat",
@@ -380,6 +385,21 @@ export function getServerInfo(): Promise<ServerInfo> {
   return invoke<ServerInfo>(COMMANDS.serverInfo);
 }
 
+/** 桌面生成一次性配对码；二维码里带 `?pair=<code>`。 */
+export function createPairingCode(): Promise<PairingCode> {
+  return invoke<PairingCode>(COMMANDS.pairingCodeCreate);
+}
+
+/** 桌面已配对设备列表（不含 token）。 */
+export function listPairedDevices(): Promise<PairedDevice[]> {
+  return invoke<PairedDevice[]>(COMMANDS.pairingDevices);
+}
+
+/** 解除某台手机的配对；下次连接必须重新扫码。 */
+export function revokePairedDevice(deviceId: string): Promise<boolean> {
+  return invoke<boolean>(COMMANDS.pairingRevoke, { deviceId });
+}
+
 /**
  * 手机端屏幕常亮：宠物页面在前台时阻止系统自动熄屏。
  *
@@ -417,8 +437,8 @@ export async function discoverServers(): Promise<DiscoveredServer[]> {
   return result.filter(isDiscoveredServer);
 }
 
-export function connectServer(addr: string): Promise<void> {
-  return invoke<void>(COMMANDS.connectServer, { addr });
+export function connectServer(addr: string, pairCode?: string): Promise<void> {
+  return invoke<void>(COMMANDS.connectServer, { addr, pairCode: pairCode ?? null });
 }
 
 export function sendChat(text: string): Promise<void> {

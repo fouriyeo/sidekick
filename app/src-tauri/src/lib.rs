@@ -78,6 +78,9 @@ mod usage_panel;
 mod panel_glass;
 
 #[cfg(desktop)]
+mod pairing;
+
+#[cfg(desktop)]
 #[tauri::command]
 async fn server_info() -> Result<desktop_server::ServerInfo, String> {
     desktop_server::info().await
@@ -146,6 +149,12 @@ pub fn run() {
             // 桌面快捷键遥控手机录音：命令只由桌面后端发起，绝不接受 WS 输入。
             let remote = mic_remote::RemoteMic::new(handle.clone());
             app.manage(remote.clone());
+
+            // 配对鉴权：桌面生成一次性码 → 手机换长期 token；LAN WS 必须过这层。
+            let pairing = std::sync::Arc::new(
+                pairing::PairingStore::new().map_err(std::io::Error::other)?,
+            );
+            app.manage(pairing.clone());
             // 全局键盘监听：macOS 用 NSEvent 旁听（不吞键），其它平台是空实现。
             hotkey::init(&handle);
 
@@ -175,6 +184,7 @@ pub fn run() {
                 memo,
                 word,
                 remote,
+                pairing,
             ));
 
             // 菜单栏常驻（D88）：隐藏 Dock 图标，入口只在菜单栏。
@@ -272,6 +282,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_role,
             server_info,
+            pairing::pairing_code_create,
+            pairing::pairing_devices,
+            pairing::pairing_revoke,
             hotkey::hotkey_status,
             hotkey::hotkey_save,
             desktop_mic::accessibility_info,
@@ -338,7 +351,7 @@ pub fn run() {
             _ => tauri::webview::PermissionResponse::Default,
         })
         .setup(|app| {
-            app.manage(mobile_client::ClientState::new());
+            app.manage(mobile_client::ClientState::new(app.handle()));
             // 语音备忘录（D115/D118）：本地库 + 上次未完成录音恢复。
             let memo_state = std::sync::Arc::new(
                 memo::mobile::MemoState::new(app.handle()).map_err(std::io::Error::other)?,

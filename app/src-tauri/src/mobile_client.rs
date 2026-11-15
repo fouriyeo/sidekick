@@ -1,9 +1,12 @@
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager};
 use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
@@ -33,22 +36,122 @@ impl Conn {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PairingData {
+    device_id: String,
+    #[serde(default)]
+    token: Option<String>,
+    #[serde(default)]
+    desktop_id: Option<String>,
+}
+
+impl Default for PairingData {
+    fn default() -> Self {
+        Self {
+            device_id: uuid::Uuid::new_v4().to_string(),
+            token: None,
+            desktop_id: None,
+        }
+    }
+}
+
 pub struct ClientState {
     conn: Mutex<Option<Conn>>,
     connect_lock: tokio::sync::Mutex<()>,
     generation: AtomicU64,
     /// 最近一次尝试/成功的地址；后台待命断线重连用它，不依赖 WebView。
     last_url: Mutex<Option<String>>,
+    /// 扫码/配对换来的长期身份，存 App 私有目录；不经过 WebView。
+    pairing: Mutex<PairingData>,
+    pairing_path: PathBuf,
+    /// 本次扫码带来的配对码；成功或失败后清掉。
+    pending_code: Mutex<Option<String>>,
 }
 
 impl ClientState {
-    pub fn new() -> Self {
+    pub fn new(app: &tauri::AppHandle) -> Self {
+        let pairing_path = app
+            .path()
+            .app_data_dir()
+            .map(|dir| dir.join("pairing.json"))
+            .unwrap_or_else(|_| PathBuf::from("pairing.json"));
+        let pairing = std::fs::read_to_string(&pairing_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<PairingData>(&raw).ok())
+            .filter(|data| !data.device_id.trim().is_empty())
+            .unwrap_or_default();
         Self {
             conn: Mutex::new(None),
             connect_lock: tokio::sync::Mutex::new(()),
             generation: AtomicU64::new(0),
             last_url: Mutex::new(None),
+            pairing: Mutex::new(pairing),
+            pairing_path,
+            pending_code: Mutex::new(None),
         }
+    }
+
+    fn save_pairing(&self) {
+        let Ok(data) = self.pairing.lock().map(|data| data.clone()) else {
+            return;
+        };
+        let Ok(raw) = serde_json::to_string_pretty(&data) else {
+            return;
+        };
+        if let Some(parent) = self.pairing_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if std::fs::write(&self.pairing_path, raw).is_ok() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(
+                    &self.pairing_path,
+                    std::fs::Permissions::from_mode(0o600),
+                );
+            }
+        }
+    }
+
+    fn set_pending_code(&self, code: Option<String>) {
+        if let Ok(mut pending) = self.pending_code.lock() {
+            *pending = code.filter(|value| !value.trim().is_empty());
+        }
+    }
+
+    fn take_pending_code(&self) -> Option<String> {
+        self.pending_code.lock().ok()?.take()
+    }
+
+    fn token(&self) -> Option<String> {
+        self.pairing
+            .lock()
+            .ok()
+            .and_then(|data| data.token.clone())
+    }
+
+    fn set_token(&self, token: String, desktop_id: Option<String>) {
+        if let Ok(mut data) = self.pairing.lock() {
+            data.token = Some(token);
+            data.desktop_id = desktop_id;
+        }
+        self.save_pairing();
+    }
+
+    fn clear_token(&self) {
+        if let Ok(mut data) = self.pairing.lock() {
+            data.token = None;
+            data.desktop_id = None;
+        }
+        self.save_pairing();
+    }
+
+    fn device_id(&self) -> String {
+        self.pairing
+            .lock()
+            .map(|data| data.device_id.clone())
+            .unwrap_or_default()
     }
 
     fn next_generation(&self) -> u64 {
@@ -117,10 +220,117 @@ fn normalize_addr(addr: &str) -> String {
     }
 }
 
+fn proof_for(token: &str, nonce: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hasher.update(nonce.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// 扫码/长期 token 的客户端握手：桌面先发 auth.required(nonce)，手机证明身份后才允许数据。
+async fn authenticate_mobile<S>(socket: &mut S, app: &tauri::AppHandle) -> Result<(), String>
+where
+    S: futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error>
+        + futures_util::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + Unpin,
+{
+    let first = tokio::time::timeout(Duration::from_secs(5), socket.next())
+        .await
+        .map_err(|_| "等待电脑鉴权超时".to_string())?
+        .ok_or_else(|| "电脑没有响应鉴权".to_string())?
+        .map_err(|error| format!("鉴权连接失败：{error}"))?;
+    let Message::Text(text) = first else {
+        return Err("电脑端鉴权格式不对，请更新桌面端".into());
+    };
+    let value: serde_json::Value =
+        serde_json::from_str(&text).map_err(|_| "电脑端鉴权格式不对".to_string())?;
+    if value.get("type").and_then(serde_json::Value::as_str) != Some("auth.required") {
+        return Err("桌面端需要更新才能配对".into());
+    }
+    let nonce = value
+        .get("nonce")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 128)
+        .ok_or_else(|| "电脑端鉴权 nonce 无效".to_string())?;
+
+    let state = app.state::<ClientState>();
+    let device_id = state.device_id();
+    let pending_code = state.take_pending_code();
+    let token = state.token();
+    let payload = if let Some(code) = pending_code {
+        serde_json::json!({
+            "v": 1, "type": "auth.pair", "code": code,
+            "deviceId": device_id, "deviceName": "Sidekick 手机", "ts": 0,
+        })
+    } else if let Some(token) = token {
+        serde_json::json!({
+            "v": 1, "type": "auth.token", "deviceId": device_id,
+            "proof": proof_for(&token, nonce), "ts": 0,
+        })
+    } else {
+        return Err("这台电脑还没配对：请在电脑端打开「手机连接」扫二维码".into());
+    };
+    socket
+        .send(Message::Text(payload.to_string().into()))
+        .await
+        .map_err(|error| format!("发送鉴权失败：{error}"))?;
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err("等待电脑确认配对超时".into());
+        }
+        let message = tokio::time::timeout(remaining, socket.next())
+            .await
+            .map_err(|_| "等待电脑确认配对超时".to_string())?
+            .ok_or_else(|| "电脑在鉴权时断开".to_string())?
+            .map_err(|error| format!("鉴权失败：{error}"))?;
+        let Message::Text(text) = message else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        match value.get("type").and_then(serde_json::Value::as_str) {
+            Some("auth.ok") => {
+                if let Some(new_token) = value.get("token").and_then(serde_json::Value::as_str) {
+                    let desktop_id = value
+                        .get("desktopId")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string);
+                    state.set_token(new_token.to_string(), desktop_id);
+                }
+                return Ok(());
+            }
+            Some("auth.error") => {
+                let code = value
+                    .get("code")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("");
+                if code == "unauthorized" {
+                    state.clear_token();
+                }
+                let message = value
+                    .get("message")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("配对失败");
+                return Err(message.to_string());
+            }
+            _ => {}
+        }
+    }
+}
+
 #[tauri::command]
-pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), String> {
+pub async fn connect_server(
+    app: tauri::AppHandle,
+    addr: String,
+    pair_code: Option<String>,
+) -> Result<(), String> {
     let url = normalize_addr(&addr);
     let state = app.state::<ClientState>();
+    state.set_pending_code(pair_code);
     if let Ok(mut last) = state.last_url.lock() {
         *last = Some(url.clone());
     }
@@ -145,7 +355,7 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
     }
 
     println!("[mobile] connecting to {url}");
-    let (socket, _) = match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(&url)).await {
+    let (mut socket, _) = match tokio::time::timeout(CONNECT_TIMEOUT, connect_async(&url)).await {
         Ok(Ok(pair)) => pair,
         Ok(Err(error)) => {
             eprintln!("[mobile] 连接 {url} 失败: {error}");
@@ -158,6 +368,12 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
             return Err("连接超时，确认电脑端已打开".to_string());
         }
     };
+
+    if let Err(error) = authenticate_mobile(&mut socket, &app).await {
+        eprintln!("[mobile] 配对鉴权失败：{error}");
+        emit_offline(&app);
+        return Err(error);
+    }
 
     let (mut write, mut read) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Outbound>();

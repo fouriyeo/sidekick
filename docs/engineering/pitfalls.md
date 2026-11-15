@@ -188,3 +188,11 @@ owner: engineering
 - **断线就 stop 待命 = 快捷键“时灵时不灵”**：WS 一断（电脑重启、路由器切换、手机久置省电）就把 FGS 停掉，而 App 在后台又不能再 `startForegroundService`；用户看到的就是「按快捷键没反应，点一下手机录音/打开 App 又好了」。正确做法：断线先保留待命服务，Rust 用最近地址每 2s 重连（最多 3 分钟），重连后补发 `mic.remote.status`；只有超时或用户关开关才停服务。
 - **ack 成功 ≠ 开始录音**：桌面 `RemoteMic` 收到 `mic.remote.ack ok` 后要等 `mic.start`/`mic.ready` 才进 `listening`。如果手机答应了却没发 `mic.start`（或 `mic.start` 被拒），状态机会永久卡在 `connecting`，后续快捷键被 `on_trigger` 忽略。必须加 3s `start_timeout` 兜底，并在手机断连/关开关时把 phase 复位 idle。
 - **后台 emit 会卡死重连任务**：手机关屏/切后台后 WebView 可能冻结，Rust 里对 `AppHandle::emit` 的调用可能一直不返回。断线清理里先 `emit_offline` 再 `on_disconnect`，或重连循环每次失败都 `emit_offline`，都会让重连任务停在半路；真机表现是「timer 跑了十几 tick 后突然不再重连，点开 App 又好了」。正确做法：后台跳过 `emit`（`is_foreground` 判断），`mic.remote.status` 在 emit 之前发；WebView 回前台后由连接状态 effect 自己补。
+
+## 15. 扫码配对与 WS 鉴权（2026-11-15）
+
+- **鉴权必须在订阅广播之前**：先给 LAN 连接建 broadcast 订阅/发 hook 快照，再验 token，等于把状态漏给未授权客户端。正确顺序：`ConnectInfo(peer)` → 非回环先 `auth.required`/验 proof → 通过后才注册 senders、订阅、发快照。
+- **桌面本机 WebView 必须回环直通**：主窗口连 `127.0.0.1/::1`，若也要求 token 会把桌面自己锁死。用 peer IP 判断 loopback，而不是用请求参数/客户端自报。
+- **配对码和 token 不要混**：6 位码只用于首次换 token（一次性、5 分钟、错 3 次作废）；长期 token 用 `sha256(token+nonce)` 证明，token 不上线。token 文件 0600；不要把 token 写日志。
+- **旧客户端会静默失败**：桌面升级后旧 APK 不会回 `auth.pair`，首包 `auth.required` 会让它当成 chat/未知消息；必须两端同时升级并重扫一次。文档/发布说明要写清楚。
+- **验证要连 LAN 地址**：本机连 `ws://127.0.0.1` 会命中 loopback 直通，测不到鉴权。联调用 `ws://<LAN IP>:47810/ws` 才走 `auth.required`。

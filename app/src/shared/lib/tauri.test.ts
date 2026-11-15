@@ -46,7 +46,16 @@ describe("tauri command wrappers", () => {
     tauri.invoke.mockResolvedValue(undefined);
 
     await connectServer("192.168.1.5:8848");
-    expect(tauri.invoke).toHaveBeenCalledWith("connect_server", { addr: "192.168.1.5:8848" });
+    expect(tauri.invoke).toHaveBeenCalledWith("connect_server", {
+      addr: "192.168.1.5:8848",
+      pairCode: null,
+    });
+
+    await connectServer("192.168.1.5:8848", "123456");
+    expect(tauri.invoke).toHaveBeenCalledWith("connect_server", {
+      addr: "192.168.1.5:8848",
+      pairCode: "123456",
+    });
 
     await sendChat("你好");
     expect(tauri.invoke).toHaveBeenCalledWith("send_chat", { text: "你好" });

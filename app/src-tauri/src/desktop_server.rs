@@ -7,7 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::Body;
-use axum::extract::State;
+use axum::extract::{ConnectInfo, State};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
@@ -33,6 +33,7 @@ use crate::dsh_hook::HookBridge;
 use crate::memo::desktop::MemoHub;
 use crate::mic_protocol::{self, MicStartMessage, MicStopReason};
 use crate::mic_remote::RemoteMic;
+use crate::pairing::PairingStore;
 use crate::token_usage::TokenUsageStore;
 
 static MOBILE_PAGE: &str = include_str!("../mobile/index.html");
@@ -76,6 +77,8 @@ struct AppState {
     senders: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>>,
     /// 桌面快捷键遥控手机录音（命令只由后端发起，绝不接受 WS 输入）。
     remote: Arc<RemoteMic>,
+    /// 扫码配对 + 长期 token 鉴权（本机回环客户端直通）。
+    pairing: Arc<PairingStore>,
 }
 
 struct ActiveMic {
@@ -283,12 +286,149 @@ async fn download_apk() -> Response {
     apk_not_found()
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+async fn ws_handler(
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state, peer))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState) {
+async fn handle_socket(mut socket: WebSocket, state: AppState, peer: SocketAddr) {
     let client_id = state.next_client.fetch_add(1, Ordering::Relaxed);
+    if !peer.ip().is_loopback() && authenticate(&mut socket, &state.pairing).await.is_err() {
+        return;
+    }
+    serve_authenticated(socket, state, client_id).await;
+}
+
+async fn authenticate(socket: &mut WebSocket, pairing: &PairingStore) -> Result<(), ()> {
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
+    let desktop_id = pairing.desktop_id();
+    let required = json!({
+        "v": 1,
+        "type": "auth.required",
+        "nonce": nonce,
+        "desktopId": desktop_id,
+        "ts": now_ms(),
+    });
+    if socket
+        .send(Message::Text(required.to_string().into()))
+        .await
+        .is_err()
+    {
+        return Err(());
+    }
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let mut failures = 0u32;
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(());
+        }
+        let message = match tokio::time::timeout(remaining, socket.next()).await {
+            Ok(Some(Ok(message))) => message,
+            _ => return Err(()),
+        };
+        let Message::Text(text) = message else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&text) else {
+            return Err(());
+        };
+        let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
+        match kind {
+            "auth.pair" => {
+                let code = value.get("code").and_then(Value::as_str).unwrap_or("");
+                let device_id = value
+                    .get("deviceId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let name = value.get("deviceName").and_then(Value::as_str);
+                match pairing.pair(code, device_id, name) {
+                    Ok((token, desktop_id)) => {
+                        let ok = json!({
+                            "v": 1,
+                            "type": "auth.ok",
+                            "deviceId": device_id,
+                            "desktopId": desktop_id,
+                            "token": token,
+                            "ts": now_ms(),
+                        });
+                        let _ = socket.send(Message::Text(ok.to_string().into())).await;
+                        println!("[auth] paired device={device_id}");
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        failures += 1;
+                        let _ = socket
+                            .send(Message::Text(
+                                auth_error("pair_failed", &error).to_string().into(),
+                            ))
+                            .await;
+                        if failures >= 5 {
+                            return Err(());
+                        }
+                    }
+                }
+            }
+            "auth.token" => {
+                let device_id = value
+                    .get("deviceId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let proof = value.get("proof").and_then(Value::as_str).unwrap_or("");
+                if !pairing.verify(device_id, &nonce, proof) {
+                    failures += 1;
+                    let _ = socket
+                        .send(Message::Text(
+                            auth_error("unauthorized", "配对已失效，请重新扫码")
+                                .to_string()
+                                .into(),
+                        ))
+                        .await;
+                    if failures >= 3 {
+                        return Err(());
+                    }
+                    continue;
+                }
+                let ok = json!({
+                    "v": 1,
+                    "type": "auth.ok",
+                    "deviceId": device_id,
+                    "desktopId": pairing.desktop_id(),
+                    "ts": now_ms(),
+                });
+                let _ = socket.send(Message::Text(ok.to_string().into())).await;
+                return Ok(());
+            }
+            _ => {
+                failures += 1;
+                let _ = socket
+                    .send(Message::Text(
+                        auth_error("bad_request", "先完成配对鉴权").to_string().into(),
+                    ))
+                    .await;
+                if failures >= 3 {
+                    return Err(());
+                }
+            }
+        }
+    }
+}
+
+fn auth_error(code: &str, message: &str) -> Value {
+    json!({
+        "v": 1,
+        "type": "auth.error",
+        "code": code,
+        "message": message,
+        "ts": now_ms(),
+    })
+}
+
+async fn serve_authenticated(socket: WebSocket, state: AppState, client_id: u64) {
     let (mut sender, mut receiver) = socket.split();
     // 先订阅广播，再直发当前 AI 状态快照：新连接（手机/网页）立刻拿到四态，
     // 不会因为快照和广播的先后顺序丢状态。
@@ -1548,6 +1688,7 @@ pub async fn start(
     memo: Arc<MemoHub>,
     word: Arc<crate::word::desktop::WordHub>,
     remote: Arc<RemoteMic>,
+    pairing: Arc<PairingStore>,
 ) {
     let senders: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<String>>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -1572,6 +1713,7 @@ pub async fn start(
         word,
         senders,
         remote,
+        pairing,
     };
     // 英语角的本地/对端变更要广播给其他已连接客户端。
     state.word.set_broadcaster(state.tx.clone());
@@ -1610,7 +1752,12 @@ pub async fn start(
             eprintln!("[discovery] UDP 响应器未启动，手机将无法自动发现（discoveryPort = null）");
         }
 
-        if let Err(error) = axum::serve(listener, app).await {
+        if let Err(error) = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        {
             eprintln!("[server] error: {error}");
         }
         return;

@@ -255,6 +255,21 @@ export type ServerInfo = {
   discoveryPort: number | null;
 };
 
+/** 桌面生成的一次性配对码；二维码把它带在 `?pair=` 里。 */
+export type PairingCode = {
+  code: string;
+  expiresAt: number;
+  ttlSeconds: number;
+};
+
+/** 桌面已配对设备（不含 token）。 */
+export type PairedDevice = {
+  deviceId: string;
+  name: string | null;
+  pairedAt: number;
+  lastSeenAt: number;
+};
+
 export type ConnEvent = {
   online: boolean;
   url?: string;

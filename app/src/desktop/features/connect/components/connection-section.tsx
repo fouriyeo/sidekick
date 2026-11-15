@@ -8,6 +8,7 @@ import {
 } from "@/desktop/lib/desktop-clients-store";
 import { ListActionRow, ListGroup, ListRow } from "@/desktop/shell/list";
 import type { ServerInfo } from "@/protocol/messages";
+import { createPairingCode } from "@/shared/lib/tauri";
 import { Button } from "@/shared/ui/button";
 
 type ConnectionSectionProps = {
@@ -50,7 +51,10 @@ export function ConnectionSection({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [qrErrorUrl, setQrErrorUrl] = useState<string | null>(null);
+  const [qrErrorPayload, setQrErrorPayload] = useState<string | null>(null);
+  const [qrPayload, setQrPayload] = useState<string | null>(null);
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairError, setPairError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const clients = useDesktopClientsStore((state) => state.clients);
@@ -59,27 +63,48 @@ export function ConnectionSection({
   const address = info ? `${info.ip}:${info.port}` : null;
   const discoveryPort = info?.discoveryPort ?? null;
   const devices = deviceCountFromClients(clients);
-  const qrFailed = url !== null && qrErrorUrl === url;
+  const qrFailed = qrPayload !== null && qrErrorPayload === qrPayload;
 
+  // 每次打开二维码生成一枚新的一次性码；二维码内容带 ?pair=，手机扫到后直接配对。
   useEffect(() => {
     if (!qrOpen || !url) return;
+    let cancelled = false;
+    setPairCode(null);
+    setPairError(null);
+    setQrPayload(null);
+    createPairingCode()
+      .then((result) => {
+        if (cancelled) return;
+        setPairCode(result.code);
+        setQrPayload(`${url}/?pair=${encodeURIComponent(result.code)}`);
+      })
+      .catch(() => {
+        if (!cancelled) setPairError("配对码生成失败");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrOpen, url]);
+
+  useEffect(() => {
+    if (!qrOpen || !qrPayload) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     let cancelled = false;
-    QRCode.toCanvas(canvas, url, { width: 196, margin: 1 })
+    QRCode.toCanvas(canvas, qrPayload, { width: 196, margin: 1 })
       .then(() => {
-        if (!cancelled) setQrErrorUrl(null);
+        if (!cancelled) setQrErrorPayload(null);
       })
       .catch(() => {
-        if (!cancelled) setQrErrorUrl(url);
+        if (!cancelled) setQrErrorPayload(qrPayload);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [qrOpen, url]);
+  }, [qrOpen, qrPayload]);
 
   useEffect(() => {
     return () => {
@@ -145,7 +170,7 @@ export function ConnectionSection({
       <ListGroup title={qrOpen ? "扫码连接" : "连接地址"}>
         {qrOpen && (
           <div className="flex flex-col items-center px-4 py-7">
-            {url !== null && !qrFailed ? (
+            {qrPayload !== null && !qrFailed ? (
               <div className="rounded-[24px] bg-white p-3.5 shadow-[0_0_0_0.5px_var(--glass-border),0_10px_28px_-24px_rgba(0,0,0,0.4)]">
                 <canvas
                   ref={canvasRef}
@@ -158,9 +183,20 @@ export function ConnectionSection({
               </div>
             ) : (
               <p className="text-[13px] text-muted-foreground">
-                {qrFailed ? "二维码生成失败" : "正在获取连接信息…"}
+                {qrFailed || pairError ? "二维码生成失败" : "正在生成配对码…"}
               </p>
             )}
+            {pairCode && !qrFailed ? (
+              <>
+                <p className="mt-3 text-[13px] text-muted-foreground">
+                  配对码{" "}
+                  <span className="font-mono tracking-[0.18em] text-foreground">{pairCode}</span>
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground/80">
+                  5 分钟内有效；过期后收起再打开二维码
+                </p>
+              </>
+            ) : null}
           </div>
         )}
         <ListRow

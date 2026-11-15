@@ -562,22 +562,26 @@ pub fn is_foreground(app: &AppHandle) -> bool {
 
 /// 连接断开：停采集，但**保留待命服务**并在后台自动重连。
 ///
-/// 之前的实现一断线就 standbyStop，手机在后台又起不了 FGS，只能等用户打开 App
-/// 或点一次录音——表现就是「快捷键有时失灵，点一下录音又好了」。
+/// 前台交给 WebView 的 connection-store；只有后台（JS 暂停）才由 Rust 重连，
+/// 否则两个重连循环会互相 cancel。
 pub fn on_disconnect(app: &AppHandle) {
     let Some(inner) = inner(app) else {
         return;
     };
     cancel_session(&inner, "disconnect");
-    let standby = inner.standby.load(Ordering::Relaxed);
-    if !standby {
+    if !inner.standby.load(Ordering::Relaxed) {
         println!("[remote-mic] disconnect standby=false");
         return;
     }
-    let generation = inner.reconnect_gen.fetch_add(1, Ordering::Relaxed) + 1;
-    println!("[remote-mic] disconnect standby=true reconnect_gen={generation}");
+    // 不要依赖 WebView 的 foreground 标志：手机关屏/切后台时它可能还是 true，
+    // 而 JS 此时被冻结，必须由 Rust 重连。前台若 JS 已经连上，循环下一拍会看到
+    // connected 直接退出。
+    spawn_reconnect(app.clone(), inner);
+}
 
-    let app = app.clone();
+fn spawn_reconnect(app: AppHandle, inner: Arc<Inner>) {
+    let generation = inner.reconnect_gen.fetch_add(1, Ordering::Relaxed) + 1;
+    println!("[remote-mic] disconnect background reconnect_gen={generation}");
     tauri::async_runtime::spawn(async move {
         // 2 秒一次，最多 3 分钟；桌面重启/路由器抖动通常几秒内恢复。
         for tick in 0..90 {
@@ -596,13 +600,13 @@ pub fn on_disconnect(app: &AppHandle) {
                 println!("[remote-mic] reconnect no last url");
                 break;
             };
-            let _ = crate::mobile_client::connect_server(app.clone(), url).await;
+            let _ = crate::mobile_client::connect_server(app.clone(), url, None).await;
             if crate::mobile_client::is_connected(&app) {
                 return;
             }
         }
         println!("[remote-mic] reconnect give up");
-        if is_standby(&app) {
+        if is_standby(&app) && !is_foreground(&app) {
             stop_standby_inner(&app).await;
         }
     });
@@ -742,5 +746,10 @@ pub fn remote_mic_set_foreground(app: AppHandle, foreground: bool) {
         let online = crate::mobile_client::is_connected(&app);
         let url = crate::mobile_client::last_url(&app).unwrap_or_default();
         let _ = app.emit("conn", json!({ "online": online, "url": url }));
+    } else if let Some(inner) = inner(&app) {
+        // 前台时 connection-store 负责重连；切后台时如果已断线，交给 Rust。
+        if is_standby(&app) && !crate::mobile_client::is_connected(&app) {
+            spawn_reconnect(app.clone(), inner);
+        }
     }
 }

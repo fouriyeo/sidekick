@@ -52,9 +52,27 @@ describe("ScanView", () => {
     const { onResult } = scan.startScan.mock.calls[0][0];
     act(() => onResult("http://192.168.1.5:47810"));
 
-    await waitFor(() => expect(connection.connect).toHaveBeenCalledWith("192.168.1.5:47810"));
+    await waitFor(() =>
+      expect(connection.connect).toHaveBeenCalledWith("192.168.1.5:47810", {
+        pairCode: undefined,
+      }),
+    );
     expect(scan.stop).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("扫到带配对码的二维码时把 pairCode 一起交给连接层", async () => {
+    renderScan();
+    await waitFor(() => expect(scan.startScan).toHaveBeenCalled());
+
+    const { onResult } = scan.startScan.mock.calls[0][0];
+    act(() => onResult("http://192.168.1.5:47810/?pair=654321"));
+
+    await waitFor(() =>
+      expect(connection.connect).toHaveBeenCalledWith("192.168.1.5:47810", {
+        pairCode: "654321",
+      }),
+    );
   });
 
   it("扫到非 Sidekick 二维码时提示并继续扫，不发起连接", async () => {

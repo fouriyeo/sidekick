@@ -45,14 +45,16 @@ export function ScanView({ open, onClose }: ScanViewProps) {
       video,
       onResult: (text) => {
         if (handledRef.current) return;
-        const addr = parseScanPayload(text);
-        if (!addr) {
+        const payload = parseScanPayload(text);
+        if (!payload) {
           setHint(MISMATCH_HINT);
           return;
         }
         handledRef.current = true;
         stopCamera();
-        void connect(addr).then(() => onClose());
+        void connect(payload.addr, { pairCode: payload.pairCode ?? undefined }).then(() =>
+          onClose(),
+        );
       },
       onError: (error) => {
         setFatal(true);

@@ -786,3 +786,11 @@
 - 原因：旧实现一断线就 `standbyStop`，后台 App 不能再 `startForegroundService`；用户看到「快捷键时灵时不灵，点一下手机录音又好了」。另一条卡死路径是桌面 ack 成功但没等到 `mic.start`，phase 永久停在 `connecting`，后续 `on_trigger` 直接忽略。
 - 边界：只处理「待命已开、WS 瞬断/电脑重启」；不做手机端常驻心跳/Wi-Fi lock，不保证 OEM 杀进程后自恢复；3 分钟仍连不上就停待命，回到用户手动打开 App 的路径。
 - 证据：断电脑端后手机通知保留，断 50 秒后 logcat 仍每 2 秒 `reconnect tick`（超过旧实现卡死的 18 tick）；重开电脑端后先 `status recv`，直接按右 Command 触发「正在录音」，再按回「待命」。假手机 ack 探针第一次 ack 后不发 `mic.start`，4 秒后第二次按右 Command 仍收到 `START #2`，验证 3s `start_timeout` 复位；右 Command 用合成 `flagsChanged` 验证，通知按钮实点与 OEM 待补验。
+
+## D147 · 扫码配对 + WS 挑战应答鉴权（2026-11-15）｜生效
+
+- 决策：桌面「手机连接」二维码内容改为 `http://<ip>:<port>/?pair=<6 位码>`；手机扫码后用一次性码 `auth.pair` 换长期 token（`~/.sidekick/paired-devices.json` 0600），之后连接用 `sha256(token + nonce)` 挑战应答。桌面本机回环 WebView 直通；LAN 客户端在鉴权前只能收到 `auth.required`，不订阅广播、不拿 AI/桌面状态。
+- 原因：原有 WS 无身份校验，同网段任何人都能连；后台待命让「同网段可触发开麦」风险放大。扫码比手动输入地址/码更方便，token 只存本地。
+- 边界：身份鉴权，不是加密；局域网仍明文 WS；不做公网/云账号；手机当前只保留最近一台电脑 token；配对码 5 分钟、错 3 次作废、成功即作废。
+- 代价：旧手机/旧桌面首次升级需要重扫一次；桌面 UI 的已配对设备撤销入口暂未做（命令已具备）；QR 码被截图后 5 分钟内仍可被配对。
+- 证据：`cargo test --lib pairing` 3 项通过；LAN 假手机探针首包 `auth.required` → `auth.pair` → `auth.ok` → 断开重连 `auth.token` 挑战成功；手机 CDP 实际 `connect_server` 配对后 token 写入 `pairing.json`，桌面唯一设备表落盘；杀桌面后台重连后右 Command 正常；前端 114 files/968 tests、`check-docs`（暂含未入库新文档提示）通过。QR 真机扫码、撤销设备 UI、TLS 待补验。

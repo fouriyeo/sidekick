@@ -13,6 +13,23 @@
 - 手机一般不用手填：App 启动后通过局域网 UDP 发现自动拿到电脑地址与真实端口，详见 [docs/engineering/lan-discovery.md](../docs/engineering/lan-discovery.md)
 - 编码：UTF-8 JSON 文本帧，一条消息一帧
 
+## 鉴权（auth.*，v1 追加）
+
+LAN 客户端连上 `/ws` 后，桌面先发 `auth.required {nonce, desktopId}`；手机必须先用一次性码或长期 token 完成挑战应答，**之后才进入正常消息**。桌面本机回环客户端（127.0.0.1/::1）直通。
+
+| 方向 | type | 字段 |
+| --- | --- | --- |
+| 桌面 → 手机 | `auth.required` | `nonce`、`desktopId`、`ts` |
+| 手机 → 桌面 | `auth.pair` | `code`（6 位）、`deviceId`、`deviceName`、`ts` |
+| 手机 → 桌面 | `auth.token` | `deviceId`、`proof`、`ts` |
+| 桌面 → 手机 | `auth.ok` | `deviceId`、`desktopId`、`token`（仅配对时）、`ts` |
+| 桌面 → 手机 | `auth.error` | `code` ∈ `pair_failed` / `unauthorized` / `bad_request`、`message`、`ts` |
+
+- 二维码内容：`http://<ip>:<port>/?pair=<6 位码>`；码 5 分钟有效、错 3 次作废、成功即作废。
+- `proof = sha256(token + nonce)`；`auth.ok` 的 `token` 只在下发时出现，之后不上线。
+- 未鉴权连接只会收到 `auth.required`，不订阅广播、不拿 AI/桌面状态；发其它消息回 `auth.error` 并断开。
+- 这是身份鉴权，不是加密；局域网仍是明文 WS。
+
 ## 消息类型
 
 ### chat
@@ -196,7 +213,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 
 | 方向 | 类型 | 字段 | 说明 |
 | --- | --- | --- | --- |
-| 桌面 → 手机 | `mic.remote` | `requestId`（≤64）、`action`: `start`\|`stop`\|`cancel`、`ts` | **只允许桌面后端（快捷键）发起**，绝不接受 WS 客户端触发：当前无鉴权，否则同网段任何人可开麦 |
+| 桌面 → 手机 | `mic.remote` | `requestId`（≤64）、`action`: `start`\|`stop`\|`cancel`、`ts` | **只允许桌面后端（快捷键）发起**，绝不接受 WS 客户端触发；LAN 连接已要求先完成 `auth.*` 鉴权（本机回环直通） |
 | 手机 → 桌面 | `mic.remote.ack` | `requestId`、`action`、`ok`、`code`、`ts` | 命令回执；`code` ∈ `remote_disabled` / `not_pet_page` / `standby_off` / `notification_denied` / `service_failed` / `busy` / `permission_denied` / `audio_blocked` / `not_recording` / `disconnected` / `cancelled` / `mic_start` / `bad_request` |
 | 手机 → 桌面 | `mic.remote.status` | `enabled`、`standby`、`ts` | 手机连上电脑、开关变化时各发一次；`standby` 表示后台待命 FGS 已挂起（切后台/锁屏仍可开麦） |
 
@@ -222,6 +239,8 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 
 ### 配对（一次性 6 位码）
 
+> 先通过 §鉴权（auth.*）；本节的 memo token 是备忘录同步的二级授权，不替代 WS 鉴权。
+
 - 桌面「语音 › 手机备忘录 › 配对手机 / 发送 Key」调用 `memo_pair_code_create` 生成 6 位码，2 分钟有效、错 3 次作废。
 - 手机 → 桌面：`memo.pair.request {code, deviceId, deviceName}`；桌面 → 手机（定向）：`memo.pair.result {ok, token, key}`。
 - 失败时 `ok:false` + `error`。`key` 可能为 `null`（电脑没配百炼）。手机把 token/Key 存 App 私有目录（MVP，Keystore 留 P1）。
@@ -240,7 +259,7 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 
 ## 英语角词库（word.*，已实现）
 
-词库是**双向同步**：桌面与手机各自持有本地 SQLite，连上后合并。鉴权复用备忘录配对令牌（先 `memo.hello` 或直接带 token 的 `word.hello`）；未配对一律 `word.error{sync_failed}`，不落库。合并是字段级、幂等的（见 `docs/engineering/english-corner.md §5`）。
+词库是**双向同步**：桌面与手机各自持有本地 SQLite，连上后合并。WS 先过 §鉴权；词库层再复用备忘录配对令牌（先 `memo.hello` 或直接带 token 的 `word.hello`）；未配对一律 `word.error{sync_failed}`，不落库。合并是字段级、幂等的（见 `docs/engineering/english-corner.md §5`）。
 
 - 握手：手机 → 桌面 `word.hello {deviceId, token, since}`；桌面校验后回 `word.hello.ack {ok}`，随后分批下发快照。
 - 下行：桌面 → 手机 `word.snapshot {words:[…], done, serverNow}`，每批 ≤100 条，`updatedAt > since`（含 90 天内墓碑）；`done:true` 时手机把游标设为 `serverNow`（桌面时钟权威）。

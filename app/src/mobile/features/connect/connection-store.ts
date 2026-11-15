@@ -18,6 +18,8 @@ export type DiscoverOptions = {
 export type ConnectOptions = {
   /** 自动重连发起的连接：不清空退避计数，由重连循环继续决定下一次。 */
   auto?: boolean;
+  /** 首次扫码配对码；已配对连接不传，Rust 用长期 token 做挑战应答。 */
+  pairCode?: string;
 };
 
 export type ConnectionState = {
@@ -185,7 +187,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => {
       set({ addr, status: "connecting", error: null });
 
       try {
-        await connectServer(addr);
+        if (options?.pairCode) {
+          await connectServer(addr, options.pairCode);
+        } else {
+          await connectServer(addr);
+        }
         // 真正的 connected 状态由 Rust 的 conn 事件驱动。
         return null;
       } catch (error) {

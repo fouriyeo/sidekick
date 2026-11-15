@@ -5,8 +5,12 @@ import type { ServerInfo } from "@/protocol/messages";
 import { ConnectionSection } from "./connection-section";
 
 const qr = vi.hoisted(() => ({ toCanvas: vi.fn() }));
+const pairing = vi.hoisted(() => ({ createPairingCode: vi.fn() }));
 
 vi.mock("qrcode", () => ({ default: qr }));
+vi.mock("@/shared/lib/tauri", () => ({
+  createPairingCode: pairing.createPairingCode,
+}));
 
 const INFO: ServerInfo = {
   ip: "192.168.1.23",
@@ -34,6 +38,12 @@ function renderSection(overrides: Partial<Parameters<typeof ConnectionSection>[0
 beforeEach(() => {
   qr.toCanvas.mockReset();
   qr.toCanvas.mockResolvedValue(undefined);
+  pairing.createPairingCode.mockReset();
+  pairing.createPairingCode.mockResolvedValue({
+    code: "123456",
+    expiresAt: Date.now() + 300_000,
+    ttlSeconds: 300,
+  });
   writeText.mockClear();
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -60,7 +70,9 @@ describe("ConnectionSection 手机连接", () => {
 
     // 二维码渲染成卡内一块，下面一行地址。
     await waitFor(() => expect(qr.toCanvas).toHaveBeenCalled());
+    expect(qr.toCanvas.mock.calls[0][1]).toBe("http://192.168.1.23:47810/?pair=123456");
     expect(screen.getByRole("img", { name: "手机连接二维码" })).toBeInTheDocument();
+    expect(screen.getByText("123456")).toBeInTheDocument();
     expect(screen.getByText("192.168.1.23:47810")).toBeInTheDocument();
     expect(screen.queryByText(/三种连接方式|推荐度|手动输入地址/)).not.toBeInTheDocument();
   });

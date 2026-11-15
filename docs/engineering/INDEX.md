@@ -2,7 +2,7 @@
 doc: engineering/INDEX
 title: 工程方案分支索引
 status: active
-updated: 2026-11-14
+updated: 2026-11-15
 load: on-demand
 children:
   - pitfalls.md
@@ -24,6 +24,7 @@ children:
   - english-corner.md
   - keyboard-remote-mic.md
   - background-recording.md
+  - pairing-auth.md
 ---
 
 # 工程方案分支
@@ -40,6 +41,7 @@ children:
 | 改音频消息/二进制帧协议 | [protocol-audio.md](./protocol-audio.md) | L |
 | 改键盘遥控录音（全局快捷键 / HUD） | [keyboard-remote-mic.md](./keyboard-remote-mic.md) | M |
 | 做锁屏/后台录音（原生采集 + 前台服务 + 通知） | [background-recording.md](./background-recording.md) | M |
+| 做扫码配对、token 鉴权、未授权拒绝 | [pairing-auth.md](./pairing-auth.md) | M |
 | 接百炼云端识别（地址/Key/流式/错误码） | [asr-cloud-bailian.md](./asr-cloud-bailian.md) | L |
 | 改桌面剪贴板历史与隐私过滤 | [clipboard-manager.md](./clipboard-manager.md) | M |
 | 改自动发现、端口冲突、桌面二维码 | [lan-discovery.md](./lan-discovery.md) | M |

@@ -138,3 +138,11 @@
 - 复现：手机切后台、待命通知在 → 杀掉电脑端 Sidekick → 旧的 `on_disconnect` 立即 `standbyStop`；手机后台无法重新拉起 FGS，快捷键从此无响应；重开电脑端也不会自动连回。点一下手机录音/打开 App 会触发 `app.tsx` 待命重启，所以表现成「点一下又好了」。
 - 修复：手机断线不再立刻停待命，Rust 记住最近地址并每 2 秒重连（最多 3 分钟），成功后先补发 `mic.remote.status`；后台跳过 WebView `emit`（冻结时可能卡住重连任务），连接锁等待加 6s 超时。桌面 `RemoteMic` 在手机断连/关开关时复位 `idle`，ack 成功后 3 秒没等到 `mic.start`/`mic.ready` 就回 `idle` 并显示 `start_timeout`，避免卡在 `connecting` 吞掉后续快捷键。
 - 证据：Android 构建通过；真机断电脑端后通知「电脑遥控待命」仍在；持续断 50 秒 logcat 仍每 2 秒重连（tick 23，旧实现约 18 tick 卡死），重开电脑端后恢复 `status recv`，直接按右 Command 能触发「正在录音」，再按回「待命」。假手机 ack 探针第一次 ack 后不发 `mic.start`，4 秒后第二次按右 Command 仍收到 `START #2`，验证 3s `start_timeout` 复位。右 Command 用 `flagsChanged` 合成事件验证；通知按钮实点与 OEM 仍待补验。
+
+## 2026-11-15 · 扫码配对与 WS 鉴权（D147）
+
+- 目标：给局域网 WS 加身份层，同时保留「扫码即连」的方便；桌面本机 WebView 不被锁死。
+- 桌面：新增 `pairing.rs`（一次性 6 位码 / token / `sha256(token+nonce)` 挑战 / 0600 设备表）+ `pairing_code_create/devices/revoke` 命令；`desktop_server` 用 `ConnectInfo` 区分回环，LAN 先 `auth.required`，通过后才发快照/广播；设置页二维码带 `?pair=` 并显示 6 位码。
+- 手机：`connect_server(addr, pairCode)`；扫码解析 `pairCode`；token 存 App 私有 `pairing.json`，后续挑战应答；未配对/失效给中文错误，提示重新扫码。
+- 协议：[protocol/README.md](../protocol/README.md) 新增 `auth.*`；工程方案 [pairing-auth.md](./engineering/pairing-auth.md)；D147。
+- 证据：LAN 假手机 `auth.required → auth.pair → auth.ok → auth.token` 通过；手机 CDP 实际配对并写 token，重连状态正常；杀桌面后手机后台重连、右 Command 仍能录音；前端 968 tests、Rust 252 + pairing 3 tests 通过；`check-docs` 仅因新文档尚未 git add 报错（提交时补齐）。
