@@ -107,3 +107,17 @@
 - **2026-11-06 · 语音一级页 + 关键词（D94，导航部分已被 D101/D104 取代）** — 根页三组摘要 + push 二级页，关键词单列表 2000 上限/权重 4；证据：644 tests / 77 files、Rust 174、桌面 QA 全页截图无溢出；真实百炼 Key 下 2000 词首包延迟待验。
 
 78. **2026-11-14 · 删桌面「概览」页，状态改沉默即正常（D143）** — 用户判断「服务 / 手机 / AI / 当前会话 / 最近一次语音」没有一条读了会改变动作，整页删除：一级 6 个 剪贴板 ⌘1 / 备忘录 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 英语角 ⌘5 / 设置 ⌘6，默认页与兜底页 = 用量（先落剪贴板，同日按用户要求改为用量看板）；`?view=overview` / `?view=sessions` 重定向默认页。侧栏三行状态摘要改为「只在需要出手时出现」：`服务 未启动`（connection.status === "error"）与 `AI 等你决定`（`visibleSessions` 里 asking 一条，点击发 `focus.request`）；自动输入未授权从「概览顶部提示条」改为「设置」项 6px 琥珀点（新增 `useAccessibilityStore`，壳层读一次 + `window.focus` 重判）。删除 `overview-page.tsx` / `overview-page.test.tsx` / `accessibility-hint.tsx` / 其测试，清掉 `ChatSection.onOpenOverview` 与 `SettingsPage.nav` 两个死参数，QA 脚本页列表与 README 截图名同步为 clipboard。证据：`pnpm typecheck` / `lint` / `build` 通过，`pnpm test` 111 files / 951 tests 全绿（app.test 14 例：默认用量、⌘1–⌘6、⌘7 无动作、服务异常行、asking 行唤起、working 不出行、旧链接回落），`node scripts/check-docs.mjs` 通过；真窗口目检与 qa-desktop-ios 全页截图待补。
+
+## 2026-11-14 · 桌面与手机玻璃改成「凝态玻璃」（D144）
+
+- 材质：`.dsl-glass` 从「一条 0.5px 顶线 + blur 30」换成**九层 inset 边**（外轮廓 → 顶棱 → 三层倒角 → 底棱）；blur 收敛到 16px、saturate 185%。新增 `--g-*` 一组 token（`tint` / `tint-panel` / `edge-*` / `spring` / `press` / `sink`），侧栏 tint 提到 `.52`（浅色）/`.30`（深色），内侧加 0.5px hairline 分界。
+- 交互：hover 从「整块提亮」改成**光从边缘往内渗**（26px + 62px 两层 inset），且不再需要挂类，所有 `.dsl-glass` 自动生效并用 `@media (hover: hover)` 门控；按下统一成 90ms 快进 → 800ms 过冲 2.4 回弹。
+- 组件：主按钮加顶棱底棱、hover 删掉 `filter: brightness`；开关开态改成顶棱亮的玻璃管、关态凹槽；输入框从填充色块改成**凹槽**（顶暗底亮），focus 改成薄荷光渗入；新增 `.dsl-flat`（无玻璃版容器）与 `.dsl-gloss`（实色块微光泽）。
+- 手机端：首次引入玻璃，只给会话卡（`.ms-feed`）与麦克风（`.mic-gesture`），其余保持实色；录音中不上玻璃。
+- 文档：`standards/visual.md` §2 材质章节重写、`standards/style-guide.html` 数值同步、`engineering/pitfalls.md` 新增 §6.5 四条玻璃坑；过程稿（试炼场 / 组件库 / 整屏预览 HTML）按现有规矩不入库。
+
+## 2026-11-15 · 后台录音调研（只出结论，未改代码）
+
+- 结论：备忘录「前台开始 → 锁屏/切后台继续」可做，标准方案 = 原生 `AudioRecord` + `microphone` 前台服务 + 常驻通知 + 分段落盘；键盘遥控/语音输入在手机锁屏后由电脑开麦，Android 14+ 不允许后台新建麦克风 FGS，只能常驻「待命服务」并把采集/推流搬出 WebView，本期不做。
+- 产出：[engineering/background-recording.md](./engineering/background-recording.md)：系统限制（Android 12/13/14/15/16）、同类产品（Pixel Recorder / Voice Memos / 飞书妙记 / 讯飞听见 / Otter / RTC SDK）、路线对比、文件级改动清单、验收与风险；同步 [memo-pipeline.md](./engineering/memo-pipeline.md) 的 P1 说明、[status.md](./status.md) 的 P1 与偏差行、[prd/memo/PRD.md](./prd/memo/PRD.md) 的 P1 行。
+- 证据：`node scripts/check-docs.mjs` 通过；未新增依赖、未改运行时代码。

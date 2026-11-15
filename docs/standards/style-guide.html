@@ -40,10 +40,14 @@
   --hi: rgba(255, 255, 255, 0.9);
   --card-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.045), 0 1px 2px rgba(0, 0, 0, 0.04),
     0 10px 28px -24px rgba(0, 0, 0, 0.4);
-  --glass-bg: rgba(247, 247, 251, 0.84);
+  /* 凝态玻璃（D144） */
+  --g-base: 255, 255, 255;
+  --g-tint: 0.34;
+  --g-tint-panel: 0.52;
+  --glass-bg: rgba(255, 255, 255, 0.34);
   --glass-border: rgba(0, 0, 0, 0.07);
-  --glass-hi: rgba(255, 255, 255, 0.72);
-  --glass-shadow: 0 0.5px 0 var(--glass-border), 0 8px 28px -22px rgba(0, 0, 0, 0.35);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 12px 28px -18px rgba(0, 0, 0, 0.42);
   --pop-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   --focus-ring: rgba(10, 119, 100, 0.28);
   --amb-a: rgba(10, 119, 100, 0.1);
@@ -71,10 +75,13 @@ html[data-theme="dark"] {
   --sidebar: #111113;
   --hi: rgba(255, 255, 255, 0.07);
   --card-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 10px 30px -26px rgba(0, 0, 0, 0.9);
-  --glass-bg: rgba(32, 32, 35, 0.86);
+  --g-base: 150, 156, 172;
+  --g-tint: 0.26;
+  --g-tint-panel: 0.30;
+  --glass-bg: rgba(150, 156, 172, 0.26);
   --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-hi: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.06), 0 12px 32px -24px rgba(0, 0, 0, 0.9);
+  --glass-hi: rgba(255, 255, 255, 0.56);
+  --glass-shadow: 0 14px 32px -18px rgba(0, 0, 0, 0.85);
   --pop-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.8), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
   --focus-ring: rgba(63, 196, 160, 0.34);
   --amb-a: rgba(63, 196, 160, 0.14);
@@ -198,9 +205,12 @@ a { color: inherit; }
 }
 .topbar[data-scrolled="true"] {
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  backdrop-filter: blur(26px) saturate(180%);
-  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-hi);
+  -webkit-backdrop-filter: blur(16px) saturate(185%);
+  backdrop-filter: blur(16px) saturate(185%);
+  box-shadow: var(--glass-shadow),
+    inset 0 0 0 0.7px rgba(255,255,255,.28), inset 0 1px 0 rgba(255,255,255,var(--glass-hi)),
+    inset 0 2px 2px rgba(255,255,255,.38), inset 0 5px 6px rgba(255,255,255,.16),
+    inset 0 10px 12px rgba(255,255,255,.07), inset 0 -1px 1px rgba(0,0,0,.11);
 }
 .tb-title {
   flex: 1;
@@ -477,9 +487,12 @@ td.num, th.num { font-family: var(--mono); font-size: 11.5px; color: var(--muted
 .demo.card { background: var(--card); box-shadow: var(--card-shadow), inset 0 0.5px 0 var(--hi); }
 .demo.glass {
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
-  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-hi);
+  -webkit-backdrop-filter: blur(16px) saturate(185%);
+  backdrop-filter: blur(16px) saturate(185%);
+  box-shadow: var(--glass-shadow),
+    inset 0 0 0 0.7px rgba(255,255,255,.28), inset 0 1px 0 rgba(255,255,255,var(--glass-hi)),
+    inset 0 2px 2px rgba(255,255,255,.38), inset 0 5px 6px rgba(255,255,255,.16),
+    inset 0 10px 12px rgba(255,255,255,.07), inset 0 -1px 1px rgba(0,0,0,.11);
 }
 .demo.pop { background: var(--pop); box-shadow: var(--pop-shadow); }
 

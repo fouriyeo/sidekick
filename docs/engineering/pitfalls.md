@@ -87,6 +87,19 @@ owner: engineering
 - **窗口 Overlay 标题栏**：`titleBarStyle: "Overlay"` + `hiddenTitle`，交通灯浮在侧栏顶部 38 区域；拖动区只有两处（侧栏顶部 38、sticky 工具栏），新增页面别把唯一可点元素放进拖动区。
 - **窗口材质（D87）**：真实材质在 `tauri.macos.conf.json`（`macOSPrivateApi` + `transparent` + `windowEffects.underWindowBackground`/`followsWindowActiveState`），**不要写进基础 `tauri.conf.json`**（Android 会跟着透明）。`index.html` 内联脚本只在「真实 Tauri（`__TAURI_INTERNALS__.metadata`）+ macOS + 未设 `sidekick:vibrancy=off`」时给 `<html>` 加 `.dsl-vibrancy`；该模式下 html/body 透明、`.dsl-main` 自铺不透明底 + 环境光、侧栏只留 tint 且关 backdrop-filter，`prefers-reduced-transparency` 退实色。真实材质只能 `pnpm tauri dev` 目检。
 
+## 6.5 玻璃材质（D144）
+
+- **`backdrop-filter: url()` 在 WKWebView 里静默失效**：症状是接进来的液态玻璃库在浏览器里好看，进 Tauri 桌面窗口后只剩一层模糊，**没有任何报错**。原因：`url(#svg)` 形式的 `backdrop-filter` 只有 Chromium 实现，WebKit Bug 245510 至今未修；更麻烦的是 Safari/WebKit 会**接受这个声明并静默丢掉 SVG 部分**，所以 `@supports (backdrop-filter: url(#x))` 会误报成「支持」。正确做法：桌面端（WKWebView）一律不做折射，只用 `blur + saturate`；真要做也得靠 UA 判断，不能信 `@supports`。
+- **玻璃层整个不渲染**：症状是侧栏/卡片背景和内容区同色、hover 毫无反应、看不出任何材质。原因：材质写在伪元素上（`::before` / `::after`），而定位被更高优先级的规则覆盖——例如配方规则里的 `.g { position: relative }`（0,2,1）盖过了 `.side > .glass { position: absolute; inset: 0 }`（0,1,1），伪元素因此尺寸塌成 0。这类问题**不会报错、不会溢出**，只表现为「看起来没生效」。正确做法：材质类与布局类分离，用选择器权重保证定位优先（把 `position` 和 `inset` 一起写进高优先级的同一组规则里），改完立刻悬停验证边缘有没有亮。
+- **嵌套 `backdrop-filter` 会采样到空白**：症状是玻璃工具栏里的玻璃按钮变成一块死色。原因：祖先元素出现 `isolation` / `transform` / `opacity < 1` / `mask` / `filter` / `will-change` 之一时，它会成为新的 backdrop root，子元素只采样到它内部（通常是空的）。正确做法：玻璃只给容器，容器内的按钮用实色或 `.dsl-flat`；真的需要两层通透时，把光学层放到同一个 `::before` 里而不是再套一层元素。
+- **hover 要门控 `@media (hover: hover) and (pointer: fine)`**：安卓 WebView 里不包这个，手指点过之后 `:hover` 状态会**卡住不退**，表现为「点过的按钮永远比别的亮」。这条在桌面看不出来，只在真机上暴露。
+
+- **「材质全改了但看起来什么都没变」**：症状是把 token、边、hover、按下全部改完，`typecheck`/`lint`/`build`/浏览器 QA 全绿，但打开应用觉得和改之前一模一样。两个独立原因，要分别查：① **跑的是旧包**——`/Applications/Sidekick.app` 是上次打包的，源码改动不进去；更坑的是项目有 `tauri_plugin_single_instance`，此时 `pnpm tauri dev` 启动的新实例会被单实例锁**直接拦下退出**（日志只有一行 `Running target/debug/desktop` 就没了，退出码 0，看不出是锁），焦点还会交还给旧 App，于是验证的永远是旧构建。正确做法：验证前先 `pgrep -f "Sidekick.app"` 确认旧实例已退出，或用 `ps` 确认 `target/debug/desktop` 真的在跑。② **窗口不透明，玻璃无物可透**——Tauri 窗口默认不透明，`backdrop-filter` 采样到的是应用自己的画布；画布是纯色时玻璃只会变成「比背景亮一点的一块」，视觉差接近于零。这不是 RGB 调错，是物理上没东西可采。正确做法：**判断玻璃有没有生效要看交互态，不要看静态截图**——悬停时边缘该亮起（`inset 0 0 26px`）、按下该下沉（`translateY(1px)`）、输入框该是凹槽（顶暗底亮）、开关开态该是顶棱亮。这四样在截图里都看不出来，但手一摸就知道。真要看到「透」，只有两条路：给画布加氛围光（D144）或开窗口透明。
+
+- **透明度叠出来的颜色不等于设计稿里的颜色**：症状是「对比度算着够，看着就是灰」。层叠容器的实际前景/背景色是 `over(fg, alpha, bg)` 算出来的，不是 token 里那个值——例如深色侧栏未选中项写 `rgba(242,242,247,.66)`，落在 `#2d2e33` 侧栏上实际是 `#afafb4`，对 7.4:1；但同一个 `.66` 叠在浅色侧栏上就是 `#5e5e60`，对 6.1:1。**改 alpha 之前先算一遍最终色，别只看 token。**正确做法：用 WCAG 相对亮度公式算 `over()` 之后的真实两色，正文按 4.5:1、≥18px 按 3:1 卡；工具脚本不用引依赖，二十行 Python 就够。
+- **`--muted-foreground: #8a8a8e` 在白卡上只有 3.44:1**（浅色主题，2026-11-15 修）：这是继承自 `tokens.css` 的老值，正文/分组标题/次要值全用它，浅色下**两处不达标**。改成 `#6c6c70` 后白卡上 5.23:1、画布上 4.69:1。教训：**次要文字不是「可以不计较」的文字**，WCAG 对次要信息没有豁免，除了装饰性文本。
+- **`text-shadow` 在玻璃侧栏上是有害的**：设计稿里为了模拟 macOS vibrancy 的「文字描边」加过 `text-shadow: 0 0 10px rgba(0,0,0,.5)`，但在**不透明窗口**里它没有任何正向作用，只会给字缘糊一圈，让 7.4:1 的字看起来「不锐利」。判断依据：vibrancy 的特效用的是窗口真透明 + 原生材质，纯 CSS 的 `text-shadow` 模拟不了，只会降低清晰度。
+
 ## 7. 桌面壳与看板
 
 - **壳体结构（D85+D86+D104/D119/D123）**：视图切换是组件状态（桌面 `route.view`、手机 `ui-store.view`），不写 URL、不引路由、不给 `<body>` 加状态类；⌘1–⌘6 在输入框/下拉/contentEditable 里不劫持。一级 = 剪贴板/备忘录/用量/语音/英语角/设置（D143：剪贴板 ⌘1 兼默认页与兜底、语音 ⌘4 单页三段、英语角 ⌘5；快捷键按 `item.shortcut` 反查，别再按下标算）。**会话列表页、系统页、48 状态条、72 图标 rail、「概览」页都已删除，不要恢复**；桌面不再展示 AI 工作态与会话标题，只有 asking 时侧栏出现一行「AI 等你决定」。

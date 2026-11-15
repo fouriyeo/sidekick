@@ -24,7 +24,7 @@
   --secondary: #f2f2f7;
   --secondary-foreground: #1c1c1e;
   --muted: #f2f2f7;
-  --muted-foreground: #8a8a8e;
+  --muted-foreground: #6c6c70;   /* D144 无障碍：原 #8a8a8e 在白卡上只有 3.44:1，不达 4.5 */
   --tertiary: #b9b9c0;
   --accent: #eceef1;
   --accent-foreground: #1c1c1e;
@@ -58,13 +58,40 @@
   --ios-teal: #0a7764;
   --ios-gray: #8e8e93;
 
-  /* ---- 材料 ---- */
+  /* ---- 材料：凝态玻璃（D144）----
+     一个光向（顶棱亮、底棱暗）+ 一条弹簧曲线 + 两种物理（凸起 / 凹槽）。
+     tint 按面积分级：控件层 .34，侧栏这种大面积 .52。 */
   --sidebar: #ececef;
-  --glass-bg: rgba(247, 247, 251, 0.84);
-  --glass-border: rgba(0, 0, 0, 0.07);
+  --g-base: 255, 255, 255;
+  --g-tint: 0.34;
+  --g-tint-panel: 0.52;
+  --g-blur: 16px;
+  --g-sat: 185%;
+  --g-edge-d: 0.28;
+  --g-edge-hi: 0.95;
+  --g-edge-hover: 26px;
+  --g-edge-hover-lo: 62px;
+  --g-spring-dur: 800ms;
+  --g-spring: cubic-bezier(0.34, 2.4, 0.64, 1);
+  --g-press-dur: 90ms;
+  --g-press: cubic-bezier(0.32, 0, 0.67, 0);
+  --g-press-scale: 0.9;
+  --g-sink: 1;
   --glass-highlight: rgba(255, 255, 255, 0.72);
-  --glass-shadow: 0 0.5px 0 var(--glass-border), 0 8px 28px -22px rgba(0, 0, 0, 0.35);
-  --sidebar-bg: rgba(236, 236, 240, 0.82);
+  /* 一条 box-shadow 叠出整圈边：外轮廓 → 顶棱 → 三层倒角 → 底棱。
+     用变量存，所有玻璃统一引用，不要在别处再写一遍。 */
+  --g-edge-stack:
+    inset 0 0 0 0.7px rgba(255, 255, 255, var(--g-edge-d)),
+    inset 1px 0 0 rgba(255, 255, 255, calc(var(--g-edge-d) * 0.33)),
+    inset -1px 0 0 rgba(255, 255, 255, calc(var(--g-edge-d) * 0.33)),
+    inset 0 1px 0 rgba(255, 255, 255, var(--g-edge-hi)),
+    inset 0 2px 2px rgba(255, 255, 255, calc(var(--g-edge-hi) * 0.4)),
+    inset 0 5px 6px rgba(255, 255, 255, calc(var(--g-edge-hi) * 0.17)),
+    inset 0 10px 12px rgba(255, 255, 255, calc(var(--g-edge-hi) * 0.07)),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.11),
+    inset 0 -4px 7px rgba(0, 0, 0, 0.04);
+  --g-shadow: 0 12px 28px -18px rgba(0, 0, 0, 0.42), 0 2px 5px -3px rgba(0, 0, 0, 0.14);
+
   --sidebar-item-hover: rgba(0, 0, 0, 0.045);
   --sidebar-item-active: rgba(255, 255, 255, 0.92);
   --sidebar-item-active-shadow:
@@ -82,8 +109,10 @@
   --popover-shadow:
     0 12px 32px -8px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   --focus-ring: rgba(10, 119, 100, 0.28);
-  --ambient-a: rgba(10, 119, 100, 0.1);
-  --ambient-b: rgba(40, 97, 140, 0.08);
+  /* 氛围背景（D144）：窗口不透明，玻璃背后只有应用自己的画布。
+     把环境光提到能看见的档位，玻璃才有东西可透。 */
+  --ambient-a: rgba(10, 119, 100, 0.22);
+  --ambient-b: rgba(40, 97, 140, 0.18);
   --topbar-fade: rgba(244, 244, 248, 0.995);
 
   color-scheme: light;
@@ -144,11 +173,12 @@ html[data-theme="dark"] .desktop-ios,
   --ios-gray: #8e8e93;
 
   --sidebar: #2c2c2e;
-  --glass-bg: rgba(32, 32, 35, 0.86);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --g-base: 150, 156, 172;
+  --g-tint: 0.26;
+  --g-tint-panel: 0.30;
+  --g-edge-d: 0.24;
+  --g-edge-hi: 0.56;
   --glass-highlight: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.06), 0 12px 32px -24px rgba(0, 0, 0, 0.9);
-  --sidebar-bg: rgba(16, 16, 18, 0.72);
   --sidebar-item-hover: rgba(255, 255, 255, 0.06);
   --sidebar-item-active: rgba(58, 58, 62, 0.9);
   --sidebar-item-active-shadow:
@@ -164,7 +194,7 @@ html[data-theme="dark"] .desktop-ios,
   --popover-shadow:
     0 18px 48px -16px rgba(0, 0, 0, 0.8), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
   --focus-ring: rgba(63, 196, 160, 0.34);
-  --ambient-a: rgba(63, 196, 160, 0.14);
+  --ambient-a: rgba(63, 196, 160, 0.20);
   --ambient-b: rgba(10, 132, 255, 0.07);
   --topbar-fade: rgba(2, 2, 3, 0.99);
 
@@ -193,10 +223,75 @@ html[data-theme="dark"] .desktop-ios,
    -------------------------------------------------------------------------- */
 
 .dsl-glass {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
-  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-highlight);
+  background: rgba(var(--g-base), var(--g-tint));
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat)) brightness(1.02);
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat)) brightness(1.02);
+  /* 边不是一条线，是九层叠出来的渐变衰减 */
+  box-shadow: var(--g-shadow), var(--g-edge-stack);
+  transition:
+    box-shadow 260ms ease-out,
+    background-color 260ms ease-out,
+    transform var(--g-spring-dur) var(--g-spring);
+}
+
+/* hover：光从边缘往内渗，不是整块加白。所有玻璃自动生效，不挂类。 */
+@media (hover: hover) and (pointer: fine) {
+  .dsl-glass:hover {
+    box-shadow:
+      0 20px 44px -20px rgba(0, 0, 0, 0.58),
+      var(--g-edge-stack),
+      inset 0 0 var(--g-edge-hover) rgba(255, 255, 255, 0.2),
+      inset 0 0 var(--g-edge-hover-lo) rgba(255, 255, 255, 0.09);
+  }
+}
+
+/* 按下：下沉，不是缩放 */
+.dsl-glass:active {
+  transform: translateY(1px);
+  transition: transform var(--g-press-dur) var(--g-press);
+}
+
+/* 画布底色：html/body 必须显式给背景。
+   不写的话浏览器默认是白的，侧栏半透明会透出那层白 ——
+   浅色主题下白正好和画布一致看不出来，深色主题下就变成一块中灰。 */
+:root.desktop-ios,
+:root.desktop-ios body {
+  background-color: var(--background);
+}
+
+/* 无玻璃版容器：同一套倒角栈，砍掉 backdrop-filter。
+   给内容卡 / 词卡 / 气泡 / 选项按钮 —— 背后没有可采的内容，真玻璃只会白耗性能。 */
+.dsl-flat {
+  position: relative;
+  background: var(--card);
+  box-shadow:
+    0 0 0 0.5px var(--separator),
+    0 10px 26px -22px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: box-shadow 200ms ease-out, transform var(--g-spring-dur) var(--g-spring);
+}
+
+html.dark .desktop-ios .dsl-flat,
+html[data-theme="dark"] .desktop-ios .dsl-flat,
+:root.desktop-ios.dark .dsl-flat,
+:root.desktop-ios[data-theme="dark"] .dsl-flat {
+  box-shadow:
+    0 0 0 0.5px var(--separator),
+    0 12px 28px -22px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.dsl-flat:active {
+  transform: translateY(1px);
+  transition: transform var(--g-press-dur) var(--g-press);
+}
+
+/* 微光泽：所有实色小块都带半像素顶棱。
+   「光从上面来」不该是玻璃的特权，否则整页的光向只有玻璃区域是对的。 */
+.dsl-gloss {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -0.5px 0 rgba(0, 0, 0, 0.05);
 }
 
 .dsl-card {
@@ -326,29 +421,37 @@ a.dsl-row:active {
   font-weight: 500;
   letter-spacing: -0.01em;
   transition:
-    transform 320ms var(--spring-back),
+    transform var(--g-spring-dur) var(--g-spring),
     background-color 160ms ease,
-    filter 160ms ease,
     box-shadow 160ms ease;
 }
 
 .desktop-ios [data-slot="button"]:active {
-  transform: scale(0.94);
-  transition-duration: 90ms;
-  transition-timing-function: var(--press-in);
+  transform: scale(var(--g-press-scale)) translateY(0.5px);
+  transition-duration: var(--g-press-dur);
+  transition-timing-function: var(--g-press);
 }
 
 .desktop-ios [data-slot="button"][data-variant="default"] {
   position: relative;
-  background: var(--primary);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.05) 46%, transparent),
+    var(--primary);
   color: var(--primary-foreground);
   box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.28),
-    0 1px 3px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.12),
+    0 6px 14px -10px rgba(10, 119, 100, 0.46);
 }
 
+/* hover 是光从边缘渗进来，不是整块提亮 */
 .desktop-ios [data-slot="button"][data-variant="default"]:hover {
-  filter: brightness(1.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.2),
+    inset 0 0 18px rgba(255, 255, 255, 0.16),
+    0 6px 14px -10px rgba(10, 119, 100, 0.46);
 }
 
 .desktop-ios [data-slot="button"][data-variant="outline"],
@@ -357,7 +460,9 @@ a.dsl-row:active {
   color: var(--foreground);
   -webkit-backdrop-filter: blur(18px) saturate(170%);
   backdrop-filter: blur(18px) saturate(170%);
-  box-shadow: inset 0 0.5px 0 var(--glass-highlight);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, calc(var(--g-edge-hi) * 0.5)),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 
 .desktop-ios [data-slot="button"][data-variant="outline"]:hover,
@@ -406,10 +511,10 @@ a.dsl-row:active {
   align-items: center;
   gap: 0;
   border-radius: 999px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
-  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-highlight);
+  background: rgba(var(--g-base), var(--g-tint));
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  box-shadow: var(--g-shadow), var(--g-edge-stack);
   padding: 2px;
 }
 
@@ -421,43 +526,74 @@ a.dsl-row:active {
   width: 40px;
   height: 24px;
   border: 0;
-  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  transition: background 220ms ease, box-shadow 220ms ease;
 }
 
+/* 关：凹槽（顶暗、底沿反光） */
 .desktop-ios [data-slot="switch"][data-unchecked] {
-  background: var(--switch-track);
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.14), transparent 44%),
+    var(--switch-track);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
+/* 开：玻璃管（顶棱亮 + 底棱也亮） */
+.desktop-ios [data-slot="switch"][data-checked] {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.02) 50%, transparent),
+    var(--primary);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+/* 钮：自身有纵向渐变和顶高光，不是一个纯白圆点 */
 .desktop-ios [data-slot="switch-thumb"] {
   width: 20px;
   height: 20px;
-  background: #ffffff;
+  background: linear-gradient(to bottom, #ffffff 0%, #fbfbfd 52%, #eceef3 100%);
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.22),
-    0 0.5px 0 rgba(255, 255, 255, 0.6);
+    0 1px 3px rgba(0, 0, 0, 0.26),
+    0 4px 9px -4px rgba(0, 0, 0, 0.32),
+    inset 0 0.5px 0 #ffffff;
+  transition: transform 260ms cubic-bezier(0.34, 1.45, 0.64, 1);
 }
 
 .desktop-ios [data-slot="switch"][data-checked] [data-slot="switch-thumb"] {
-  background: #ffffff;
+  background: linear-gradient(to bottom, #ffffff 0%, #fbfbfd 52%, #eceef3 100%);
 }
 
 /* ----------------------------------------------------------------------------
    输入框 / 搜索：iOS 填充式，聚焦时柔光而不是描边
    -------------------------------------------------------------------------- */
 
+/* 输入框是凹进玻璃的槽：比卡片暗 + 顶棱压暗 + 底沿反光。
+   和按钮的上凸正好反着 —— 这是同一套物理的两个方向。 */
 .desktop-ios [data-slot="input"] {
   height: 38px;
   border: 0;
   border-radius: 11px;
-  background: var(--muted);
+  background: rgba(120, 120, 128, 0.13);
   padding: 0 12px;
   font-size: 14px;
-  transition: box-shadow 160ms ease, background-color 160ms ease;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.16),
+    inset 1px 0 2px rgba(0, 0, 0, 0.05),
+    inset -1px 0 2px rgba(0, 0, 0, 0.05),
+    inset 0 -1.5px 0 rgba(255, 255, 255, 0.3),
+    inset 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 220ms ease-out, background-color 220ms ease-out;
 }
 
+/* 聚焦：光渗进槽里，外圈保留给键盘用户的 focus ring */
 .desktop-ios [data-slot="input"]:focus-visible {
-  background: var(--card);
-  box-shadow: 0 0 0 3.5px var(--focus-ring);
+  background: rgba(120, 120, 128, 0.15);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.17),
+    inset 0 -1.5px 0 rgba(255, 255, 255, 0.34),
+    inset 0 0 0 1px rgba(10, 119, 100, 0.4),
+    inset 0 0 22px rgba(10, 119, 100, 0.17),
+    0 0 0 3.5px var(--focus-ring);
 }
 
 .dsl-search {
@@ -711,10 +847,23 @@ html[data-theme="dark"] .desktop-ios select,
    -------------------------------------------------------------------------- */
 
 .dsl-sidebar {
-  background: var(--sidebar-bg);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  backdrop-filter: blur(30px) saturate(180%);
-  box-shadow: inset -0.5px 0 0 var(--glass-border);
+  /* 侧栏是大面积材质：tint 比控件层高（.52 vs .34），否则纯色背景下和内容区糊成一片 */
+  background: rgba(var(--g-base), var(--g-tint-panel));
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  /* 直角贴窗口边：只画顶棱 + 内侧分界，不画四边 */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, var(--g-edge-hi)),
+    inset -0.5px 0 0 rgba(0, 0, 0, 0.09);
+}
+
+html.dark .desktop-ios .dsl-sidebar,
+html[data-theme="dark"] .desktop-ios .dsl-sidebar,
+:root.desktop-ios.dark .dsl-sidebar,
+:root.desktop-ios[data-theme="dark"] .dsl-sidebar {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, var(--g-edge-hi)),
+    inset -0.5px 0 0 rgba(255, 255, 255, 0.11);
 }
 
 .dsl-nav-item {
@@ -726,12 +875,26 @@ html[data-theme="dark"] .desktop-ios select,
   height: 34px;
   border-radius: 9px;
   padding: 0 10px;
-  color: var(--muted-foreground);
+  /* 未选中压到 70% 明度：对比度约 5.7:1，达标且和选中项有明显层次 */
+  color: rgba(28, 28, 30, 0.7);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.005em;
   transition: color 140ms ease, background-color 140ms ease;
   outline: none;
+}
+
+html.dark .desktop-ios .dsl-nav-item,
+html[data-theme="dark"] .desktop-ios .dsl-nav-item,
+:root.desktop-ios.dark .dsl-nav-item,
+:root.desktop-ios[data-theme="dark"] .dsl-nav-item {
+  color: rgba(242, 242, 247, 0.78);
+}
+
+/* 图标和文字同一亮度：48% 的图标在深色下只剩 3:1，属于「有但看不清」 */
+.dsl-nav-item svg {
+  opacity: 1;
+  transition: opacity 140ms ease;
 }
 
 .dsl-nav-item:active {
@@ -754,6 +917,11 @@ html[data-theme="dark"] .desktop-ios select,
 
 .dsl-nav-item[data-active="true"] {
   color: var(--foreground);
+  font-weight: 500;
+}
+
+.dsl-nav-item[data-active="true"] svg {
+  opacity: 1;
 }
 
 .dsl-nav-thumb {
@@ -774,10 +942,10 @@ html[data-theme="dark"] .desktop-ios select,
 }
 
 .dsl-topbar[data-scrolled="true"] {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  backdrop-filter: blur(26px) saturate(180%);
-  box-shadow: var(--glass-shadow), inset 0 0.5px 0 var(--glass-highlight);
+  background: rgba(var(--g-base), var(--g-tint));
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  box-shadow: var(--g-shadow), var(--g-edge-stack);
 }
 
 /* 分段滑块 */
@@ -917,32 +1085,25 @@ html.dsl-vibrancy .dsl-main {
     var(--background);
 }
 
+/* vibrancy 下窗口背后是真的桌面壁纸 —— 这才是玻璃最该成立的场合。
+   用 token 派生，深浅自动跟着走，不要再硬编码白色渐变。 */
 html.dsl-vibrancy .dsl-sidebar {
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.3) 0%,
-    rgba(255, 255, 255, 0.14) 34%,
-    rgba(255, 255, 255, 0.07) 100%
+    rgba(var(--g-base), calc(var(--g-tint-panel) * 0.58)) 0%,
+    rgba(var(--g-base), calc(var(--g-tint-panel) * 0.27)) 34%,
+    rgba(var(--g-base), calc(var(--g-tint-panel) * 0.13)) 100%
   );
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow: inset -0.5px 0 0 var(--glass-border);
+  box-shadow: inset -0.5px 0 0 rgba(0, 0, 0, 0.09);
 }
 
 html.dsl-vibrancy .dsl-sidebar::before {
   display: none;
 }
 
-html.dark .desktop-ios.dsl-vibrancy .dsl-sidebar,
-html[data-theme="dark"].dsl-vibrancy .dsl-sidebar,
-:root.desktop-ios.dark.dsl-vibrancy .dsl-sidebar {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    rgba(255, 255, 255, 0.045) 34%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
-}
+/* 深色由 --g-base / --g-tint-panel 自动适配，不再单独覆盖 */
 
 /* 降低透明度时：材质退成实色，侧栏回到 --sidebar，内容区保持不透明 */
 @media (prefers-reduced-transparency: reduce) {
