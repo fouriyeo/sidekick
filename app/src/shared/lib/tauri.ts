@@ -233,6 +233,11 @@ const COMMANDS = {
   hotkeySave: "hotkey_save",
   sendRemoteMicAck: "send_remote_mic_ack",
   sendRemoteMicStatus: "send_remote_mic_status",
+  remoteMicPrepare: "remote_mic_prepare",
+  remoteMicStandbyStart: "remote_mic_standby_start",
+  remoteMicStandbyStop: "remote_mic_standby_stop",
+  remoteMicStandbyStatus: "remote_mic_standby_status",
+  remoteMicSetForeground: "remote_mic_set_foreground",
   sendUsageRequest: "send_usage_request",
   tokenUsageStats: "token_usage_stats",
   tokenPricingStatus: "token_pricing_status",
@@ -1036,8 +1041,50 @@ export function subscribeMicHud(handler: (payload: RemoteHudPayload) => void): U
 }
 
 /** 手机：上报本机是否响应电脑遥控（连上电脑 / 开关变化时）。 */
-export function sendRemoteMicStatus(enabled: boolean): Promise<void> {
-  return invoke<void>(COMMANDS.sendRemoteMicStatus, { enabled });
+export function sendRemoteMicStatus(enabled: boolean, standby = false): Promise<void> {
+  return invoke<void>(COMMANDS.sendRemoteMicStatus, { enabled, standby });
+}
+
+export type RemoteMicPrepareResult = {
+  ok: boolean;
+  mic: boolean;
+  notifications: boolean;
+  code?: string | null;
+};
+
+export type RemoteMicStandbyStatus = {
+  ok: boolean;
+  standby: boolean;
+  recording: boolean;
+  session?: string | null;
+  bytes?: number;
+};
+
+/** 手机：首次开启后台待命时申请录音 + 通知权限。 */
+export function remoteMicPrepare(): Promise<RemoteMicPrepareResult> {
+  return invoke<RemoteMicPrepareResult>(COMMANDS.remoteMicPrepare);
+}
+
+/** 手机：启动/关闭「电脑遥控待命」前台服务（必须在 App 前台调用）。 */
+export function remoteMicStandbyStart(): Promise<{
+  ok: boolean;
+  code?: string | null;
+  standby?: boolean;
+}> {
+  return invoke(COMMANDS.remoteMicStandbyStart);
+}
+
+export function remoteMicStandbyStop(): Promise<void> {
+  return invoke<void>(COMMANDS.remoteMicStandbyStop);
+}
+
+export function remoteMicStandbyStatus(): Promise<RemoteMicStandbyStatus> {
+  return invoke<RemoteMicStandbyStatus>(COMMANDS.remoteMicStandbyStatus);
+}
+
+/** 手机：告诉原生层当前是否前台；后台未待命时直接回 standby_off。 */
+export function remoteMicSetForeground(foreground: boolean): Promise<void> {
+  return invoke<void>(COMMANDS.remoteMicSetForeground, { foreground });
 }
 
 /** 手机：回执 `mic.remote` 命令。 */

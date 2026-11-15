@@ -15,7 +15,7 @@ related:
 
 # 后台录音调研
 
-> 结论先行：**「先在 App 里开录，再锁屏/切后台」可以做，业界标准做法是原生 `AudioRecord` + `microphone` 前台服务 + 常驻通知 + 分段落盘；「手机已经在后台/锁屏，再由电脑快捷键开麦」不能只加一个服务，Android 12+ 不允许从后台启动前台服务、14+ 对麦克风这类 while-in-use 类型更严，要做只能常驻「待命服务」并把采集/推流整体搬出 WebView。后者如果接受常驻通知与鉴权前提，可按 §6.2 做；建议先补配对鉴权。**
+> 结论先行：**「先在 App 里开录，再锁屏/切后台」可以做，业界标准做法是原生 `AudioRecord` + `microphone` 前台服务 + 常驻通知 + 分段落盘；「手机已经在后台/锁屏，再由电脑快捷键开麦」不能只加一个服务，Android 12+ 不允许从后台启动前台服务、14+ 对麦克风这类 while-in-use 类型更严，要做只能常驻「待命服务」并把采集/推流整体搬出 WebView。后者已按 §6.2 落地为可选开关（默认关、常驻通知）；鉴权仍是正式分发前的前置风险。**
 > 读者：产品 / 工程 / 测试。不包含：排期承诺（见 §9）、iOS 实现细节（后续单独评估）。
 
 ## 1. 先分清三个「后台」
@@ -185,7 +185,7 @@ Rust memo_recording_finish
 3. **后台 JS 会被冻结**：现有 `mic.remote` 处理、`getUserMedia` 采集、PCM 推流都在 WebView/JS 侧；必须搬到 Rust/原生，否则切后台就断。
 4. **放大现有安全风险**：当前 WS 无鉴权；待命模式等于把「同网段可触发开麦」的能力长期化。正式做之前建议先补配对/鉴权，或至少只在可信网络启用并在设置里明示。
 
-### 6.2 可行方案：待命 FGS + 原生采集
+### 6.2 已落地方案：待命 FGS + 原生采集
 
 ```text
 Mac 快捷键
@@ -205,12 +205,14 @@ Mac 快捷键
 2. Mac 按快捷键 → 桌面发 `mic.remote.start` → 手机 Rust 让服务开 `AudioRecord`，通知切「正在录音 00:12」，拿 partial wake lock。
 3. Rust 把 PCM 按 100ms 组帧发给桌面；桌面 HUD 波形、ASR、插入照旧。
 4. 松开/再按/60 秒/Esc → 停录、关文件、通知回待命；语音输入仍不落历史，文件删除。
-5. 断开电脑/关闭待命/进程被杀 → 停待命；下次打开 App 且连上电脑时再启动。
+5. 断开电脑 → 先保留待命服务，Rust 用最近地址每 2 秒重连（最多 3 分钟），成功后补发 `mic.remote.status`；只有重连超时或用户关闭待命才停服务。进程被杀则只能下次打开 App 再启动。
 
 关键实现：
 
 - **采集到 Rust 走文件 tail（推荐）**：服务写 `remote-mic/<session>.pcm`，Rust 轮询读新增字节；无 JNI、无 socket，延迟约 50–100ms，够 ASR 用。若嫌延迟高，再换 127.0.0.1 TCP。
 - **Rust 接管遥控**：`mobile_client` 读到 `mic.remote` 先交给新的 `mobile_remote_mic`，不再 `emit` 给 JS；复用现有 `mic_start` / `mic_frame` / `mic_stop` 和 `mic.remote.ack`。
+- **断线保活**：WS 断开后不立刻 `standbyStop`，否则后台 App 无法重新拉起 FGS，表现为快捷键失灵、点录音/打开 App 才恢复。`on_disconnect` 保留服务，Rust 每 2 秒重连，成功后先补发 `status`；3 分钟仍失败才停。
+- **后台不要 emit**：WebView 在后台可能冻结，`AppHandle::emit` 可能不返回；重连循环里跳过 `emit_offline`/`conn`，先把 `mic.remote.status` 发出去，否则重连任务会卡死，表现同样是「点开 App 又好了」。回前台时 `remote_mic_set_foreground` 再补一条权威 `conn`（online = Rust 实际连接态），避免 connection-store 停在旧状态。
 - **协议小改**：`mic.remote.status` 加 `standby`；ack 加 `standby_off` / `notification_denied` / `service_failed`；桌面 HUD 区分「手机待命未开」。
 - **权限**：首次开启待命时请求 `RECORD_AUDIO` + `POST_NOTIFICATIONS`；任一被拒就不能开待命，并给明确引导。
 - **通知**：待命/录音两态；`setOngoing(true)`；「停止」动作；点按回 App。通知权限被拒时 FGS 通知不可见，等于偷偷开麦，必须禁止。
@@ -222,7 +224,7 @@ Mac 快捷键
 - **耗电**：待命不碰麦克风，耗电很低；录音时才有 AudioRecord + 文件写 + wake lock，60 秒上限，影响可控。
 - **OEM**：国产 ROM 仍要自启动/电池白名单；锁屏、划掉任务、长时间待机存活要真机验证。
 - **安全**：无鉴权的待命服务风险高；建议先做配对/鉴权，或把待命限制为「仅可信 Wi-Fi + 手动开启」。
-- **产品原则**：mic PRD 的「无后台」要被改成「可选后台待命，默认关，通知可见」；这是产品决策，不只是技术改动。
+- **产品原则**：mic PRD 已改为「默认无后台；键盘遥控可选待命，默认关，通知可见」；这是产品决策，不只是技术改动。
 - **工作量**：spike 2–3 天（真机：切后台/锁屏 + Mac 按键 + 音频到 Mac + 60 秒 + 来电）；MVP 1.5–2 周；打磨 3–5 天。
 
 ### 6.4 不接受的替代
@@ -231,7 +233,7 @@ Mac 快捷键
 - 手机上的大按钮点一下开始，再锁屏（属于场景 A 的能力），但语音输入是 60 秒短会话，收益有限。
 - 如果只是想在电脑前随时说，可评估「桌面直接用 Mac 麦克风采集」；那是另一条产品路径，不用手机待命。
 
-> 建议顺序：先补配对/鉴权 → 2–3 天 spike 验证待命/锁屏/音频链路 → 再决定是否做完整版；不要和备忘录后台录音混在一个迭代里。
+> 落地（2026-11-15）：`RemoteMicService` / `RemoteMicPlugin`（Kotlin）+ `remote_mic.rs`（Rust）+ `settings.remoteMicStandby` + 通知/HUD 文案；真机 RMX3370 / Android 13 已验证「App 切后台 + 锁屏」时由模拟桌面 `mic.remote` 触发：57 帧 / 约 184KB；播放 660Hz 测试音后帧 RMS/`mic.level` 非零；60 秒自动停为 599 帧 / 1,933,572 字节并回 `mic.stop(timeout)`；写 `.stop=release`（通知「停止」同路径）回 `mic.stop(release)`。真实热键（F8 临时绑定）在手机切后台时已触发「正在录音」并写 64KB PCM；桌面同协议探针（16k PCM TTS）完成 `mic.result` 文本「后台录音测试成功。这是一段5秒钟左右的测试语音。」、5s/84 tokens、剪贴板写入；右 Command 已用合成 flagsChanged 验证、通知按钮实点与 OEM 待验；正式分发前仍建议先补配对/鉴权。
 
 ## 7. 桌面端（macOS）备注
 

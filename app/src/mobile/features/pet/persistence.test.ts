@@ -140,6 +140,14 @@ describe("pet persistence", () => {
     expect(fallback.save?.settings.keepAwakeHours).toBe(2);
   });
 
+  it("后台待命默认关，旧存档不误开，显式开启保留", () => {
+    const legacy = parsePetSave({ version: 1 }, NOW);
+    expect(legacy.save?.settings.remoteMicStandby).toBe(false);
+
+    const on = parsePetSave({ version: 1, settings: { remoteMicStandby: true } }, NOW);
+    expect(on.save?.settings.remoteMicStandby).toBe(true);
+  });
+
   it("normalizes keepAwake: legacy 未接入 值落到默认开，显式关闭保留", () => {
     const legacy = parsePetSave({ version: 1, settings: { keepAwake: "never" } }, NOW);
     expect(legacy.save?.settings.keepAwake).toBe(true);

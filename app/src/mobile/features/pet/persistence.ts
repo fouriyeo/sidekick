@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: PetSettings = {
   dimMinutes: 5,
   keepAwakeHours: 2,
   remoteMic: true,
+  remoteMicStandby: false,
 };
 
 /** 自动变暗分钟数的合法范围（1 分钟起，最多 1 小时）。 */
@@ -103,6 +104,10 @@ function normalizeSettings(raw: unknown): PetSettings {
     keepAwakeHours: normalizeKeepAwakeHours(value.keepAwakeHours),
     // 旧存档没有这个字段：默认允许电脑遥控（用户可随时在 更多 › 麦克风 关掉）。
     remoteMic: typeof value.remoteMic === "boolean" ? value.remoteMic : DEFAULT_SETTINGS.remoteMic,
+    remoteMicStandby:
+      typeof value.remoteMicStandby === "boolean"
+        ? value.remoteMicStandby
+        : DEFAULT_SETTINGS.remoteMicStandby,
   };
 }
 

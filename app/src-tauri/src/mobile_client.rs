@@ -37,6 +37,8 @@ pub struct ClientState {
     conn: Mutex<Option<Conn>>,
     connect_lock: tokio::sync::Mutex<()>,
     generation: AtomicU64,
+    /// 最近一次尝试/成功的地址；后台待命断线重连用它，不依赖 WebView。
+    last_url: Mutex<Option<String>>,
 }
 
 impl ClientState {
@@ -45,6 +47,7 @@ impl ClientState {
             conn: Mutex::new(None),
             connect_lock: tokio::sync::Mutex::new(()),
             generation: AtomicU64::new(0),
+            last_url: Mutex::new(None),
         }
     }
 
@@ -89,6 +92,10 @@ pub fn send_memo_binary(app: &tauri::AppHandle, frame: Vec<u8>) -> Result<(), St
 }
 
 fn emit_offline(app: &tauri::AppHandle) {
+    // 后台 WebView 可能冻结；emit 在后台可能卡住调用者（断线清理/重连循环）。
+    if !crate::remote_mic::is_foreground(app) {
+        return;
+    }
     let _ = app.emit("conn", serde_json::json!({ "online": false }));
 }
 
@@ -114,8 +121,19 @@ fn normalize_addr(addr: &str) -> String {
 pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), String> {
     let url = normalize_addr(&addr);
     let state = app.state::<ClientState>();
+    if let Ok(mut last) = state.last_url.lock() {
+        *last = Some(url.clone());
+    }
 
-    let _serial = state.connect_lock.lock().await;
+    // 后台待命中 JS 可能被冻结，connectServer 任务会一直占着 connect_lock；
+    // 给锁加超时，避免 Rust 自动重连被一个挂起的旧命令永久卡死。
+    let _serial = match tokio::time::timeout(Duration::from_secs(6), state.connect_lock.lock()).await {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("[mobile] 连接忙：等待 connect_lock 超时");
+            return Err("上一次连接还在进行，稍后重试".to_string());
+        }
+    };
     let generation = state.next_generation();
 
     {
@@ -158,6 +176,10 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
                     if crate::memo::mobile::sync::handle_server_message(&read_app, &text) {
                         continue;
                     }
+                    // 键盘遥控后台待命：Rust 先接管；未开启待命时仍交给 WebView 前台路径。
+                    if crate::remote_mic::handle_server_message(&read_app, &text) {
+                        continue;
+                    }
                     if text.contains("\"type\":\"status\"") {
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                             println!(
@@ -198,6 +220,7 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
         }
         println!("[mobile] 连接已断开");
         emit_offline(&read_app);
+        crate::remote_mic::on_disconnect(&read_app);
     });
 
     let write_task = tauri::async_runtime::spawn(async move {
@@ -222,11 +245,35 @@ pub async fn connect_server(app: tauri::AppHandle, addr: String) -> Result<(), S
         });
     }
     println!("[mobile] connected to {url}");
-    let _ = app.emit("conn", serde_json::json!({ "online": true, "url": url }));
-    // 连上后补一次英语角同步（未配对会静默跳过）。
-    crate::word::mobile::kick(app.clone());
+    // 后台待命由 Rust 保活：先补发 status（桌面重新登记），再做可能卡住的 WebView emit。
+    if crate::remote_mic::is_standby(&app) {
+        let _ = send_remote_mic_status(app.clone(), true, Some(true));
+    }
+    if crate::remote_mic::is_foreground(&app) {
+        let _ = app.emit("conn", serde_json::json!({ "online": true, "url": url }));
+        // 连上后补一次英语角同步（未配对会静默跳过）；后台不碰 WebView。
+        crate::word::mobile::kick(app.clone());
+    }
 
     Ok(())
+}
+
+/// 手机 Rust 侧自己的连接状态；后台待命重连用，不依赖 WebView。
+pub fn is_connected(app: &tauri::AppHandle) -> bool {
+    app.state::<ClientState>()
+        .conn
+        .lock()
+        .map(|guard| guard.is_some())
+        .unwrap_or(false)
+}
+
+/// 最近一次连接地址（后台待命断线重连用）。
+pub fn last_url(app: &tauri::AppHandle) -> Option<String> {
+    app.state::<ClientState>()
+        .last_url
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
 }
 
 #[tauri::command]
@@ -378,14 +425,25 @@ pub fn mic_frame(
     let bytes = STANDARD
         .decode(pcm)
         .map_err(|_| "音频数据无效".to_string())?;
-    let frame = mic_protocol::build_audio_frame(&session, sequence, &bytes)?;
-    send_binary(&app, frame)?;
+    send_mic_frame(&app, &session, sequence, &bytes, level)
+}
+
+/// 原生采集路径复用同一套 `SK01` 组帧与电平上报，避免两份协议实现。
+pub fn send_mic_frame(
+    app: &tauri::AppHandle,
+    session: &str,
+    sequence: u32,
+    pcm: &[u8],
+    level: Option<f32>,
+) -> Result<(), String> {
+    let frame = mic_protocol::build_audio_frame(session, sequence, pcm)?;
+    send_binary(app, frame)?;
 
     // 电平跟着每帧一起送（约 8Hz）：桌面用它把顶部状态条的波形画成真的。
     if let Some(level) = level {
         let percent = (level.clamp(0.0, 1.0) * 100.0).round() as u32;
         send_payload(
-            &app,
+            app,
             serde_json::json!({
                 "v": 1,
                 "type": "mic.level",
@@ -418,15 +476,20 @@ pub fn mic_stop(app: tauri::AppHandle, session: String, reason: String) -> Resul
 /// 手机 → 桌面：上报本机是否响应「电脑遥控录音」。
 ///
 /// 桌面靠这条消息决定快捷键按下去时是「发命令」还是「弹未连接提示」；
-/// 断连时桌面侧会清掉登记，不需要额外的停机消息。
+/// `standby` 表示后台待命服务是否已挂起（手机切后台/锁屏也能开麦）。
 #[tauri::command]
-pub fn send_remote_mic_status(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+pub fn send_remote_mic_status(
+    app: tauri::AppHandle,
+    enabled: bool,
+    standby: Option<bool>,
+) -> Result<(), String> {
     send_payload(
         &app,
         serde_json::json!({
             "v": 1,
             "type": "mic.remote.status",
             "enabled": enabled,
+            "standby": standby.unwrap_or(false),
             "ts": now_ms(),
         }),
     )

@@ -1,6 +1,6 @@
 # 项目状态
 
-最后更新：2026-11-14
+最后更新：2026-11-15
 
 > 当前快照（能跑什么 / 待验收 / 技术债 / 下一步）。逐日变更见 [history.md](./history.md)，关键取舍见 [decisions.md](./decisions.md)，回归测试见 [engineering/quality.md](./engineering/quality.md#8)。
 
@@ -14,6 +14,7 @@
 | 手机壳：宠物页（顶栏 / 会话卡浮层 / 宠物 / 麦克风）+ 设置二级页 + 聊天/连接/回答页 + 备忘录全屏页；竖屏单布局 | ✅ 代码完成（真机走查待补） | [prd/shell/INDEX.md](./prd/shell/INDEX.md) · [frontend-architecture.md](./frontend-architecture.md) |
 | 语音输入：百炼云端流式 ASR（唯一）→ 写剪贴板 + 合成 Cmd+V；结果卡手动「回车 / 清空」 | ✅ 真机验证（完整矩阵待补） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/asr-cloud-bailian.md](./engineering/asr-cloud-bailian.md) |
 | 键盘遥控录音：桌面全局快捷键（双击右 Control 等）→ 手机开始/结束 → 结果插入前台应用；未连接弹顶部提示、Esc 取消 | 🚧 代码完成（真机/真窗口/冲突矩阵待验收） | [prd/mic/INDEX.md](./prd/mic/INDEX.md) · [engineering/protocol-audio.md](./engineering/protocol-audio.md) |
+| 键盘遥控「后台待命」：手机切到别的 App/锁屏后，Mac 快捷键仍能开麦；microphone FGS + 常驻通知 + 原生 PCM 回传 | ✅ 代码完成 + 真机通过：切后台+锁屏、模拟桌面 `mic.remote`、音频非静音、60s timeout、通知停止 marker、F8 热键触发、桌面转写/插入（5s/84 tokens）；断线保活/自动重连与 `start_timeout` 复位已补（D146）；右 Command（合成 flagsChanged）已验；通知按钮实点、OEM 待验 | [engineering/keyboard-remote-mic.md](./engineering/keyboard-remote-mic.md) · [engineering/background-recording.md](./engineering/background-recording.md) |
 | 语音备忘录：手机前台录音 → 分段转写 → LLM 归类 → 本地 rusqlite；电脑只读镜像 + 6 位码配对 | ✅ 代码完成（真机验收待） |
 | 英语角（生词本）：记录 → 百炼 qwen3.8-flash 解释 → 词库造句；桌面 ⌘5 + 手机全屏页 + 局域网双向同步 | ✅ 代码完成（浏览器 QA 通过；真机双向同步已验证；账单对账待补） |
 | 英语角语音朗读：qwen-audio-3.1-tts-plus（单词/例句/造句句）→ 本地 mp3 缓存 → 双端播放；桌面失败回退系统 `say` | ✅ 真机验证（首次 1–2s、缓存命中 0 请求、按字符记账） | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md#55-语音合成qwen-audio-31-tts-plus) | [prd/english-corner/INDEX.md](./prd/english-corner/INDEX.md) · [engineering/english-corner.md](./engineering/english-corner.md) | [prd/memo/INDEX.md](./prd/memo/INDEX.md) · [engineering/memo-pipeline.md](./engineering/memo-pipeline.md) |
@@ -30,6 +31,7 @@
 - **桌面真窗口目检**：交通灯位置、拖动区、滚动玻璃与紧凑标题过渡、窗口级 vibrancy、深浅主题、1180/960 两档；D143 后确认默认页是用量看板、正常运行时侧栏没有状态字、asking 时「AI 等你决定」一行可点唤起 DSH、自动输入未授权只出琥珀点。
 - **菜单栏与看板**：左键弹出位置（顶部 16×8 指引尖、尖顶距菜单栏 2pt，D138）与收起（点外部 / Esc / Cmd+W）、钉住后失焦不收起（D135）、尖在贴边时是否指回图标、玻璃态尖端磨砂与卡片是否同一块材质、多屏不越界、D120 玻璃深色观感与 `SIDEKICK_UI_VIBRANCY=off` 回退。
 - **键盘遥控录音**：真机端到端（开始/结束/6 类失败/Esc 取消/多手机拒绝）、HUD 在其它 App 前台与全屏 Space 的可见性、不抢焦点（插入仍 same_app）、快捷键与 IDE/输入法冲突、现有手机按住流程回归。
+- **键盘遥控后台待命（D145/D146）**：右 Command 已用合成 `flagsChanged` 验证（物理键盘可再按一次确认）、通知「停止」按钮实点（marker 路径已验）、来电停止、OEM 白名单与划掉任务存活；断线保活/自动重连已验证；假手机 ack 探针验证 3s `start_timeout` 后第二次按键仍能发起。
 - **语音**：真实百炼账号下 60 秒 / 断连 / 密码框矩阵、辅助功能实测、2000 词首包延迟；回车/清空在终端等非标准输入框与焦点切换矩阵。
 - **AI 联动**：真实 DSH 重启与插件加载、四态动作与三音效、杀 DSH 15s 内静态、隐私抓包审计（无工具名原文/参数/路径）。
 - **用量看板**：真实账本对账、价格联网 / 断网 / 覆盖文件、空/损坏账本、手机模型分组开关。
@@ -43,7 +45,7 @@
 
 | 项 | 说明 |
 | --- | --- |
-| 无鉴权 / 无加密 | 同网段任何人可连 WS；仅限可信网络（配对与鉴权 P1） |
+| 无鉴权 / 无加密 | 同网段任何人可连 WS；仅限可信网络（配对与鉴权 P1）。后台待命放大为「同网段可触发开麦」，默认关且仅可信网络 |
 | 无心跳（半开连接） | 进程退出/断网靠 FIN/RST 立刻发现（约 0.5s）；电脑睡眠或路由器静默丢包时可能长时间仍显示「已连接」 |
 | 消息不落库 | 广播不持久化，重启清空；发送方也收自己的回显（按 `from` 区分） |
 | 企业网只放行单播（D73） | 广播/组播全丢，mDNS 同样不可用；自动发现恒 0 台，只能手动地址或扫码兜底 |
@@ -74,7 +76,7 @@
 ### P1
 
 - 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息。
-- 键盘遥控录音（D132/D133）：代码已完成，补真机与真窗口验收矩阵；裸修饰键若被发现还需要「输入监控」授权，补授权引导。**用户 2026-11-15 明确要求「手机切到别的 App/锁屏后，Mac 快捷键仍能开麦」**：只能走「待命 FGS + 原生采集」方案（常驻通知 + 鉴权前提），见 [engineering/background-recording.md §6.2](./engineering/background-recording.md)，待确认常驻通知后再排期。
+- 键盘遥控录音（D132/D133）：代码已完成，补真机与真窗口验收矩阵；裸修饰键若被发现还需要「输入监控」授权，补授权引导。**后台待命（D145）已落地**：手机前台开待命后，切后台/锁屏仍可由电脑快捷键开麦；真机切后台+锁屏 + 模拟 `mic.remote` 已通（音频电平非零；60s 599 帧/1.93MB 自动 timeout；通知停止 marker 回 `release`）；真实热键 F8 临时绑定切后台已触发「正在录音」；同协议探针完成桌面转写/插入（5s/84 tokens，剪贴板有文本）；右 Command 已用合成 flagsChanged 验证；通知按钮实点与 OEM 白名单待验。
 - 配对与鉴权（首次扫码配对、长期密钥、信道加密）；精确手机台数（角色握手）。
 - 备忘录：Keystore、锁屏/后台录音、AAC 压缩、cursor/心跳；宠物扩展状态行。后台录音调研已完成（[engineering/background-recording.md](./engineering/background-recording.md)），待拍板是否进本轮；键盘遥控录音在手机锁屏后开麦受 Android 后台限制，方案见同文 §6。
 - 麦克风选择 spike（2026-11-15）：设置页实验卡片支持「自动（系统默认）/顶部/底部」试听，默认自动；真机 A/B 后再决定是否接入按住说话。

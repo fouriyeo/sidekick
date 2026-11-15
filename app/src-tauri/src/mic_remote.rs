@@ -87,13 +87,34 @@ impl RemoteMic {
             capable.insert(client_id, Instant::now());
         } else {
             capable.remove(&client_id);
+            if capable.is_empty() {
+                drop(capable);
+                self.reset_idle();
+            }
         }
     }
 
     pub fn disconnect(&self, client_id: u64) {
-        if let Ok(mut capable) = self.capable.lock() {
+        let empty = {
+            let Ok(mut capable) = self.capable.lock() else {
+                return;
+            };
             capable.remove(&client_id);
+            capable.is_empty()
+        };
+        if empty {
+            self.reset_idle();
         }
+    }
+
+    /// 手机断连/关开关后清掉本机状态；否则 phase 卡在 Connecting/Listening 时，
+    /// 快捷键会被 on_trigger 直接忽略，表现成「有时候按了没反应」。
+    fn reset_idle(&self) {
+        self.set_phase(Phase::Idle);
+        if let Ok(mut pending) = self.pending.lock() {
+            *pending = None;
+        }
+        hotkey::set_recording(&self.app, false);
     }
 
     // ---- 快捷键动作 ----------------------------------------------------------
@@ -219,7 +240,11 @@ impl RemoteMic {
             }
         };
         // 成功 ack 只代表手机「答应了」，等 mic.start/mic.ready 才进 listening。
-        if !matched || ok {
+        if !matched {
+            return;
+        }
+        if ok {
+            self.arm_listen_timeout(request_id.to_string());
             return;
         }
 
@@ -229,6 +254,41 @@ impl RemoteMic {
             json!({ "v": 1, "state": "unavailable", "reason": code, "ts": now_ms() }),
         );
         mic_hud::hide_later(&self.app, HUD_LINGER);
+    }
+
+    /// ack 成功但 3 秒内没有 mic.start/mic.ready：状态机不能一直卡在 Connecting。
+    fn arm_listen_timeout(&self, request_id: String) {
+        let weak = self.self_weak.get().cloned();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            let Some(this) = weak.and_then(|weak| weak.upgrade()) else {
+                return;
+            };
+            if this.phase() != Phase::Connecting {
+                return;
+            }
+            let still_pending = {
+                let Ok(mut pending) = this.pending.lock() else {
+                    return;
+                };
+                match pending.as_ref() {
+                    Some(current) if current.request_id == request_id => {
+                        *pending = None;
+                        true
+                    }
+                    _ => false,
+                }
+            };
+            if !still_pending {
+                return;
+            }
+            this.reset_idle();
+            mic_hud::show(
+                &this.app,
+                json!({ "v": 1, "state": "failed", "reason": "start_timeout", "ts": now_ms() }),
+            );
+            mic_hud::hide_later(&this.app, HUD_LINGER);
+        });
     }
 
     // ---- 内部 ----------------------------------------------------------------

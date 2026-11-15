@@ -26,7 +26,13 @@ const ACK: RemoteMicAck = {
   ts: 2,
 };
 
-const STATUS: RemoteMicStatus = { v: 1, type: "mic.remote.status", enabled: true, ts: 3 };
+const STATUS: RemoteMicStatus = {
+  v: 1,
+  type: "mic.remote.status",
+  enabled: true,
+  standby: true,
+  ts: 3,
+};
 
 describe("parseRemoteMicMessage", () => {
   it("解析桌面的开始命令", () => {
@@ -49,6 +55,7 @@ describe("parseRemoteMicMessage", () => {
     expect(parseRemoteMicMessage(JSON.stringify(STATUS))).toMatchObject({
       type: "mic.remote.status",
       enabled: true,
+      standby: true,
     });
   });
 

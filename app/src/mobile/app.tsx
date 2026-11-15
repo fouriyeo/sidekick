@@ -36,6 +36,10 @@ import {
   disableWebviewHaptics,
   exitApp,
   memoSyncNow,
+  remoteMicSetForeground,
+  remoteMicStandbyStart,
+  remoteMicStandbyStatus,
+  remoteMicStandbyStop,
   sendRemoteMicStatus,
   sendStatusRequest,
   subscribeBackButton,
@@ -86,11 +90,57 @@ export function MobileApp() {
 
   // 电脑遥控开关：连上电脑时上报一次，用户改开关时再上报（桌面据此决定快捷键是否可用）。
   const remoteMicEnabled = usePetStore((state) => state.pet.settings.remoteMic);
+  const remoteMicStandby = usePetStore((state) => state.pet.settings.remoteMicStandby);
   const connectionStatus = useConnectionStore((state) => state.status);
+  const standbyActiveRef = useRef(false);
+
+  // 后台待命：连上电脑 + 两个开关都开时启动 FGS；关开关/断开时停。
+  // 启动后再查一次真实状态上报给电脑，避免「设置开了但权限没给」被误判成可遥控。
   useEffect(() => {
     if (connectionStatus !== "connected") return;
-    void sendRemoteMicStatus(remoteMicEnabled).catch(() => undefined);
-  }, [remoteMicEnabled, connectionStatus]);
+    let cancelled = false;
+    void (async () => {
+      const wanted = remoteMicEnabled && remoteMicStandby;
+      if (wanted) {
+        const result = await remoteMicStandbyStart().catch(() => null);
+        standbyActiveRef.current = Boolean(result?.ok);
+      } else if (standbyActiveRef.current) {
+        await remoteMicStandbyStop().catch(() => undefined);
+        standbyActiveRef.current = false;
+      }
+      const status = await remoteMicStandbyStatus().catch(() => null);
+      if (cancelled) return;
+      await sendRemoteMicStatus(remoteMicEnabled, Boolean(status?.standby)).catch(() => undefined);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionStatus, remoteMicEnabled, remoteMicStandby]);
+
+  // 告诉原生层前台/后台：后台且未待命时，桌面遥控直接回 standby_off，不让它干等 ack。
+  useEffect(() => {
+    void remoteMicSetForeground(!document.hidden).catch(() => undefined);
+    const onVisibility = () => {
+      const visible = !document.hidden;
+      void remoteMicSetForeground(visible).catch(() => undefined);
+      if (!visible) return;
+      const settings = usePetStore.getState().pet.settings;
+      if (
+        useConnectionStore.getState().status === "connected" &&
+        settings.remoteMic &&
+        settings.remoteMicStandby
+      ) {
+        // 服务可能被系统回收；回前台补一次启动，再上报真实 standby。
+        void (async () => {
+          await remoteMicStandbyStart().catch(() => undefined);
+          const status = await remoteMicStandbyStatus().catch(() => null);
+          await sendRemoteMicStatus(true, Boolean(status?.standby)).catch(() => undefined);
+        })();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   // 宠物页之外的页面把 overlayOpen 置 true：AI 音效/触感只在宠物页前台响。
   useEffect(() => {

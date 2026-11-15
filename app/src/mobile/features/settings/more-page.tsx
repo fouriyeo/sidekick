@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useConnectionStore } from "@/mobile/features/connect/connection-store";
 import { useConnectionView } from "@/mobile/features/connect/connection-view";
 import { useFirstUseStore } from "@/mobile/features/first-use/store";
@@ -12,7 +13,12 @@ import { MobilePage, PageScroll } from "@/mobile/shell/page";
 import { PageHeader } from "@/mobile/shell/page-header";
 import { pushBackHandler } from "@/mobile/system-back";
 import { useUiStore } from "@/mobile/ui-store";
-import { sendStatusRequest } from "@/shared/lib/tauri";
+import {
+  remoteMicPrepare,
+  remoteMicStandbyStart,
+  remoteMicStandbyStop,
+  sendStatusRequest,
+} from "@/shared/lib/tauri";
 import { setThemePreference, type ThemePreference, useTheme } from "@/shared/lib/theme";
 import { Label } from "@/shared/ui/label";
 import { MicProbeCard } from "./mic-probe-card";
@@ -387,6 +393,7 @@ export function MorePage() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [firstUseOpen, setFirstUseOpen] = useState(false);
+  const [standbyBusy, setStandbyBusy] = useState(false);
 
   // 返回键先收起重置确认 / 首用清单，再交给根页面（返回宠物）。
   const resetConfirmRef = useRef(resetConfirm);
@@ -413,6 +420,48 @@ export function MorePage() {
       setSettingsError(saved ? null : "没保存上，再试一次。");
     },
     [updateSettings],
+  );
+
+  const toggleRemoteMicStandby = useCallback(
+    async (checked: boolean) => {
+      if (standbyBusy) return;
+      setStandbyBusy(true);
+      try {
+        if (!checked) {
+          await update({ remoteMicStandby: false });
+          await remoteMicStandbyStop().catch(() => undefined);
+          return;
+        }
+        const prepared = await remoteMicPrepare();
+        if (!prepared.ok) {
+          toast.error(
+            prepared.mic
+              ? "需要通知权限：没有常驻通知，系统不允许后台开麦"
+              : "需要麦克风权限：先在宠物页按一次麦克风授权",
+          );
+          return;
+        }
+        await update({ remoteMicStandby: true });
+        if (useConnectionStore.getState().status === "connected") {
+          const result = await remoteMicStandbyStart();
+          if (!result.ok) {
+            toast.error("后台待命启动失败，重开一次或检查系统权限");
+            await update({ remoteMicStandby: false });
+            return;
+          }
+        }
+        toast.success(
+          useConnectionStore.getState().status === "connected"
+            ? "已开启后台待命"
+            : "已开启，连上电脑后自动生效",
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "后台待命设置失败");
+      } finally {
+        setStandbyBusy(false);
+      }
+    },
+    [standbyBusy, update],
   );
 
   async function confirmReset() {
@@ -570,9 +619,42 @@ export function MorePage() {
                 id="pet-remote-mic"
                 label="电脑遥控录音"
                 checked={pet.settings.remoteMic}
-                onCheckedChange={(checked) => void update({ remoteMic: checked })}
+                onCheckedChange={(checked) =>
+                  void update(
+                    checked ? { remoteMic: true } : { remoteMic: false, remoteMicStandby: false },
+                  )
+                }
               />
             </div>
+            {pet.settings.remoteMic && (
+              <>
+                <Hairline />
+                <div className="flex min-h-[60px] items-center gap-4 px-4">
+                  <span className="min-w-0 flex-1">
+                    <Label
+                      htmlFor="pet-remote-mic-standby"
+                      className="block text-[15px] leading-[21px] font-normal text-foreground"
+                    >
+                      后台待命
+                    </Label>
+                    <span className="mt-1 block text-[13px] leading-[19px] text-muted-foreground">
+                      切到别的 App / 锁屏也能用电脑快捷键；通知栏会常驻一条
+                    </span>
+                  </span>
+                  <Toggle
+                    id="pet-remote-mic-standby"
+                    label="后台待命"
+                    checked={pet.settings.remoteMicStandby}
+                    onCheckedChange={(checked) => {
+                      if (!standbyBusy) void toggleRemoteMicStandby(checked);
+                    }}
+                  />
+                </div>
+                <p className="px-4 pb-3 text-[12px] leading-[18px] text-muted-foreground">
+                  待命时不碰麦克风，录音时才亮系统绿点；国产系统可能还要把 Sidekick 加进电池白名单。
+                </p>
+              </>
+            )}
           </section>
 
           <MicProbeCard />

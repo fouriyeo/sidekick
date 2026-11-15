@@ -771,3 +771,18 @@
 - 代价：玻璃的「炫技感」大幅降低。深色主题下背景接近纯黑，玻璃只能靠 tint 提亮，观感接近一块深灰面板——这是 OLED 深底 + 无折射的必然结果。手机端玻璃效果比桌面更弱（舞台是纯色底，按 OLED 红线不加光晕与大渐变）。浅色主题下侧栏与内容区的分界依赖 tint 差 + 内侧 0.5px hairline，比不透明侧栏时更需要仔细验收。
 - 不做：不做 `backdrop-filter: url()` 折射（跨引擎不一致）；不跟随系统壁纸（浅色下不可读）；不做跟随光标的高光（凝态是静止的，光只随 hover 状态变化，不随指针移动）；不给内容卡 / 词卡 / 列表叠玻璃（用 `.dsl-flat` 同族材质）；不把玻璃层互相嵌套（嵌套 `backdrop-filter` 会采样到空白）。
 - 落地：材质集中在 `app/src/desktop/styles/ios.css` 的 `--g-*` 一组 token 与 `.dsl-glass` / `.dsl-sidebar` / `.dsl-nav-item` / `.dsl-flat` / `.dsl-gloss`；手机端在 `mobile/styles/clean.css` 的 `.ms-feed` 与 `.mic-gesture`。设计过程稿（HTML 试炼场、参数对照页）按 D71 与 [design/ARCHIVE](design/ARCHIVE.md) 的规矩**不入库**，结论只活在本文与 [standards/visual.md](standards/visual.md) §2。
+
+## D145 · 键盘遥控「后台待命」：默认关的 microphone FGS + 原生采集（2026-11-15）｜生效
+
+- 决策：新增可选「后台待命」（`settings.remoteMicStandby`，默认关）。开启后手机前台时启动 `RemoteMicService`（`foregroundServiceType="microphone"` + 常驻通知）；切到别的 App/锁屏/划掉任务后，桌面 `mic.remote` 仍能开 `AudioRecord`，PCM 写本地文件，由手机 Rust tail 成 100ms 帧走现有 `mic.start` / `SK01` / `mic.stop`。待命期间不碰麦克风、不亮绿点；录音时通知变「正在录音」。
+- 原因：用户明确要「手机切到别的软件时，电脑键盘一点击还能录音并把声音传到电脑」。Android 12+ 不允许后台启动前台服务，14+ 对 while-in-use 的麦克风更严；唯一可行路径是「前台预启动待命 FGS + 后台只开采集」。WebView 在后台会冻结，所以 `mic.remote`、采集、帧发送必须搬到 Rust/原生。
+- 边界：只解决「手机已在后台/锁屏，电脑快捷键开始/结束」；不把语音输入改成常驻录音，不默认开启，不做备忘录后台录音（另立 P1），不改变 60 秒上限、转写/插入/记账链路与「不落历史」。
+- 代价：通知栏常驻一条；待命不耗麦克风但会占一个 FGS；OEM 仍可能杀；当前 WS 无鉴权，待命等于把「同网段可触发开麦」长期化，正式分发前应补配对/鉴权或只在可信网络使用。协议 `mic.remote.status` 加 `standby`，ack 加 `standby_off` / `notification_denied` / `service_failed`。
+- 证据：`scripts/build-android.sh` 通过；真机 RMX3370 / Android 13 打开待命后按 Home + 锁屏，模拟桌面 `mic.remote` 触发得到 `mic.start(frameMs=100)`、57 帧 / 183,996 字节、`mic.level`、`mic.stop(release)`；播放 660Hz 测试音后帧 RMS/电平非零；60 秒自动停 599 帧 / 1,933,572 字节并回 `mic.stop(timeout)`；写 `.stop=release`（通知「停止」同路径）回 `mic.stop(release)`。真实热键（F8 临时绑定）在手机切后台时已触发「正在录音」并写 64KB PCM；桌面同协议探针（16k PCM TTS）完成 `mic.result`：文本「后台录音测试成功。这是一段5秒钟左右的测试语音。」、`audioDurationMs=5000`、84 tokens、剪贴板写入；右 Command 后续用合成 flagsChanged 验证；通知按钮实点与 OEM 待验。
+
+## D146 · 后台待命断线保活与遥控状态机复位（2026-11-15）｜生效
+
+- 决策：手机 WS 断开后不立刻停待命 FGS；Rust 用最近连接地址每 2 秒重连，最多 3 分钟，成功后先补发 `mic.remote.status`。后台跳过 WebView `emit`（冻结时可能卡住重连任务），回前台由 `remote_mic_set_foreground` 补一条权威 `conn`；`connect_server` 的锁等待加 6s 超时。桌面 `RemoteMic` 在手机断连/关开关时复位 `idle`；ack 成功后 3 秒未收到 `mic.start`/`mic.ready` 则回 `idle`，HUD 显示 `start_timeout`。
+- 原因：旧实现一断线就 `standbyStop`，后台 App 不能再 `startForegroundService`；用户看到「快捷键时灵时不灵，点一下手机录音又好了」。另一条卡死路径是桌面 ack 成功但没等到 `mic.start`，phase 永久停在 `connecting`，后续 `on_trigger` 直接忽略。
+- 边界：只处理「待命已开、WS 瞬断/电脑重启」；不做手机端常驻心跳/Wi-Fi lock，不保证 OEM 杀进程后自恢复；3 分钟仍连不上就停待命，回到用户手动打开 App 的路径。
+- 证据：断电脑端后手机通知保留，断 50 秒后 logcat 仍每 2 秒 `reconnect tick`（超过旧实现卡死的 18 tick）；重开电脑端后先 `status recv`，直接按右 Command 触发「正在录音」，再按回「待命」。假手机 ack 探针第一次 ack 后不发 `mic.start`，4 秒后第二次按右 Command 仍收到 `START #2`，验证 3s `start_timeout` 复位；右 Command 用合成 `flagsChanged` 验证，通知按钮实点与 OEM 待补验。

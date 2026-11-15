@@ -152,12 +152,20 @@ export const REMOTE_HUD_COPY = {
   cancelled: "已取消",
   cancelledHint: "这段录音不会转写",
   ackTimeout: "手机没有响应",
-  ackTimeoutHint: "确认手机还在小跟班页面、和电脑在同一网络",
+  ackTimeoutHint: "确认手机已开启后台待命，或留在小跟班页面并保持亮屏",
+  startTimeout: "手机没有开始录音",
+  startTimeoutHint: "再按一次；仍无反应就打开手机看「后台待命」是否还在",
   disconnected: "连接断了",
   remoteDisabled: "手机没开「电脑遥控录音」",
   remoteDisabledHint: "手机上 更多 › 麦克风 打开即可",
   notPetPage: "手机不在小跟班页面",
   notPetPageHint: "解锁手机、回到宠物页再试",
+  standbyOff: "手机没有开后台待命",
+  standbyOffHint: "手机上 更多 › 麦克风 打开「后台待命」，或让手机留在小跟班页面",
+  notificationDenied: "手机没有通知权限",
+  notificationDeniedHint: "没有常驻通知，系统不允许后台开麦；去系统设置允许通知",
+  serviceFailed: "手机待命服务启动失败",
+  serviceFailedHint: "重新打开 Sidekick，或重启手机后再试",
   busy: "手机正在处理上一段语音",
   permissionDenied: "手机没给麦克风权限",
   permissionDeniedHint: "在手机上点一次麦克风，允许录音",
@@ -187,6 +195,21 @@ export function remoteHudText(payload: { state: string; reason?: string | null }
       if (reason === "not_pet_page") {
         return { title: REMOTE_HUD_COPY.notPetPage, hint: REMOTE_HUD_COPY.notPetPageHint };
       }
+      if (reason === "standby_off") {
+        return { title: REMOTE_HUD_COPY.standbyOff, hint: REMOTE_HUD_COPY.standbyOffHint };
+      }
+      if (reason === "notification_denied") {
+        return {
+          title: REMOTE_HUD_COPY.notificationDenied,
+          hint: REMOTE_HUD_COPY.notificationDeniedHint,
+        };
+      }
+      if (reason === "service_failed") {
+        return {
+          title: REMOTE_HUD_COPY.serviceFailed,
+          hint: REMOTE_HUD_COPY.serviceFailedHint,
+        };
+      }
       if (reason === "busy") {
         return { title: REMOTE_HUD_COPY.busy, hint: REMOTE_HUD_COPY.hintFallback };
       }
@@ -214,6 +237,12 @@ export function remoteHudText(payload: { state: string; reason?: string | null }
     case "failed":
       if (reason === "ack_timeout") {
         return { title: REMOTE_HUD_COPY.ackTimeout, hint: REMOTE_HUD_COPY.ackTimeoutHint };
+      }
+      if (reason === "start_timeout") {
+        return {
+          title: REMOTE_HUD_COPY.startTimeout,
+          hint: REMOTE_HUD_COPY.startTimeoutHint,
+        };
       }
       if (reason === "disconnected") {
         return { title: REMOTE_HUD_COPY.disconnected, hint: REMOTE_HUD_COPY.noPhoneHint };

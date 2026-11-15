@@ -108,6 +108,8 @@
 
 78. **2026-11-14 · 删桌面「概览」页，状态改沉默即正常（D143）** — 用户判断「服务 / 手机 / AI / 当前会话 / 最近一次语音」没有一条读了会改变动作，整页删除：一级 6 个 剪贴板 ⌘1 / 备忘录 ⌘2 / 用量 ⌘3 / 语音 ⌘4 / 英语角 ⌘5 / 设置 ⌘6，默认页与兜底页 = 用量（先落剪贴板，同日按用户要求改为用量看板）；`?view=overview` / `?view=sessions` 重定向默认页。侧栏三行状态摘要改为「只在需要出手时出现」：`服务 未启动`（connection.status === "error"）与 `AI 等你决定`（`visibleSessions` 里 asking 一条，点击发 `focus.request`）；自动输入未授权从「概览顶部提示条」改为「设置」项 6px 琥珀点（新增 `useAccessibilityStore`，壳层读一次 + `window.focus` 重判）。删除 `overview-page.tsx` / `overview-page.test.tsx` / `accessibility-hint.tsx` / 其测试，清掉 `ChatSection.onOpenOverview` 与 `SettingsPage.nav` 两个死参数，QA 脚本页列表与 README 截图名同步为 clipboard。证据：`pnpm typecheck` / `lint` / `build` 通过，`pnpm test` 111 files / 951 tests 全绿（app.test 14 例：默认用量、⌘1–⌘6、⌘7 无动作、服务异常行、asking 行唤起、working 不出行、旧链接回落），`node scripts/check-docs.mjs` 通过；真窗口目检与 qa-desktop-ios 全页截图待补。
 
+79. **2026-11-15 · 菜单栏看板修掉「卡片外一圈底色」（D144 回归）** — 用户截图反馈「卡片还有一圈边框，大框外面有一层底色」。根因：D144 给主窗口补的 `:root.desktop-ios { background-color: var(--background) }` 是 0,2,0，压过 `panel.css` 的 `html.desktop-ios { background: transparent }`（0,1,1），整个 360×470 面板窗口被刷成页面底色（浅色 #f2f2f7 / 深色 #000），左右 20 / 上 10 / 下 28 的透明留白就成了一层底；同一块不透明画布还让 `NSGlassEffectView` 采不到壁纸，卡片退化成一片平白（实测卡片色正好是 30% 白叠在 #f2f2f7 上）。修法：`entries/panel.tsx` 与 `entries/mic-hud.tsx` 给 `<html>` 同时挂 `.dsl-transparent-window`，`panel.css` / `hud.css` 用 `html.desktop-ios.dsl-transparent-window`（0,2,1）压过 ios.css，不依赖两个 CSS 的导入顺序；麦克风 HUD（同一写法、同一症状）一并修掉。证据：浏览器 `?window=panel` 计算样式 `html/body/#root` 由 `rgb(242,242,247)` 变 `rgba(0,0,0,0)`；`SIDEKICK_PANEL_PREVIEW="200,100"` 真窗口截图（浅/深两套）卡片外无底色、玻璃透出壁纸模糊；新增 `entries/panel.test.tsx`（1 例）守 JS 半；`pnpm typecheck/lint/test`、`check-docs` 通过。
+
 ## 2026-11-14 · 桌面与手机玻璃改成「凝态玻璃」（D144）
 
 - 材质：`.dsl-glass` 从「一条 0.5px 顶线 + blur 30」换成**九层 inset 边**（外轮廓 → 顶棱 → 三层倒角 → 底棱）；blur 收敛到 16px、saturate 185%。新增 `--g-*` 一组 token（`tint` / `tint-panel` / `edge-*` / `spring` / `press` / `sink`），侧栏 tint 提到 `.52`（浅色）/`.30`（深色），内侧加 0.5px hairline 分界。
@@ -121,3 +123,18 @@
 - 结论：备忘录「前台开始 → 锁屏/切后台继续」可做，标准方案 = 原生 `AudioRecord` + `microphone` 前台服务 + 常驻通知 + 分段落盘；键盘遥控/语音输入在手机锁屏后由电脑开麦，Android 14+ 不允许后台新建麦克风 FGS，只能常驻「待命服务」并把采集/推流搬出 WebView，本期不做。
 - 产出：[engineering/background-recording.md](./engineering/background-recording.md)：系统限制（Android 12/13/14/15/16）、同类产品（Pixel Recorder / Voice Memos / 飞书妙记 / 讯飞听见 / Otter / RTC SDK）、路线对比、文件级改动清单、验收与风险；同步 [memo-pipeline.md](./engineering/memo-pipeline.md) 的 P1 说明、[status.md](./status.md) 的 P1 与偏差行、[prd/memo/PRD.md](./prd/memo/PRD.md) 的 P1 行。
 - 证据：`node scripts/check-docs.mjs` 通过；未新增依赖、未改运行时代码。
+- 追加（同日）：用户明确要求场景 B（手机切到别的 App/锁屏后，Mac 快捷键仍能开麦）；补充 §6.2「待命 FGS + 原生采集」方案与 §6.3 代价（常驻通知/鉴权/2–3 周），待确认后先做 2–3 天 spike。
+
+## 2026-11-15 · 键盘遥控「后台待命」（D145）
+
+- 目标：手机切到别的 App / 锁屏后，Mac 全局快捷键仍能让手机开麦，并把 PCM 实时送到电脑走现有 ASR/插入。
+- 手机：新增 `RemoteMicService`（`microphone` FGS，待命/录音两态，常驻通知、partial wake lock、AudioRecord 16k mono PCM16 → `remote-mic/<session>.pcm`）与 `RemoteMicPlugin`（权限申请、待命启停、采集启停、状态）；`scripts/patch-android-manifest.mjs` 同步两个 Kotlin 文件并注入 FGS/通知/WakeLock 权限与 `<service>`。
+- Rust：新增 `remote_mic.rs`，在 `mobile_client` 读循环里接管 `mic.remote`；待命开启时启动服务、`mic.start`、tail 文件按 100ms 组 `SK01` 帧、读 `.stop` 后发 `mic.stop`；新增 `remote_mic_prepare/standby_start/standby_stop/standby_status/set_foreground` 命令；`mic.remote.status` 加 `standby`，ack 加 `standby_off`/`notification_denied`/`service_failed`。
+- 前端：`settings.remoteMicStandby`（默认关）+ 设置页「后台待命」开关/权限引导/通知说明；`app.tsx` 连接后启动待命、visibilitychange 上报前后台；HUD 新增待命错误文案。
+- 证据：`scripts/build-android.sh` 通过（Kotlin/Rust 均编译）；真机 RMX3370 / Android 13 打开待命 → 按 Home + 锁屏 → 模拟桌面 `mic.remote`：收到 `mic.start(frameMs=100)`、57 帧 / 183,996 字节、`mic.level`、`mic.stop(release)`；播放 660Hz 测试音后帧 RMS 0.002–0.015、`mic.level` 2–34（非静音）；60 秒自动停 599 帧 / 1,933,572 字节并回 `mic.stop(timeout)`；写 `.stop=release`（通知「停止」同路径）回 `mic.stop(release)`；`pnpm typecheck` / `lint` / `test`（113 files / 964 tests）通过。真实热键（F8 临时绑定）在手机切后台时已触发「正在录音」并写出 64KB PCM；桌面同协议探针（16k PCM TTS）完成 `mic.result`：文本「后台录音测试成功。这是一段5秒钟左右的测试语音。」、`audioDurationMs=5000`、84 tokens、剪贴板写入；右 Command 后续用合成 flagsChanged 验证，通知按钮实点与 OEM 白名单待补验。
+
+## 2026-11-15 · 键盘遥控快捷键「时灵时不灵」修复（D146）
+
+- 复现：手机切后台、待命通知在 → 杀掉电脑端 Sidekick → 旧的 `on_disconnect` 立即 `standbyStop`；手机后台无法重新拉起 FGS，快捷键从此无响应；重开电脑端也不会自动连回。点一下手机录音/打开 App 会触发 `app.tsx` 待命重启，所以表现成「点一下又好了」。
+- 修复：手机断线不再立刻停待命，Rust 记住最近地址并每 2 秒重连（最多 3 分钟），成功后先补发 `mic.remote.status`；后台跳过 WebView `emit`（冻结时可能卡住重连任务），连接锁等待加 6s 超时。桌面 `RemoteMic` 在手机断连/关开关时复位 `idle`，ack 成功后 3 秒没等到 `mic.start`/`mic.ready` 就回 `idle` 并显示 `start_timeout`，避免卡在 `connecting` 吞掉后续快捷键。
+- 证据：Android 构建通过；真机断电脑端后通知「电脑遥控待命」仍在；持续断 50 秒 logcat 仍每 2 秒重连（tick 23，旧实现约 18 tick 卡死），重开电脑端后恢复 `status recv`，直接按右 Command 能触发「正在录音」，再按回「待命」。假手机 ack 探针第一次 ack 后不发 `mic.start`，4 秒后第二次按右 Command 仍收到 `START #2`，验证 3s `start_timeout` 复位。右 Command 用 `flagsChanged` 合成事件验证；通知按钮实点与 OEM 仍待补验。

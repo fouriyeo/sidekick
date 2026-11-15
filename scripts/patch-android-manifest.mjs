@@ -21,6 +21,21 @@ const micPluginTarget = resolve(
   "java/dev/sidekick/app/MicProbePlugin.kt",
 );
 
+/** `app/src-tauri/mobile/android/` 入库、`gen/` 每次 init 重建，构建前逐个同步。 */
+const androidSources = [
+  { name: "MicProbePlugin.kt", source: micPluginSource, target: micPluginTarget },
+  {
+    name: "RemoteMicPlugin.kt",
+    source: resolve(repoRoot, "app/src-tauri/mobile/android/RemoteMicPlugin.kt"),
+    target: resolve(androidRoot, "java/dev/sidekick/app/RemoteMicPlugin.kt"),
+  },
+  {
+    name: "RemoteMicService.kt",
+    source: resolve(repoRoot, "app/src-tauri/mobile/android/RemoteMicService.kt"),
+    target: resolve(androidRoot, "java/dev/sidekick/app/RemoteMicService.kt"),
+  },
+];
+
 if (!existsSync(manifestPath)) {
   console.log("AndroidManifest 不存在，跳过；先运行 pnpm tauri android init。");
   process.exit(0);
@@ -34,6 +49,11 @@ const permissions = [
   "android.permission.ACCESS_LOCAL_NETWORK",
   // 扫码连接要用后置相机；系统相机授权由 wry 在 getUserMedia 时自动弹出（见 lib.rs 的 on_permission_request）。
   "android.permission.CAMERA",
+  // 后台待命：麦克风前台服务 + 通知 + 录音期间的 partial wake lock。
+  "android.permission.FOREGROUND_SERVICE",
+  "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+  "android.permission.POST_NOTIFICATIONS",
+  "android.permission.WAKE_LOCK",
 ];
 
 let text = readFileSync(manifestPath, "utf8");
@@ -57,11 +77,27 @@ if (!text.includes(orientation)) {
   changed = true;
 }
 
+// 后台待命：microphone 类型前台服务必须写进 manifest，否则 startForeground 直接抛异常。
+const remoteMicService = `
+        <service
+            android:name=".RemoteMicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />`;
+if (!text.includes('android:name=".RemoteMicService"')) {
+  if (text.includes("</application>")) {
+    text = text.replace(/(\n\s*<\/application>)/, `${remoteMicService}$1`);
+    changed = true;
+  } else {
+    console.warn("AndroidManifest 缺少 </application>，跳过 RemoteMicService 注入。");
+  }
+}
+
 if (changed) {
   writeFileSync(manifestPath, text);
-  console.log("已写入 Android 权限 / 竖屏方向。");
+  console.log("已写入 Android 权限 / 竖屏方向 / RemoteMicService。");
 } else {
-  console.log("Android 权限与竖屏方向已存在。");
+  console.log("Android 权限、竖屏方向与 RemoteMicService 已存在。");
 }
 
 const LOCAL_NETWORK_MARKER = "// sidekick:local-network";
@@ -125,25 +161,25 @@ function patchMainActivity() {
 }
 
 /**
- * 麦克风选择 spike 的 Kotlin 插件源码在 `app/src-tauri/mobile/android/` 入库；
- * `gen/` 不入库、每次 init 都会重建，所以构建前同步过去。
+ * Android 原生源码在 `app/src-tauri/mobile/android/` 入库；`gen/` 不入库、每次 init
+ * 都会重建，所以构建前同步过去。新增 Kotlin 文件时把它加进 `androidSources`。
  */
-function syncMicProbePlugin() {
-  if (!existsSync(micPluginSource)) {
-    console.warn("MicProbePlugin.kt 源文件不存在，跳过同步。");
-    return;
+function syncAndroidSources() {
+  for (const entry of androidSources) {
+    if (!existsSync(entry.source)) {
+      console.warn(`${entry.name} 源文件不存在，跳过同步。`);
+      continue;
+    }
+    const source = readFileSync(entry.source, "utf8");
+    if (existsSync(entry.target) && readFileSync(entry.target, "utf8") === source) {
+      console.log(`${entry.name} 已是最新。`);
+      continue;
+    }
+    mkdirSync(dirname(entry.target), { recursive: true });
+    writeFileSync(entry.target, source);
+    console.log(`已同步 ${entry.name}。`);
   }
-
-  const source = readFileSync(micPluginSource, "utf8");
-  if (existsSync(micPluginTarget) && readFileSync(micPluginTarget, "utf8") === source) {
-    console.log("MicProbePlugin.kt 已是最新。");
-    return;
-  }
-
-  mkdirSync(dirname(micPluginTarget), { recursive: true });
-  writeFileSync(micPluginTarget, source);
-  console.log("已同步 MicProbePlugin.kt。");
 }
 
-syncMicProbePlugin();
+syncAndroidSources();
 patchMainActivity();

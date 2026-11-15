@@ -15,6 +15,9 @@ export type RemoteMicAction = "start" | "stop" | "cancel";
 export type RemoteMicAckCode =
   | "remote_disabled"
   | "not_pet_page"
+  | "standby_off"
+  | "notification_denied"
+  | "service_failed"
   | "busy"
   | "permission_denied"
   | "audio_blocked"
@@ -49,6 +52,8 @@ export type RemoteMicStatus = {
   v: 1;
   type: "mic.remote.status";
   enabled: boolean;
+  /** 后台待命服务是否已挂起：true 时手机切后台/锁屏也能开麦。 */
+  standby?: boolean;
   ts: number;
 };
 
@@ -128,6 +133,7 @@ export function isRemoteMicStatus(value: unknown): value is RemoteMicStatus {
     message.v === 1 &&
     message.type === "mic.remote.status" &&
     typeof message.enabled === "boolean" &&
+    (message.standby === undefined || typeof message.standby === "boolean") &&
     typeof message.ts === "number"
   );
 }

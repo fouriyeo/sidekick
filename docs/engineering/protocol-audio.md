@@ -2,7 +2,7 @@
 doc: engineering/protocol-audio
 title: 音频协议
 status: active
-updated: 2026-11-08
+updated: 2026-11-15
 load: on-demand
 owner: engineering
 ---
@@ -249,12 +249,15 @@ idle
 | --- | --- | --- |
 | 桌面 → 手机 | `mic.remote` | 按下/双击快捷键后请求开始；再按请求结束；录音中 Esc 请求取消 |
 | 手机 → 桌面 | `mic.remote.ack` | 回执（ok / 稳定错误码），桌面据此在 HUD 显示「手机在后台」「没给麦克风权限」等 |
-| 手机 → 桌面 | `mic.remote.status` | 手机是否响应电脑遥控；连上电脑 + 开关变化时各一次，断连由桌面清理 |
+| 手机 → 桌面 | `mic.remote.status` | 手机是否响应电脑遥控（`enabled`）与后台待命是否挂起（`standby`）；连上电脑 + 开关变化时各一次，断连由桌面清理 |
 
 约束：
 
 - `mic.remote` **只能由桌面后端产生**（快捷键 → `mic_remote`），`desktop_server` 不把任何 WS 输入映射成这条命令。
 - 手机不在宠物页 / 不在前台 / 关掉开关 / 没给权限时，必须回 ack 错误码，**不允许静默**；桌面 2s 无 ack 按超时提示。
+- 后台待命开启时（`standby=true`），手机 Rust 直接接管：`RemoteMicService` 用 `AudioRecord` 采 16k mono PCM16，写 `remote-mic/<session>.pcm`，Rust tail 后按 100ms 组 `mic.start` / `SK01` / `mic.stop`；WebView 不参与。
+- 待命关闭且手机在后台时，ack 用 `standby_off`（而不是等 2 秒超时）；通知权限被拒/服务起不来用 `notification_denied` / `service_failed`。
+- 待命采集必须由前台可见时的用户动作启动 FGS（Android 12+/14+）；不能「后台即用即开」。通知栏常驻「电脑遥控待命」，录音时变「正在录音」。
 - 安卓 WebView 的自动播放策略可能让 `AudioContext` 起不来：`voice-recorder.ts` 检测到 `state !== "running"` 时抛 `AudioBlockedError`，手机回 `audio_blocked`。
 - 电平：手机在每帧音频之后附带一条 `mic.level {session, level: 0-100}`（约 8Hz），桌面只把它转给顶部状态条画波形；不进广播、不落库、不参与转写。
 - 只有 `mic.stop(reason=release)` 进入转写；Esc 取消走 `mic.stop(reason=cancel)`，不转写、不插入、不记账。

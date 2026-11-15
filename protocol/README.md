@@ -197,8 +197,8 @@ AI 联动状态（桌面 → 手机）。桌面把 DSH 的聚合状态与会话�
 | 方向 | 类型 | 字段 | 说明 |
 | --- | --- | --- | --- |
 | 桌面 → 手机 | `mic.remote` | `requestId`（≤64）、`action`: `start`\|`stop`\|`cancel`、`ts` | **只允许桌面后端（快捷键）发起**，绝不接受 WS 客户端触发：当前无鉴权，否则同网段任何人可开麦 |
-| 手机 → 桌面 | `mic.remote.ack` | `requestId`、`action`、`ok`、`code`、`ts` | 命令回执；`code` ∈ `remote_disabled` / `not_pet_page` / `busy` / `permission_denied` / `audio_blocked` / `not_recording` / `disconnected` / `cancelled` / `mic_start` / `bad_request` |
-| 手机 → 桌面 | `mic.remote.status` | `enabled`、`ts` | 手机连上电脑、开关变化时各发一次；桌面按 `client_id` 记住可遥控手机，断连即清 |
+| 手机 → 桌面 | `mic.remote.ack` | `requestId`、`action`、`ok`、`code`、`ts` | 命令回执；`code` ∈ `remote_disabled` / `not_pet_page` / `standby_off` / `notification_denied` / `service_failed` / `busy` / `permission_denied` / `audio_blocked` / `not_recording` / `disconnected` / `cancelled` / `mic_start` / `bad_request` |
+| 手机 → 桌面 | `mic.remote.status` | `enabled`、`standby`、`ts` | 手机连上电脑、开关变化时各发一次；`standby` 表示后台待命 FGS 已挂起（切后台/锁屏仍可开麦） |
 
 - 另有一条轻量电平 `mic.level`（手机 → 桌面，随音频帧约 8Hz）：`{session, level: 0..100, ts}`，只用于顶部状态条的波形，不广播、不落库。
 

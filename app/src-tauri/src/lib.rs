@@ -50,6 +50,9 @@ mod keep_awake;
 /// 手机端麦克风选择 spike（仅 Android；桌面不注册）。
 #[cfg(mobile)]
 mod mic_probe;
+/// 手机端「后台待命」：原生麦克风前台服务 + 键盘遥控（仅 Android；iOS 走空实现）。
+#[cfg(mobile)]
+mod remote_mic;
 #[cfg(target_os = "macos")]
 mod menu;
 mod memo;
@@ -377,6 +380,11 @@ pub fn run() {
             mobile_client::send_key_request,
             mobile_client::send_remote_mic_status,
             mobile_client::send_remote_mic_ack,
+            remote_mic::remote_mic_prepare,
+            remote_mic::remote_mic_standby_start,
+            remote_mic::remote_mic_standby_stop,
+            remote_mic::remote_mic_standby_status,
+            remote_mic::remote_mic_set_foreground,
             memo::mobile::memo_list,
             memo::mobile::memo_get,
             memo::mobile::memo_update,
@@ -414,6 +422,9 @@ pub fn run() {
 
     #[cfg(target_os = "android")]
     let builder = builder.plugin(mic_probe::init());
+
+    #[cfg(mobile)]
+    let builder = builder.plugin(remote_mic::init());
 
     builder
         .run(tauri::generate_context!())

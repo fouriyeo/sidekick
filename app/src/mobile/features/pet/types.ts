@@ -21,6 +21,8 @@ export type PetSettings = {
   keepAwakeHours: number;
   /** 是否允许电脑用全局快捷键遥控这台手机开始/结束录音；默认开启。 */
   remoteMic: boolean;
+  /** 是否常驻「后台待命」前台服务：切到别的 App/锁屏也能被电脑快捷键开麦；默认关闭。 */
+  remoteMicStandby: boolean;
 };
 
 export type PetState = {
