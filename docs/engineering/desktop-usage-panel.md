@@ -52,7 +52,7 @@ related:
 | 玻璃边缘 | 玻璃态**不加描边、不加投影**（`--panel-border: transparent` / 外壳 `filter: none`）；`NSGlassEffectView` 套 `masksToBounds` 的 holder，再叠一层 path 蒙版，柔光与三角一起被裁掉 |
 | 玻璃回退 | `SIDEKICK_UI_VIBRANCY=off` 不铺 view（等价 D116 实色卡）；AppKit 失败只打日志静默降级。回退必须在 Rust 侧——原生 view 插进去以后 CSS 关不掉 |
 | 为什么不用 CSS backdrop-filter | 采样上界是文档根元素，透明窗口背后没有像素可采样（见 D120）；`prefers-reduced-transparency` 在 WKWebView 上不匹配，不能当降级手段 |
-| 页面透明 | 面板入口把 `.desktop-ios` 挂在 `<html>`，ios.css 会因此给 html 铺页面底色；`panel.css` 必须用 `html.desktop-ios { background: transparent }` 压过它，否则整窗（含透明留白）是一圈灰/黑，和壁纸冲突 |
+| 页面透明 | 面板入口把 `.desktop-ios` + `.dsl-transparent-window` 挂在 `<html>`；ios.css 的 `:root.desktop-ios`（0,2,0，D144 起的画布底色）会因此给整窗铺页面底色，`panel.css` 必须用 `html.desktop-ios.dsl-transparent-window`（0,2,1）压过它，否则 20/10/28 的透明留白变成一圈灰（浅色 #f2f2f7）/ 黑（深色 #000），原生玻璃也只能采到这块实色 |
 
 定位数学在 `usage_panel::panel_origin`（纯函数，单测覆盖主屏居中、右/左边缘夹取、副屏负坐标、拿不到显示器、非法 scale）。托盘矩形来自 `TrayIconEvent::Click.rect`（tauri/tray-icon 在 macOS 上已换算成顶部原点的 `dpi::Position/Size`，统一 `to_physical(scale)` 后再算）。
 

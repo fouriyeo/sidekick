@@ -4,11 +4,14 @@
    只由 entries/mic-hud.tsx 引入。窗口 transparent(true) + always_on_top，
    因此 html/body/#root 必须透明，只留一点内边距给卡片阴影；
    卡片本身用深海配色（.deep-sea-scope + bg-abyss），与主窗口浮层一致。
+   `.dsl-transparent-window` 是「这是透明小窗、别铺画布」的标记：ios.css 的
+   `:root.desktop-ios`（0,2,0，D144 画布底色）会盖掉 `html.desktop-ios`（0,1,1），
+   留白被刷成页面底色（浅色 #f2f2f7 / 深色 #000）后，状态条外会多出一圈实心矩形。
    ========================================================================== */
 
-html.desktop-ios,
-html.desktop-ios body,
-html.desktop-ios #root {
+html.desktop-ios.dsl-transparent-window,
+html.desktop-ios.dsl-transparent-window body,
+html.desktop-ios.dsl-transparent-window #root {
   height: 100%;
   margin: 0;
   padding: 0;

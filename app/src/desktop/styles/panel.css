@@ -13,13 +13,16 @@
    - 颜色全部 hex，不依赖 oklch/color-mix；深浅两套跟随 html[data-theme]/.dark。
    ========================================================================== */
 
-/* 权重必须压过 ios.css 的 `.desktop-ios`：面板入口把 `.desktop-ios` 挂在 <html>
-   上，而 ios.css 给 `.desktop-ios` 铺了 `--background` + 两层环境光径向渐变
-   （`.desktop-ios` = 0,1,0，`html` = 0,0,1）。只写 `html` 会整窗被刷成页面底色，
-   14px 透明留白变成一圈灰（浅色 #f2f2f7）/ 黑（深色 #000），跟桌面壁纸冲突。 */
-html.desktop-ios,
-html.desktop-ios body,
-html.desktop-ios #root {
+/* 画布必须透明：面板入口把 `.desktop-ios` + `.dsl-transparent-window` 一起挂在 <html> 上。
+   为什么不能只写 `html.desktop-ios`（0,1,1）：ios.css 的 D144 画布规则
+   `:root.desktop-ios { background-color: var(--background) }` 是 0,2,0，权重更高，
+   会把整个 360×470 窗口刷成页面底色（浅色 #f2f2f7 / 深色 #000）——20/10/28 的
+   透明留白于是变成「卡片外一圈灰框」，原生玻璃也只能采到这块实色（2026-11-15 回归）。
+   `.dsl-transparent-window` 把权重抬到 0,2,1，稳定压过 ios.css 且不依赖导入顺序；
+   麦克风 HUD 窗口（hud.css）用同一个类解决同一个问题。 */
+html.desktop-ios.dsl-transparent-window,
+html.desktop-ios.dsl-transparent-window body,
+html.desktop-ios.dsl-transparent-window #root {
   height: 100%;
   margin: 0;
   padding: 0;
