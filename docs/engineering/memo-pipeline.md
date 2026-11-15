@@ -55,7 +55,7 @@ P1 预留：MemoRecorderService（ForegroundService + AudioRecord）+ Keystore
 ```
 
 - MVP 录音在 WebView：复用现有 `getUserMedia` + ScriptProcessor，PCM 分片经 Tauri 命令交给 Rust 写 WAV；不做前台服务、不做常驻通知。
-- 锁屏/后台录音（P1）：Kotlin `MemoRecorderService` + `AudioRecord` 替换采集层，管道与 UI 不变（见 §3.6）。
+- 锁屏/后台录音（P1）：Kotlin `MemoRecorderService` + `AudioRecord` 替换采集层；**不只是换采集**，还要接前台服务、常驻通知、原生落盘与恢复，取舍与方案见 [background-recording.md](./background-recording.md)（调研 2026-11-15）。
 - 前端只通过 Tauri 命令读数据、控制录音、看状态；**不直接碰文件与 SQL**。
 - Rust 侧不依赖 `tauri-plugin-fs`：App 私有目录用 `app_data_dir()` 拿到路径即可。
 
@@ -66,7 +66,7 @@ P1 预留：MemoRecorderService（ForegroundService + AudioRecord）+ Keystore
 3. **状态在磁盘**：`recording.json`（会话 id、开始时间、已写字节、状态）每次分片更新；启动时据此恢复。
 4. **麦克风被抢占**：`track.onended` / AudioContext 异常 → 停止、写盘、提示；不自动恢复。
 5. **上限**：2 小时自动停止；WAV 约 115MB/小时，设置页显示占用（P2 再压缩）。
-6. **P1 预留（暂缓）**：原生 `AudioRecord` + `foregroundServiceType="microphone"` + 常驻通知 + partial wake lock + OEM 电池白名单引导；麦克风焦点丢失处理；真机 30/60/120 分钟温升与电量。进 P1 时只替换采集层，管道与 UI 不变。
+6. **P1 预留（暂缓）**：原生 `AudioRecord` + `foregroundServiceType="microphone"` + 常驻通知 + partial wake lock + OEM 电池白名单引导；麦克风焦点丢失处理；真机 30/60/120 分钟温升与电量。**注意：不是「只替换采集层」**——后台期间 WebView 会被冻结，采集/落盘/恢复都要在 Kotlin 服务里完成，Rust 只在开始时下发路径、结束时导入并复用现有管道；方案与同类产品调研见 [background-recording.md](./background-recording.md)。
 
 ## 4. 处理管道
 

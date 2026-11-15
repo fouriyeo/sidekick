@@ -23,6 +23,7 @@ children:
   - desktop-usage-panel.md
   - english-corner.md
   - keyboard-remote-mic.md
+  - background-recording.md
 ---
 
 # 工程方案分支
@@ -38,6 +39,7 @@ children:
 | 做麦克风选择 / 原生采集（顶部/底部麦） | [mic-selection.md](./mic-selection.md) | S |
 | 改音频消息/二进制帧协议 | [protocol-audio.md](./protocol-audio.md) | L |
 | 改键盘遥控录音（全局快捷键 / HUD） | [keyboard-remote-mic.md](./keyboard-remote-mic.md) | M |
+| 做锁屏/后台录音（原生采集 + 前台服务 + 通知） | [background-recording.md](./background-recording.md) | M |
 | 接百炼云端识别（地址/Key/流式/错误码） | [asr-cloud-bailian.md](./asr-cloud-bailian.md) | L |
 | 改桌面剪贴板历史与隐私过滤 | [clipboard-manager.md](./clipboard-manager.md) | M |
 | 改自动发现、端口冲突、桌面二维码 | [lan-discovery.md](./lan-discovery.md) | M |

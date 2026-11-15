@@ -53,7 +53,7 @@
 | 辅助功能依赖 | 自动粘贴与「回车 / 清空」依赖 macOS TCC 授权，重编译后可能需重勾选；密码框/窗口变化只复制 |
 | AI 联动首次需重启 DSH | profile patch 只在 DSH 启动时加载，之后开关热生效 |
 | AI 联动边界 | 只认显式提问/审批（`ask_user_question` / `exit_plan_mode` / `approval` / `blocked`），模型普通回复不算；P0 只聚合顶层会话，子代理可能提前完成 |
-| 备忘录 MVP 偏差 | Key 存 App 私有文件（0600，Keystore 列 P1）；手机固定官方端点；锁屏/后台录音与 AAC 压缩暂缓；WAV 约 115MB/h |
+| 备忘录 MVP 偏差 | Key 存 App 私有文件（0600，Keystore 列 P1）；手机固定官方端点；锁屏/后台录音与 AAC 压缩暂缓；WAV 约 115MB/h（后台录音调研见 [engineering/background-recording.md](./engineering/background-recording.md)） |
 | 手机台数为近似 | 「N 台设备」来自 `system.clients - 1`，无角色握手、不显示设备名 |
 | 剪贴板限制 | 仅桌面运行时记录、无全局快捷键、仅文本；图片/文件/富文本不支持 |
 | 宠物动作未接满 18 个 | angry/refuse/random 等没有触发源，等真实事件再接（D137 §3.4） |
@@ -74,9 +74,9 @@
 ### P1
 
 - 手机回答 AI 提问（answer 回传 + hook 结果注入）、文本消息。
-- 键盘遥控录音（D132/D133）：代码已完成，补真机与真窗口验收矩阵；裸修饰键若被发现还需要「输入监控」授权，补授权引导。
+- 键盘遥控录音（D132/D133）：代码已完成，补真机与真窗口验收矩阵；裸修饰键若被发现还需要「输入监控」授权，补授权引导。**用户 2026-11-15 明确要求「手机切到别的 App/锁屏后，Mac 快捷键仍能开麦」**：只能走「待命 FGS + 原生采集」方案（常驻通知 + 鉴权前提），见 [engineering/background-recording.md §6.2](./engineering/background-recording.md)，待确认常驻通知后再排期。
 - 配对与鉴权（首次扫码配对、长期密钥、信道加密）；精确手机台数（角色握手）。
-- 备忘录：Keystore、锁屏/后台录音、AAC 压缩、cursor/心跳；宠物扩展状态行。
+- 备忘录：Keystore、锁屏/后台录音、AAC 压缩、cursor/心跳；宠物扩展状态行。后台录音调研已完成（[engineering/background-recording.md](./engineering/background-recording.md)），待拍板是否进本轮；键盘遥控录音在手机锁屏后开麦受 Android 后台限制，方案见同文 §6。
 - 麦克风选择 spike（2026-11-15）：设置页实验卡片支持「自动（系统默认）/顶部/底部」试听，默认自动；真机 A/B 后再决定是否接入按住说话。
 
 ### P2
