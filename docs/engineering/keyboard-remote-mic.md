@@ -56,7 +56,7 @@ owner: engineering
 - `hotkey.rs`：`NSEvent::addGlobalMonitorForEventsMatchingMask` + `addLocalMonitor`（`FlagsChanged|KeyDown|KeyUp`），**本地 monitor 原样返回事件**；`Detector` 是纯逻辑（可单测）。绑定分两类：`Bare`（单键修饰键，按一下切换）、`Single`（任意普通键单键，需无修饰键）、`Combo`（修饰键 + 键，可按住）。配置 `~/.sidekick/hotkey.json`（0600，原子写）。
 - `mic_remote.rs`：capable 注册表、单手机路由、ack 超时、phase（Idle/Connecting/Listening/Processing）、HUD 事件。`on_trigger` 在 Connecting/Processing 不再静默忽略，而是显示「正在连接/识别中」。
 - `mic_hud.rs`：**HUD 语义层**。吃 `{state, reason}`，把协议错误码翻译成标题 + 第二行解释，再交给 `mic_panel`。所有失败分支（没手机、多手机、ack 超时、start 超时、手机拒绝、断线、识别失败）都必须在这里有文案。
-- `mic_panel.rs`：真正的顶部 NSPanel（520×60，`NSScreenSaverWindowLevel` + `CanJoinAllSpaces`/`FullScreenAuxiliary`，非激活、不接鼠标）。WKWebView 渲染胶囊；`generation` 防旧定时器收起新状态；录音态显示波形与计时，失败态显示原因和下一步。
+- `mic_panel.rs`：真正的顶部 NSPanel（**300×40**，`NSScreenSaverWindowLevel` + `CanJoinAllSpaces`/`FullScreenAuxiliary`，非激活、不接鼠标）。WKWebView 渲染 D133 单行胶囊；`generation` 防旧定时器收起新状态；录音态显示波形与计时，失败态在标题后接一句短原因（放不下省略）。
 - 命令：`hotkey_status` / `hotkey_save` / `hotkey_test_arm` / `hotkey_test_disarm`（设置卡），事件：`hotkey-changed`、`hotkey-tested`。
 - `hotkey-tested` 是**测试键位专属**：10 秒窗口内下一次 Trigger 只回报，不启动手机录音；用截止时间而不是 bool，避免前端关闭后吞掉真实快捷键。
 - 旧 `mic-hud` WebView 窗口/capability 保留但不再创建；不要再往 `mic_hud::show` 里加「只 eprintln」的分支。
@@ -76,28 +76,28 @@ owner: engineering
 - 手机 `voice-recorder.ts` 本来就按 chunk 算 RMS（`computeLevel`），现在随 `sendMicFrame` 一起把 0–1 电平传给 Rust；
 - 手机 Rust 在发完二进制帧后附带 `mic.level {session, level: 0-100}`（约 8Hz）；
 - 桌面 `desktop_server` 路由给 `mic_remote.on_level`（只在录音态生效），再 `evaluateJavaScript` 注入 HTML；
-- HTML 用与手机端 `voice-waveform.tsx` 相同的画法：24 根柱子、历史右移、居中伸缩、50ms 采样，每根柱子带固定形状差异；没有数据 >700ms 时回落到静态底噪（不会僵死也不会假跳）。胶囊宽度 **520×60**，两行：第一行状态/计时，第二行原因或下一步；配色走「低对比深灰 + 淡绿」，失败态点变红/琥珀。
+- HTML 用与手机端 `voice-waveform.tsx` 相同的画法：24 根柱子、历史右移、居中伸缩、50ms 采样，每根柱子带固定形状差异；没有数据 >700ms 时回落到静态底噪（不会僵死也不会假跳）。视觉保持 D133 的 **300×40 单行胶囊**：录音态 = 状态 + 波形 + 计时，失败态 = 标题 + `·` + 短原因；长原因由 CSS 省略，不增高。配色走「低对比深灰 + 淡绿」，失败态点变红/琥珀。
 
 ## 6. HUD 状态与文案
 
 文案的**唯一来源**是 `mic_hud.rs › feedback()`（Rust 侧，原生 NSPanel 直接渲染）；旧 `shared/lib/mic-status-copy.ts` 只保留手机端/历史测试引用，不要把它当桌面 HUD 的事实来源。
 
-| 状态 | 文案（标题 · 第二行） |
+| 状态 | 文案（单行，标题 · 短句；放不下省略） |
 | --- | --- |
-| `unavailable` + `no_phone` | 未连接手机麦克风 · 打开手机小跟班并保持连接；锁屏可开「后台待命」 |
-| `unavailable` + `standby_off` | 手机没有开后台待命 · 手机上打开「后台待命」，或让手机留在小跟班页面 |
-| `unavailable` + `notification_denied` | 手机没有通知权限 · 去系统设置允许通知 |
-| `unavailable` + `service_failed` | 手机待命服务启动失败 · 重新打开 Sidekick 或重启手机 |
-| `unavailable` + `multi_phone` | 检测到多台手机 · 只保留一台手机在待命 |
-| `connecting` | 正在连接手机… · 快捷键已触发，等手机响应 |
+| `unavailable` + `no_phone` | 未连接手机麦克风 · 打开手机 |
+| `unavailable` + `standby_off` | 手机没有开后台待命 · 打开待命 |
+| `unavailable` + `notification_denied` | 手机没有通知权限 · 允许通知 |
+| `unavailable` + `service_failed` | 手机待命服务启动失败 · 重开 App |
+| `unavailable` + `multi_phone` | 检测到多台手机 · 只留一台 |
+| `connecting` | 正在连接手机… · 等手机响应 |
 | `stopping` / `cancelling` | 正在结束… / 正在取消… |
-| `listening` | 正在听 · 再按一次结束 · Esc 取消 + 计时/波形 |
-| `processing` | 识别中… · 说完的文字马上进当前窗口 |
-| `failed` + `ack_timeout` | 手机没有响应 · 确认后台待命，或回小跟班页面再试 |
-| `failed` + `start_timeout` | 手机没有开始录音 · 再按一次；仍无反应就看「后台待命」 |
-| `failed` + `disconnected` | 连接断了 · Rust 会自动重连，稍后再按 |
-| `delivered` / `copied` / `failed` | 已输入 / 已复制原因 / 具体失败原因 + 下一步 |
-| `cancelled` | 已取消 · 这段录音不会转写 |
+| `listening` | 正在听 + 计时/波形（不塞提示） |
+| `processing` | 识别中… · 马上进窗口 |
+| `failed` + `ack_timeout` | 手机没有响应 · 检查待命 |
+| `failed` + `start_timeout` | 手机没有开始录音 · 再按一次 |
+| `failed` + `disconnected` | 连接断了 · 正在重连 |
+| `delivered` / `copied` / `failed` | 已输入 / 已复制原因 / 具体失败原因 + 短提示 |
+| `cancelled` | 已取消 · 不转写 |
 
 ## 6.1 快捷键“时灵时不灵”的排查
 

@@ -47,7 +47,17 @@ pub fn show(app: &AppHandle, payload: Value) {
         .unwrap_or("failed");
     let reason = payload.get("reason").and_then(Value::as_str);
     let feedback = feedback(state, reason);
-    mic_panel::show_status(app, feedback.tone.as_str(), feedback.title, feedback.detail);
+    mic_panel::show_status(app, feedback.tone.as_str(), &display_text(state, &feedback));
+}
+
+/// 保持 D133 的单行胶囊：失败原因作为标题后的短句，放不下由 CSS 省略。
+/// 录音态不塞提示，把宽度留给波形和计时。
+fn display_text(state: &str, feedback: &Feedback) -> String {
+    if state == "listening" || feedback.detail.is_empty() {
+        feedback.title.to_string()
+    } else {
+        format!("{} · {}", feedback.title, feedback.detail)
+    }
 }
 
 /// 延迟收起；有新状态时由 `mic_panel` 的 generation 保护，不会被旧定时器误收。
@@ -57,23 +67,23 @@ pub fn hide_later(app: &AppHandle, delay: std::time::Duration) {
 
 fn reason_feedback(reason: &str) -> Feedback {
     let (title, detail) = match reason {
-        "empty_transcript" => ("没听清，再试一次", "靠近手机、说完整一句"),
-        "asr_timeout" => ("电脑识别超时", "检查网络和百炼配置，再试一次"),
-        "insert_failed" => ("文本写入失败", "检查剪贴板/磁盘权限，再试一次"),
-        "cloud_not_configured" => ("百炼还没配置", "到「语音」页填地址和 API Key"),
-        "cloud_key_invalid" => ("百炼 Key 无效", "到「语音」页重新保存 Key"),
-        "cloud_key_unavailable" => ("读不到百炼 Key", "到「语音」页重新保存 Key"),
-        "cloud_forbidden" => ("这个 Key 没有模型权限", "检查百炼业务空间/模型权限"),
-        "cloud_rate_limited" => ("百炼限流了", "等一会儿再按一次"),
-        "cloud_quota_exceeded" => ("百炼额度不足", "去百炼控制台检查额度"),
-        "cloud_model_not_found" => ("百炼模型不存在", "到「语音」页恢复推荐模型"),
-        "cloud_network" => ("连不上百炼", "检查电脑网络后重试"),
-        "cloud_timeout" => ("百炼响应超时", "这段没转完，再试一次"),
+        "empty_transcript" => ("没听清，再试一次", ""),
+        "asr_timeout" => ("电脑识别超时", "检查网络"),
+        "insert_failed" => ("文本写入失败", "检查权限"),
+        "cloud_not_configured" => ("百炼还没配置", "看语音页"),
+        "cloud_key_invalid" => ("百炼 Key 无效", "看语音页"),
+        "cloud_key_unavailable" => ("读不到百炼 Key", "看语音页"),
+        "cloud_forbidden" => ("这个 Key 没有模型权限", "检查权限"),
+        "cloud_rate_limited" => ("百炼限流了", "稍后再试"),
+        "cloud_quota_exceeded" => ("百炼额度不足", "检查额度"),
+        "cloud_model_not_found" => ("百炼模型不存在", "看语音页"),
+        "cloud_network" => ("连不上百炼", "检查网络"),
+        "cloud_timeout" => ("百炼响应超时", "再试一次"),
         "cloud_task_failed" => ("百炼识别失败", "再试一次"),
-        "cloud_internal" => ("云端会话异常", "重启 Sidekick 再试"),
-        "session_busy" => ("手机正在处理上一段", "等这次结果出来再按"),
-        "bad_request" | "session_mismatch" => ("语音会话出了点问题", "再按一次快捷键重试"),
-        _ => ("这次没成功", "再按一次快捷键重试"),
+        "cloud_internal" => ("云端会话异常", "重启 App"),
+        "session_busy" => ("手机正在处理上一段", "等上一段"),
+        "bad_request" | "session_mismatch" => ("语音会话出了点问题", "再试一次"),
+        _ => ("这次没成功", "再试一次"),
     };
     Feedback {
         tone: Tone::Error,
@@ -84,29 +94,17 @@ fn reason_feedback(reason: &str) -> Feedback {
 
 fn unavailable_feedback(reason: &str) -> Feedback {
     let (title, detail) = match reason {
-        "multi_phone" => ("检测到多台手机", "只保留一台手机在待命"),
-        "remote_disabled" => ("手机没开「电脑遥控录音」", "手机上 更多 › 麦克风 打开即可"),
-        "not_pet_page" => ("手机不在小跟班页面", "解锁手机、回到宠物页再试"),
-        "standby_off" => (
-            "手机没有开后台待命",
-            "手机上打开「后台待命」，或让手机留在小跟班页面",
-        ),
-        "notification_denied" => (
-            "手机没有通知权限",
-            "没有常驻通知就不能后台开麦；去系统设置允许通知",
-        ),
-        "service_failed" => ("手机待命服务启动失败", "重新打开 Sidekick 或重启手机"),
-        "busy" => ("手机正在处理上一段语音", "等这次识别结束再按"),
-        "permission_denied" => ("手机没给麦克风权限", "在手机上点一次麦克风并允许录音"),
-        "audio_blocked" => ("手机需要先点一下屏幕", "安卓要求先有触摸才能开麦"),
-        "no_phone" => (
-            "未连接手机麦克风",
-            "打开手机小跟班并保持连接；锁屏可开「后台待命」",
-        ),
-        _ => (
-            "未连接手机麦克风",
-            "打开手机小跟班并保持连接；锁屏可开「后台待命」",
-        ),
+        "multi_phone" => ("检测到多台手机", "只留一台"),
+        "remote_disabled" => ("手机没开「电脑遥控录音」", "打开遥控"),
+        "not_pet_page" => ("手机不在小跟班页面", "回到宠物页"),
+        "standby_off" => ("手机没有开后台待命", "打开待命"),
+        "notification_denied" => ("手机没有通知权限", "允许通知"),
+        "service_failed" => ("手机待命服务启动失败", "重开 App"),
+        "busy" => ("手机正在处理上一段语音", "等上一段"),
+        "permission_denied" => ("手机没给麦克风权限", "允许麦克风"),
+        "audio_blocked" => ("手机需要先点一下屏幕", "点一下"),
+        "no_phone" => ("未连接手机麦克风", "打开手机"),
+        _ => ("未连接手机麦克风", "打开手机"),
     };
     Feedback {
         tone: Tone::Error,
@@ -115,28 +113,28 @@ fn unavailable_feedback(reason: &str) -> Feedback {
     }
 }
 
-/// `{state, reason}` → 标题 + 第二行解释。所有分支都必须返回非空标题。
+/// `{state, reason}` → 标题 + 短句。所有分支都必须返回非空标题。
 pub fn feedback(state: &str, reason: Option<&str>) -> Feedback {
     match state {
         "connecting" => Feedback {
             tone: Tone::Wait,
             title: "正在连接手机…",
-            detail: "快捷键已触发，等手机响应",
+            detail: "等手机响应",
         },
         "requesting" => Feedback {
             tone: Tone::Wait,
             title: "快捷键已收到",
-            detail: "正在联系手机…",
+            detail: "正在联系",
         },
         "stopping" => Feedback {
             tone: Tone::Wait,
             title: "正在结束…",
-            detail: "等手机把这段音频传完",
+            detail: "传完就结束",
         },
         "cancelling" => Feedback {
             tone: Tone::Wait,
             title: "正在取消…",
-            detail: "这段录音不会转写",
+            detail: "不转写",
         },
         "listening" => Feedback {
             tone: Tone::Listening,
@@ -146,7 +144,7 @@ pub fn feedback(state: &str, reason: Option<&str>) -> Feedback {
         "processing" => Feedback {
             tone: Tone::Wait,
             title: "识别中…",
-            detail: "说完的文字马上进当前窗口",
+            detail: "马上进窗口",
         },
         "delivered" => Feedback {
             tone: Tone::Success,
@@ -157,57 +155,57 @@ pub fn feedback(state: &str, reason: Option<&str>) -> Feedback {
             "secure_input" => Feedback {
                 tone: Tone::Success,
                 title: "已复制（当前是密码框）",
-                detail: "密码框不能自动粘贴，按 ⌘V 手动粘贴",
+                detail: "按 ⌘V",
             },
             "accessibility_off" => Feedback {
                 tone: Tone::Success,
                 title: "已复制；辅助功能未开",
-                detail: "到 系统设置 › 隐私与安全性 › 辅助功能 打开 Sidekick",
+                detail: "",
             },
             "target_mismatch" => Feedback {
                 tone: Tone::Success,
                 title: "已复制；焦点已变",
-                detail: "录音期间切换了窗口，没有自动粘贴",
+                detail: "已切换窗口",
             },
             "paste_failed" => Feedback {
                 tone: Tone::Success,
                 title: "已复制；自动粘贴失败",
-                detail: "按 ⌘V 手动粘贴",
+                detail: "按 ⌘V",
             },
             _ => Feedback {
                 tone: Tone::Success,
                 title: "已复制到剪贴板",
-                detail: "按 ⌘V 手动粘贴",
+                detail: "按 ⌘V",
             },
         },
         "failed" => match reason.unwrap_or("") {
             "ack_timeout" => Feedback {
                 tone: Tone::Error,
                 title: "手机没有响应",
-                detail: "确认手机开了「后台待命」，或回到小跟班页面再试",
+                detail: "检查待命",
             },
             "start_timeout" => Feedback {
                 tone: Tone::Error,
                 title: "手机没有开始录音",
-                detail: "再按一次；仍无反应就看手机「后台待命」是否还在",
+                detail: "再按一次",
             },
             "disconnected" => Feedback {
                 tone: Tone::Error,
                 title: "连接断了",
-                detail: "手机可能切网/被系统回收；Rust 会自动重连，稍后再按",
+                detail: "正在重连",
             },
             other => reason_feedback(other),
         },
         "cancelled" => Feedback {
             tone: Tone::Wait,
             title: "已取消",
-            detail: "这段录音不会转写",
+            detail: "不转写",
         },
         "unavailable" => unavailable_feedback(reason.unwrap_or("")),
         _ => Feedback {
             tone: Tone::Error,
             title: "这次没成功",
-            detail: "再按一次快捷键重试",
+            detail: "再试一次",
         },
     }
 }
@@ -229,7 +227,7 @@ mod tests {
         let feedback = feedback("failed", Some("ack_timeout"));
         assert_eq!(feedback.tone, Tone::Error);
         assert!(feedback.title.contains("手机没有响应"));
-        assert!(feedback.detail.contains("后台待命"));
+        assert!(feedback.detail.contains("待命"));
     }
 
     #[test]
@@ -243,7 +241,7 @@ mod tests {
     fn connecting_says_shortcut_was_received() {
         let feedback = feedback("connecting", None);
         assert_eq!(feedback.tone, Tone::Wait);
-        assert!(feedback.detail.contains("快捷键已触发"));
+        assert!(feedback.detail.contains("响应"));
     }
 
     #[test]
@@ -259,5 +257,16 @@ mod tests {
         let feedback = feedback("failed", Some("something_new"));
         assert!(!feedback.title.is_empty());
         assert!(!feedback.detail.is_empty());
+    }
+
+    #[test]
+    fn display_text_stays_single_line_and_omits_recording_hint() {
+        let listening = feedback("listening", None);
+        assert_eq!(display_text("listening", &listening), "正在听");
+
+        let no_phone = feedback("unavailable", Some("no_phone"));
+        let text = display_text("unavailable", &no_phone);
+        assert!(text.starts_with("未连接手机麦克风 · "));
+        assert!(!text.contains('\n'));
     }
 }

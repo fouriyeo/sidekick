@@ -150,5 +150,5 @@
 ## 2026-11-15 · 快捷键失败可见反馈 + 测试键位（D148）
 
 - 复现：手机断开后按右 Command，`[hotkey]` 有事件、桌面完全无提示；根因是 `mic_hud::show` 在迁移到原生 NSPanel 后被留成 no-op，`mic_remote` 的 no_phone/ack_timeout/start_timeout/手机拒绝/识别失败分支都只调它。
-- 修复：`mic_hud` 改为语义层（state/reason → 标题 + 下一步），`mic_panel` 扩成 520×60 两行，失败态 4.5 秒；`on_trigger` 在 Connecting/Processing 不再静默；stop/cancel 立即显示「正在结束/取消」。
+- 修复：`mic_hud` 改为语义层（state/reason → 标题 + 下一步），`mic_panel` 保持 300×40 单行胶囊（原因作为标题后的短句，放不下省略），失败态 4.5 秒；`on_trigger` 在 Connecting/Processing 不再静默；stop/cancel 立即显示「正在结束/取消」。
 - 诊断：`hotkey_test_arm/disarm` + `hotkey-tested` 事件，测试键位 10 秒内只检测不录音；状态 hint 加 macOS「安全输入」提醒。前端 970 tests、Rust 261 tests 通过；真机/真窗口待回归。

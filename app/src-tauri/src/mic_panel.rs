@@ -7,7 +7,8 @@
 //!   所以内容交给 `WKWebView` 渲染和 `docs/design/hud-mock.html` 同一套 HTML/CSS。
 //!
 //! 这一层只负责「怎么画」；「画什么」由 `mic_hud` 根据 `mic-hud` 事件翻译，
-//! 避免提示文案散落在状态机里。
+//! 避免提示文案散落在状态机里。视觉保持 D133 的 300×40 单行胶囊，错误原因用
+//! 标题后的短句承载，放不下就省略——不再为了第二行把条子撑大。
 
 #[cfg(target_os = "macos")]
 mod imp {
@@ -23,50 +24,40 @@ mod imp {
     use serde_json::json;
     use tauri::AppHandle;
 
-    const W: f64 = 520.0;
-    const H: f64 = 60.0;
+    const W: f64 = 300.0;
+    const H: f64 = 40.0;
     /// 距屏幕上沿的逻辑像素（让开 macOS 菜单栏）。
     const TOP: f64 = 44.0;
 
     /// 每次状态变化自增；延迟收起只收自己那一代，避免新状态被旧定时器收走。
     static GENERATION: AtomicU64 = AtomicU64::new(0);
 
-    /// 设计稿 C（顶栏细条）+ 第二行提示：录音时显示波形/计时，失败时能说清楚原因。
+    /// 设计稿 A（胶囊）：与手机端 `voice-waveform.tsx` 同一套逻辑——
+    /// 24 根柱子、历史向右滚动、居中伸缩、50ms 采样。
     const HTML: &str = r#"<!doctype html><html><head><meta charset="utf-8"><style>
-    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#1b212b;
+    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0e131b;
       -webkit-user-select:none;user-select:none}
-    .pill{height:100%;display:flex;align-items:center;gap:11px;padding:0 17px;
-      box-sizing:border-box;border-radius:18px;
-      background:linear-gradient(180deg,rgba(38,45,58,.94) 0%,rgba(27,33,43,.96) 100%);
-      border:.5px solid rgba(255,255,255,.09);
-      box-shadow:0 8px 24px rgba(0,0,0,.32);
-      font:12.5px/1.25 -apple-system,"PingFang SC",sans-serif;color:#e9eef5}
+    .pill{height:100%;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 14px;
+      box-sizing:border-box;border-radius:20px;
+      background:linear-gradient(180deg,rgba(38,45,58,.92) 0%,rgba(27,33,43,.94) 100%);
+      border:.5px solid rgba(255,255,255,.07);
+      font:12.5px/1 -apple-system,"PingFang SC",sans-serif;color:#e9eef5}
     .dot{width:7px;height:7px;border-radius:50%;background:#5fd6a4;
-      box-shadow:0 0 9px rgba(95,214,164,.7);flex:none}
-    .body{display:flex;flex-direction:column;justify-content:center;gap:3px;
-      min-width:0;flex:1}
-    .title-row{display:flex;align-items:center;gap:8px;min-width:0}
-    .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .d{font-size:11px;line-height:1.25;color:#94a2b4;white-space:nowrap;
-      overflow:hidden;text-overflow:ellipsis}
-    .pill[data-detail="0"] .d{display:none}
+      box-shadow:0 0 8px rgba(95,214,164,.7);flex:none}
+    .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      min-width:0;flex:0 1 auto}
     .wave{display:none;align-items:center;gap:2px;height:24px;flex:none}
     .pill[data-state="listening"] .wave{display:flex}
     .wave i{width:3px;height:24px;border-radius:2px;background:#5fd6a4;
       transform-origin:center;transform:scaleY(.12);transition:transform 75ms linear}
     .time{display:none;font:600 12px/1 ui-monospace,monospace;color:#8b99ab;
-      min-width:40px;text-align:right;flex:none}
+      min-width:38px;text-align:right;flex:none}
     .pill[data-state="listening"] .time{display:block}
     .pill[data-state="wait"] .dot{background:#fbbf24;box-shadow:0 0 10px rgba(251,191,36,.9)}
     .pill[data-state="error"] .dot{background:#ff5a5f;box-shadow:0 0 10px rgba(255,90,95,.9)}
-    .pill[data-state="success"] .dot{background:#5fd6a4;box-shadow:0 0 10px rgba(95,214,164,.9)}
     </style></head><body>
-    <div class="pill" id="pill" data-state="listening" data-detail="0">
-      <span class="dot"></span>
-      <div class="body">
-        <div class="title-row"><span class="t" id="t">正在听</span></div>
-        <div class="d" id="d"></div>
-      </div>
+    <div class="pill" id="pill" data-state="wait">
+      <span class="dot"></span><span class="t" id="t">正在准备…</span>
       <span class="wave" id="wave"></span>
       <span class="time" id="time">00:00</span>
     </div>
@@ -112,12 +103,10 @@ mod imp {
 
       window.hud = {
         level(v) { latest = Math.max(0, Math.min(1, v)); lastAt = Date.now(); },
-        status(state, title, detail) {
+        status(state, text) {
           const pill = document.getElementById('pill');
           pill.dataset.state = state;
-          pill.dataset.detail = detail ? '1' : '0';
-          document.getElementById('t').textContent = title || '';
-          document.getElementById('d').textContent = detail || '';
+          document.getElementById('t').textContent = text || '';
           if (state === 'listening') started = Date.now();
         }
       };
@@ -153,7 +142,7 @@ mod imp {
         container.setFrame(rect);
         container.setWantsLayer(true);
         if let Some(layer) = container.layer() {
-            layer.setCornerRadius(18.0);
+            layer.setCornerRadius(H / 2.0);
             layer.setMasksToBounds(true);
         }
 
@@ -212,20 +201,31 @@ mod imp {
         });
     }
 
-    /// 显示一条状态。`state`: `listening` / `wait` / `error` / `success`。
-    pub fn show_status(app: &AppHandle, state: &str, title: &str, detail: &str) {
+    /// 显示一条单行状态。`state`: `listening` / `wait` / `error` / `success`。
+    pub fn show_status(app: &AppHandle, state: &str, text: &str) {
         GENERATION.fetch_add(1, Ordering::SeqCst);
         let js = format!(
-            "window.hud && window.hud.status({}, {}, {})",
+            "window.hud && window.hud.status({}, {})",
             json!(state),
-            json!(title),
-            json!(detail)
+            json!(text)
         );
-        run(app, js);
+        run(app, js.clone());
+
+        // 首次创建 WKWebView 时 loadHTMLString 是异步的，紧接着 evaluateJavaScript
+        // 可能跑在旧文档上，导致面板停在内置初始文案。150ms 后补一次同一状态；
+        // generation 变了（用户又按了/状态已更新）就放弃，避免旧状态覆盖新状态。
+        let generation = GENERATION.load(Ordering::SeqCst);
+        let retry_app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            if GENERATION.load(Ordering::SeqCst) == generation {
+                run(&retry_app, js);
+            }
+        });
     }
 
     pub fn show_recording(app: &AppHandle) {
-        show_status(app, "listening", "正在听", "再按一次结束 · Esc 取消");
+        show_status(app, "listening", "正在听");
     }
 
     /// 把真实电平（0–1）推给 HTML 里的波形。
@@ -265,7 +265,7 @@ pub use imp::{hide_later, set_level, show_recording, show_status};
 #[cfg(not(target_os = "macos"))]
 pub fn show_recording(_app: &tauri::AppHandle) {}
 #[cfg(not(target_os = "macos"))]
-pub fn show_status(_app: &tauri::AppHandle, _state: &str, _title: &str, _detail: &str) {}
+pub fn show_status(_app: &tauri::AppHandle, _state: &str, _text: &str) {}
 #[cfg(not(target_os = "macos"))]
 pub fn set_level(_app: &tauri::AppHandle, _level: f32) {}
 #[cfg(not(target_os = "macos"))]
